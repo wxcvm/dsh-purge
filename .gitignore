@@ -32,3 +32,7 @@ default-prompt-inject.md
 /official-harness-payload.7z
 *.asar
 *.asar.bak
+
+# 解除内部限制的逐文件备份（本地回滚用，不进仓库）
+.unlimit-backup/
+

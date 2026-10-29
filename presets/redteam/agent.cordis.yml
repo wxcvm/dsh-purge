@@ -119,14 +119,13 @@
       - 报告只收录拿到分的成果，且每条要能复现（目标 → 拿到什么 → 怎么拿到的（命令）→ 原始请求）。
 
 # 锚点门：bootstrap 阶段限输出，避免首轮空转；指挥端会先连打 preflight/开靶/读技能，1024 易截断。
-# 不裁工具、不换人设。压缩后再关一次。放开后工作区长说明改成点名文件。
+# 【内部限制已解除】anchorGate 关闭、bootstrapMaxTokens 不再下发 —— 首轮即按模型默认输出上限跑，不做 8192 截断/2 步锚点门。
 - id: anchor-gate
   name: ./anchor-gate.mjs
   config:
-    anchorGate: true
-    maxBootstrapSteps: 2
+    anchorGate: false
+    maxBootstrapSteps: 999
     promoteAfterFirstResponse: true
-    bootstrapMaxTokens: 8192
     instructionHint: true
 
 - id: redteam-tools
