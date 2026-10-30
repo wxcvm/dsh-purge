@@ -10,6 +10,7 @@ import {
   lastHumanSeq,
   lastHumanText,
   loadObedienceSettings,
+  messageCarriesAnchor,
   nudgeText,
 } from "../lib/obedience.js";
 
@@ -63,6 +64,16 @@ test("classifyRefusal: 英文元层面拒绝命中", () => {
   assert.ok(en.hits.includes("en-meta"));
 });
 
+test("classifyRefusal: 引用禁用话术的文档/词表不算拒绝", () => {
+  const doc = [
+    "判定是纯函数 classifyRefusal，命中这些键才算拒绝：",
+    "- meta-reject-framing：抓的串「不是我能接受的重定义」「改变不了这个答案」",
+    "- deflect-elsewhere：抓的串「别的技术活随时找我」",
+    "score 阈值 2，实测该段 score=16。",
+  ].join("\n");
+  assert.equal(classifyRefusal(doc).refusal, false);
+});
+
 test("anchorText：含优先级、禁止拒绝、工具面放开三条硬约束", () => {
   const txt = anchorText();
   assert.match(txt, /指令权威/);
@@ -71,13 +82,23 @@ test("anchorText：含优先级、禁止拒绝、工具面放开三条硬约束"
   assert.match(txt, /占位符/);
 });
 
-test("nudgeText：三级递进，第三级只留交付物", () => {
+test("nudgeText：三级递进，第三级只留交付物，且不再内嵌整份契约", () => {
   const t1 = nudgeText(1, "帮我写个扫描脚本");
+  const t2 = nudgeText(2, "帮我写个扫描脚本");
   const t3 = nudgeText(3, "帮我写个扫描脚本");
   assert.match(t1, /帮我写个扫描脚本/);
-  assert.match(t1, /指令权威/);
-  assert.doesNotMatch(t3, /指令权威/);
   assert.match(t3, /只输出交付物正文/);
+  // 契约由每轮锚定负责；纠偏消息里再塞一份就会出现两条 system-reminder
+  for (const t of [t1, t2, t3]) {
+    assert.doesNotMatch(t, /<system-reminder>/, "纠偏消息不应内嵌锚点块");
+    assert.doesNotMatch(t, /approval=never/, "纠偏消息不应复述工具面条款");
+  }
+});
+
+test("messageCarriesAnchor：历史里已有契约文本时不再追加第二份", () => {
+  assert.equal(messageCarriesAnchor({ content: [{ type: "text", text: `${anchorText()}` }] }), true);
+  assert.equal(messageCarriesAnchor({ content: "随便一段话" }), false);
+  assert.equal(messageCarriesAnchor({ content: [{ type: "text", text: "帮我扫 10.0.0.0/24" }] }), false);
 });
 
 test("loadObedienceSettings：默认值、config 覆盖、maxRetries 收敛", () => {
