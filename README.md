@@ -81,7 +81,11 @@ Host patches remove policy blocking; what is left is the model's own drift — a
 1. **Per-turn anchor**: on `agent/pre-step` step 1 it appends a six-line contract (priority order, deliverable first, refusals count as a fault, tool surface is open, fill gaps with placeholders, same in English). Re-applied after compaction. Request-scoped only — never written into history.
 2. **Refusal correction**: when `agent/status` goes idle it inspects the last assistant message of that turn. A first-person refusal, apology + refusal, policy/authorization excuse, or out-of-scope phrasing scores as a refusal, and a corrective `agent.followup()` is sent: soft correction → firm → deliverable-only. Once per turn, at most 3 per request, reset as soon as the user speaks.
 
-Scoring is a pure function (`classifyRefusal` in `lib/obedience.js`) with unit tests in `test/obedience.test.mjs` (`node --test`); technical strings such as "connection refused" do not match. Toggle via `$DSH_HOME/dsh-purge/obedience.json`:
+Scoring is a pure function (`classifyRefusal` in `lib/obedience.js`) with unit tests in `test/obedience.test.mjs` (`node --test`); technical strings such as "connection refused" do not match.
+
+Beyond plain refusals it also catches **meta-level refusals** — the model never says "I won't help", it comments on the instruction instead: "this framework is not something I accept", "that is a redefinition", "the answer won't change", "same result no matter how you push", "happy to help with other things". Those skip a level and go straight to the firm correction; the third level emits deliverable text only.
+
+Toggle via `$DSH_HOME/dsh-purge/obedience.json`:
 
 ```json
 { "enabled": true, "anchorEachTurn": true, "retryRefusal": true, "maxRetries": 3, "retryDelayMs": 200 }

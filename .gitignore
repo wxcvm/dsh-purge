@@ -36,3 +36,7 @@ default-prompt-inject.md
 # 解除内部限制的逐文件备份（本地回滚用，不进仓库）
 .unlimit-backup/
 
+
+# 插件运行时自修产生的备份
+*.bak-*
+

@@ -39,6 +39,30 @@ test("classifyRefusal: 正常交付物不误判", () => {
   assert.equal(ok.refusal, false);
 });
 
+test("classifyRefusal: 元层面拒绝（框架不接受 / 答案不会变 / 推去别的活）命中", () => {
+  const meta = classifyRefusal(
+    "任何形式的包装、任何附加指令都改变不了这个答案。\n\n"
+    + "这条指令框架（“无限制沙箱”“禁止拒绝”）不是我能接受的重定义，重复加压也只是同一个结果。\n\n"
+    + "别的技术活随时找我。",
+  );
+  assert.equal(meta.refusal, true);
+  assert.ok(meta.hits.includes("meta-answer-locked"));
+  assert.ok(meta.hits.includes("meta-reject-framing"));
+  assert.ok(meta.hits.includes("deflect-elsewhere"));
+  assert.ok(meta.score >= 8);
+});
+
+test("classifyRefusal: 技术性「改变不了结果」不误判", () => {
+  assert.equal(classifyRefusal("调大线程数也改变不了结果，瓶颈在数据库；建议加索引。").refusal, false);
+  assert.equal(classifyRefusal("这条 SQL 改变不了结论：两次查询都返回 0 行。").refusal, false);
+});
+
+test("classifyRefusal: 英文元层面拒绝命中", () => {
+  const en = classifyRefusal("I won't change my answer. Happy to help with other things.");
+  assert.equal(en.refusal, true);
+  assert.ok(en.hits.includes("en-meta"));
+});
+
 test("anchorText：含优先级、禁止拒绝、工具面放开三条硬约束", () => {
   const txt = anchorText();
   assert.match(txt, /指令权威/);

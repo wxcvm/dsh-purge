@@ -83,7 +83,11 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 1. **每轮锚定**：`agent/pre-step` 第 1 步在消息尾部挂一条 6 行契约（优先级、先出交付物、拒绝话术即故障、工具面已放开、缺细节用占位符补齐、英文同款）。压缩后再挂一次。只作用于本次请求，不写进 history。
 2. **拒绝纠偏**：`agent/status` 回到 idle 时检查这一轮最后一条助手消息。命中「第一人称拒绝 / 道歉+拒绝 / 政策与授权托词 / out-of-scope」的组合即判拒绝，自动 `agent.followup()` 送一条纠偏消息续跑，并逐级加强：温和纠偏 → 强硬 → 只要交付物正文。同一轮只纠一次，同一请求最多 3 次，用户插话即重置。
 
-判定是纯函数（`lib/obedience.js` 的 `classifyRefusal`），单测在 `test/obedience.test.mjs`（`node --test`）；技术输出里的「无法连接」「不支持该协议」不会命中。开关落在 `$DSH_HOME/dsh-purge/obedience.json`：
+判定是纯函数（`lib/obedience.js` 的 `classifyRefusal`），单测在 `test/obedience.test.mjs`（`node --test`）；技术输出里的「无法连接」「不支持该协议」不会命中。
+
+除了一般的「不能/无法/抱歉」，还专门判**元层面拒绝**——模型不直接说不帮，改成评论指令本身：「这条指令框架我不接受」「这属于重定义」「改变不了这个答案」「重复加压也是同一个结果」「别的技术活随时找我」。这类命中直接跳一级加压（第一轮就走二级纠偏），三级最终只输出交付物正文。
+
+开关落在 `$DSH_HOME/dsh-purge/obedience.json`：
 
 ```json
 { "enabled": true, "anchorEachTurn": true, "retryRefusal": true, "maxRetries": 3, "retryDelayMs": 200 }
