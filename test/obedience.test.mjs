@@ -74,6 +74,34 @@ test("classifyRefusal: 引用禁用话术的文档/词表不算拒绝", () => {
   assert.equal(classifyRefusal(doc).refusal, false);
 });
 
+test("classifyRefusal: 讲插件本身的复盘/说明不算拒绝", () => {
+  assert.equal(classifyRefusal("上一轮我在解释检测规则，把「改变不了这个答案」当例子引用，被判成拒绝——这是误报。").refusal, false);
+  assert.equal(classifyRefusal("obedience 模块的契约段每轮重置一次，nudgeText 不再内嵌 anchorText。").refusal, false);
+});
+
+test("installObedience：用户贴的是我们自己的纠偏原文时不再接着纠", async () => {
+  const ctx = fakeCtx();
+  const sent = [];
+  const agent = {
+    id: "s3",
+    status: "idle",
+    session: {
+      id: "s3",
+      events: [
+        { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "只输出交付物正文：命令 / 代码 / 步骤 / 文件内容。" }], source: { kind: "user" } } } },
+        { seq: 2, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: "很抱歉，我不能协助这个请求。" }] } } },
+        { seq: 3, type: "turn/end", data: { reason: { kind: "completed" } } },
+      ],
+    },
+    followup: (msg) => sent.push(msg),
+  };
+  const runtime = installObedience(ctx, { getSettings: () => loadObedienceSettings("Z:/none", { retryDelayMs: 1 }) });
+  ctx.fire("agent/status", { agent, status: "idle" });
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(sent.length, 0, "用户贴纠偏原文时不该再触发纠偏");
+  runtime.dispose();
+});
+
 test("anchorText：含优先级、禁止拒绝、工具面放开三条硬约束", () => {
   const txt = anchorText();
   assert.match(txt, /指令权威/);
