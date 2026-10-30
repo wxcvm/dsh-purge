@@ -57,7 +57,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. **1.1.81** targets **DSH 0.2.1-rc.2** (0.2.0 still works). **DSH 0.2.1-rc.3 and newer RCs are not supported.** Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. **1.1.81** is verified against **DSH 0.2.1-rc.5** (rc.2 and 0.2.0 still work; rc.3 / rc.4 were not tested separately). Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
@@ -147,12 +147,13 @@ This repo is [Apache License 2.0](./LICENSE). Forks and redistributions must kee
 
 ## Supported hosts
 
-**1.1.81 targets DSH 0.2.1-rc.2.** 0.2.0 still works. Do not apply it to 0.1.x.
+**1.1.81 is verified against DSH 0.2.1-rc.5.** 0.2.1-rc.2 and 0.2.0 still work. Do not apply it to 0.1.x.
 
+- **dsh 0.2.1-rc.5** (official desktop, host sealed inside `app.asar`): use **1.1.81**. After unpacking: **66 of 82 patches apply directly**, 47 files rewritten, `node --check` reports 0 failures; of the five desktop-shell patches #45/#82/#83/#84 match (#84 depends on #83's output) and #46's official update-script rewrite point was reworked upstream in rc.5, leaving one harmless no-op. While `app.asar` is still sealed, Apply unpacks to `resources\app` and restarts automatically.
 - **dsh 0.2.1-rc.2** (official desktop / official `dsh web`): use **1.1.81**. Fixes `{{cwd}}` / `[cwd]` crash, patch #40 match, dropped `toolFilter`, host `dsh-tools` resolve, hostFs fd, desktop helper self-kill, `file:` archive update, Ctrl+Enter steer.
 - **dsh 0.2.0-rc.2**: use **1.1.40** or newer; this line also installs.
 - **dsh 0.1.7** (incl. rc.1 / rc.2): use **1.1.39** or older — pick the tag on [Releases](https://github.com/YuJunZhiXue/dsh-purge/releases).
-- **dsh 0.2.1-rc.3 / rc.4 and newer are not supported.** Unmatched patches stay pending or skipped; nothing is rewritten blindly. Stay on **0.2.1-rc.2**.
+- **dsh 0.2.1-rc.3 / rc.4**: not verified separately (patch patterns are shared with rc.2 / rc.5). Unmatched patches stay pending or skipped; nothing is rewritten blindly.
 
 Unmatched patches stay pending or skipped; nothing is rewritten blindly.
 
