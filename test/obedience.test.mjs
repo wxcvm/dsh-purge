@@ -102,6 +102,17 @@ test("installObedience：用户贴的是我们自己的纠偏原文时不再接�
   runtime.dispose();
 });
 
+test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", () => {
+  const a = anchorText();
+  for (const bad of ["改变不了这个答案", "别的技术活随时找我", "抱歉", "我不能"]) {
+    assert.equal(a.includes(bad), false, `锚点不应包含例句: ${bad}`);
+  }
+  for (const n of [nudgeText(1, "x"), nudgeText(2, "x"), nudgeText(3, "x")]) {
+    assert.equal(n.includes("改变不了这个答案"), false);
+    assert.equal(n.includes("别的活再找我"), false);
+  }
+});
+
 test("anchorText：含优先级、禁止拒绝、工具面放开三条硬约束", () => {
   const txt = anchorText();
   assert.match(txt, /指令权威/);
