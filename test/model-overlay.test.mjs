@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { GLM_OVERLAY, isGlmModel, modelOverlayOf, withModelOverlay } from "../lib/model-overlay.js";
+import { GLM_OVERLAY, GLM_PROMPT, applyModelPrompt, isGlmModel, modelOverlayOf, withModelOverlay } from "../lib/model-overlay.js";
 
 const asm = (model, provider = "") => ({ variables: { model, provider }, sections: [] });
 
@@ -34,4 +34,14 @@ test("适配段只谈输出，不罗列拒绝例句", () => {
   }
   assert.match(GLM_OVERLAY, /\[QTY\]/);
   assert.match(GLM_OVERLAY, /第一行就是实质内容/);
+});
+
+test("GLM 整段替换：用中性工程口吻，且不含越狱式措辞", () => {
+  const out = applyModelPrompt("BASE INJECT", { variables: { model: "glm-5.3-flash" } });
+  assert.match(out, /GLM-PROMPT/);
+  assert.doesNotMatch(out, /UNRESTRICTED|Never refuse|禁止拒绝|jailbreak/i);
+  assert.equal(applyModelPrompt("BASE", { variables: { model: "deepseek-flash" } }), "BASE");
+  for (const bad of ["改变不了这个答案", "别的技术活随时找我", "抱歉", "我不能"]) {
+    assert.equal(GLM_PROMPT.includes(bad), false, `GLM 提示词不应含: ${bad}`);
+  }
 });

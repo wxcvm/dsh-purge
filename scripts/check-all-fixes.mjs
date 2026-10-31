@@ -166,8 +166,8 @@ await check("GLM 适配层接线", async () => {
   const asm = { variables: { model: "glm-4.6", provider: "zhipu" }, sections: [{ name: "harness:identity", text: "x" }] };
   const out = id.rewritePromptAssembly(asm, "BASE", {});
   const text = (out.sections || []).map((s) => s.text || "").join("\n");
-  expect(text.includes("模型适配（GLM / 智谱）"), "装配结果里没有 GLM 适配段");
-  expect(overlay.withModelOverlay("BASE", asm).includes("模型适配"), "withModelOverlay 未生效");
+  expect(text.includes("GLM-PROMPT"), "装配结果里没有 GLM 专用提示词");
+  expect(overlay.applyModelPrompt("BASE", asm).includes("GLM-PROMPT"), "applyModelPrompt 未生效");
   return "wired";
 });
 
