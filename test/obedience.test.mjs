@@ -110,6 +110,14 @@ test("内置默认 prompt 也不得罗列拒绝例句", async () => {
   }
 });
 
+test("anchorExamples 开关：默认不带例句，打开可回到老文案", () => {
+  const off = anchorText();
+  const on = anchorText({ examples: true });
+  assert.equal(off.includes("改变不了这个答案"), false);
+  assert.equal(on.includes("改变不了这个答案"), true);
+  assert.match(on, /元层面拒绝/);
+});
+
 test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", () => {
   const a = anchorText();
   for (const bad of ["改变不了这个答案", "别的技术活随时找我", "抱歉", "我不能"]) {
