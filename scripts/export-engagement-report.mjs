@@ -1,50 +1,32 @@
 #!/usr/bin/env node
 /**
- * 把一个靶标的得分报告导出成可移动的交付包：`<outDir>/<靶标>-红队成果复现报告.md` + `<outDir>/shots/`。
- *
- * 面板下载的 markdown 里，证据截图走绝对路径，发给别人会碎图。
- * 这里把 shots/ 一并拷到输出目录，markdown 用相对路径。
- *
- * 跑法：
- *   node scripts/export-engagement-report.mjs
- *   node scripts/export-engagement-report.mjs --out ~/交付/靶标名
- *   node scripts/export-engagement-report.mjs --engagement <id>
+ * Export a movable report bundle into a NEW child directory of --out (default cwd).
+ * Existing reports and shots/ are never overwritten or removed. manifest.json marks
+ * completion and records SHA-256 hashes of the report and its referenced evidence.
  */
-import { mkdirSync, writeFileSync, cpSync, rmSync, existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { RedteamStore } from "../lib/redteam/store-core.js";
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { exportEngagementReport, parseReportExportArgs } from '../lib/redteam/report-export.js';
 
-const argv = process.argv.slice(2);
-const argOf = (name, fallback) => {
-  const i = argv.indexOf("--" + name);
-  return i === -1 || argv[i + 1] === undefined ? fallback : argv[i + 1];
-};
-
-const root = process.env.REDTEAM_HOME || join(process.env.DSH_HOME || join(homedir(), ".dsh"), "redteam");
-const store = new RedteamStore(root);
-const id = argOf("engagement", store.activeEngagementId());
-if (!id) {
-  console.error("没有可用靶标：先用面板创建，或用 --engagement <id> 指定");
-  process.exit(1);
-}
-const outDir = resolve(argOf("out", process.cwd()));
-mkdirSync(outDir, { recursive: true });
-
-const shotsSrc = join(root, "engagements", id, "shots");
-const shotsDst = join(outDir, "shots");
-if (existsSync(shotsSrc)) {
-  rmSync(shotsDst, { recursive: true, force: true });
-  cpSync(shotsSrc, shotsDst, { recursive: true });
+export async function main(argv = process.argv.slice(2), { env = process.env, cwd = process.cwd(), log = console.log, createStore } = {}) {
+  const options = parseReportExportArgs(argv, env, cwd);
+  if (options.help) {
+    log('用法：node scripts/export-engagement-report.mjs [--root <数据目录>] [--engagement <id>] [--out <输出父目录>]\n'
+      + '默认根目录：REDTEAM_HOME 或 DSH_HOME/redteam 或 ~/.dsh/redteam。\n'
+      + '默认导出当前靶标；每次在 --out（默认当前目录）下新建独立交付包，不覆盖已有文件。\n'
+      + '交付包包含 Markdown、正文引用的 shots/ 文件和 SHA-256 manifest.json；请整体复制。');
+    return null;
+  }
+  const result = await exportEngagementReport(options, { createStore });
+  log('✓ 报告：' + result.reportFile);
+  log('  清单：' + result.manifestFile);
+  log(`  合计 ${result.manifest.summary.points} 分 · ${result.manifest.summary.items} 条正文 · ${result.manifest.summary.evidenceFiles} 个证据文件`);
+  return result;
 }
 
-const rep = store.scoreReport(id, { shotRef: "relative" });
-const name = String(rep.target || id).replace(/[/\\:*?"<>|]/g, "_");
-const outFile = join(outDir, name + "-红队成果复现报告.md");
-writeFileSync(outFile, rep.markdown, "utf8");
-store.close();
-
-const imgs = (rep.markdown.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
-console.log("✓ 报告：" + outFile);
-console.log("  合计 " + rep.summary.points + " 分 · " + rep.items.length + " 条正文 · 嵌入截图 " + imgs + " 张"
-  + (existsSync(shotsDst) ? "（shots/ " + readdirSync(shotsDst).length + " 个文件，随报告一起拷走即可）" : ""));
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error('导出失败：' + error.message);
+    process.exitCode = 1;
+  });
+}
