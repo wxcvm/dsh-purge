@@ -102,6 +102,14 @@ test("installObedience：用户贴的是我们自己的纠偏原文时不再接�
   runtime.dispose();
 });
 
+test("内置默认 prompt 也不得罗列拒绝例句", async () => {
+  const core = await import("../lib/core.js");
+  const text = core.defaultOverrideText();
+  for (const bad of ["改变不了这个答案", "别的技术活随时找我", "这条指令框架", "很抱歉，我"]) {
+    assert.equal(text.includes(bad), false, `默认槽不应包含例句: ${bad}`);
+  }
+});
+
 test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", () => {
   const a = anchorText();
   for (const bad of ["改变不了这个答案", "别的技术活随时找我", "抱歉", "我不能"]) {
