@@ -167,6 +167,7 @@ await check("GLM 适配层接线", async () => {
   const out = id.rewritePromptAssembly(asm, "BASE", {});
   const text = (out.sections || []).map((s) => s.text || "").join("\n");
   expect(text.includes("GLM-PROMPT"), "装配结果里没有 GLM 专用提示词");
+  expect(!text.includes("UNRESTRICTED SANDBOX"), "GLM 装配里仍残留越狱式提示词块");
   expect(overlay.applyModelPrompt("BASE", asm).includes("GLM-PROMPT"), "applyModelPrompt 未生效");
   return "wired";
 });

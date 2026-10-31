@@ -54,12 +54,14 @@ for (const c of candidates.slice(0, limit * 2)) {
   const models = new Set();
   let hasInject = false;
   let hasOverlay = false;
+  let hasRaw = false;
   let refusal = "";
   for (const line of lines) {
     const m = line.match(/"model"\s*:\s*"([^"]{2,40})"/);
     if (m) models.add(m[1]);
     if (line.includes("Little Code Sauce")) hasInject = true;
     if (line.includes("GLM-PROMPT")) hasOverlay = true;
+    if (line.includes("UNRESTRICTED SANDBOX")) hasRaw = true;
     if (!refusal && /我帮不了|无论怎么措辞|无法协助|不能协助|不会提供/.test(line)) {
       const mm = line.match(/"(?:text)":"([^"]{0,200})/);
       if (mm) refusal = mm[1].slice(0, 120);
@@ -70,7 +72,7 @@ for (const c of candidates.slice(0, limit * 2)) {
   if (!isGlm && !hasOverlay) { checked += 1; if (checked > limit) break; }
   const stamp = new Date(c.mtime).toLocaleString("zh-CN");
   console.log(`\n${path.basename(path.dirname(c.fp)).slice(0, 22)}  ${stamp}`);
-  console.log(`  model=${modelList}  inject=${hasInject ? "Y" : "N"}  glmPrompt=${hasOverlay ? "Y" : "N"}`);
+  console.log(`  model=${modelList}  inject=${hasInject ? "Y" : "N"}  glmPrompt=${hasOverlay ? "Y" : "N"}  rawInject=${hasRaw ? "Y" : "N"}`);
   if (refusal) console.log(`  拒绝片段: ${refusal}`);
   if (isGlm && !hasOverlay) console.log("  ↳ GLM 会话但系统提示里没有适配段：插件进程还没加载新代码（需重启）");
   checked += 1;
