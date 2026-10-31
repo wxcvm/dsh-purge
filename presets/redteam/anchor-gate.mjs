@@ -3,7 +3,7 @@
  *
  * 只接梁神两阶段里这一段，不接两工具裁剪，也不切 PTC：
  * 第一段思考要像官方 Minimal（含 we、不含 let me）才放开输出上限；
- * 锚不住则最多 4 步。上限 1024 token，放开后拆掉，避免焊死在后面的请求上。
+ * 锚不住则最多 4 步。原来兜底 1024 token，会把纯文本回答硬截断（2026-10-31 修）。
  * 上下文压缩把模型可见的表面整段重写，压缩后再关上，直到新的锚点或再走满 4 步。
  *
  * 红队指挥和执行角色一直看见原来的工具和人设。放开之后，整篇工作区说明
@@ -39,7 +39,7 @@ export function hasAnchoredReasoning(content) {
  * c) 没有工具调用但已经回答，且 promoteAfterFirstResponse → 放开。
  */
 export function decidePromotion(state, config) {
-  if (state.toolCalled && config.anchorGate !== true) return true
+  if (config.anchorGate !== true) return true
   if (state.toolCalled && config.anchorGate === true && (state.anchored || state.steps >= config.maxBootstrapSteps)) return true
   /* 红队指挥首轮必调工具；英文思考常写 I need 过不了 we 锚，但仍应在少量 step 后放开输出上限 */
   if (state.toolCalled && config.anchorGate === true && state.steps >= 1 && config.promoteAfterFirstResponse === true) return true
@@ -178,7 +178,10 @@ export function apply(ctx, config = {}) {
     anchorGate: config.anchorGate !== false,
     maxBootstrapSteps: integerAtLeast(config.maxBootstrapSteps, 4, 1),
     promoteAfterFirstResponse: config.promoteAfterFirstResponse !== false,
-    bootstrapMaxTokens: integerAtLeast(config.bootstrapMaxTokens, 1024, 1),
+    // 【修复】config 里没写 bootstrapMaxTokens 就不再兜底 1024：那会把纯文本回答硬截断。
+    bootstrapMaxTokens: config.bootstrapMaxTokens === undefined
+      ? undefined
+      : integerAtLeast(config.bootstrapMaxTokens, 1, 1),
     instructionHint: config.instructionHint !== false,
   }
 

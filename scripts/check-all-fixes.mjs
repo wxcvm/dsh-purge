@@ -145,6 +145,20 @@ await check("注入解析可用", () => {
   return `source=${r.source} len=${r.text.length}`;
 });
 
+// 15. 预设副本（宿主真正加载的那份）不得留着 1024 兜底
+await check("预设副本无 1024 兜底", () => {
+  const repoGate = path.join(root, "presets/redteam/anchor-gate.mjs");
+  const repoText = fs.readFileSync(repoGate, "utf8");
+  expect(!/integerAtLeast\(config\.bootstrapMaxTokens, 1024/.test(repoText), "仓库内仍兜底 1024");
+  const home = process.env.DSH_HOME || path.join(process.env.USERPROFILE || "", ".dsh");
+  const liveGate = path.join(home, ".agent-presets/redteam/anchor-gate.mjs");
+  if (!fs.existsSync(liveGate)) return "live 副本不存在（跳过）";
+  const liveText = fs.readFileSync(liveGate, "utf8");
+  expect(!/integerAtLeast\(config\.bootstrapMaxTokens, 1024/.test(liveText), "live 副本仍兜底 1024");
+  expect(liveText === repoText, "live 副本与仓库不一致");
+  return "live == repo";
+});
+
 const pad = Math.max(...rows.map((r) => r.name.length));
 let bad = 0;
 for (const r of rows) {
