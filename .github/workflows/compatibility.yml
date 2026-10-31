@@ -1,0 +1,37 @@
+name: Maintenance compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/compat-maintenance, codex/redteam-workflow-enhancement]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  api-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        host: [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-alpha.2]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare explicit official fixture, without host or model execution
+        run: node scripts/prepare-host-fixture.mjs ${{ matrix.host }}
+      - name: Install isolated fixture with all lifecycle scripts disabled
+        run: npm install --prefix .scratch/hosts/${{ matrix.host }} --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Check generated bundle and syntax
+        run: |
+          node scripts/build-client.mjs --check
+          node scripts/check-syntax.mjs
+      - name: Run unit and actual public API contract tests
+        shell: bash
+        run: |
+          export DSH_COMPAT_HOST_ROOT="$GITHUB_WORKSPACE/.scratch/hosts/${{ matrix.host }}"
+          node --test
