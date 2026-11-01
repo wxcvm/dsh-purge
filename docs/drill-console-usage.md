@@ -62,6 +62,10 @@
 缺       FOFA_KEY、VPS 私钥 —— 这两项不填，测绘只能被动、拿不到反弹 shell
 ```
 
+## 6.5 工具逐个注释
+
+64 个 `redteam_*` 工具的作用、参数、调用时机见 [drill-tools-reference.md](./drill-tools-reference.md)（由 `lib/redteam/tools.js` 自动抽取，改代码后重跑生成脚本即可同步）。
+
 ## 7. 想省事就让 AI 全做
 
 把这句话发给我即可：
