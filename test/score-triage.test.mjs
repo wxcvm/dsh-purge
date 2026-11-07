@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isUntestedLiveAsset, reviewScoring } from '../lib/redteam/score-triage.js'
+import { isUntestedLiveAsset, reviewScoring, nextTaskCard } from '../lib/redteam/score-triage.js'
 
 const rules = [
   { code: 'server-host', re: /服务器权限|命令执行成功/i },
@@ -63,4 +63,22 @@ test('原始 HTTP 证据存在时可列入待复核，但不会自动加分', ()
   })], points([]), rules)
   assert.equal(r.review_ready, 1)
   assert.equal(r.counted, 0)
+})
+
+test('任务卡只选一个优先待办；priority=0 不被误排到末尾', () => {
+  const card = nextTaskCard([
+    { priority: 2, action: '可选任务', target: 'asset #7' },
+    { priority: 0, action: '核对未计分命中', target: 'vuln #3', tool: 'redteam_score_list' },
+  ], { score_points: 100, score_hits: 1, recorded_hits: 3 })
+  assert.equal(card.status, 'ready')
+  assert.equal(card.title, '核对未计分命中')
+  assert.equal(card.first_tool, 'redteam_score_list')
+  assert.equal(card.before.score_points, 100)
+  assert.equal(card.before.counted_hits, 1)
+  assert.equal(card.workflow.length, 3)
+})
+test('没有可信待办项时，不生成假的得分任务', () => {
+  const result = nextTaskCard([], { score_points: 0 })
+  assert.equal(result.status, 'idle')
+  assert.equal(Object.hasOwn(result, 'first_tool'), false)
 })
