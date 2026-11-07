@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isUntestedLiveAsset, reviewScoring, nextTaskCard } from '../lib/redteam/score-triage.js'
+import { isUntestedLiveAsset, reviewScoring, nextTaskCard, compareProgress } from '../lib/redteam/score-triage.js'
 
 const rules = [
   { code: 'server-host', re: /服务器权限|命令执行成功/i },
@@ -81,4 +81,38 @@ test('没有可信待办项时，不生成假的得分任务', () => {
   const result = nextTaskCard([], { score_points: 0 })
   assert.equal(result.status, 'idle')
   assert.equal(Object.hasOwn(result, 'first_tool'), false)
+})
+
+test('进度对账只把真正的有效分值增长视为得分', () => {
+  const base = { score_points: 0, counted_hits: 0, recorded_hits: 0, assets: 2, confirmed: 1 }
+  const scored = compareProgress(base, { ...base, score_points: 50, counted_hits: 1, recorded_hits: 1 })
+  assert.equal(scored.status, 'scored')
+  assert.equal(scored.delta.score_points, 50)
+  assert.equal(scored.measurable_change, true)
+  const discovered = compareProgress(base, { ...base, assets: 3, confirmed: 2 })
+  assert.equal(discovered.status, 'records-added')
+  assert.equal(discovered.score_increased, false)
+  const duplicated = compareProgress(base, { ...base, recorded_hits: 1 })
+  assert.equal(duplicated.status, 'records-added')
+  assert.equal(duplicated.score_increased, false)
+})
+test('没有统计变化不能声称得分，记录减少不能算新增', () => {
+  const base = { score_points: 20, counted_hits: 1, recorded_hits: 1, assets: 3, confirmed: 2 }
+  const unchanged = compareProgress(base, { ...base })
+  assert.equal(unchanged.status, 'no-change')
+  assert.equal(unchanged.measurable_change, false)
+  const changed = compareProgress(base, { ...base, score_points: 10 })
+  assert.equal(changed.status, 'records-changed')
+  assert.equal(changed.score_increased, false)
+})
+test('进度对账拒绝不完整的基线，不能靠缺失字段捏造增量', () => {
+  assert.throws(
+    () => compareProgress({ assets: 2 }, { score_points: 10, counted_hits: 1, recorded_hits: 1, assets: 2, confirmed: 1 }),
+    /progress snapshot requires/,
+  )
+  assert.throws(
+    () => compareProgress({ score_points: 0, counted_hits: 0, recorded_hits: 0, assets: 0, confirmed: 0 },
+      { score_points: NaN, counted_hits: 0, recorded_hits: 0, assets: 0, confirmed: 0 }),
+    /progress snapshot requires/,
+  )
 })
