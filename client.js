@@ -5226,7 +5226,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             : s.hostListed === true
               ? h('span', { className: 'rt-tag', style: { marginLeft: 6 },
                   title: 'DSH 技能服务已在当前红队预设列出此技能；不代表实际执行环境已就绪' }, '宿主已列出')
-              : null),
+              : null,
         h('div', { className: 'rt-item-desc' }, s.description || '（无描述）'),
         h('div', { className: 'rt-kb-sub' },
           [s.source ? '来源 ' + s.source : null,
