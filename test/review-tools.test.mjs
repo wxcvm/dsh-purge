@@ -58,3 +58,16 @@ test('没有命中不等于交付已就绪；分页只限制详情不改变缺�
   assert.equal(result.issues.length, 1)
   assert.equal(result.omitted, 2)
 })
+
+test('范围复核结果优先呈现未匹配与仅域名匹配资产', () => {
+  const assets = Array.from({ length: 30 }, (_, i) => ({ id: i + 1, ip: '192.0.2.' + (i + 1) }))
+  assets.push({ id: 31, ip: '198.51.100.1', primary_name: 'sub.example.test' })
+  assets.push({ id: 32, ip: '203.0.113.1' })
+  const result = reviewScope(assets, '192.0.2.0/24,*.example.test', 3)
+  assert.equal(result.ip_matched, 30)
+  assert.equal(result.name_only, 1)
+  assert.equal(result.unmatched, 1)
+  assert.equal(result.items.length, 3)
+  assert.deepEqual(result.items.map((x) => x.status), ['unmatched', 'name-only', 'ip-matched'])
+  assert.equal(result.sample_truncated, true)
+})
