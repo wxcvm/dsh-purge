@@ -21,8 +21,8 @@ test('fork package metadata installs from its own maintained repository', () => 
 test('built-in updater and profile fallback no longer point at the original repository', () => {
   const updater = read('../lib/update.js')
   const profile = read('../lib/profile-insert.js')
-  assert.match(updater, /const REPO = "wxcvm\\/dsh-purge";/)
-  assert.doesNotMatch(updater, /YuJunZhiXue\\/dsh-purge/)
-  assert.match(profile, /https:\\/\\/codeload\\.github\\.com\\/wxcvm\\/dsh-purge\\/tar\\.gz\\/refs\\/heads\\/master/)
-  assert.doesNotMatch(profile, /YuJunZhiXue\\/dsh-purge/)
+  assert.ok(updater.includes('const REPO = "wxcvm/dsh-purge";'))
+  assert.ok(!updater.includes('YuJunZhiXue/dsh-purge'))
+  assert.ok(profile.includes(tarball))
+  assert.ok(!profile.includes('YuJunZhiXue/dsh-purge'))
 })
