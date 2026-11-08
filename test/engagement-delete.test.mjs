@@ -54,6 +54,7 @@ test('missing target is an idempotent no-op, including a stale current pointer',
   assert.equal(result.not_found, true)
   assert.equal(result.current, null)
   assert.equal(existsSync(store.dirOf('missing-target')), false)
+  assert.equal(readFileSync(store.currentPath(), 'utf8'), '')
 })
 
 test('delete requires exact confirmation and refuses path traversal', (t) => {
