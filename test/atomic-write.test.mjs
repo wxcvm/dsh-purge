@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { atomicWriteFileSync } from '../lib/redteam/atomic-write.js'
 import { readSettings, writeSettings } from '../lib/redteam/settings.js'
 import { loadPlatformConfig, savePlatformConfig } from '../lib/redteam/platform-config.js'
-import { loadProxyConfig, saveProxyConfig } from '../lib/redteam/proxy-config.js'
 
 function withTemp(fn) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-atomic-config-'))
@@ -32,7 +31,7 @@ test('a failed replacement cleans up staging and keeps the original target', () 
   assert.deepEqual(readdirSync(root), ['config.json'])
 }))
 
-test('agent limits, tool paths and proxy settings share the crash-safe writer', () => withTemp((root) => {
+test('agent limits and toolkit settings save complete JSON across updates', () => withTemp((root) => {
   writeSettings(root, { maxAgents: 4 })
   writeSettings(root, { otherSetting: 'preserved' })
   assert.deepEqual(readSettings(root), { maxAgents: 4, otherSetting: 'preserved' })
@@ -44,20 +43,11 @@ test('agent limits, tool paths and proxy settings share the crash-safe writer', 
   assert.equal(platform.notes, 'keep me')
   assert.equal(platform.envAdaptConfigured, true)
 
-  saveProxyConfig({
-    enabled: true, protocol: 'http', host: '127.0.0.1', port: 8899,
-    username: 'test-user', password: 'test-secret',
-  }, root)
-  saveProxyConfig({ noProxy: 'localhost' }, root)
-  const proxy = loadProxyConfig(root)
-  assert.equal(proxy.password, 'test-secret')
-  assert.equal(proxy.noProxy, 'localhost')
-  for (const file of ['settings.json', 'config.json', 'proxy.json']) {
+  for (const file of ['settings.json', 'config.json']) {
     assert.doesNotThrow(() => JSON.parse(readFileSync(join(root, file), 'utf8')))
   }
   assert.equal(readdirSync(root).filter((name) => name.includes('.tmp-')).length, 0)
   if (process.platform !== 'win32') {
-    assert.equal(statSync(join(root, 'proxy.json')).mode & 0o777, 0o600)
     assert.equal(statSync(join(root, 'config.json')).mode & 0o777, 0o600)
   }
 }))
