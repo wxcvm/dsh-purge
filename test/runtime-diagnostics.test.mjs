@@ -67,7 +67,7 @@ test('invalid metadata and stale copied Skills are explicitly identified', async
   writeFileSync(join(bundledDir, 'wrong.md'), skill('different'))
   writeFileSync(join(installed, 'wrong.md'), skill('wrong'))
   writeFileSync(join(bundledDir, 'invalid.md'), '# no frontmatter')
-  writeFileSync(preset, "customSkillDirs:\n  - !!js dshHomePath('skills')\n")
+  writeFileSync(preset, "customSkillDirs:\n  - !!js dshHomePath('skills')\n# - !!js dshHomePath('redteam/skills')\n")
   const result = await inspectRuntime({ home, bundledDir, sqliteProbe: sqlite })
   assert.equal(result.skills.filesReady, false)
   assert.deepEqual(result.skills.invalid, [
