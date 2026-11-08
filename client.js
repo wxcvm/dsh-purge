@@ -8099,7 +8099,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         const target = engagements.find((item) => item.id === eng)
         if (!target || deleting) return
         const label = target.name || target.id
-        if (!window.confirm('永久删除靶标「' + label + '」及其本地资产库、证据和报告？\\n此操作不可撤销。')) return
+        if (!window.confirm('永久删除靶标「' + label + '」及其本地资产库、证据和报告？\n此操作不可撤销。')) return
         setDeleting(true)
         api({ op: 'deleteEngagement', id: target.id, confirm: target.id }).then((r) => {
           setDeleting(false)
