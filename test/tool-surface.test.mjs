@@ -10,6 +10,10 @@ test('reviewed tool names match source declarations and actual registrations', a
   const source = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
   const declared = [...source.matchAll(/name:\s*'(redteam_[a-z0-9_]+)'/g)].map(match => match[1]).sort()
   assert.deepEqual(declared, expected)
+  const docs = readFileSync(new URL('../docs/drill-tools-reference.md', import.meta.url), 'utf8')
+  for (const name of expected) {
+    assert.ok(docs.includes('`' + name + '`'), `missing documentation for ${name}`)
+  }
 
   const home = mkdtempSync(join(tmpdir(), 'purge-tool-surface-'))
   const previousHome = process.env.DSH_HOME
