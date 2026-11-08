@@ -7916,6 +7916,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [refreshKey, setRefreshKey] = React.useState(0)
       const [digest, setDigest] = React.useState(null)
       const [seen, setSeen] = React.useState(null)
+      const snapshotRequest = React.useRef(0)
+      const selectedEngagement = React.useRef(null)
 
       React.useEffect(() => {
         if (embedded) return undefined
@@ -7929,12 +7931,22 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }, [embedded])
 
       const loadSnapshot = (id) => {
-        if (!id) { setSnapshot(null); return }
+        /* 旧靶标的迟到响应绝不能覆盖新靶标；刷新同一靶标也只接受最新请求。 */
+        const request = ++snapshotRequest.current
+        if (selectedEngagement.current !== id) {
+          selectedEngagement.current = id
+          setSnapshot(null)
+        }
+        if (!id) return
         api({ op: 'snapshot', engagement: id }).then((r) => {
+          if (request !== snapshotRequest.current || selectedEngagement.current !== id) return
           if (!r || r.ok === false) { setErr((r && r.error) || '加载失败'); return }
           setErr(null)
           setSnapshot(r)
-        }, (e) => setErr(String((e && e.message) || e)))
+        }, (e) => {
+          if (request === snapshotRequest.current && selectedEngagement.current === id)
+            setErr(String((e && e.message) || e))
+        })
       }
 
       const refreshList = (selectId) => {
@@ -7970,8 +7982,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setRefreshKey((k) => k + 1)
         api({ op: 'bootstrap' }).then((b) => {
           setEngagements((b && b.engagements) || [])
-          if (eng) loadSnapshot(eng)
-        }, () => { if (eng) loadSnapshot(eng) })
+          if (selectedEngagement.current) loadSnapshot(selectedEngagement.current)
+        }, () => {
+          if (selectedEngagement.current) loadSnapshot(selectedEngagement.current)
+        })
       }
 
       const trackPointer = (e, move) => {
@@ -8065,7 +8079,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         return digestHasNew(seen[tab], digest[tab])
       }
 
-      const stats = (snapshot && snapshot.stats) || {}
+      const currentSnapshot = snapshot && snapshot.engagement && snapshot.engagement.id === eng ? snapshot : null
+      const stats = (currentSnapshot && currentSnapshot.stats) || {}
       /* 顶层按「作战 / 入口 / 设置」收拢：config 不再和作战页平级，guide 移到概览 */
       const tabSections = [
         { label: '作战', pages: [
@@ -8117,10 +8132,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn rt-btn-primary', disabled: creating, onClick: () => openEngagement() },
                 creating ? '创建中…' : '创建靶标'))))
       } else if (st.tab === 'intel') body = h(IntelTab, { engagement: eng, refreshKey: refreshKey })
-      else if (st.tab === 'overview') body = h(OverviewTab, { engagement: eng, snapshot: snapshot, refreshKey: refreshKey, onGoto: (tab) => setSt(Object.assign({}, st, { tab })) })
-      else if (st.tab === 'assets') body = h(AssetsTab, { engagement: eng, snapshot: snapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
+      else if (st.tab === 'overview') body = h(OverviewTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onGoto: (tab) => setSt(Object.assign({}, st, { tab })) })
+      else if (st.tab === 'assets') body = h(AssetsTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng })
-      else if (st.tab === 'testing') body = h(AssetsTab, { engagement: eng, snapshot: snapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
+      else if (st.tab === 'testing') body = h(AssetsTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
       else if (st.tab === 'sessions') body = h(SessionTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'findings') body = h(FindingsTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'chain') body = h(ChainTab, { engagement: eng, refreshKey: refreshKey })
@@ -8222,7 +8237,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('span', null, '被动/主动 ' + (stats.passiveSignals || 0) + '/' + (stats.activeSignals || 0)),
           h('div', { className: 'rt-spacer' }),
           full ? h('span', null, '按 Esc 或点右上角「退出全面浏览」回到带侧栏的界面') : null,
-          h('span', null, 'SQLite · ' + (snapshot && snapshot.engagement ? snapshot.engagement.name : ''))))
+          h('span', null, 'SQLite · ' + (currentSnapshot && currentSnapshot.engagement ? currentSnapshot.engagement.name : ''))))
     }
 
     /* ---------------------------------------------------------- 入口按钮 */
