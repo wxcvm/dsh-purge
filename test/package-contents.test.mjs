@@ -23,6 +23,6 @@ test('npm tarball contains the installed skills and documented maintenance sourc
   }
   assert.ok([...files].filter(file => file.startsWith('skills/redteam/')).length > 20,
     'most of the bundled skill library is missing')
-  assert.ok(![...files].some(file => /^maintenance\\/.*\\/dist\\//.test(file)),
+  assert.ok(![...files].some(file => file.startsWith('maintenance/') && file.includes('/dist/')),
     'built maintenance binaries must be release artifacts, not bundled npm payload')
 })
