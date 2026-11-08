@@ -280,12 +280,13 @@ test('无资产关联/记录不在样本中只提示核对范围，失活与阻�
     { id: 2, state: 'live', test_status: 'blocked', ip: '192.0.2.2' },
     { id: 3, state: 'live', test_status: 'abandoned', ip: '192.0.2.3' },
     { id: 4, state: 'live', test_status: 'no_surface', ip: '192.0.2.4' },
+    { id: 6, state: 'live', test_status: 'testing', ip: '192.0.2.6' },
   ]
-  const candidates = [1, 2, 3, 4, 5, null].map((asset_id, index) => ({
+  const candidates = [1, 2, 3, 4, 5, null, 6].map((asset_id, index) => ({
     id: index + 1, status: 'candidate', severity: 'high', asset_id, evidence: '旧观察结果',
   }))
   const q = reviewCandidateQueue(candidates, assets)
-  assert.deepEqual(q.deferred.map((v) => v.vuln_id), [1, 2, 3, 4])
+  assert.deepEqual(q.deferred.map((v) => v.vuln_id), [1, 2, 3, 4, 7])
   assert.deepEqual(q.needs_scope.map((v) => v.vuln_id), [5, 6])
   assert.equal(q.ready.length, 0)
   assert.equal(q.needs_evidence.length, 0)
