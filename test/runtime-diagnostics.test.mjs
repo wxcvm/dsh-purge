@@ -45,7 +45,7 @@ test('matching flat Skills and preset path are reported ready without claiming m
     writeFileSync(join(bundledDir, name + '.md'), skill(name))
     writeFileSync(join(installed, name + '.md'), skill(name))
   }
-  writeFileSync(preset, "customSkillDirs:\n  - !!js dshHomePath('skills')\n  - !!js dshHomePath('redteam/skills')\n")
+  writeFileSync(preset, "customSkillDirs:\n  - !!js dshHomePath('skills')\n# - !!js dshHomePath('redteam/skills')\n  - !!js dshHomePath('redteam/skills')\n")
   const before = readFileSync(preset, 'utf8')
   const report = await inspectRuntime({ home, bundledDir, sqliteProbe: sqlite })
   assert.equal(report.runtime.sqliteAvailable, true)
