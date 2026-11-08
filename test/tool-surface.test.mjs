@@ -8,7 +8,7 @@ const expected = JSON.parse(readFileSync(new URL('./fixtures/tool-surface.json',
 
 test('reviewed tool names match source declarations and actual registrations', async (t) => {
   const source = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
-  const declared = [...source.matchAll(/name:\\s*'(redteam_[a-z0-9_]+)'/g)].map(match => match[1]).sort()
+  const declared = [...source.matchAll(/name:\s*'(redteam_[a-z0-9_]+)'/g)].map(match => match[1]).sort()
   assert.deepEqual(declared, expected)
 
   const home = mkdtempSync(join(tmpdir(), 'purge-tool-surface-'))
@@ -22,7 +22,7 @@ test('reviewed tool names match source declarations and actual registrations', a
   mkdirSync(moduleDir, { recursive: true })
   writeFileSync(join(home, 'package.json'), '{}')
   writeFileSync(join(moduleDir, 'package.json'), '{"name":"@deepseek-ai/dsh-tools","main":"index.js"}')
-  writeFileSync(join(moduleDir, 'index.js'), 'exports.defineTool = spec => spec\\n')
+  writeFileSync(join(moduleDir, 'index.js'), 'exports.defineTool = spec => spec\n')
   process.env.DSH_HOME = home
 
   const { apply } = await import('../lib/redteam/tools.js')
