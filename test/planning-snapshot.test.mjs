@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
-import { compactVuln } from '../lib/redteam/tools.js'
+import { compactVuln } from '../lib/redteam/query-options.js'
 import { reviewCandidateQueue, reviewScoring } from '../lib/redteam/score-triage.js'
 
 function fixture() {
