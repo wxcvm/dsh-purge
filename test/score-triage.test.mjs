@@ -147,3 +147,34 @@ test('旧版五字段基线仍可对账，新版基线丢字段则报错', () =>
   assert.equal(card.before.reviewed_assets, 0)
   assert.throws(() => compareProgress(card.before, old), /progress snapshot requires/)
 })
+
+test('禁用、缺失及旧口径得分点不列为可复核记分成果', () => {
+  const disabled = reviewScoring([vuln(11)], { items: [
+    { code: 'server-host', points: 50, enabled: false, hits: [] },
+  ] }, rules)
+  assert.equal(disabled.review_ready, 0)
+  assert.equal(disabled.unavailable_rule, 1)
+  assert.equal(disabled.suggestions[0].suggest[0].available, false)
+  assert.equal(disabled.followup[0].status, 'rule-unavailable')
+
+  const missing = reviewScoring([vuln(12)], { items: [] }, rules)
+  assert.equal(missing.unavailable_rule, 1)
+  assert.equal(missing.review_ready, 0)
+
+  const legacy = reviewScoring([vuln(13)], { items: [
+    { code: 'server-host', points: 50, enabled: true, legacy: true, hits: [] },
+  ] }, rules)
+  assert.equal(legacy.unavailable_rule, 1)
+  assert.equal(legacy.suggestions[0].suggest[0].available, false)
+})
+test('多个匹配规则中只要有一条可用，仍可进入人工复核', () => {
+  const r = reviewScoring([vuln(14, { gained: '服务器权限和数据库凭据' })], {
+    items: [
+      { code: 'server-host', points: 50, enabled: false, hits: [] },
+      { code: 'db-credential', points: 50, enabled: true, hits: [] },
+    ],
+  }, rules)
+  assert.equal(r.review_ready, 1)
+  assert.equal(r.unavailable_rule, 0)
+  assert.equal(r.suggestions[0].suggest.filter((s) => s.available).length, 1)
+})
