@@ -29,6 +29,10 @@ test('external file changes take effect without resetting a sticky in-process ov
   try {
     assert.equal(primeInjectionState(home), false)
     writeFileSync(flagPath(home), 'disabled')
+    // Even before the read cache expires, an explicit toggle must read the file.
+    assert.equal(toggleInjection(home), false)
+    assert.equal(existsSync(flagPath(home)), false)
+    writeFileSync(flagPath(home), 'disabled')
     await new Promise((resolve) => setTimeout(resolve, 550))
     assert.equal(isInjectionOff(home), true)
     unlinkSync(flagPath(home))
