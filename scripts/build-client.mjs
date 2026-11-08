@@ -3,6 +3,7 @@
  * 写进 client.js 里的 DSH_PURGE_DRILL 标记之间。
  *
  * 用法：node scripts/build-client.mjs
+ * 校验：node scripts/build-client.mjs --check（只比较，不写文件）
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
