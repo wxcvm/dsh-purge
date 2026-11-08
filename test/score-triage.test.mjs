@@ -116,3 +116,34 @@ test('进度对账拒绝不完整的基线，不能靠缺失字段捏造增量',
     /progress snapshot requires/,
   )
 })
+
+test('完成资产检查也算进展，即使没有新增漏洞或分数', () => {
+  const before = {
+    score_points: 0, counted_hits: 0, recorded_hits: 0, assets: 5, confirmed: 0,
+    findings: 0, reviewed_assets: 0, evidence_items: 0,
+  }
+  const result = compareProgress(before, { ...before, reviewed_assets: 1 })
+  assert.equal(result.status, 'records-added')
+  assert.equal(result.delta.reviewed_assets, 1)
+  assert.equal(result.score_increased, false)
+})
+test('新增候选漏洞和 HTTP 证据会计入记录进展，但不伪报得分', () => {
+  const before = {
+    score_points: 10, counted_hits: 1, recorded_hits: 1, assets: 5, confirmed: 1,
+    findings: 2, reviewed_assets: 1, evidence_items: 3,
+  }
+  const result = compareProgress(before, { ...before, findings: 3, evidence_items: 4 })
+  assert.equal(result.status, 'records-added')
+  assert.equal(result.delta.findings, 1)
+  assert.equal(result.delta.evidence_items, 1)
+  assert.equal(result.delta.score_points, 0)
+})
+test('旧版五字段基线仍可对账，新版基线丢字段则报错', () => {
+  const old = { score_points: 0, counted_hits: 0, recorded_hits: 0, assets: 1, confirmed: 0 }
+  assert.equal(compareProgress(old, { ...old, findings: 3 }).status, 'no-change')
+  const fresh = { ...old, findings: 1, reviewed_assets: 0, evidence_items: 0 }
+  const card = nextTaskCard([{ priority: 1, action: '检查现有记录' }], fresh)
+  assert.equal(card.before.findings, 1)
+  assert.equal(card.before.reviewed_assets, 0)
+  assert.throws(() => compareProgress(card.before, old), /progress snapshot requires/)
+})
