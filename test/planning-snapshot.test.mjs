@@ -114,7 +114,7 @@ test('taskBrief shows factual active and blocked notes alongside evidence gaps',
   }
   try {
     db.prepare("UPDATE asset SET test_status='testing', test_notes=?, test_updated_at=? WHERE id=4")
-      .run('[time] started\\n[time] checking services', '2026-11-08T08:00:00Z')
+      .run('[time] started\n[time] checking services', '2026-11-08T08:00:00Z')
     db.prepare("UPDATE asset SET test_status='blocked', test_notes=?, test_surface=? WHERE id=5")
       .run('[time] requires access approval', 'service unreachable')
     const result = dispatch(store, { op: 'taskBrief', engagement: 'lab' })
