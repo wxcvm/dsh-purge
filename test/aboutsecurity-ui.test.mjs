@@ -1,12 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { aboutSecurityDir } from '../lib/redteam/skill-catalog.js'
+import { aboutSecurityDir, listLocalSkills, readLocalSkill, searchLocalSkills } from '../lib/redteam/skill-catalog.js'
 import { aboutSecurityStatus, startAboutSecurity } from '../lib/redteam/aboutsecurity-manager.js'
-import { handleAboutSecurityOp, handleSkillOp } from '../lib/redteam/ui.js'
 
 function fixture(t) {
   const home = mkdtempSync(join(tmpdir(), 'purge-aboutsecurity-ui-'))
@@ -26,15 +25,14 @@ function putSkill(root) {
 }
 test('AboutSecurity absent: status is read-only and builtin skill directory remains visible', async (t) => {
   const home = fixture(t)
-  const snap = handleAboutSecurityOp({ op: 'aboutSecurityStatus' })
+  const snap = aboutSecurityStatus({ home })
   assert.equal(snap.ok, true)
   assert.equal(snap.installed, false)
   assert.equal(snap.skills, 0)
   assert.equal(aboutSecurityStatus({ home }).busy, false)
-  const catalog = await handleSkillOp({}, { op: 'skillCatalog' })
-  assert.equal(catalog.ok, true)
-  assert.ok(catalog.items.some((x) => x.library === 'redteam'))
-  assert.equal(catalog.libraries.aboutsecurity, 0)
+  const skills = listLocalSkills({ home })
+  assert.ok(skills.some((x) => x.source === 'redteam'))
+  assert.ok(!skills.some((x) => x.source === 'aboutsecurity'))
 })
 
 test('existing AboutSecurity skills show separately, with a readable body and no false native registry claim', async (t) => {
@@ -42,18 +40,17 @@ test('existing AboutSecurity skills show separately, with a readable body and no
   const root = aboutSecurityDir(home)
   mkdirSync(join(dirname(root), '.git'), { recursive: true })
   putSkill(root)
-  const snap = handleAboutSecurityOp({ op: 'aboutSecurityStatus' })
+  const snap = aboutSecurityStatus({ home })
   assert.equal(snap.installed, true)
   assert.equal(snap.skills, 1)
-  const catalog = await handleSkillOp({}, { op: 'skillCatalog' })
-  const item = catalog.items.find((x) => x.library === 'aboutsecurity' && x.name === 'recon/passive-recon')
-  assert.ok(item, 'external skill should appear in catalog')
-  assert.equal(item.hostListed, false)
-  assert.equal(catalog.items.filter((x) => x.library === 'aboutsecurity').length, 1)
-  const detail = await handleSkillOp({}, { op: 'skillRead', library: item.library, name: item.name })
-  assert.equal(detail.ok, true)
+  const catalog = listLocalSkills({ home }).filter((x) => x.source === 'aboutsecurity')
+  assert.equal(catalog.length, 1)
+  assert.equal(catalog[0].key, 'aboutsecurity:recon/passive-recon')
+  const found = searchLocalSkills('OSINT', { home })
+  assert.equal(found.total, 1)
+  const detail = readLocalSkill(catalog[0].key, { home })
   assert.ok(detail.content.includes('被动检索'))
-  await assert.rejects(() => handleSkillOp({}, { op: 'skillRead', library: 'aboutsecurity', name: '../../outside' }), /not found/)
+  assert.throws(() => readLocalSkill('aboutsecurity:../../outside', { home }), /not found/)
 })
 
 test('explicit install is asynchronous, updates status and does not start automatically', async (t) => {
@@ -78,4 +75,20 @@ test('explicit install is asynchronous, updates status and does not start automa
   const again = startAboutSecurity({ home, runGit: async () => { throw new Error('should not run') } })
   assert.equal(again.ok, false)
   assert.equal(again.installed, true)
+})
+
+
+test('host and embedded client both expose the install/status UI without importing optional host dependencies', () => {
+  const ui = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
+  const panel = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const embedded = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  for (const op of ['aboutSecurityStatus', 'aboutSecurityInstall', 'aboutSecurityUpdate']) {
+    assert.ok(ui.includes(op), 'host missing ' + op)
+    assert.ok(panel.includes(op), 'panel missing ' + op)
+    assert.ok(embedded.includes(op), 'embedded panel missing ' + op)
+  }
+  assert.match(ui, /request\.library === 'aboutsecurity'/)
+  assert.match(ui, /hostListed: false/)
+  assert.match(panel, /AboutSecurity（按需安装）/)
+  assert.match(embedded, /AboutSecurity 扩展技能库/)
 })
