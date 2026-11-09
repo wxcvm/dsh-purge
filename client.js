@@ -128,6 +128,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const zh = {
 			nav: "规则设定",
 			"dock.clean": "清洗",
+			"help.clean": "清洗台详细操作指南（新手）",
 			"dock.drill": "作战台",
 			"dock.toggle": "dsh-purge",
 			"dock.newSession": "dsh-purge",
@@ -486,6 +487,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const en = {
 			nav: "Rules",
 			"dock.clean": "Clean",
+			"help.clean": "Cleaning console step-by-step guide",
 			"dock.drill": "Ops",
 			"dock.toggle": "dsh-purge",
 			"dock.newSession": "dsh-purge",
@@ -2221,6 +2223,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 				),
+				h("div", { className: "dshp-row", style: { margin: "8px 0 10px" } },
+					h("a", {
+						href: "https://github.com/wxcvm/dsh-purge/blob/master/docs/CLEANING_GUIDE.zh-CN.md",
+						target: "_blank", rel: "noopener noreferrer",
+						style: { fontSize: 12.5 },
+					}, t("help.clean"))),
 				h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
 				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
 				h(PatchGroups, { state: s }),
