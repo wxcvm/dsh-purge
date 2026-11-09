@@ -1605,7 +1605,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("p", { className: "dshp-artex-note", role: "status" },
 						status.online ? "已连接本机 ARTEX" + (status.version ? " · " + status.version : "")
 							: "当前未发现运行中的 ARTEX 服务",
-						" · 可复用工具 " + reused + "/" + tools.length + " 项"),
+						" · 已复用 " + reused + " 项 · ARTEX 本机工具 " + tools.length + " 项"),
 					status.online ? h("a", {
 						href: "http://127.0.0.1:8787/", target: "_blank", rel: "noopener noreferrer",
 					}, "打开 ARTEX") : null,
@@ -1616,6 +1616,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								+ (item.reused ? "DSH 已复用" : "可用文件，DSH 优先使用其原有配置")
 								+ " · " + item.path))),
 					) : h("p", { className: "dshp-artex-note" }, "尚未找到 ARTEX 在本机管理的工具；如果只运行 Docker，容器内工具不会当作 Windows 可执行文件。"),
+					Array.isArray(status.toolRoots) && status.toolRoots.length
+						? h("details", null,
+							h("summary", null, "ARTEX 本机工具目录（" + status.toolRoots.length + "）"),
+							h("ul", { className: "dshp-artex-tools" },
+								status.toolRoots.map((dir) => h("li", { key: dir }, dir))),
+						) : null,
 					status.skillDir ? h("p", { className: "dshp-artex-note" }, "ARTEX Skill 目录（仅显示）： " + status.skillDir) : null,
 					h("p", { className: "dshp-artex-note" },
 						"仅读取本机健康状态与工具路径；不导入登录凭据，不复制配置，也不会启动或修改 ARTEX。"),
