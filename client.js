@@ -1426,7 +1426,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				groupTotals.set(key, (groupTotals.get(key) || 0) + 1);
 			}
 			const diagnostics = formatPatchDiagnostics(state, rows, t);
-			const filteredDiagnostics = formatPatchDiagnostics(state, selected, t);
+			const filteredDiagnostics = "当前筛选: " + mode + (search.trim() ? " / " + search.trim() : "") + "\n" + "显示 " + selected.length + " / " + rows.length + " 项\n\n" + formatPatchDiagnostics(state, selected, t);
 			const filters = [
 				["all", "全部", tally.total],
 				["attention", "需关注", tally.pending + tally.unmatched],
