@@ -6912,6 +6912,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [offset, setOffset] = React.useState(0)
       const [checking, setChecking] = React.useState('')
       const [checks, setChecks] = React.useState({})
+      const [reload, setReload] = React.useState(0)
+      const checkEng = React.useRef(eng)
+      checkEng.current = eng
 
       const limit = 15
       React.useEffect(() => {
@@ -6924,14 +6927,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           else setData(r)
         }, (e) => { if (live) setErr(String((e && e.message) || e)) })
         return () => { live = false }
-      }, [eng, status, offset, refreshKey])
+      }, [eng, status, offset, refreshKey, reload])
 
       const verify = (runId) => {
         if (checking) return
         setChecking(runId)
-        api({ op: 'scanArtifactInspect', engagement: eng, run_id: runId }).then((r) => {
+        const currentEng = eng
+        api({ op: 'scanArtifactInspect', engagement: currentEng, run_id: runId }).then((r) => {
+          if (checkEng.current !== currentEng) return
           setChecking(''); setChecks((old) => ({ ...old, [runId]: r || { ok: false, error: '无返回结果' } }))
         }, (e) => {
+          if (checkEng.current !== currentEng) return
           setChecking(''); setChecks((old) => ({ ...old, [runId]: { ok: false, error: String((e && e.message) || e) } }))
         })
       }
@@ -6950,7 +6956,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             value: status, onChange: (e) => { setStatus(e.target.value); setOffset(0) } },
             h('option', { value: '' }, '全部状态'),
             Object.keys(labels).map((key) => h('option', { key, value: key }, labels[key]))),
-          h('button', { className: 'rt-btn', onClick: () => { setOffset(0); setData(null); api({ op: 'scanHistory', engagement: eng, status, offset: 0, limit }).then((r) => { if (r && r.ok !== false) { setData(r); setErr('') } else setErr((r && r.error) || '读取失败') }, (e) => setErr(String(e))) } }, '刷新')),
+          h('button', { className: 'rt-btn', onClick: () => { setOffset(0); setReload((v) => v + 1) } }, '刷新')),
         h('div', { className: 'rt-pane', style: { minHeight: 0 } },
           h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.6 } },
             '这里只读取 redteam_scan_run 保存的真实执行清单；核验输出会重新计算本机文件 SHA-256，不启动网络测试。“已导入”表示写入资产库，不代表漏洞已经验证。'),

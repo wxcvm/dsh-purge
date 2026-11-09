@@ -69,3 +69,35 @@ test('unreadable manifest is reported, not silently counted as successful scan',
   assert.equal(items.unreadable, 1)
   assert.equal(items.items[0].next.includes('核对'), true)
 })
+
+test('workbench API uses the same scan history records as the agent', async (t) => {
+  const { store, write } = fixture(t)
+  write('alpha', ONE, 'nmap', 'imported', '<nmaprun/>', { assets: 1 })
+  const { dispatch, dispatchAsync } = await import('../lib/redteam/store-core.js')
+  const list = dispatch(store, { op: 'scanHistory', engagement: 'alpha' })
+  assert.equal(list.ok, true)
+  assert.equal(list.total, 1)
+  assert.equal(list.items[0].run_id, ONE)
+  const check = await dispatchAsync(store, {
+    op: 'scanArtifactInspect', engagement: 'alpha', run_id: ONE,
+  })
+  assert.equal(check.status, 'verified')
+  const missing = await dispatchAsync(store, {
+    op: 'scanArtifactInspect', engagement: 'unknown', run_id: ONE,
+  })
+  assert.equal(missing.ok, false)
+  assert.match(missing.error, /engagement not found/)
+})
+
+test('scan history is exposed in workbench navigation and model tool list', async () => {
+  const { readFileSync } = await import('node:fs')
+  const frontend = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const built = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const tool = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  for (const code of [frontend, built]) {
+    assert.match(code, /function ScanHistoryTab/)
+    assert.match(code, /scanArtifactInspect/)
+    assert.match(code, /\['scan-history', '扫描记录'\]/)
+  }
+  assert.match(tool, /name: 'redteam_scan_history'/)
+})
