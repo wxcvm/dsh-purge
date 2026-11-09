@@ -28,16 +28,22 @@ ChatGPT 版是在 **1.1.71 老底子** 上加了一层模块化改造，所以�
 | `docs/redteam-workflow.md` | 红队工作流说明 | — |
 | `.github/workflows/compatibility.yml` | CI：多 Node 版本跑测试 | — |
 
-## 暂缓（放在 `test-pending/`，不进 `node --test`）
+## 暂缓与已收编（`test-pending/` 的四个用例）
 
-这 4 个用例依赖本仓库还没有的实现，属于"要移植配套内核才能跑"：
+2026-11-08 追平：四个用例里有三个已经落地并搬进正式套件（`test/*.test.mjs`，CI 会跑），
+`workflow-coordination.mjs` 拆成两半——不依赖宿主的 10 条搬进
+`test/coordination-primitives.test.mjs`，工具级的 6 条仍留在 `test-pending/`。
 
-| 用例 | 卡在哪 |
-|---|---|
-| `agent-status.mjs` | 需要 `lib/redteam/tools.js` 导出 `liveRunningChildren` / `reservationStatus`（后者不存在，需新写） |
-| `store-query.mjs` | 需要 ChatGPT 版 `store-core.js` 的 `dataQuality` 等查询算子（本仓库 340 KB vs 其 352 KB） |
-| `workflow-coordination.mjs` | 同上，依赖 tools 的占位/生命周期接线 |
-| `prompt-compat.mjs` | 依赖其 `identity.js` 的装配行为（本仓库已有自己的 override 保留修复） |
+| 用例 | 现状 | 落点 |
+|---|---|---|
+| `agent-status.mjs` | ✅ 已实现 | `lib/redteam/agent-status.js` + `ui.js#handleAgentsOp` 入参校验；测试 → `test/agent-status.test.mjs`（9 条） |
+| `store-query.mjs` | ✅ 已实现 | `store-core.js` 新增 `dataQuality` 算子（只读计数、不 checkpoint、不迁移 schema）+ `query-options.js` 分页校验；测试 → `test/store-query.test.mjs`（9 条） |
+| `prompt-compat.mjs` | ✅ 已实现 | `lib/identity.js` 装配契约（不多造 `tools`、`interpolate:false` 原样保留、装配失败原样冒泡）；测试 → `test/prompt-compat.test.mjs`（4 条） |
+| `workflow-coordination.mjs` | ⚠️ 一半已收编 | 设置原子合并 + 占位簿记（`reservation-state.js`）+ 子会话活动归纳（`lib/redteam/child-activity.js`）→ `test/coordination-primitives.test.mjs`（10 条，全绿）；`redteam_agent_slot` / 查询包装器 / `redteam_data_quality` 的工具级契约仍在 `test-pending/workflow-coordination.mjs`，见 `test-pending/README.md` |
+
+`workflow-coordination.mjs` 剩下的 6 条按 ChatGPT 版（1.1.71-redteam.1）的 **57 个工具**写的契约，
+本仓库现在是 75 个，且 `redteam_agent_slot` 语义不同（label+时间戳键 / 复用 / 注册表退化态字段）。
+硬要过就得回退既有工具行为，所以保留为规格说明，不进 `npm test`。
 
 ## 没有移植的
 

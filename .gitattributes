@@ -1,0 +1,9 @@
+# Everything keeps the platform default first; specific paths below override it.
+* text=auto
+
+# scripts/build-client.mjs compares client.js and lib/redteam/client.js byte for byte.
+# core.autocrlf=true (common on Windows) checks them out as CRLF, which makes
+# `node scripts/build-client.mjs --check` report a false "stale" and shows a
+# needless full-file diff. Treat both as binary so git never rewrites their bytes.
+client.js -text
+lib/redteam/client.js -text

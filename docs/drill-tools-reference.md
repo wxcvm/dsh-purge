@@ -559,6 +559,35 @@ _每步都要写 tool（命令原文）与 result（回显），否则报告无�
 - `description` — 得分条件说明
 - `enabled`
 
+### `redteam_scope_review`
+【离线只读】把库里的资产清单和**用户明确填写的允许范围**逐条核对，输出匹配、未匹配与无法判定的条目。支持 IPv4/IPv6、CIDR、域名与 `*.子域名`；只有域名的条目要人工再核 IP 归属。**没有网络请求，也不证明授权**——它只回答「库里的资产有没有落在我被明说的范围内」。没对上范围的资产先向指挥确认，别直接开打。
+
+参数：
+- `engagement`
+- `allowed` — 【必填】明确允许的地址/域名，逗号或换行分隔，例如 `192.0.2.0/24,2001:db8::/32,example.test,*.example.test`
+- `limit` — 最多展示多少条资产的匹配情况，默认 25，最多 100
+
+返回 `total_assets` / `sampled` / `partial`（资产超过 2000 条时 `partial:true`，用 `limit` 收窄再看）以及匹配、越界、仅域名三类清单。
+
+### `redteam_delivery_audit`
+【离线只读】审「已计入分数的记录」本身交得齐不齐：有没有写目标、有没有写结果证据、有没有关联 `vuln_id`/`step_id`。**只报缺口，不加分**，也**不因为字段填全就认定漏洞真实存在**——可复现性仍然是 `redteam_evidence_verify` 的事。收工前跑一次，把缺口补成报告能复现的样子。
+
+参数：
+- `engagement`
+- `limit` — 最多展示多少条缺口，默认 25，最多 100
+
+返回 `achieved_points` 与每条缺口具体缺哪个字段。
+
+### `redteam_progress_check`
+【只读】进展对账。把上一张 `redteam_next_action` 返回的 `focus.before` **原样 JSON** 传进来，它用当前库里的数字重算一遍，比较有效分数、计分条数、资产数、确认漏洞、已复核资产与新增 HTTP 证据，告诉你这一步到底推进了多少。**不猜成功、不自动写分**——数字没动就是没推进，别拿工具调用次数当战果，也别把"新增记录"说成"新增得分"。
+
+参数：
+- `engagement`
+- `before` — 【必填】原样粘贴上一张 `focus.before` 的 JSON，例如 `{"score_points":0,"counted_hits":0,"recorded_hits":0,"assets":2,"confirmed":1}`
+- `task_key` — 可选，上一张 `focus.task_key`，只用于在输出里标识任务
+
+解析失败会直接报错（说明你传的不是原始 JSON），不要自己手写这个对象。
+
 ## F. POC 与攻击文件
 
 _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*；验证有效后回填 verified。_
