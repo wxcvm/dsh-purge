@@ -31,6 +31,9 @@ try {
     throw 'Original lockfile was not restored'
   }
   Write-Host 'PASS: read-only verification and failed-install profile rollback'
+  # Clear the expected non-zero native exit from our fake pnpm; otherwise the
+  # GitHub pwsh wrapper treats a successful test as a failed job.
+  $global:LASTEXITCODE = 0
 } finally {
   $env:PATH = $oldPath
   Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction SilentlyContinue
