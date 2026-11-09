@@ -69,7 +69,9 @@
 
 工具复用只从用户设置的 `ARTEX_TOOL_DIRS` 或 Windows `%LOCALAPPDATA%\ARTEX\tools` 等已有本机目录寻找 nuclei、httpx、subfinder、ffuf、dnsx 等文件。查找优先级保持为：**用户显式路径 → DSH 自有工具箱与目录 → PATH → ARTEX 本机工具**。只显示文件路径及 DSH 是否采用，**文件被找到不等于已执行版本探测或验证实际兼容**。Docker/WSL 内的文件不会被直接当作 Windows 可执行文件。
 
-清洗台提供「重新检测 ARTEX」；当本机服务已经确认是 ARTEX 时可直接打开它。通过环境变量 `ARTEX_SKILL_DIR` 指定的目录仅用于展示，不自动复制 Skills。
+清洗台提供「重新检测 ARTEX」；当本机服务已经确认是 ARTEX 时可直接打开它。
+
+也可以在 dsh-purge 源码目录运行 `node scripts/diagnose-artex.mjs`，查看服务状态、HTTP 状态码与工具来源；默认不输出本机完整路径。如确需定位文件，使用 `node scripts/diagnose-artex.mjs --paths`，分享输出前请检查私人目录。通过环境变量 `ARTEX_SKILL_DIR` 指定的目录仅用于展示，不自动复制 Skills。
 
 本功能不会修改两套系统的配置或数据库，也不会读取凭据、自动启动 ARTEX 或发起扫描。ARTEX 的 Agent、MCP、任务和资产并未自动同步到 DSH。
 
