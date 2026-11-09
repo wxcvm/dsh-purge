@@ -8931,40 +8931,47 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			const [confirmSkip, setConfirmSkip] = useState(false);
 			const [status, setStatus] = useState(null);
 			const [busy, setBusy] = useState(false);
-			const cacheRef = useRef({ at: 0, ready: false });
+			const cacheRef = useRef({ at: 0, ready: null });
 			const openRef = useRef(false);
 			openRef.current = open;
 
 			const refresh = useCallback(async () => {
 				const r = await fetchEnvAdaptStatus();
-				const ready = !!(r && r.ready);
-				cacheRef.current = { at: Date.now(), ready: ready, skipped: !!(r && r.skipped) };
+				if (!r || r.ok !== true || typeof r.ready !== "boolean") return null;
+				cacheRef.current = { at: Date.now(), ready: r.ready, skipped: !!r.skipped };
 				setStatus(r);
+				if (r.ready) {
+					setOpen(false);
+					setConfirmSkip(false);
+				}
 				return r;
 			}, []);
 
 			const blockAndOpen = useCallback(() => {
 				setConfirmSkip(false);
-				refresh();
-				/* 第一次：只走完整授权窗 → 授权后进环境适配页 */
-				if (!readDrillAuth()) {
-					setOpen(false);
-					requestDrillEnv();
-					return true;
-				}
-				/* 已授权过：只弹精简环境适配窗，不再自动拉开整块作战台 */
-				setOpen(true);
+				/* 先取最新结果再展示弹窗：旧的未就绪缓存不应盖过已保存的工具配置。 */
+				void refresh().then((r) => {
+					if (!r || r.ready) return;
+					if (!readDrillAuth()) {
+						setOpen(false);
+						requestDrillEnv();
+					} else {
+						setOpen(true);
+					}
+				});
 				return true;
 			}, [refresh]);
 
 			const mustBlockSubmit = useCallback(() => {
 				if (!isRedteamModeActive()) return false;
 				const cached = cacheRef.current;
-				/* cache 过期时触发异步刷新;本次调用按最后一次 cache 判断,未知保守 block */
+				/* 未知/过期不当作“环境缺失”：刷新并交由宿主自己的执行阶段确认。
+				 * 只有近期明确的 ready=false 才弹配置窗口。 */
 				if (!cached.at || Date.now() - cached.at > 2500) {
-					refresh().catch(() => {});
+					void refresh();
+					return false;
 				}
-				if (cached.ready) return false;
+				if (cached.ready !== false) return false;
 				blockAndOpen();
 				return true;
 			}, [blockAndOpen, refresh]);
@@ -9083,14 +9090,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 											body: JSON.stringify({ op: "platformEnvAdaptSkip", skip: true }),
 										}).then((r) => r.json()).then((r) => {
 											setBusy(false);
+											if (!r || r.ok !== true || r.ready !== true) {
+												setStatus({ ready: false, message: (r && r.error) || "保存“暂不配置”失败，请重试。" });
+												return;
+											}
 											cacheRef.current = { at: Date.now(), ready: true, skipped: true };
 											setStatus(r);
 											setOpen(false);
 											setConfirmSkip(false);
-										}).catch(() => {
+										}).catch((e) => {
 											setBusy(false);
-											cacheRef.current = { at: Date.now(), ready: true, skipped: true };
-											setOpen(false);
+											setStatus({ ready: false, message: "保存“暂不配置”失败：" + String((e && e.message) || e) });
 										});
 									},
 								}, t("envGate.skipYes")),
