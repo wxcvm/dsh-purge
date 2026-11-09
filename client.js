@@ -1625,6 +1625,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [askUninstall, setAskUninstall] = useState(false);
 			const [uninstallBusy, setUninstallBusy] = useState(false);
 			const [notice, setNotice] = useState({ kind: "idle", text: "" });
+			const [cleanGuideOpen, setCleanGuideOpen] = useState(false);
+			const [cleanGuideText, setCleanGuideText] = useState("");
+			const [cleanGuideError, setCleanGuideError] = useState("");
 			const [updateNotice, setUpdateNotice] = useState({ kind: "idle", text: "" });
 			const [updateInfo, setUpdateInfo] = useState(null);
 			const [channel, setChannel] = useState("stable");
@@ -1931,7 +1934,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 										}),
 									);
 								}
-								if (parts.length === 0) parts.push(tr("restart.incomplete.flash", { entry: "unknown" }));
+								if (d.host_written === false) parts.push("补丁未确认写入当前宿主");
+								if (d.hook_restore_failed === true) parts.push("Hook 恢复失败");
+								if (parts.length === 0) parts.push("部分补丁未满足完成条件，查看上方补丁状态");
+								setState((prev) => Object.assign({}, prev || {}, {
+									apply_progress: { active: false, kind: "apply", stage: "done", error: parts.join("；") },
+								}));
 								setNotice({
 									kind: "error",
 									text: tr("restart.incomplete", { detail: parts.join("；") }),
@@ -1944,6 +1952,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								return;
 							}
 							if (action === "apply") {
+								setState((prev) => Object.assign({}, prev || {}, {
+									apply_progress: { active: false, kind: "apply", stage: "done", error: "" },
+								}));
 								setNotice({ kind: "ok", text: tr("ok.done") });
 								loadAll();
 								suppressRestartAsk.current = false;
@@ -2228,11 +2239,23 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 				),
 				h("div", { className: "dshp-row", style: { margin: "8px 0 10px" } },
-					h("a", {
-						href: "https://github.com/wxcvm/dsh-purge/blob/master/docs/CLEANING_GUIDE.zh-CN.md",
-						target: "_blank", rel: "noopener noreferrer",
-						style: { fontSize: 12.5 },
-					}, t("help.clean"))),
+					h("button", { type: "button", className: "dshp-btn",
+						onClick: () => {
+							setCleanGuideOpen((v) => !v);
+							if (cleanGuideText) return;
+							apiJson("/redteam/api", {
+								method: "POST", headers: { "content-type": "application/json" },
+								body: JSON.stringify({ op: "guideDoc", doc: "cleaning" }),
+							}).then((d) => {
+								if (!d || d.ok === false) throw new Error((d && d.error) || "指南读取失败");
+								setCleanGuideText(d.content || "");
+								setCleanGuideError("");
+							}).catch((e) => setCleanGuideError(String((e && e.message) || e)));
+						},
+					}, cleanGuideOpen ? "收起清洗台指南" : "在当前窗口阅读清洗台指南")),
+				cleanGuideOpen ? h("div", null,
+					cleanGuideError ? h("div", { className: "dshp-notice is-error" }, cleanGuideError) : null,
+					h("pre", { className: "dshp-guide-doc" }, cleanGuideText || (cleanGuideError ? "" : "正在读取本地指南…"))) : null,
 				h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
 				h("div", { className: "dshp-bar", "aria-hidden": "true" }, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
 				h(PatchGroups, { state: s }),
