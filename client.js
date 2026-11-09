@@ -1405,6 +1405,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [search, setSearch] = useState("");
 			const [showDiagnostic, setShowDiagnostic] = useState(false);
 			const [copyNotice, setCopyNotice] = useState("");
+			const [shownDiagnostics, setShownDiagnostics] = useState(null);
 			const [refreshBusy, setRefreshBusy] = useState(false);
 			const [refreshReport, setRefreshReport] = useState(null);
 			if (!state || !state.patch_status) return h("div", { className: "dshp-skel", style: { height: 120 } });
@@ -1469,7 +1470,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					finally { if (box && box.parentNode) box.parentNode.removeChild(box); }
 				}
 				setCopyNotice(copied ? scope + "诊断已复制（包含本机宿主路径）" : "复制失败；已展开诊断文本，请手动复制");
-				if (!copied) setShowDiagnostic(true);
+				if (!copied) { setShownDiagnostics(text); setShowDiagnostic(true); }
 			};
 			return h("div", { className: "dshp-clean-browser" },
 				h("div", { className: "dshp-clean-tools" },
@@ -1493,7 +1494,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("div", { className: "dshp-row" },
 						h("span", { className: "dshp-clean-count", role: "status" },
 							"显示 " + selected.length + " / " + rows.length + " 项；跳过不代表失败"),
-						h(Btn, { tiny: true, onClick: () => setShowDiagnostic((v) => !v) },
+						h(Btn, { tiny: true, onClick: () => { setShownDiagnostics(null); setShowDiagnostic((v) => !v); } },
 							showDiagnostic ? "收起诊断" : "查看诊断"),
 						h(Btn, { tiny: true, disabled: Boolean(busy || refreshBusy), onClick: refreshPatches }, refreshBusy ? "检测中…" : "重新检测"),
 						h(Btn, { tiny: true, onClick: () => copyDiagnostics(filteredDiagnostics, "当前筛选") }, "复制当前筛选"),
@@ -1512,7 +1513,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					showDiagnostic ? h("pre", {
 						className: "dshp-clean-diagnostic",
 						tabIndex: 0, "aria-label": "完整清洗诊断文本",
-					}, diagnostics) : null,
+					}, shownDiagnostics || diagnostics) : null,
 				),
 				!state.ai_base
 					? h("p", { className: "dshp-hint" }, "尚未定位到宿主；诊断可复制，补丁列表等待宿主加载。")
