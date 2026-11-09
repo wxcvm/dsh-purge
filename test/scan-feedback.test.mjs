@@ -62,3 +62,19 @@ test('later successful run cancels old failure for the same target', () => {
   assert.equal(state.recommendation, null)
   assert.equal(state.repeated_targets, 1)
 })
+
+test('next-action, overview, and embedded UI share the scan feedback flow', async () => {
+  const { readFileSync } = await import('node:fs')
+  const store = readFileSync(new URL('../lib/redteam/store-core.js', import.meta.url), 'utf8')
+  const tools = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  const ui = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const embedded = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(store, /scanFeedback = listScanHistory\(this, id/)
+  assert.match(store, /scan_feedback:/)
+  assert.match(tools, /const scanFollowup = scanFeedbackTask\(scanFeedback\)/)
+  assert.match(tools, /matchTaskScan\(acts, assets, scanFeedback\)/)
+  for (const client of [ui, embedded]) {
+    assert.match(client, /扫描历史与反馈/)
+    assert.match(client, /重复目标/)
+  }
+})
