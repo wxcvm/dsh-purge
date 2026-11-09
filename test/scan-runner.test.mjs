@@ -97,3 +97,20 @@ test('successful run reuses ingestion and records the outcome on the same manife
   assert.equal(manifest.ingested, true)
   assert.equal(manifest.ingestion.imported.scan_run_id, 7)
 })
+
+test('scanner output without recognized findings never reports a successful import', async (t) => {
+  const root = temp(t), file = join(root, 'nmap.exe')
+  writeFileSync(file, 'fixture')
+  const result = await executeScanAndIngest({
+    kind: 'nmap', target: '192.0.2.99', outputDir: join(root, 'runs'),
+  }, {
+    root, config: { platform: 'windows', tools: { nmap: file }, toolkitDir: root, binDirs: [] },
+    env: { PATH: '' },
+    execFileFn: (_bin, _argv, _cfg, done) => done(null, '<nmaprun></nmaprun>', ''),
+    ingest: () => ({ ok: true, assets: 0, ports: 0, vulns: 0 }),
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.status, 'no-findings')
+  assert.equal(result.ingested, false)
+  assert.equal(JSON.parse(readFileSync(result.manifestFile, 'utf8')).status, 'no-findings')
+})
