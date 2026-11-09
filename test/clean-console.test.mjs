@@ -12,7 +12,7 @@ function isolated(name, next, globals = {}) {
   return runInNewContext('(' + client.slice(from, to).trim() + ')', globals)
 }
 
-const filterPatchRows = isolated('filterPatchRows', 'formatPatchDiagnostics')
+const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
 const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
   patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
 })
