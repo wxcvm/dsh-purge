@@ -81,3 +81,17 @@ test('path-only tools never launch binaries even on verify request', async (t) =
   assert.equal(plan.status, 'path-only')
   assert.equal(plan.verification.status, 'path-only')
 })
+
+test('environment API and embedded client expose task-tool choice without target execution', async () => {
+  const { readFileSync } = await import('node:fs')
+  const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const bundle = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(host, /platformTaskPlan/)
+  assert.match(host, /planTaskTools/)
+  for (const text of [source, bundle]) {
+    assert.match(text, /按任务选择工具/)
+    assert.match(text, /platformTaskPlan/)
+    assert.match(text, /验证推荐工具版本/)
+  }
+})
