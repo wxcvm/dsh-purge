@@ -1444,7 +1444,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						if (tally.pending) notes.push(t("metric.pendingShort", { n: tally.pending }));
 						if (tally.unmatched) notes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
 						if (tally.skipped) notes.push(t("metric.skipShort", { n: tally.skipped }));
-						const expanded = filtered || !!open[key];
+						const expanded = open[key] === undefined ? filtered : !!open[key];
 						return h("div", { key: key, className: "dshp-group" },
 							h("button", {
 								type: "button", className: "dshp-group-h",
