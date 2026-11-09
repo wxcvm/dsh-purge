@@ -101,3 +101,15 @@ test('scan history is exposed in workbench navigation and model tool list', asyn
   }
   assert.match(tool, /name: 'redteam_scan_history'/)
 })
+
+test('scan history feedback always considers unfiltered outcomes, even when display is filtered', (t) => {
+  const { store, write } = fixture(t)
+  write('alpha', ONE, 'nmap', 'imported', '<nmaprun/>', { assets: 2 })
+  write('alpha', TWO, 'httpx', 'previewed', '{"url":"https://example.org"}')
+  const view = listScanHistory(store, 'alpha', { status: 'imported', limit: 1 })
+  assert.equal(view.total, 1)
+  assert.equal(view.feedback.total_scans, 2)
+  assert.equal(view.feedback.pending_review, 1)
+  assert.equal(view.feedback.recommendation.status, 'previewed')
+  assert.equal(listScanHistory(store, 'beta').feedback.total_scans, 0)
+})
