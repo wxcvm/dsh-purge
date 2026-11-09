@@ -2118,10 +2118,20 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							if (ticket !== actionTicket.current) return;
 							actionTerminal.current = true;
 							if (responseNeedsPrompt(d)) {
+								setState((prev) => Object.assign({}, prev || {}, {
+									apply_progress: { active: false, kind: "apply", stage: "idle", error: tr("need.prompt") },
+								}));
 								rejectNeedPrompt(tr);
 								return;
 							}
 							if (!d.ok) {
+								setState((prev) => Object.assign({}, prev || {}, {
+									apply_progress: {
+										...((prev && prev.apply_progress) || {}),
+										active: false,
+										error: String(d.error || "宿主拒绝该操作"),
+									},
+								}));
 								setNotice({ kind: "error", text: tr("err.action", { action: label, error: d.error || "" }) });
 								return;
 							}
@@ -2312,6 +2322,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			}, []);
 
 			const doUninstall = useCallback(() => {
+				actionTerminal.current = false;
 				setUninstallBusy(true);
 				setAskUninstall(false);
 				setAskRestart(false);
@@ -2323,6 +2334,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				apiJson("/dsh-purge/uninstall", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
 					.then((d) => {
 						if (!d || !d.ok) throw new Error((d && d.error) || "uninstall failed");
+						actionTerminal.current = true;
 						setNotice({ kind: "ok", text: (d && d.note) || hostText(tr, "uninstall.done", d.surface || hostSurfaceOf(state)) });
 						if ((d && d.surface) === "desktop" || (d && d.fullApp) || hostSurfaceOf(state) === "desktop") return;
 						waitHostAfterUninstall(tr);
