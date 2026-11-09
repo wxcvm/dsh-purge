@@ -885,6 +885,13 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-flow-node.is-cur{transform:none}
 }
 .dshp-group{margin:0 0 8px;border-radius:8px;overflow:hidden}
+.dshp-patch-tools{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:10px 0}
+.dshp-patch-search{display:flex;flex-direction:column;gap:3px;min-width:130px;flex:1 1 155px;font-size:12px;color:var(--dshp-mute)}
+.dshp-patch-search .dshp-field{width:100%;min-width:0;box-sizing:border-box;height:32px;padding:4px 8px;border-radius:7px;border:1px solid var(--dshp-line);background:var(--dshp-paper);color:var(--dshp-ink)}
+.dshp-patch-action{height:32px;border:1px solid var(--dshp-line);border-radius:7px;background:var(--dshp-paper);color:var(--dshp-ink);padding:0 10px;cursor:pointer}
+.dshp-patch-action:hover{background:var(--dshp-fill)}
+.dshp-patch-count{font-size:12px;color:var(--dshp-mute)}
+
 .dshp-group-h{width:100%;display:flex;align-items:center;gap:12px;padding:8px 12px;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
 .dshp-group-h:hover{background:var(--dshp-fill)}
 .dshp-group-h:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:-2px}
@@ -1315,51 +1322,151 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return out;
 		}
 
+		function cleaningPatchMatches(row, state, query, status, t) {
+			const st = row.st;
+			if (status === "issues" && st !== "pending" && st !== "unmatched") return false;
+			if (status !== "all" && status !== "issues" && st !== status
+				&& !(status === "applied" && st === "already")) return false;
+			const needle = String(query || "").trim().toLowerCase();
+			if (!needle) return true;
+			const text = [
+				patchIdLabel(row), (row.ids || []).join(" "), patchTitle(t, state, row),
+				String(row.layer || ""), String(st || ""), statusLabel(st, t),
+			].join(" ").toLowerCase();
+			return text.includes(needle);
+		}
+
+		/** Explicit export-by-copy for support: no prompt or rule text, no network request. */
+		function cleaningDiagnosticText(state, t) {
+			const rows = patchRowsOf(state);
+			const tally = tallyPatches(rows);
+			const progress = state && state.apply_progress;
+			const lines = [
+				"dsh-purge 清洗台诊断（本机状态快照）",
+				"宿主类型: " + String((state && state.surface) || "未知"),
+				"插件版本: " + String((state && state.plugin_version) || "未知"),
+				"宿主根目录: " + String((state && state.ai_base) || "未定位"),
+				"DSH_HOME: " + String((state && state.dsh_home) || "未知"),
+				"补丁: 已应用 " + tally.applied + "/" + tally.total
+					+ "，待处理 " + tally.pending + "，未匹配 " + tally.unmatched + "，跳过 " + tally.skipped,
+				"启动器: cmd=" + String((state && state.shim_cmd) || "?")
+					+ " ps1=" + String((state && state.shim_ps1) || "?")
+					+ " unix=" + String((state && state.shim_bin) || "?"),
+				"备份: " + ((state && state.has_backup) ? "有" : "无"),
+			];
+			if (progress && (progress.active || progress.error)) {
+				lines.push("最近操作: " + String(progress.kind || "apply") + " / " + String(progress.stage || "?")
+					+ (progress.error ? " / " + String(progress.error) : ""));
+			}
+			lines.push("", "补丁详情:");
+			if (rows.length === 0) lines.push("(暂无可读取的补丁；请确认宿主是否已定位)");
+			for (const row of rows) {
+				lines.push(patchIdLabel(row) + " [" + statusLabel(row.st, t) + "/" + row.st + "] "
+					+ patchTitle(t, state, row) + (row.layer ? " · " + row.layer : ""));
+			}
+			return lines.join("\n");
+		}
+
 		function PatchGroups({ state }) {
 			const t = useT();
 			const [open, setOpen] = useState({});
+			const [query, setQuery] = useState("");
+			const [status, setStatus] = useState("all");
+			const [copyNote, setCopyNote] = useState("");
 			if (!state || !state.patch_status) return h("div", { className: "dshp-skel", style: { height: 120 } });
 			const located = !!state.ai_base;
-			if (!located) return null;
+			const allRows = patchRowsOf(state);
+			const visibleRows = allRows.filter((row) => cleaningPatchMatches(row, state, query, status, t));
 			const grouped = new Map();
-			for (const row of patchRowsOf(state)) {
+			for (const row of visibleRows) {
 				const key = layerGroupOf(row.layer);
 				if (!grouped.has(key)) grouped.set(key, []);
 				grouped.get(key).push(row);
 			}
-			return GROUP_ORDER.filter((key) => grouped.has(key)).map((key) => {
-				const rows = grouped.get(key).slice().sort((a, b) => a.id - b.id);
-				if (!rows.length) return null;
-				const tally = tallyPatches(rows);
-				const notes = [];
-				if (tally.pending) notes.push(t("metric.pendingShort", { n: tally.pending }));
-				if (tally.unmatched) notes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
-				if (tally.skipped) notes.push(t("metric.skipShort", { n: tally.skipped }));
-				const expanded = !!open[key];
-				return h("div", { key: key, className: "dshp-group" },
-					h("button", {
-						type: "button",
-						className: "dshp-group-h",
-						"aria-expanded": expanded ? "true" : "false",
-						onClick: () => setOpen((prev) => Object.assign({}, prev, { [key]: !prev[key] })),
+			const filtered = status !== "all" || query.trim().length > 0;
+			const copyDiagnostic = async () => {
+				const report = cleaningDiagnosticText(state, t);
+				try {
+					if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("clipboard unavailable");
+					await navigator.clipboard.writeText(report);
+					setCopyNote("诊断摘要已复制（包含本机路径，请按需分享）");
+					return;
+				} catch { /* Electron file:// and older webviews may need a manual copy fallback */ }
+				try {
+					const area = document.createElement("textarea");
+					area.value = report;
+					area.setAttribute("readonly", "");
+					area.style.position = "fixed";
+					area.style.left = "-9999px";
+					document.body.appendChild(area);
+					area.select();
+					const ok = document.execCommand("copy");
+					document.body.removeChild(area);
+					setCopyNote(ok ? "诊断摘要已复制（包含本机路径，请按需分享）" : "复制失败，请检查剪贴板权限");
+				} catch {
+					setCopyNote("复制失败，请检查剪贴板权限");
+				}
+			};
+			const header = h("div", { className: "dshp-patch-tools" },
+				h("label", { className: "dshp-patch-search" },
+					h("span", null, "查找补丁"),
+					h("input", {
+						className: "dshp-field", type: "search", value: query,
+						placeholder: "编号 / 名称 / 分组", "aria-label": "搜索补丁",
+						onChange: (e) => setQuery(e.target.value),
+					})),
+				h("label", { className: "dshp-patch-search" },
+					h("span", null, "状态"),
+					h("select", {
+						className: "dshp-field", value: status, "aria-label": "筛选补丁状态",
+						onChange: (e) => setStatus(e.target.value),
 					},
-						h("strong", null, t("group." + key)),
-						h("span", { className: "dshp-count" }, tally.applied + "/" + tally.total + (notes.length ? " · " + notes.join(" · ") : "")),
-					),
-					expanded ? h("table", { className: "dshp-table" },
-						h("thead", null, h("tr", null,
-							h("th", null, "#"),
-							h("th", null, t("table.patch")),
-							h("th", null, t("table.status")),
-						)),
-						h("tbody", null, rows.map((r) => h("tr", { key: r.ids ? r.ids.join("-") : r.id },
-							h("td", { className: "dshp-id" }, patchIdLabel(r)),
-							h("td", null, patchTitle(t, state, r)),
-							h("td", null, h(Pill, { value: r.st })),
-						))),
-					) : null,
-				);
-			});
+						[["all", "全部"], ["issues", "待处理 + 未匹配"], ["pending", "待处理"],
+						 ["unmatched", "未匹配"], ["skipped", "跳过"], ["applied", "已应用"]]
+							.map(([value, label]) => h("option", { key: value, value }, label)))),
+				h("span", { className: "dshp-patch-count" },
+					"显示 " + visibleRows.length + " / " + allRows.length + " 项"),
+				h("button", { className: "dshp-patch-action", type: "button", onClick: copyDiagnostic },
+					"复制诊断摘要"),
+				copyNote ? h("span", { className: "dshp-patch-count", role: "status" }, copyNote) : null,
+			);
+			if (!located) return h("div", null,
+				header,
+				h("p", { className: "dshp-hint" }, "尚未定位宿主；可复制诊断摘要以排查。找到宿主后才会显示补丁详情。"),
+			);
+			return h("div", null, header,
+				visibleRows.length === 0
+					? h("p", { className: "dshp-hint" }, "没有符合条件的补丁；可切换为「全部」或清空搜索。")
+					: GROUP_ORDER.filter((key) => grouped.has(key)).map((key) => {
+						const rows = grouped.get(key).slice().sort((a, b) => a.id - b.id);
+						const tally = tallyPatches(rows);
+						const notes = [];
+						if (tally.pending) notes.push(t("metric.pendingShort", { n: tally.pending }));
+						if (tally.unmatched) notes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
+						if (tally.skipped) notes.push(t("metric.skipShort", { n: tally.skipped }));
+						const expanded = filtered || !!open[key];
+						return h("div", { key: key, className: "dshp-group" },
+							h("button", {
+								type: "button", className: "dshp-group-h",
+								"aria-expanded": expanded ? "true" : "false",
+								onClick: () => setOpen((prev) => Object.assign({}, prev, { [key]: !prev[key] })),
+							},
+								h("strong", null, t("group." + key)),
+								h("span", { className: "dshp-count" },
+									tally.applied + "/" + tally.total + (notes.length ? " · " + notes.join(" · ") : "")),
+							),
+							expanded ? h("table", { className: "dshp-table" },
+								h("thead", null, h("tr", null,
+									h("th", null, "#"), h("th", null, t("table.patch")), h("th", null, t("table.status")))),
+								h("tbody", null, rows.map((r) => h("tr", { key: r.ids ? r.ids.join("-") : r.id },
+									h("td", { className: "dshp-id" }, patchIdLabel(r)),
+									h("td", null, patchTitle(t, state, r)),
+									h("td", null, h(Pill, { value: r.st })),
+								))),
+							) : null,
+						);
+					}),
+			);
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
