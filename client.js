@@ -3468,31 +3468,37 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				};
 			}, []);
 			translate = t;
-			const workspace = props.workspace === true;
+			if (props.workspace !== true) {
+				// The legacy Dock retains its exact original content structure.
+				return h("div", { className: "dshp-root", "data-theme": theme },
+					h("style", null, PURGE_CSS),
+					h(PurgifySection, null),
+					h(RulesSection, null),
+				);
+			}
 			const sections = [
 				{ id: "patches", title: "清洗与补丁", description: "状态、补丁、版本与提示词" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
 			];
 			const selected = sections.find((item) => item.id === section) || sections[0];
-			return h("div", { className: workspace ? "dshp-root dshp-clean-workspace" : "dshp-root",
-				"data-theme": workspace ? "dusk" : theme },
+			return h("div", { className: "dshp-root dshp-clean-workspace", "data-theme": "dusk" },
 				h("style", null, PURGE_CSS),
-				workspace ? h("nav", { className: "dshp-clean-nav", "aria-label": "清洗台功能导航" },
+				h("nav", { className: "dshp-clean-nav", "aria-label": "清洗台功能导航" },
 					h("div", { className: "dshp-clean-nav-heading" }, "清洗台"),
 					sections.map((item) => h("button", {
 						key: item.id, type: "button", className: "dshp-clean-nav-item",
 						"aria-current": section === item.id ? "page" : undefined,
 						onClick: () => setSection(item.id),
 					}, h("strong", null, item.title), h("small", null, item.description))),
-				) : null,
-				h("div", { className: workspace ? "dshp-clean-content" : "dshp-clean-legacy" },
-					workspace ? h("header", { className: "dshp-clean-page-heading" },
+				),
+				h("div", { className: "dshp-clean-content" },
+					h("header", { className: "dshp-clean-page-heading" },
 						h("h2", null, selected.title),
 						h("p", null, selected.description),
-					) : null,
-					h("div", { className: "dshp-clean-pane", hidden: workspace && section !== "patches" },
+					),
+					h("div", { className: "dshp-clean-pane", hidden: section !== "patches" },
 						h(PurgifySection, null)),
-					h("div", { className: "dshp-clean-pane", hidden: workspace && section !== "rules" },
+					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 				),
 			);
