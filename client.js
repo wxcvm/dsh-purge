@@ -9310,7 +9310,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [state, setState] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
-      const [report, setReport] = React.useState(null)
+      // Keep only the current workbench session's parsed report in memory across tab navigation.
+      const report = props.report || null
       const [reportBusy, setReportBusy] = React.useState(false)
       const [reportError, setReportError] = React.useState('')
       const [assetMatches, setAssetMatches] = React.useState(null)
@@ -9384,7 +9385,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const reviewFile = async (event) => {
         const file = event.target.files && event.target.files[0]
         if (!file) return
-        setReport(null)
+        props.onReportChange(null)
         setReportError('')
         setHandoffMessage('')
         setReportBusy(true)
@@ -9399,7 +9400,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           const result = await response.json()
           if (!response.ok || !result || result.ok === false)
             throw new Error((result && result.error) || '无法预览 SARIF')
-          setReport(result)
+          props.onReportChange(result)
         } catch (err) {
           setReportError(String((err && err.message) || err))
         } finally {
@@ -9746,6 +9747,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const st = useUI()
       const [engagements, setEngagements] = React.useState([])
       const [eng, setEng] = React.useState(null)
+      const [artexSession, setArtexSession] = React.useState(null)
       const [snapshot, setSnapshot] = React.useState(null)
       const [err, setErr] = React.useState(null)
       const [newName, setNewName] = React.useState('')
@@ -9985,6 +9987,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey })
        else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
       else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng,
+        report: artexSession && artexSession.engagement === eng ? artexSession.report : null,
+        onReportChange: (nextReport) => setArtexSession(nextReport ? { engagement: eng, report: nextReport } : null),
         onGotoAsset: (assetId) => {
           if (!eng || !Number.isSafeInteger(assetId) || assetId < 1) return
           markTabSeen('assets')

@@ -36,5 +36,9 @@ test('ARTEX matching links route into the chosen engagement asset and local find
     assert.match(source, /asset_id: focusAssetId \|\| undefined/)
     assert.match(source, /查看该资产漏洞/)
     assert.match(source, /返回 ARTEX/)
+    assert.match(source, /artexSession && artexSession.engagement === eng/)
+    assert.match(source, /onReportChange: \(nextReport\) => setArtexSession/)
+    assert.match(source, /const report = props.report \|\| null/)
+    assert.match(source, /props.onReportChange\(result\)/)
   }
 })
