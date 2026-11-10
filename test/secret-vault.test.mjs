@@ -82,6 +82,7 @@ test('incorrect key is rejected before data-changing writes or migration', (t) =
   const { root, store, track } = fixture(t, KEY)
   const id = store.openEngagement('locked').id
   store.addCredential(id, { host: 'x.test', username: 'u', secret_value: 'locked' })
+  store.addWebshell(id, { url: 'https://x.test/shell', pass_key: 'locked-shell' })
   store.close()
   const wrong = track(new RedteamStore(root, { secretKey: WRONG_KEY }))
   assert.throws(() => wrong.listCredentials(id), /Cannot decrypt/)
