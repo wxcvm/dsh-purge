@@ -55,6 +55,8 @@ test('ARTEX SARIF preserves finding, task, asset and triage lineage without inve
   assert.equal(out.items[2].report_stale, null)
   assert.equal(out.source_assets_total, 3)
   assert.deepEqual(out.asset_groups.map((x) => x.asset_id), [2, 6, 11])
+  assert.deepEqual(out.match_asset_groups.map((x) => x.asset_id), [6, 2, 11])
+  assert.equal(out.match_asset_groups_omitted, 0)
   assert.equal(out.asset_groups[0].ip, '192.0.2.1')
   assert.equal(out.asset_groups[1].domain, 'api.example.test')
   assert.equal(out.asset_groups[1].port, 443)
@@ -117,6 +119,30 @@ test('large source asset groups keep exact counts while listing bounded referenc
   assert.equal(output.review_queue_total, 25)
 })
 
+test('high-priority findings get matching slots beyond the first 50 asset IDs', () => {
+  const many = structuredClone(sample)
+  many.runs[0].results = Array.from({ length: 60 }, (_unused, index) => ({
+    properties: { findingId: index + 1, assetIds: [index + 1], severity: 'low', status: 'fixed' },
+    message: { text: 'resolved-' + index },
+  }))
+  many.runs[0].results.push({
+    properties: { findingId: 500, assetIds: [500], severity: 'critical', status: 'pending',
+      assetRefs: [{ id: 500, type: 'ip', ip: '192.0.2.55' }] },
+    message: { text: 'urgent asset' },
+  })
+  const out = reviewArtexSarif(many)
+  assert.equal(out.source_assets_total, 61)
+  assert.equal(out.asset_groups.length, 50)
+  assert.equal(out.asset_groups[0].asset_id, 1)
+  assert.equal(out.asset_groups.some((x) => x.asset_id === 500), false)
+  assert.equal(out.review_queue[0].finding_id, 500)
+  assert.equal(out.match_asset_groups[0].asset_id, 500)
+  assert.equal(out.match_asset_groups[0].ip, '192.0.2.55')
+  assert.equal(out.match_asset_groups.length, 50)
+  assert.equal(out.match_asset_groups_omitted, 11)
+  assert.equal(out.review_queue_omitted, 41)
+})
+
 test('ARTEX report review route and embedded resource tab are both connected', () => {
   const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
   const rt = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
@@ -131,6 +157,8 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(rt, /与当前 DSH 靶标匹配/)
   assert.match(rt, /report\.review_queue/)
   assert.match(rt, /review_queue: report\.review_queue/)
+  assert.match(rt, /report\.match_asset_groups \|\| report\.asset_groups/)
+  assert.match(rt, /refs: sourceRefs/)
   assert.match(rt, /reviewAssetLabel/)
   assert.match(rt, /assetMatches\._report === report/)
   assert.match(rt, /复制核查交接清单/)
@@ -139,4 +167,5 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(embedded, /与当前 DSH 靶标匹配/)
   assert.match(embedded, /复制核查交接清单/)
   assert.match(embedded, /reviewAssetLabel/)
+  assert.match(embedded, /refs: sourceRefs/)
 })
