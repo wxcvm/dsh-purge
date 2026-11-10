@@ -9485,7 +9485,6 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                         disabled: !activeProgress || reviewSaving !== null,
                         onClick: () => saveReview(finding, status),
                       }, reviewSaving === finding.finding_id ? '保存中…' : '保存备注')),
-                    ),
                   )
                 }),
               ) : h('p', { className: 'rt-foot' }, '选择 DSH 靶标后即可保存独立核查进度'))
