@@ -12,12 +12,13 @@ import { presetScopeApi } from '../lib/redteam/skill-registry-state.js'
 
 test('没有服务 → missing', () => {
   assert.equal(presetScopeApi(undefined), 'missing')
+  assert.equal(presetScopeApi({}), 'unknown-api')
   assert.equal(presetScopeApi(null), 'missing')
 })
 
-test('服务在但没有 standingKeyFor → scope-api-missing（不是 missing）', () => {
+test('服务在但没有 standingKeyFor、有 composedPreset → agent-scope（不是 missing）', () => {
   const registry = { defaultId: 'standard', presetForSession() {}, composedPreset() {} }
-  assert.equal(presetScopeApi(registry), 'scope-api-missing')
+  assert.equal(presetScopeApi(registry), 'agent-scope')
 })
 
 test('提供 standingKeyFor → standing-key-for', () => {
