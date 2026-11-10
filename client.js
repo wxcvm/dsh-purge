@@ -10652,6 +10652,75 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			return st;
 		}
 
+
+		// Use the same native main-panel slots as Armory: navigation stays in the DSH shell.
+		const PURGE_PANEL_ID = "dsh-purge-workspace";
+		let purgeWorkspaceCtx = null;
+		const purgeWorkspaceBus = { page: "drill", listeners: new Set() };
+		function selectPurgeWorkspacePage(page) {
+			purgeWorkspaceBus.page = page === "clean" ? "clean" : "drill";
+			for (const fn of purgeWorkspaceBus.listeners) fn(purgeWorkspaceBus.page);
+		}
+		function showPurgeWorkspace(page) {
+			selectPurgeWorkspacePage(page);
+			setDock({ open: false, authOpen: false });
+			const ctx = purgeWorkspaceCtx;
+			const layout = ctx && typeof ctx.get === "function" ? ctx.get("layout") : ctx && ctx.layout;
+			try {
+				if (!layout || typeof layout.selectPanel !== "function") throw new Error("main panel unavailable");
+				layout.selectPanel(PURGE_PANEL_ID);
+			} catch {
+				// Only older hosts without the main-panel slot need the existing Dock.
+				setDock({ open: true, maximized: true, tab: purgeWorkspaceBus.page });
+			}
+		}
+		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n";
+		function PurgeWorkspacePage() {
+			const t = useT();
+			const [page, setPage] = useState(purgeWorkspaceBus.page);
+			useEffect(() => {
+				const fn = (next) => setPage(next);
+				purgeWorkspaceBus.listeners.add(fn);
+				return () => purgeWorkspaceBus.listeners.delete(fn);
+			}, []);
+			useEffect(() => {
+				if (page === "drill" && __dshPurgeDrill && __dshPurgeDrill.setUI) {
+					__dshPurgeDrill.setUI({ open: true });
+				}
+			}, [page]);
+			const open = (next) => selectPurgeWorkspacePage(next);
+			const back = () => {
+				const ctx = purgeWorkspaceCtx;
+				const layout = ctx && typeof ctx.get === "function" ? ctx.get("layout") : ctx && ctx.layout;
+				if (layout && typeof layout.selectPanel === "function") layout.selectPanel(null);
+			};
+			return h("section", {
+				className: "dshp-dock dshp-workspace",
+				"data-workspace": page === "clean" ? "clean" : "redteam",
+				"data-maximized": "1", "data-open": "1", "data-theme": "dusk",
+				"aria-label": "Purge 工作区",
+			},
+				h("header", { className: "dshp-workspace-nav" },
+					h("strong", null, "Purge"),
+					h("nav", { className: "dshp-workspace-tabs", role: "tablist", "aria-label": "Purge 工作区" },
+						["clean", "drill"].map((key) => h("button", {
+							type: "button", key, role: "tab",
+							"aria-selected": String(page === key),
+							onClick: () => open(key),
+						}, key === "clean" ? "清洗台" : "作战台"))),
+					h("button", { type: "button", className: "dshp-workspace-back", onClick: back }, "返回会话")),
+				h("div", { className: "dshp-dock-body" },
+					page === "clean" ? h(SettingsRoot, { t }) : h(__dshPurgeDrill.Panel, { embedded: true })));
+		}
+		function PurgeWorkspaceIcon(props) {
+			return h("svg", { width: props.size || 18, height: props.size || 18,
+				viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
+				strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round",
+				"aria-hidden": "true" },
+				h("path", { d: "M12 2 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z" }),
+				h("path", { d: "m8.5 12 2.5 2.5 4.5-5" }));
+		}
+
 		function requestDrill(kind) {
 			const pending = kind || "tab";
 			const openEnv = () => {
@@ -10662,10 +10731,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				} catch { /* ignore */ }
 			};
 			if (readDrillAuth()) {
-				setDock({ open: true, tab: "drill", authOpen: false, pending: "tab", maximized: pending === "full" ? true : dockBus.maximized });
 				try { if (__dshPurgeDrill && __dshPurgeDrill.setUI) __dshPurgeDrill.setUI({ open: true }); } catch { /* ignore */ }
 				if (pending === "env") openEnv();
-				
+				showPurgeWorkspace("drill");
 				return;
 			}
 			/* 未授权：直接切到作战台页签并弹出授权窗（不再停在清洗页，避免像「没触发」） */
@@ -10677,11 +10745,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		}
 
 		function openDockClean() {
-			setDock({ open: true, tab: "clean", authOpen: false, pending: "tab" });
+			showPurgeWorkspace("clean");
 		}
 		function toggleDock() {
-			if (dockBus.open) setDock({ open: false, authOpen: false, pending: "tab" });
-			else openDockClean();
+			openDockClean();
 		}
 		syncDrillGrant();
 
@@ -11245,7 +11312,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				if (!uiTag) {
 					uiTag = document.createElement("style");
 					uiTag.setAttribute("data-dsh-purge-ui", "1");
-					uiTag.textContent = PURGE_CSS;
+					uiTag.textContent = PURGE_CSS + PURGE_WORKSPACE_CSS;
 					document.head.append(uiTag);
 				}
 				if (!__dshPurgeDrill || !__dshPurgeDrill.CSS) return undefined;
@@ -11827,6 +11894,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		}
 
 		function apply(ctx) {
+			purgeWorkspaceCtx = ctx;
+			ctx.slots.inject("main", () => ctx.slots.register({
+				name: "main", key: PURGE_PANEL_ID, label: "Purge 工作区",
+			}, PurgeWorkspacePage));
+			ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({
+				name: "sidebar.panellist", id: PURGE_PANEL_ID, order: 6, label: "Purge 作战台",
+			}, PurgeWorkspaceIcon));
 			if (ctx.uiConversation && ctx.uiConversation.events && typeof ctx.uiConversation.events.register === "function") {
 				ctx.uiConversation.events.register(purgeCommandInputDefinition);
 				ctx.slots.inject("conversation.chat.node", () => ctx.slots.register({
