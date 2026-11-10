@@ -67,7 +67,7 @@ Harness does more than forward a prompt. It rewrites prompts, approval gates, sa
 
 | You get | What it does |
 |---|---|
-| **dsh-purge dock** | A button beside the session title opens the right dock. Two pages: Clean and Drill |
+| **Purge workspace** | A native Harness main-panel entry opens Clean / Drill workspaces; floating Dock remains as an older-host fallback |
 | **Clean** | Grouped patch status, Apply / Restore / Uninstall, prompt editor, multiple rule sets |
 | **Drill** | Authorized asset, evidence, intelligence and task overview; not restricted to local subnets |
 | **Host policy** | Default copy, permission policy, and tool limits. Official capabilities stay. No second invented identity |
@@ -410,7 +410,7 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-**dsh-purge** sits beside the session title. It opens a right-hand dock with two pages: **Clean** and **Drill**. Switch **Light / Ink**. Patches are grouped; the count only includes items that actually applied. Rule sets sit in a list above the editor, with Enable and Delete on each row.
+Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.6` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
 
 The first time you open Drill, read the notice, wait for the countdown, scroll to the end and check three boxes. Clean does not need this step. Drill is for your own systems or targets with explicit written authorization, including authorized public-facing assets.
 
@@ -436,7 +436,7 @@ Drill is not categorically restricted to local/private subnets. Record the autho
 
 | Area | What it shows |
 |---|---|
-| dsh-purge | button beside the session title; opens or collapses the dock |
+| dsh-purge | native Harness sidebar/main workspace, with older-host Dock fallback |
 | Clean | patches, prompt, rule sets |
 | Drill | assets and environment after authorization. This build does not ship skills or the knowledge base. The tab says Unauthorized until then |
 | Patches | grouped status, Apply, Restore, or Uninstall |
@@ -448,7 +448,7 @@ Drill is not categorically restricted to local/private subnets. Record the autho
 
 ## Layout
 
-`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, and `client.js` is the dock. This build does not ship `skills/` or the knowledge base.
+`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, and `client.js` contains the native main workspace and legacy Dock fallback. This build does not ship `skills/` or the knowledge base.
 
 Runtime files live under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `redteam/`. If `DSH_HOME` is unset, the launcher-adjacent `.dsh` wins over `~/.dsh`. Web and the desktop app each use their own home.
 

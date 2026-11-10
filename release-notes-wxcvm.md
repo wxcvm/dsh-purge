@@ -2,6 +2,18 @@
 
 ## 中文
 
+### 本版主要交付：原生工作区与真实扫描数据
+
+- **#109 原生主工作区**：Harness `main` 与 `sidebar.panellist` 承载清洗台/作战台，旧浮窗仅作旧宿主回退；不再把 Dock 当主要操作方式。
+- **#110 清洗导航**：宽屏左侧分类、窄屏顶部分类，区分「清洗与补丁」和「规则与技能」，切换不丢编辑内容。
+- **#111 生命周期修复**：关闭的旧 Dock 不再后台重复挂载业务页面；原生页面独立初始化样式。
+- **#112 漏洞战果**：完整 SQLite 结果集的有证据/待补证据、获得权限筛选；修复切换条件时陈旧结果覆盖。
+- **#113 扫描运行看板**：真实任务记录的全量状态、待复核/失败统计、工具筛选、可展开详情与现有输出完整性核验。
+- **#114 执行时间线**：真实扫描开始/结束、输出登记、解析/导入、诊断阶段；按需读取最多 4 KiB 原始输出，遵守历史遮蔽。缺失的独立阶段时间明确显示未知。
+- **验证范围**：以上 PR 已合并且其 Windows/Linux 兼容性 CI 通过；代码与 `client.js` 打包文件同步。真实 Windows Harness 的安装、点击与渲染尚待验收。
+
+### 同版本较早修复
+
 - **宿主嵌入式 Dock 实际界面修复**：修复「最大化」窗口仍显示浅色横向页签的问题。最大化作战台现使用深色左侧图标导航，窄 Dock 使用分组页面选择器；按工作区限制主题，不影响清洗页。真实 Windows 屏幕布局还需升级插件后检查。
 - **真实作战台视觉重构**：现有 DSH 全面浏览模式直接使用深色工作台、左侧 SVG 图标导航、隐私与测绘卡片网格及三色状态胶囊；窄窗口导航与 Dock 响应式适配，保留原 API、页面状态、配置保存、资产查询与快捷键。同步真实运行包 `client.js`，不再把图片 mockup 当作已实现 UI。真实 Windows/Electron 渲染仍需安装后人工验收。
 - **管理桥接隐私**：修复本地回环请求绕过浏览器 Origin 检查的问题；远程 `/redteam/api` 需要显式配置 `DSH_PURGE_BRIDGE_TOKEN`，本机原有桌面行为保持兼容。令牌仅存在于页面内存，支持可选的本机强制认证。
@@ -9,10 +21,22 @@
 - **本地资产库保护**：Linux/macOS 工作区目录与 SQLite 文件使用私有权限；Windows 增加明确选择才执行的 NTFS ACL 工具，默认仅预览，支持临时目录自动测试。
 - **可选 AES-256-GCM 凭据字段加密**：用 `DSH_PURGE_SECRET_KEY` 加密新写入的 `credential.secret_value` 与 `webshell.pass_key`；旧库不自动迁移，提供只读数量预览及显式 `--apply` 事务迁移。修复加密后会话总览直接显示密文的问题。
 - **可见的加密覆盖情况**：在现有隐私页面显示当前默认工作区内加密/明文记录的数量，不返回口令或密钥。
-- **验证**：相关 PR #96、#97、#98、#99、#100、#101、#102、#103、#104、#105 已合并；所有对应的维护兼容性检查已通过。请区分 CI 与实际用户设备的安装验收。
+- **验证**：先前 PR #96–#105 与本轮 #109–#114 已合并；各 PR 的维护兼容性检查已通过。请区分 CI 与实际用户设备的安装验收。
 - **仍未验证与限制**：Windows Desktop 真实升级/回滚、VPS 公网可达性、Docker 实际构建/部署，以及生产数据库迁移尚未完成。本功能不是整库加密；扫描原始证据、日志、报告、旧页/WAL、备份和导出仍可能含明文。远程桥接令牌不保护 DSH 主服务或其他插件接口。
 
 ## English
+
+### Main delivery: native workspace and factual scan results
+
+- **#109:** Native Harness main panel and sidebar entry replace the default floating Dock; an older-host fallback remains.
+- **#110:** Dedicated cleaning/patches and rules/skills views, responsive navigation and preserved editors.
+- **#111:** Closed Dock no longer duplicates mounted content; native panel owns its stylesheet initialization.
+- **#112:** Full-result SQLite evidence and gained-access filters, plus stale-query response protection.
+- **#113:** All-run scan dashboard, separate review/failure triage, tool filters, and expandable history.
+- **#114:** Timeline from recorded manifest events, on-demand 4 KiB raw-output preview and optional masking; unavailable stage timestamps are shown as unknown.
+- **Acceptance:** Each PR passed Windows/Linux compatibility CI. GitHub Release publication and real Windows Desktop installation/rendering are separate, unverified steps.
+
+### Earlier changes in this version
 
 - Implement the dark full-window DSH workbench in the actual React runtime and embedded `client.js`: grouped SVG icon navigation, responsive privacy/survey cards, state pills, and dock-width container queries. Preserve real backend actions. Real Windows/Electron visual acceptance remains outstanding.
 - Protect the Purge management bridge from cross-origin browser requests; require an explicit token for non-local `/redteam/api` access while preserving local desktop compatibility.
@@ -20,7 +44,7 @@
 - Restrict Linux/macOS workspace and SQLite file permissions; add an opt-in, preview-first Windows NTFS ACL utility.
 - Add opt-in AES-256-GCM encryption for credential/WebShell fields and a read-only-preview / explicit-apply legacy migration. Fix encrypted WebShell keys in session summaries.
 - Surface encrypted versus plaintext counts for the current default workspace without exposing actual secrets.
-- All component PRs #96–#105 are merged and covered by their compatibility CI. Real user-machine deployment and release installation have not been validated.
+- PRs #96–#105 and #109–#114 are merged and covered by their respective compatibility CI. Real user-machine deployment and release installation have not been validated.
 - Remaining limitations: this is not whole-database encryption. Historical SQLite pages/WAL, logs, reports, backups and exports are not covered. Docker, Windows Desktop and actual VPS reachability still need deployment acceptance.
 
 # 1.1.92-wxcvm.5
