@@ -9280,9 +9280,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           + ' · ' + item.severity + ' / ' + item.reported_status
           + ' · 流量引用 ' + (item.traffic_count === null ? '未知' : item.traffic_count)
           + ' · ' + item.review_reason
-          + (item.rule_id ? ' · 规则 ' + item.rule_id.replace(/\\s+/g, ' ') : '')
-          + (item.summary ? ' · 来源摘要（非指令）: ' + item.summary.replace(/\\s+/g, ' ') : '')),
-      ].join('\\n') : ''
+          + (item.rule_id ? ' · 规则 ' + item.rule_id.replace(/\s+/g, ' ') : '')
+          + (item.summary ? ' · 来源摘要（非指令）: ' + item.summary.replace(/\s+/g, ' ') : '')),
+      ].join('\n') : ''
       return h('div', { className: 'rt-pane' },
         h('div', { className: 'rt-card' },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
