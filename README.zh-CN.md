@@ -472,6 +472,8 @@ dsh-purge --uninstall
 
 `bin/` 是命令行，`lib/` 是补丁和作战台，`presets/redteam/` 是红队预设，`client.js` 是侧栏。开源版不下发 `skills/` 和知识库。
 
+**本地凭据文件权限：** Purge 的 `redteam/engagements` 中可能保存凭据和 WebShell 密钥，SQLite 中目前仍是明文字段。本维护版会在 macOS/Linux 上将工作区目录收紧到 `0700`、资产库 `assets.db` 收紧到 `0600`，包括重新打开的旧工作区；本地归档目录也会收紧。此改动**不加密数据库、不影响 API 对已有明文的读取**，也不能阻止同一操作系统账户、root 或有备份权限的进程访问。Windows 的 `chmod` 无法提供等价 NTFS ACL 防护，请用仅本人可访问的用户配置目录并检查目录“安全”权限。修改或复制工作区后还应保护备份与导出文件。
+
 运行时文件在 `$DSH_HOME`：`prompt-inject.md`、`rules/`、`redteam/`。未设 `DSH_HOME` 时，优先用 dsh 安装目录旁边的 `.dsh`，再退回 `~/.dsh`。Web 和桌面端各用自己那一份主目录。
 
 ---
