@@ -5550,6 +5550,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [external, setExternal] = React.useState(null)
       const [externalError, setExternalError] = React.useState(null)
       const [externalRequest, setExternalRequest] = React.useState(false)
+      const [removeArmed, setRemoveArmed] = React.useState(false)
 
       const loadExternal = () => {
         api({ op: 'aboutSecurityStatus' }).then((result) => {
@@ -5566,6 +5567,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!result || !result.ok) setExternalError((result && result.error) || '操作未能启动')
           else if (!result.busy) load(true)
         }, (error) => { setExternalRequest(false); setExternalError(String((error && error.message) || error)) })
+      }
+      /* 卸载不可撤销：第一次点只上膛，第二次才发请求；失焦自动撤销上膛 */
+      const removeExternal = () => {
+        setExternalRequest(true)
+        setExternalError(null)
+        api({ op: 'aboutSecurityRemove', confirm: true }).then((result) => {
+          setExternalRequest(false)
+          setRemoveArmed(false)
+          if (result) setExternal(result)
+          if (!result || result.ok === false) setExternalError((result && result.error) || '卸载失败')
+          else load(true)
+        }, (error) => { setExternalRequest(false); setRemoveArmed(false); setExternalError(String((error && error.message) || error)) })
       }
       React.useEffect(() => { loadExternal() }, [refreshKey])
       React.useEffect(() => {
@@ -5729,7 +5742,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           listItems),
         h('div', { className: 'rt-main' },
           h('div', { className: 'rt-toolbar' },
-            h('span', { style: { fontWeight: 600 } }, detail ? detail.name : '技能目录（DSH 原生）'),
+            h('span', { style: { fontWeight: 600 } }, detail ? detail.name : '技能目录'),
             h('div', { className: 'rt-spacer' }),
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => { load(true); loadExternal() } }, busy ? '刷新中…' : '刷新')),
           h('div', { className: 'rt-note', style: { marginBottom: 8 } },
@@ -5748,6 +5761,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               external && external.installed
                 ? h('button', { className: 'rt-btn', disabled: externalRequest || external.busy,
                     onClick: () => manageExternal(true) }, '更新技能') : null,
+              external && external.installed
+                ? h('button', {
+                    className: 'rt-btn',
+                    disabled: externalRequest,
+                    style: removeArmed ? { color: 'var(--rt-danger, #d33)', borderColor: 'var(--rt-danger, #d33)' } : undefined,
+                    title: removeArmed ? '再点一次：删除本机 AboutSecurity 检出（不影响随包技能）' : '卸载 AboutSecurity 检出（不删除随包红队技能）',
+                    onBlur: () => setRemoveArmed(false),
+                    onClick: () => { if (!removeArmed) { setRemoveArmed(true); return } removeExternal() },
+                  }, removeArmed ? '确认卸载' : '卸载') : null,
               h('button', { className: 'rt-btn', disabled: externalRequest, onClick: loadExternal }, '检查状态')),
             h('div', { style: { fontSize: 11, marginTop: 6 } },
               '按需从 wgpsec/AboutSecurity 下载 skills/；宿主支持时自动注册，是否成功以「宿主已列出」标记为准。'),
