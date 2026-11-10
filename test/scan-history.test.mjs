@@ -158,3 +158,44 @@ test('manual import cannot rewrite a record belonging to another project', (t) =
   assert.equal(format.updated, false)
   assert.equal(listScanHistory(store, 'alpha').items[0].status, 'previewed')
 })
+
+test('board status counters remain global while view filters by status, tool and attention', (t) => {
+  const { store, write } = fixture(t)
+  const THIRD = '2026-11-09T03-00-00-000Z-cccccccc'
+  const FOURTH = '2026-11-09T04-00-00-000Z-dddddddd'
+  const FIFTH = '2026-11-09T05-00-00-000Z-eeeeeeee'
+  write('alpha', ONE, 'nmap', 'imported', '<nmaprun/>')
+  write('alpha', TWO, 'httpx', 'failed', 'stderr')
+  write('alpha', THIRD, 'nmap', 'previewed', '<nmaprun/>')
+  write('alpha', FOURTH, 'httpx', 'timeout', 'partial')
+  write('alpha', FIFTH, 'nmap', 'no-findings', '<nmaprun/>')
+  const all = listScanHistory(store, 'alpha')
+  assert.equal(all.total, 5)
+  assert.deepEqual(all.summary, {
+    total: 5, attention: 4, failures: 2,
+    byStatus: { 'no-findings': 1, timeout: 1, previewed: 1, failed: 1, imported: 1 },
+    byKind: { nmap: 3, httpx: 2 },
+  })
+  const onlyKind = listScanHistory(store, 'alpha', { kind: 'httpx' })
+  assert.equal(onlyKind.total, 2)
+  assert.equal(onlyKind.summary.total, 5)
+  assert.ok(onlyKind.items.every((r) => r.kind === 'httpx'))
+  assert.equal(listScanHistory(store, 'alpha', { attention: true }).total, 4)
+  assert.deepEqual(listScanHistory(store, 'alpha', { failures: true }).items.map((r) => r.status), ['timeout', 'failed'])
+  assert.equal(listScanHistory(store, 'alpha', { kind: 'nmap', attention: true }).total, 2)
+  assert.equal(listScanHistory(store, 'alpha', { kind: 'nmap', status: 'imported' }).total, 1)
+  assert.equal(listScanHistory(store, 'alpha', { status: 'imported', limit: 1 }).feedback.total_scans, 5)
+  assert.equal(listScanHistory(store, 'beta').summary.total, 0)
+})
+
+test('scan board exposes real read-only statuses, responsive cards and expandable run details', () => {
+  const client = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  assert.match(client, /function ScanHistoryTab\(props\)/)
+  assert.match(client, /op: 'scanHistory', engagement: eng, status, kind, attention, failures, offset, limit/)
+  assert.match(client, /className: 'rt-run-metrics'/)
+  assert.match(client, /className: 'rt-run-toggle'/)
+  assert.match(client, /'aria-expanded': open \? 'true' : 'false'/)
+  assert.match(client, /metric\('failed', '执行及导入失败', summary.failures, failures, chooseFailures\)/)
+  assert.match(client, /maskHistory \? '执行有错误，详情已隐藏' : item.error/)
+  assert.match(client, /op: 'scanArtifactInspect'/)
+})
