@@ -4815,6 +4815,25 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 .rt-dock .rt-status-pill{font-weight:600}
 .rt-dock.rt-embedded .rt-tab{white-space:nowrap}
 .rt-dock .rt-privacy-pane .rt-card,.rt-dock .rt-survey-pane .rt-card{min-width:0}
+.rt-dock{container-type:inline-size}
+@container(max-width:700px){
+  .rt-ops-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rt-ops-grid{grid-template-columns:minmax(0,1fr)}
+  .rt-ops-stages{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rt-split{flex-direction:column}
+  .rt-side,.rt-list{width:auto;max-height:170px;flex:none;border-right:0;
+    border-bottom:1px solid var(--rt-line)}
+  .rt-main{min-height:0;flex:1}
+  .rt-card,.rt-ops-section{overflow-wrap:anywhere}
+}
+@container(max-width:420px){
+  .rt-ops-metrics{grid-template-columns:minmax(0,1fr)}
+  .rt-ops-hero{padding:12px}
+  .rt-ops-hero h2{font-size:16px}
+  .rt-ops-stages{grid-template-columns:minmax(0,1fr)}
+  .rt-tab-group-title{display:none}
+  .rt-toolbar{padding:7px}
+}
 @media(max-width:990px){
   .rt-full{grid-template-columns:minmax(0,1fr);
     grid-template-rows:58px auto minmax(0,1fr) 44px}
@@ -10348,8 +10367,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 onKeyDown: (e) => {
                   const index = tabs.findIndex((page) => page[0] === t[0])
                   let target = index
-                  if (e.key === 'ArrowRight') target = (index + 1) % tabs.length
-                  else if (e.key === 'ArrowLeft') target = (index + tabs.length - 1) % tabs.length
+                  if (e.key === 'ArrowRight' || (full && e.key === 'ArrowDown')) target = (index + 1) % tabs.length
+                  else if (e.key === 'ArrowLeft' || (full && e.key === 'ArrowUp')) target = (index + tabs.length - 1) % tabs.length
                   else if (e.key === 'Home') target = 0
                   else if (e.key === 'End') target = tabs.length - 1
                   else return
