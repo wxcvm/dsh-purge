@@ -9290,6 +9290,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [reviewNotes, setReviewNotes] = React.useState({})
       const [reviewSaving, setReviewSaving] = React.useState(null)
       const [reviewError, setReviewError] = React.useState('')
+      const [feedbackBusy, setFeedbackBusy] = React.useState(false)
+      const exportFeedback = () => {
+        if (!report || !props.engagement || feedbackBusy) return
+        const engagement = props.engagement
+        setFeedbackBusy(true)
+        setReviewError('')
+        api({ op: 'artexReviewExport', engagement,
+          finding_ids: report.review_queue.map((item) => item.finding_id) })
+          .then((result) => {
+            if (!result || result.ok === false || !result.feedback) throw new Error((result && result.error) || '回执导出失败')
+            const data = result.feedback
+            const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+            const link = document.createElement('a')
+            link.href = url
+            link.download = 'artex-dsh-review-feedback.json'
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+          })
+          .catch((err) => setReviewError(String((err && err.message) || err)))
+          .finally(() => setFeedbackBusy(false))
+      }
       const [reviewFilter, setReviewFilter] = React.useState('all')
       const [reviewSaved, setReviewSaved] = React.useState(null)
       React.useEffect(() => {
@@ -9512,7 +9535,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('b', null, '建议核查顺序（前 ' + reviewQueue.length + ' 条）'),
                 h('button', { type: 'button', className: 'rt-btn',
                   onClick: () => copyWithFeedback(handoffText, 'ARTEX 核查交接清单', (_ok, message) => setHandoffMessage(message)),
-                }, '复制核查交接清单')),
+                }, '复制核查交接清单'),
+                h('button', { type: 'button', className: 'rt-btn',
+                  disabled: !activeProgress || !(activeProgress.items || []).length || feedbackBusy,
+                  onClick: exportFeedback,
+                }, feedbackBusy ? '正在导出…' : '导出 DSH 核查回执')),
               h('p', { className: 'rt-foot' },
                 '先核对过期报告，再看待确认事项；交接文本包含来源主机、端口及 DSH 资产匹配依据（仅供核实），不含原始请求或响应。'),
               reviewQueue.slice(0, 5).map((item) => h('p', { key: item.finding_id, className: 'rt-foot' },

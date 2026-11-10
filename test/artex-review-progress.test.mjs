@@ -11,6 +11,7 @@ const methods = {
   db(id) { return this.databases[id] },
   saveArtexReview: RedteamStore.prototype.saveArtexReview,
   listArtexReviews: RedteamStore.prototype.listArtexReviews,
+  exportArtexReviews: RedteamStore.prototype.exportArtexReviews,
 }
 
 test('ARTEX review state persists, updates evidence version, and stays inside selected DSH engagement', (t) => {
@@ -109,6 +110,8 @@ test('source and embedded ARTEX resource page expose manual review progress cont
     const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
     assert.match(source, /artexReviewList/)
     assert.match(source, /artexReviewSave/)
+    assert.match(source, /artexReviewExport/)
+    assert.match(source, /导出 DSH 核查回执/)
     assert.match(source, /记录 DSH 人工核查进度/)
     assert.match(source, /证据版本变化/)
     assert.match(source, /progressLabel/)
@@ -118,4 +121,33 @@ test('source and embedded ARTEX resource page expose manual review progress cont
     assert.match(source, /disabled: !activeProgress \|\| reviewSaving !== null/)
     assert.match(source, /证据版本变化/)
   }
+})
+
+test('explicit review feedback export preserves source IDs and inspected versions without findings import', (t) => {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  db.exec(DDL)
+  const store = { ...methods, databases: { lab: db } }
+  store.saveArtexReview('lab', {
+    finding_id: 15, task_id: 4, evidence_version: 6,
+    status: 'needs_evidence', note: 'Check report freshness before review',
+  })
+  store.saveArtexReview('lab', {
+    finding_id: 16, task_id: null, evidence_version: null,
+    status: 'reviewed', note: '',
+  })
+  const out = dispatch(store, {
+    op: 'artexReviewExport', engagement: 'lab', finding_ids: [15, 16, 999],
+  })
+  assert.equal(out.ok, true)
+  assert.equal(out.feedback.schema, 'artex.dsh.review-feedback.v1')
+  assert.equal(out.feedback.source, 'dsh-purge')
+  assert.equal(out.feedback.engagement, 'lab')
+  assert.match(out.feedback.exported_at, /^\d{4}-\d\d-/)
+  assert.deepEqual(out.feedback.reviews.map((x) => x.finding_id), [15, 16])
+  assert.equal(out.feedback.reviews[0].task_id, 4)
+  assert.equal(out.feedback.reviews[0].evidence_version, 6)
+  assert.equal(out.feedback.reviews[0].status, 'needs_evidence')
+  assert.equal(out.feedback.reviews[1].evidence_version, null)
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, 0)
 })
