@@ -472,6 +472,25 @@ dsh-purge --uninstall
 
 `bin/` 是命令行，`lib/` 是补丁和作战台，`presets/redteam/` 是红队预设，`client.js` 是侧栏。开源版不下发 `skills/` 和知识库。
 
+## 可选的凭据静态加密（AES-256-GCM）
+
+本功能是**显式启用**，不会悄悄迁移旧资产，也不会改变界面读取口令的方式。配置 `DSH_PURGE_SECRET_KEY` 后，新的 `credential.secret_value` 和 `webshell.pass_key` 会使用随机 nonce 和 AES-256-GCM 进行加密，数据库内存放的是 `dshp:vault:v1:...` 信封；工具、报表及控制台通过 Store 解密读取。**不配置密钥时，旧版明文行为保持不变。**
+
+1. 使用 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` 生成 **64 位十六进制（32 字节）**随机密钥，保存在单独的密码管理器或安全密钥存储中。把它以 `DSH_PURGE_SECRET_KEY` 环境变量提供给 **启动 DSH 的进程**；不要写进 Git、截图、报告或数据库目录。Windows PowerShell 可用 `$env:DSH_PURGE_SECRET_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Vault key' -AsSecureString)).Password` 在当前终端设置，然后从同一终端启动 DSH；不要把实际密钥直接写到 PowerShell 历史。
+2. 旧工作区不会自动加密。先**停止 DSH**，保留现有数据库及其备份，并在同一环境中执行以下命令。默认只输出明文/密文记录**数量**，不修改文件、不输出口令：
+
+```sh
+node scripts/secret-vault.mjs
+# 确认迁移对象和密钥备份后，显式执行：
+node scripts/secret-vault.mjs --apply
+# 如需使用自定义磁盘位置：
+node scripts/secret-vault.mjs --root "D:/DSH/redteam" --apply
+```
+
+3. 重启 DSH 时保持**同一密钥**。迁移按工作区使用 SQLite 事务；重复运行不会再次加密密文。密钥缺失、错误或密文损坏时，对受保护字段的读取会明确报错，**不会自动回退成明文或覆盖已有凭据**。
+
+**能力边界：** 此项只加密上述两个字段，不加密 SQLite 整库、扫描证据、其他备注、截图、日志、报告或导出内容。老数据库在转换前是明文，历史 SQLite 页/WAL/快照与备份中可能仍保留旧明文；迁移不负责清理这些副本。授权用户在程序内解密后的数据仍会通过现有 API/报告使用。丢失密钥将无法恢复已加密字段；共享多台 DSH 时各实例必须使用正确密钥。可结合上文的 POSIX 文件权限及可选 Windows NTFS ACL 保护使用。
+
 **本地凭据文件权限：** Purge 的 `redteam/engagements` 中可能保存凭据和 WebShell 密钥，SQLite 中目前仍是明文字段。本维护版会在 macOS/Linux 上将工作区目录收紧到 `0700`、资产库 `assets.db` 收紧到 `0600`，包括重新打开的旧工作区；本地归档目录也会收紧。此改动**不加密数据库、不影响 API 对已有明文的读取**，也不能阻止同一操作系统账户、root 或有备份权限的进程访问。Windows 的 `chmod` 无法提供等价 NTFS ACL 防护。Windows 11 可使用本仓库的显式 NTFS ACL 工具来保护工作区，默认**只预览、不更改**：
 
 ```powershell
