@@ -13,6 +13,8 @@ const sample = {
         message: { text: 'Observed access control issue', markdown: 'PRIVATE_RAW_TRAFFIC' },
         partialFingerprints: { artexFindingId: '15' },
         properties: { findingId: 15, taskId: 3, assetIds: [6, 2, 6], severity: 'critical', status: 'confirmed',
+          assetRefs: [{ id: 6, type: 'service', domain: 'api.example.test', port: 443 },
+            { id: 2, type: 'ip', ip: '192.0.2.1' }],
           trafficCount: 2, evidenceVersion: 6, reportEvidenceVersion: 4, reportStale: true },
       },
       {
@@ -53,6 +55,10 @@ test('ARTEX SARIF preserves finding, task, asset and triage lineage without inve
   assert.equal(out.items[2].report_stale, null)
   assert.equal(out.source_assets_total, 3)
   assert.deepEqual(out.asset_groups.map((x) => x.asset_id), [2, 6, 11])
+  assert.equal(out.asset_groups[0].ip, '192.0.2.1')
+  assert.equal(out.asset_groups[1].domain, 'api.example.test')
+  assert.equal(out.asset_groups[1].port, 443)
+  assert.equal(out.asset_groups[2].domain, null, 'old ARTEX exports retain unmappable numeric IDs')
   assert.deepEqual(out.asset_groups[0].finding_ids, [15])
   assert.equal(out.asset_groups[0].traffic_references, 2)
   assert.equal(out.asset_groups[0].stale_reports, 1)
@@ -121,9 +127,12 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(rt, /ARTEX SARIF 报告/)
   assert.match(rt, /按 ARTEX 资产 ID 查看关联漏洞/)
   assert.match(rt, /report\.asset_groups/)
+  assert.match(rt, /matchArtexAssets/)
+  assert.match(rt, /与当前 DSH 靶标匹配/)
   assert.match(rt, /report\.review_queue/)
   assert.match(rt, /复制核查交接清单/)
   assert.match(embedded, /ARTEX SARIF 报告/)
   assert.match(embedded, /按 ARTEX 资产 ID 查看关联漏洞/)
+  assert.match(embedded, /与当前 DSH 靶标匹配/)
   assert.match(embedded, /复制核查交接清单/)
 })

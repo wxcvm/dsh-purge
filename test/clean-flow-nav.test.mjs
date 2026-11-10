@@ -27,13 +27,13 @@ test('redteam main section headings are real controls and each page remains navi
   assert.match(rt, /title: '打开' \+ section\.label \+ '首页'/)
   assert.match(rt, /setUI\(\{ tab: page \}\)/)
   assert.match(rt, /\['artex', 'ARTEX'\]/)
-  assert.match(rt, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab\)/)
+  assert.match(rt, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab, \{ engagement: eng \}\)/)
   assert.match(rt, /h\('button', \{[\s\S]*?className: 'rt-tab' \+ \(st\.tab === t\[0\]/)
 })
 
 test('cleaning panel no longer houses ARTEX and embedded drill gets the updated navigator', () => {
   assert.doesNotMatch(root, /function ArtexLinkSection\(\)/)
-  assert.match(root, /function ArtexTab\(\)/)
+  assert.match(root, /function ArtexTab\(props\)/)
   assert.match(root, /className: 'rt-tab-group-title'/)
   assert.match(rt, /fetch\('\/dsh-purge\/artex', \{ method: 'GET' \}\)/)
 })
