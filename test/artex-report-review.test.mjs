@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { reviewArtexSarif } from '../lib/redteam/artex-report-review.js'
 
 const sample = {
@@ -143,6 +144,51 @@ test('high-priority findings get matching slots beyond the first 50 asset IDs', 
   assert.equal(out.review_queue_omitted, 41)
 })
 
+test('ARTEX handoff shows source host, port, matching reasons and limited candidates', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const start = source.indexOf('    function formatArtexReviewAssets(')
+  const end = source.indexOf('    function ArtexTab(props)', start)
+  assert.ok(start >= 0 && end > start)
+  const format = runInNewContext(source.slice(start, end) + '\nformatArtexReviewAssets')
+  const report = {
+    asset_groups: [{ asset_id: 1, ip: '192.0.2.1' }],
+    match_asset_groups: [
+      { asset_id: 500, domain: 'api.example.test', port: 443 },
+      { asset_id: 2, ip: '192.0.2.2' },
+    ],
+  }
+  const many = Array.from({ length: 7 }, (_unused, i) => ({
+    dsh_asset_id: i + 10, primary_name: 'web-' + i + '.test', ip: '198.51.100.' + (i + 1),
+    matched_by: 'domain', port_match: true,
+  }))
+  const matches = {
+    review_links: [{ finding_id: 15, links: [
+      { source_asset_id: 500, status: 'ambiguous', dsh_asset_id: null },
+      { source_asset_id: 2, status: 'matched', dsh_asset_id: 41 },
+      { source_asset_id: 3, status: 'not_compared', dsh_asset_id: null },
+    ] }],
+    items: [
+      { source_asset_id: 500, status: 'ambiguous', candidates: many, candidates_truncated: true },
+      { source_asset_id: 2, status: 'matched', candidates: [
+        { dsh_asset_id: 41, primary_name: 'service.example.test', ip: '192.0.2.2',
+          matched_by: 'ip+domain', port_match: false },
+      ] },
+    ],
+  }
+  const line = format({ finding_id: 15, asset_ids: [500, 2, 3] }, report, matches)
+  assert.match(line, /ARTEX #500 api\.example\.test · 端口 443 → 多个资产候选/)
+  assert.match(line, /DSH #10 web-0\.test \/ 198\.51\.100\.1 \[域名\/别名一致、开放端口一致\]/)
+  assert.match(line, /DSH #41 service\.example\.test \/ 192\.0\.2\.2 \[IP 一致、域名\/别名一致\]/)
+  assert.match(line, /另有 2 个候选未列出/)
+  assert.match(line, /匹配候选有截断/)
+  assert.match(line, /ARTEX #3 → 本次未比对/)
+  assert.doesNotMatch(line, /DSH #15/)
+  assert.match(format({ finding_id: 16, asset_ids: [500] }, report, matches), /匹配结果暂缺/)
+  assert.match(format({ finding_id: 17, asset_ids: [] }, report, matches), /ARTEX 未关联资产/)
+  assert.match(format({ finding_id: 15, asset_ids: [500] }, report, null), /尚未比对当前靶标/)
+  assert.ok(!line.includes('PRIVATE_RAW_TRAFFIC'))
+})
+
 test('ARTEX report review route and embedded resource tab are both connected', () => {
   const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
   const rt = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
@@ -160,6 +206,7 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(rt, /report\.match_asset_groups \|\| report\.asset_groups/)
   assert.match(rt, /refs: sourceRefs/)
   assert.match(rt, /reviewAssetLabel/)
+  assert.match(rt, /formatArtexReviewAssets/)
   assert.match(rt, /assetMatches\._report === report/)
   assert.match(rt, /复制核查交接清单/)
   assert.match(embedded, /ARTEX SARIF 报告/)
@@ -167,5 +214,6 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(embedded, /与当前 DSH 靶标匹配/)
   assert.match(embedded, /复制核查交接清单/)
   assert.match(embedded, /reviewAssetLabel/)
+  assert.match(embedded, /formatArtexReviewAssets/)
   assert.match(embedded, /refs: sourceRefs/)
 })
