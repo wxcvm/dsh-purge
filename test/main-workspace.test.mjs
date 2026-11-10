@@ -41,3 +41,16 @@ test('native clean workspace has separate navigation without discarding edits', 
   assert.match(client, /if \(props\.workspace !== true\)/)
   assert.match(client, /\.dshp-clean-pane\[hidden\]\{display:none!important\}/)
 })
+
+test('closed legacy Dock does not mount duplicate forms or run hidden API effects', () => {
+  assert.match(client, /const body = !st\.open \? null : st\.tab === "clean"/)
+  assert.match(client, /\? h\(SettingsRoot, \{ t \}\)/)
+})
+
+test('native main workspace loads both styles without depending on shell overlay', () => {
+  assert.match(client, /function ensurePurgeWorkspaceStyles\(\)/)
+  assert.match(client, /function PurgeWorkspacePage\(\) \{\s*const t = useT\(\);\s*useEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/)
+  assert.match(client, /document\.querySelector\('style\[data-dsh-purge-drill="1"\]'\)/)
+  assert.match(client, /function PurgeDock\(\)/)
+  assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
+})
