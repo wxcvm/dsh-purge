@@ -7186,6 +7186,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          protection && protection.bridge ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+            h('h4', null, 'DSH 管理连接诊断'),
+            h('div', { style: { fontSize: 12 } },
+              '当前连接本地端点：' + (protection.bridge.acceptedAddress || '未知')
+                + ':' + (protection.bridge.acceptedPort || '未知')),
+            h('div', { style: { fontSize: 12 } },
+              'DSH 服务报告端口：' + (protection.bridge.configuredPort || '未知')),
+            h('div', { style: { fontSize: 12, opacity: 0.8 } },
+              '这是当前 HTTP 连接实际到达的端点，不是服务器绑定范围。公网可达性、Docker 端口映射和反向代理仍未检测。')) : null,
           h('div', { className: 'rt-card' },
             h('h4', null, '保护状态：已保护 / 可启用 / 仍会暴露'),
             protection ? [
