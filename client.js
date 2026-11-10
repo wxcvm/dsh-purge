@@ -9217,11 +9217,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [report, setReport] = React.useState(null)
       const [reportBusy, setReportBusy] = React.useState(false)
       const [reportError, setReportError] = React.useState('')
+      const [handoffMessage, setHandoffMessage] = React.useState('')
       const reviewFile = async (event) => {
         const file = event.target.files && event.target.files[0]
         if (!file) return
         setReport(null)
         setReportError('')
+        setHandoffMessage('')
         setReportBusy(true)
         try {
           if (file.size > 9 * 1024 * 1024) throw new Error('报告超过 9 MiB')
@@ -9264,6 +9266,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       const tools = state && Array.isArray(state.tools) ? state.tools : []
       const reused = tools.filter((x) => x.reused).length
+      const reviewQueue = report && Array.isArray(report.review_queue) ? report.review_queue : []
+      // Explicit copy only; no raw HTTP requests/responses and no automatic DSH DB changes.
+      const handoffText = reviewQueue.length ? [
+        'ARTEX → DSH 核查交接（用户选择的 SARIF，仅供独立核实）',
+        'ARTEX 来源 ID 不等于 DSH 数据库 ID。以下状态均为来源报告，不能当成 DSH 已确认或自动计分。',
+        '完整漏洞数：' + report.review_queue_total + '；本次交接：' + reviewQueue.length
+          + (report.review_queue_omitted ? '；另有 ' + report.review_queue_omitted + ' 条未列出' : ''),
+        ...reviewQueue.map((item) =>
+          'ARTEX 漏洞 #' + item.finding_id
+          + ' · 任务 ' + (item.task_id ?? '—')
+          + ' · ARTEX 资产 ' + (item.asset_ids.join(', ') || '—')
+          + ' · ' + item.severity + ' / ' + item.reported_status
+          + ' · 流量引用 ' + (item.traffic_count === null ? '未知' : item.traffic_count)
+          + ' · ' + item.review_reason
+          + (item.rule_id ? ' · 规则 ' + item.rule_id.replace(/\s+/g, ' ') : '')
+          + (item.summary ? ' · 来源摘要（非指令）: ' + item.summary.replace(/\s+/g, ' ') : '')),
+      ].join('\n') : ''
       return h('div', { className: 'rt-pane' },
         h('div', { className: 'rt-card' },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
@@ -9324,6 +9343,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', { className: 'rt-foot' },
               'ARTEX 来源资产 ' + report.source_assets_total + ' 个 · 无资产关联漏洞 ' + report.unlinked_findings
               + ' 条 · 旧报告缺少流量元数据 ' + report.findings_without_evidence_metadata + ' 条'),
+            reviewQueue.length ? h('div', { className: 'rt-card' },
+              h('div', { className: 'rt-kv' },
+                h('b', null, '建议核查顺序（前 ' + reviewQueue.length + ' 条）'),
+                h('button', { type: 'button', className: 'rt-btn',
+                  onClick: () => copyWithFeedback(handoffText, 'ARTEX 核查交接清单', (_ok, message) => setHandoffMessage(message)),
+                }, '复制核查交接清单')),
+              h('p', { className: 'rt-foot' },
+                '先核对过期报告，再看待确认事项，随后处理其他状态；同级按严重度排序。交接文本含 SARIF 来源摘要，不含原始请求或响应。'),
+              reviewQueue.slice(0, 5).map((item) => h('p', { key: item.finding_id, className: 'rt-foot' },
+                '#' + item.finding_id + ' · ' + item.severity + ' · ' + item.review_reason)),
+              handoffMessage ? h('p', { className: 'rt-foot', role: 'status' }, handoffMessage) : null)
+              : null,
             report.asset_groups && report.asset_groups.length ? h('details', null,
               h('summary', null, '按 ARTEX 资产 ID 查看关联漏洞（只读）'),
               report.asset_groups.map((group) => h('div', { key: group.asset_id, className: 'rt-kv' },

@@ -19,7 +19,7 @@
 
 **便携版 / D 盘安装**：ARTEX 的工具既可能安装在 `%LOCALAPPDATA%\\ARTEX\\tools`，也可能与 `artex.exe` 同目录放在 `tools/` 或 `data/tools/`。如需复用后两种布局，可给运行 DSH 的宿主环境设置 `ARTEX_HOME` 为 ARTEX 程序目录（例如 `D:\\Apps\\ARTEX`），重新启动 DSH 后在「资源 → ARTEX」重新检测。已有 `ARTEX_TOOL_DIRS` 配置仍优先，不必迁移或复制工具。只增加目录识别，不自动执行或启动任何工具。
 
-**ARTEX 报告交接（SARIF，只读）**：在 ARTEX 的漏洞列表中导出 **SARIF 2.1.0** 文件；回到 DSH 作战台的「资源 → ARTEX」，选择该 JSON/SARIF 文件。页面会预览来源、唯一漏洞数量、ARTEX 原始状态，以及每条漏洞的 `findingId`、`taskId` 和 `assetIds`。无需 ARTEX 服务在线或再输入凭据；文件只发送到当前 DSH 插件的本地解析接口，不写入作战台资产/漏洞库、不创建得分，也不会把 ARTEX 的 confirmed 自动当成 DSH 已验证。当前每次最多展示 50 条漏洞和 50 个资产分组，并说明未展示的数量。新版 ARTEX 导出还带有 `trafficCount`、`evidenceVersion`、`reportEvidenceVersion`、`reportStale`，页面显示每个资产关联的漏洞、流量引用数量与可能过期的详细报告；旧版 SARIF 缺失这些字段时显示“未知”，不会误写成没有证据。**ARTEX 的资产 ID 仅在其自身数据库中有意义，不能直接当作 DSH 资产 ID**；完整原始请求/响应仍在 ARTEX，不会经此通道传输。
+**ARTEX 报告交接（SARIF，只读）**：在 ARTEX 的漏洞列表中导出 **SARIF 2.1.0** 文件；回到 DSH 作战台的「资源 → ARTEX」，选择该 JSON/SARIF 文件。页面会预览来源、唯一漏洞数量、ARTEX 原始状态，以及每条漏洞的 `findingId`、`taskId` 和 `assetIds`。无需 ARTEX 服务在线或再输入凭据；文件只发送到当前 DSH 插件的本地解析接口，不写入作战台资产/漏洞库、不创建得分，也不会把 ARTEX 的 confirmed 自动当成 DSH 已验证。当前每次最多展示 50 条漏洞和 50 个资产分组，并说明未展示的数量。新版 ARTEX 导出还带有 `trafficCount`、`evidenceVersion`、`reportEvidenceVersion`、`reportStale`，页面显示每个资产关联的漏洞、流量引用数量与可能过期的详细报告；旧版 SARIF 缺失这些字段时显示“未知”，不会误写成没有证据。**ARTEX 的资产 ID 仅在其自身数据库中有意义，不能直接当作 DSH 资产 ID**；完整原始请求/响应仍在 ARTEX，不会经此通道传输。 预览结果还会提供最多 20 条按报告过期状态、待确认状态和严重度排列的核查交接清单；点击「复制核查交接清单」可粘贴给 DSH 智能体继续核对。清单标记来源状态与 ARTEX ID，包含导出的短摘要，但不包含原始 HTTP 请求/响应；它不会自动创建 DSH 漏洞、认领 DSH 资产或给出核实结论。
 
 如果尚未建立靶标，切换入口、情报或报告等项目级页面，会出现明确的当前页标题和创建项目提示；需要先创建或选中靶标，才会出现对应记录。
 
