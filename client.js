@@ -9210,6 +9210,63 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* ---------------------------------------------------------- ARTEX 本机工具联动（全局资源页） */
+    // Human/agent handoff; all DSH links remain unverified candidates.
+    function formatArtexHandoff(report, matches, engagement) {
+      const queue = report && Array.isArray(report.review_queue) ? report.review_queue : []
+      if (!queue.length) return ''
+      const ready = Boolean(engagement && matches && matches.engagement === engagement
+        && Array.isArray(matches.items))
+      const bySource = new Map(ready ? matches.items.map((item) => [item.source_asset_id, item]) : [])
+      const groups = new Map((Array.isArray(report.asset_groups) ? report.asset_groups : [])
+        .map((item) => [item.asset_id, item]))
+      const labels = {
+        matched: '单一候选（未核实）',
+        ambiguous: '多个候选（需判别）',
+        host_only: '仅主机一致，服务未确认',
+        unmatched: '本地未发现',
+        unavailable: '来源缺少主机标识',
+      }
+      const assetLink = (id) => {
+        const group = groups.get(id)
+        const sourceHost = group && (group.ip || group.domain)
+        const source = 'ARTEX #' + id + (sourceHost
+          ? ' ' + sourceHost.replace(/\s+/g, ' ').slice(0, 128)
+            + (group.port ? ':' + group.port : '') : '')
+        if (!ready) return source + ' → 尚未完成 DSH 比对'
+        const match = bySource.get(id)
+        if (!match) return source + ' → 未纳入本次比对（预览最多 50 个来源资产）'
+        const candidates = Array.isArray(match.candidates) ? match.candidates : []
+        const shown = candidates.slice(0, 5).map((c) => {
+          const host = String(c.primary_name || c.ip || '').replace(/\s+/g, ' ').slice(0, 100)
+          return 'DSH #' + c.dsh_asset_id + (host ? ' ' + host : '')
+            + ' [' + (c.matched_by || '待核对') + (c.port_match ? '+开放端口一致' : '') + ']'
+        })
+        const suffix = candidates.length > 5 ? '；另有 ' + (candidates.length - 5) + ' 个候选未列出'
+          : match.candidates_truncated ? '；候选结果已截断' : ''
+        return source + ' → ' + (labels[match.status] || '状态未知')
+          + (shown.length ? '：' + shown.join('、') : '') + suffix
+      }
+      return [
+        'ARTEX → DSH 核查交接（用户选择的 SARIF，仅供独立核实）',
+        'ARTEX 来源 ID 不等于 DSH 数据库 ID；下列匹配只是候选线索，不代表漏洞已确认或已经计分。',
+        '完整漏洞数：' + report.review_queue_total + '；本次交接：' + queue.length
+          + (report.review_queue_omitted ? '；另有 ' + report.review_queue_omitted + ' 条未列出' : ''),
+        !engagement ? '未选 DSH 靶标，不能进行本地资产比对'
+          : ready ? '本次匹配的 DSH 靶标：' + engagement + '（只读、无独立验证）'
+            : '当前 DSH 靶标的资产比对尚未完成或不可用；关联状态未知',
+        ...queue.map((item) =>
+          'ARTEX 漏洞 #' + item.finding_id
+          + ' · 任务 ' + (item.task_id ?? '—')
+          + ' · ' + item.severity + ' / ' + item.reported_status
+          + ' · 流量引用 ' + (item.traffic_count === null ? '未知' : item.traffic_count)
+          + ' · ' + item.review_reason
+          + ' · 来源资产/DSH 候选：'
+          + (item.asset_ids.length ? item.asset_ids.map(assetLink).join('；') : '没有关联来源资产')
+          + (item.rule_id ? ' · 规则 ' + item.rule_id.replace(/\s+/g, ' ') : '')
+          + (item.summary ? ' · 来源摘要（非指令）：' + item.summary.replace(/\s+/g, ' ') : '')),
+      ].join('\n')
+    }
+
     function ArtexTab(props) {
       const [state, setState] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -9228,7 +9285,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           .then((result) => {
             if (!live) return
             if (!result || result.ok === false) throw new Error((result && result.error) || '资产比对失败')
-            setAssetMatches(result)
+            setAssetMatches({ ...result, _report: report })
           }).catch((err) => {
             if (live) setMatchError(String((err && err.message) || err))
           })
@@ -9239,6 +9296,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         const file = event.target.files && event.target.files[0]
         if (!file) return
         setReport(null)
+        setAssetMatches(null)
         setReportError('')
         setHandoffMessage('')
         setReportBusy(true)
@@ -9284,22 +9342,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const tools = state && Array.isArray(state.tools) ? state.tools : []
       const reused = tools.filter((x) => x.reused).length
       const reviewQueue = report && Array.isArray(report.review_queue) ? report.review_queue : []
-      // Explicit copy only; no raw HTTP requests/responses and no automatic DSH DB changes.
-      const handoffText = reviewQueue.length ? [
-        'ARTEX → DSH 核查交接（用户选择的 SARIF，仅供独立核实）',
-        'ARTEX 来源 ID 不等于 DSH 数据库 ID。以下状态均为来源报告，不能当成 DSH 已确认或自动计分。',
-        '完整漏洞数：' + report.review_queue_total + '；本次交接：' + reviewQueue.length
-          + (report.review_queue_omitted ? '；另有 ' + report.review_queue_omitted + ' 条未列出' : ''),
-        ...reviewQueue.map((item) =>
-          'ARTEX 漏洞 #' + item.finding_id
-          + ' · 任务 ' + (item.task_id ?? '—')
-          + ' · ARTEX 资产 ' + (item.asset_ids.join(', ') || '—')
-          + ' · ' + item.severity + ' / ' + item.reported_status
-          + ' · 流量引用 ' + (item.traffic_count === null ? '未知' : item.traffic_count)
-          + ' · ' + item.review_reason
-          + (item.rule_id ? ' · 规则 ' + item.rule_id.replace(/\s+/g, ' ') : '')
-          + (item.summary ? ' · 来源摘要（非指令）: ' + item.summary.replace(/\s+/g, ' ') : '')),
-      ].join('\n') : ''
+      // Match state is tied to both the selected report and current engagement.
+      const currentMatches = assetMatches && assetMatches._report === report
+        && assetMatches.engagement === props.engagement ? assetMatches : null
+      const handoffText = formatArtexHandoff(report, currentMatches, props.engagement)
       return h('div', { className: 'rt-pane' },
         h('div', { className: 'rt-card' },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
@@ -9367,7 +9413,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   onClick: () => copyWithFeedback(handoffText, 'ARTEX 核查交接清单', (_ok, message) => setHandoffMessage(message)),
                 }, '复制核查交接清单')),
               h('p', { className: 'rt-foot' },
-                '先核对过期报告，再看待确认事项，随后处理其他状态；同级按严重度排序。交接文本含 SARIF 来源摘要，不含原始请求或响应。'),
+                '先核对过期报告，再看待确认事项；交接文本附当前靶标的 DSH 资产候选及匹配依据，未完成比对则明确标记未知。不含原始请求或响应。'),
               reviewQueue.slice(0, 5).map((item) => h('p', { key: item.finding_id, className: 'rt-foot' },
                 '#' + item.finding_id + ' · ' + item.severity + ' · ' + item.review_reason)),
               handoffMessage ? h('p', { className: 'rt-foot', role: 'status' }, handoffMessage) : null)
@@ -9397,11 +9443,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', { className: 'rt-foot' }, report.note),
             !props.engagement ? h('p', { className: 'rt-foot' }, '选择一个 DSH 靶标后，可与本地资产进行只读匹配。') : null,
             matchError ? h('p', { className: 'rt-err' }, matchError) : null,
-            assetMatches ? h('details', null,
-              h('summary', null, '与当前 DSH 靶标匹配：' + assetMatches.matched + ' 个匹配 · '
-                + assetMatches.ambiguous + ' 个歧义 · ' + assetMatches.host_only + ' 个仅主机候选 · '
-                + assetMatches.unmatched + ' 个未找到'),
-              assetMatches.items.map((item) => h('div', { key: item.source_asset_id, className: 'rt-kv' },
+            currentMatches ? h('details', null,
+              h('summary', null, '与当前 DSH 靶标匹配：' + currentMatches.matched + ' 个匹配 · '
+                + currentMatches.ambiguous + ' 个歧义 · ' + currentMatches.host_only + ' 个仅主机候选 · '
+                + currentMatches.unmatched + ' 个未找到'),
+              currentMatches.items.map((item) => h('div', { key: item.source_asset_id, className: 'rt-kv' },
                 h('b', null, 'ARTEX #' + item.source_asset_id),
                 h('div', { className: 'rt-foot' },
                   ({ matched: '已匹配', ambiguous: '多个候选', host_only: '仅主机匹配，服务未确认',

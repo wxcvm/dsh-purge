@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { reviewArtexSarif } from '../lib/redteam/artex-report-review.js'
 
 const sample = {
@@ -135,4 +136,52 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(embedded, /按 ARTEX 资产 ID 查看关联漏洞/)
   assert.match(embedded, /与当前 DSH 靶标匹配/)
   assert.match(embedded, /复制核查交接清单/)
+})
+
+test('ARTEX handoff includes scoped local DSH candidates and preserves unknown states', () => {
+  const rt = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const start = rt.indexOf('    function formatArtexHandoff(')
+  const end = rt.indexOf('    function ArtexTab(props)', start)
+  assert.ok(start >= 0 && end > start, 'formatter is part of ARTEX resource tab')
+  const format = runInNewContext(rt.slice(start, end) + '\nformatArtexHandoff')
+  const report = reviewArtexSarif(sample)
+  const matched = {
+    engagement: 'selected-project',
+    items: [
+      { source_asset_id: 2, status: 'matched', candidates: [
+        { dsh_asset_id: 41, primary_name: 'api.example.test', matched_by: 'ip', port_match: false },
+      ] },
+      { source_asset_id: 6, status: 'ambiguous', candidates: [
+        { dsh_asset_id: 10, ip: '192.0.2.5', matched_by: 'domain', port_match: true },
+        { dsh_asset_id: 11, ip: '192.0.2.6', matched_by: 'domain', port_match: true },
+      ] },
+      { source_asset_id: 11, status: 'unavailable', candidates: [] },
+    ],
+  }
+  const output = format(report, matched, 'selected-project')
+  assert.match(output, /ARTEX 漏洞 #15/)
+  assert.match(output, /ARTEX #6 api\.example\.test:443 → 多个候选/)
+  assert.match(output, /DSH #10.*开放端口一致/)
+  assert.match(output, /ARTEX #2 192\.0\.2\.1 → 单一候选/)
+  assert.match(output, /ARTEX #11 → 来源缺少主机标识/)
+  assert.ok(!output.includes('PRIVATE_RAW_TRAFFIC'))
+  const stale = format(report, matched, 'another-project')
+  assert.match(stale, /关联状态未知/)
+  assert.doesNotMatch(stale, /DSH #10/)
+  assert.match(format(report, null, null), /未选 DSH 靶标/)
+  const limited = { ...matched, items: matched.items.filter((x) => x.source_asset_id !== 11) }
+  assert.match(format(report, limited, 'selected-project'), /未纳入本次比对/)
+  const noLinks = format({ ...report, review_queue: [report.review_queue[2]] }, matched, 'selected-project')
+  assert.match(noLinks, /没有关联来源资产/)
+})
+
+test('handoff UI uses only matches for the selected report and engagement', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const embedded = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  for (const text of [source, embedded]) {
+    assert.match(text, /setAssetMatches\(\{ \.\.\.result, _report: report \}\)/)
+    assert.match(text, /assetMatches\._report === report/)
+    assert.match(text, /assetMatches\.engagement === props\.engagement/)
+    assert.match(text, /formatArtexHandoff\(report, currentMatches, props\.engagement\)/)
+  }
 })
