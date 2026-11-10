@@ -4731,11 +4731,52 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           onClick: () => setPage((p) => Math.min(pages - 1, p + 1)) }, '下一页'))
     }
 
-    const api = (req) => fetch('/redteam/api', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(req),
-    }).then((res) => res.json())
+    // An operator can use a remote DSH/Purge UI with an explicitly configured
+    // bridge token. Keep it only in memory, never in a URL or localStorage.
+    let bridgeToken = ''
+    let bridgeTokenDialog = null
+    const askBridgeToken = () => {
+      if (bridgeTokenDialog) return bridgeTokenDialog
+      bridgeTokenDialog = new Promise((resolve) => {
+        const overlay = document.createElement('div')
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483646;display:grid;place-items:center;background:rgba(0,0,0,.56);padding:16px'
+        overlay.innerHTML = '<div role="dialog" aria-modal="true" aria-label="Purge 远程访问" style="width:min(420px,100%);padding:22px;border-radius:14px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#222);box-shadow:0 20px 70px #0005;font:14px system-ui"><h3 style="margin:0 0 8px;font-size:17px">Purge 远程访问验证</h3><p style="margin:0 0 14px;line-height:1.6">请输入在 DSH 服务端通过 DSH_PURGE_BRIDGE_TOKEN 设置的访问令牌。令牌仅保留在此页面的内存中。</p><input type="password" aria-label="远程访问令牌" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #8888;border-radius:8px;background:transparent;color:inherit"><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px"><button type="button" data-action="cancel" style="padding:8px 14px">取消</button><button type="button" data-action="submit" style="padding:8px 14px">连接</button></div></div>'
+        const input = overlay.querySelector('input')
+        const close = (value) => { overlay.remove(); resolve(value) }
+        overlay.querySelector('[data-action="cancel"]').onclick = () => close('')
+        overlay.querySelector('[data-action="submit"]').onclick = () => close(input.value.trim())
+        overlay.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') close('')
+          if (event.key === 'Enter') close(input.value.trim())
+        })
+        document.body.appendChild(overlay)
+        input.focus()
+      }).finally(() => { bridgeTokenDialog = null })
+      return bridgeTokenDialog
+    }
+    const sendBridgeRequest = async (req, token) => {
+      const headers = { 'content-type': 'application/json' }
+      if (token) headers['x-dsh-purge-token'] = token
+      const res = await fetch('/redteam/api', { method: 'POST', headers, body: JSON.stringify(req) })
+      return { status: res.status, data: await res.json() }
+    }
+    const api = async (req) => {
+      const previousToken = bridgeToken
+      let reply = await sendBridgeRequest(req, previousToken)
+      if (reply.status === 401 && reply.data &&
+          (reply.data.error === 'bridge_token_required' || reply.data.error === 'bridge_token_invalid')) {
+        if (bridgeToken === previousToken) {
+          bridgeToken = await askBridgeToken()
+          if (!bridgeToken) return { ok: false, error: '已取消远程访问验证' }
+        }
+        reply = await sendBridgeRequest(req, bridgeToken)
+        if (reply.status === 401) bridgeToken = ''
+      }
+      if (reply.data && reply.data.error === 'bridge_remote_not_configured') {
+        return { ok: false, error: 'Purge 远程管理未启用：请在 DSH 服务端设置 DSH_PURGE_BRIDGE_TOKEN，并通过 HTTPS 或 VPN 访问。' }
+      }
+      return reply.data
+    }
 
     let ui = { open: true, tab: 'overview' }
     const subs = new Set()
