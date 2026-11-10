@@ -256,5 +256,5 @@ test('scan board renders real timeline and never leaks masked output previews', 
   assert.match(source, /op: 'scanArtifactPreview'/)
   assert.match(source, /if \(previewing \|\| maskHistory\) return/)
   assert.match(source, /excerpt && !maskHistory/)
-  assert.match(source, /maskHistory \? '诊断内容已隐藏'/)
+  assert.match(source, /maskHistory \? h\('span', null, '诊断内容已隐藏'\)/)
 })
