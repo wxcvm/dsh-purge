@@ -11312,9 +11312,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				if (!uiTag) {
 					uiTag = document.createElement("style");
 					uiTag.setAttribute("data-dsh-purge-ui", "1");
-					uiTag.textContent = PURGE_CSS + PURGE_WORKSPACE_CSS;
 					document.head.append(uiTag);
 				}
+				uiTag.textContent = PURGE_CSS + PURGE_WORKSPACE_CSS;
 				if (!__dshPurgeDrill || !__dshPurgeDrill.CSS) return undefined;
 				const styleTag = document.createElement("style");
 				styleTag.setAttribute("data-dsh-purge-drill", "1");
@@ -11914,7 +11914,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				name: "shell.overlay",
 				id: "dsh-purge-dock",
 				order: 50,
-			}, () => h(react.Fragment, null, h(WelcomeNotice), h(PurgeLauncher), h(PurgeDock), h(HeroNewSessionMount), h(TabRowPurgeMount), h(EnvAdaptSendGate), h(RewindDockMount))));
+			}, () => h(react.Fragment, null, h(WelcomeNotice), h(PurgeDock), h(HeroNewSessionMount), h(TabRowPurgeMount), h(EnvAdaptSendGate), h(RewindDockMount))));
 			try {
 				if (typeof ctx.inject === "function") {
 					ctx.inject(["sessions", "uiWorkspace", "workspaces", "conversation"], (host) => installRewindUi(host));
