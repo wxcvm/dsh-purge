@@ -62,3 +62,51 @@ test('queries cannot turn into raw SQL and unsupported fields return useful erro
   assert.ok(LOCAL_ASSET_FIELDS.includes('cert'))
   assert.match(compileLocalAssetQuery('title=x OR port=80 AND domain=demo').where, / OR /)
 })
+
+test('offline search is available through the workbench API without any scanning', async (t) => {
+  const { RedteamStore, dispatch } = await import('../lib/redteam/store-core.js')
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  db.exec([
+    'CREATE TABLE asset (id INTEGER PRIMARY KEY, ip TEXT, ip_int INTEGER, segment_cidr TEXT, state TEXT, primary_name TEXT, scope TEXT, priority TEXT, test_status TEXT, first_seen TEXT, discovered_at TEXT)',
+    'CREATE TABLE asset_name (id INTEGER PRIMARY KEY, asset_id INTEGER, name TEXT)',
+    'CREATE TABLE port (id INTEGER PRIMARY KEY, asset_id INTEGER, port INTEGER, state TEXT, proto TEXT, provenance TEXT, title TEXT, banner TEXT, url TEXT)',
+    'CREATE TABLE service (id INTEGER PRIMARY KEY, port_id INTEGER, name TEXT, product TEXT, cpe TEXT)',
+    'CREATE TABLE fingerprint (id INTEGER PRIMARY KEY, asset_id INTEGER, category TEXT, product TEXT, vendor TEXT, evidence TEXT)',
+    'CREATE TABLE observation (id INTEGER PRIMARY KEY, entity_kind TEXT, entity_id INTEGER, attr TEXT, value TEXT)',
+    "INSERT INTO asset VALUES (1, '192.0.2.1', 1, '192.0.2.0/24', 'live', 'app.example.test', 'external', 'high', 'untested', '2026-11-10', '2026-11-10')",
+    "INSERT INTO asset VALUES (2, '192.0.2.2', 2, '192.0.2.0/24', 'live', 'vpn.example.test', 'external', 'medium', 'untested', '2026-11-10', '2026-11-10')",
+    "INSERT INTO port VALUES (1, 1, 443, 'open', 'tcp', 'active', 'Demo Login', 'nginx', 'https://app.example.test')",
+    "INSERT INTO port VALUES (2, 2, 443, 'closed', 'tcp', 'passive', 'VPN', 'apache', 'https://vpn.example.test')",
+    "INSERT INTO service VALUES (1, 1, 'https', 'nginx', 'cpe:/a:nginx:nginx')",
+    "INSERT INTO service VALUES (2, 2, 'https', 'apache', 'cpe:/a:apache:httpd')",
+  ].join(';') + ';')
+  const store = {
+    db: () => db,
+    listAssets: RedteamStore.prototype.listAssets,
+    assetChildren: () => ({ ports: new Map(), names: new Map(), fingerprints: new Map() }),
+    assetRow: (_db, row) => ({ id: row.id, ip: row.ip, primary_name: row.primary_name,
+      ports: [], names: [], fingerprints: [] }),
+  }
+  const result = dispatch(store, { op: 'localAssetSearch', engagement: 'lab',
+    query: 'domain="example.test" && port=443', limit: 10 })
+  assert.equal(result.ok, true)
+  assert.equal(result.engagement, 'lab')
+  assert.equal(result.total, 1)
+  assert.deepEqual(result.items.map((r) => r.id), [1])
+  const bad = dispatch(store, { op: 'localAssetSearch', engagement: 'lab', query: 'body="x"' })
+  assert.equal(bad.ok, false)
+  assert.match(bad.error, /本地库不含网页正文/)
+})
+
+test('source and embedded frontend both expose the offline asset search page', async () => {
+  const { readFileSync } = await import('node:fs')
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const code = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    assert.match(code, /function LocalAssetSearchTab/)
+    assert.match(code, /\['local-search', '本地测绘'\]/)
+    assert.match(code, /op: 'localAssetSearch'/)
+  }
+  const tools = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  assert.match(tools, /name: 'redteam_local_asset_search'/)
+})
