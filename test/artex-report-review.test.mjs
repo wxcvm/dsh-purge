@@ -111,5 +111,8 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(server, /reviewArtexSarif\(body\.sarif\)/)
   assert.match(rt, /\/dsh-purge\/artex\/report-preview/)
   assert.match(rt, /ARTEX SARIF 报告/)
+  assert.match(rt, /按 ARTEX 资产 ID 查看关联漏洞/)
+  assert.match(rt, /report\.asset_groups/)
   assert.match(embedded, /ARTEX SARIF 报告/)
+  assert.match(embedded, /按 ARTEX 资产 ID 查看关联漏洞/)
 })
