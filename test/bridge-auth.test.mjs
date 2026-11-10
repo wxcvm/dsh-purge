@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { authorizeBridgeRequest, isLocalBridgePeer } from '../lib/redteam/bridge-auth.js'
+import { authorizeBridgeRequest, isLocalBridgePeer, bridgePrivacyPosture } from '../lib/redteam/bridge-auth.js'
 
 function req(remoteAddress, host, token) {
   return {
@@ -50,4 +50,25 @@ test('operator may opt in to requiring the token even for localhost', () => {
   assert.equal(authorizeBridgeRequest(req('::1', '[::1]:53380', 'local-secret'), {
     token: 'local-secret', requireLocalToken: true,
   }).tokenAuthenticated, true)
+})
+
+test('privacy posture only reports configuration, never secrets or public reachability', () => {
+  const secret = 'not-for-ui-random-test-secret'
+  const snapshot = bridgePrivacyPosture(req('127.0.0.1', 'localhost:53380'), {
+    DSH_PURGE_BRIDGE_TOKEN: secret,
+    DSH_PURGE_REQUIRE_LOCAL_TOKEN: '1',
+  })
+  assert.deepEqual(snapshot, {
+    localPeer: true,
+    remoteTokenConfigured: true,
+    localTokenRequired: true,
+    publicReachability: 'not_tested',
+    listenerScope: 'not_inspected',
+  })
+  assert.equal(JSON.stringify(snapshot).includes(secret), false)
+
+  const remote = bridgePrivacyPosture(req('203.0.113.5', 'example.test'), {})
+  assert.equal(remote.localPeer, false)
+  assert.equal(remote.remoteTokenConfigured, false)
+  assert.equal(remote.publicReachability, 'not_tested')
 })
