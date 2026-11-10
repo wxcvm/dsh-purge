@@ -4942,6 +4942,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const refreshKey = props.refreshKey || 0
       const onRefresh = props.onRefresh
       const [view, setView] = React.useState('list')
+      const [focusAssetId, setFocusAssetId] = React.useState(props.focusAssetId || null)
+      React.useEffect(() => { setFocusAssetId(props.focusAssetId || null) }, [eng, props.focusAssetId])
       const [cidr, setCidr] = React.useState(null)
       const [q, setQ] = React.useState('')
       const [qApplied, setQApplied] = React.useState('')
@@ -4963,6 +4965,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [web, setWeb] = React.useState(null)
       const [openId, setOpenId] = React.useState(null)
       const [detail, setDetail] = React.useState(null)
+      React.useEffect(() => {
+        if (!eng || !focusAssetId) return undefined
+        let live = true
+        setView('list')
+        setOpenId(focusAssetId)
+        setDetail(null)
+        api({ op: 'asset', engagement: eng, id: focusAssetId }).then((result) => {
+          if (live && result && result.ok && result.asset) setDetail(result.asset)
+        }, () => {})
+        return () => { live = false }
+      }, [eng, focusAssetId])
       /* 左侧「外网 C 段 / 内网 C 段」两组各自折叠，状态按靶标记住 */
       const sideCollapse = useCollapse('assets-side:' + eng)
       const seq = React.useRef(0)
@@ -4974,6 +4987,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setState((s) => Object.assign({}, s, { loading: true, error: null }))
         api({
           op: 'assets', engagement: eng, cidr: cidr || undefined, q: qApplied || undefined,
+          asset_id: focusAssetId || undefined,
           service: service || undefined, port: port || undefined,
           provenance: prov || undefined, test_status: testStatus || undefined,
           priority: priority || undefined, scope: scope || undefined,
@@ -4990,7 +5004,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }, (e) => {
           if (my === seq.current) setState({ loading: false, error: String((e && e.message) || e), total: 0, items: [] })
         })
-      }, [eng, cidr, qApplied, service, port, prov, testStatus, priority, scope, assetState, sort, page, refreshKey])
+      }, [eng, cidr, qApplied, service, port, prov, testStatus, priority, scope, assetState, sort, page, refreshKey, focusAssetId])
 
       React.useEffect(() => {
         if (!eng || view !== 'domain') return
@@ -5310,7 +5324,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       else if (view === 'timeline') pane = h(DiscoveryView, { engagement: eng, refreshKey: refreshKey })
 
       return h('div', { className: 'rt-split' }, side,
-        h('div', { className: 'rt-main' }, view === 'testing' ? null : toolbar,
+        h('div', { className: 'rt-main' },
+          focusAssetId ? h('div', { className: 'rt-card', role: 'status' },
+            '从 ARTEX 定位到 DSH 资产 #' + focusAssetId + '（当前靶标的本地资产）',
+            h('button', { className: 'rt-btn', type: 'button',
+              onClick: () => setFocusAssetId(null) }, '显示全部资产'),
+            h('button', { className: 'rt-btn', type: 'button',
+              onClick: () => setUI({ tab: 'artex', focus: null }) }, '返回 ARTEX')) : null,
+          view === 'testing' ? null : toolbar,
           conclusion,
           state.error ? h('div', { className: 'rt-err' }, state.error) : null,
           pane,
@@ -5836,10 +5857,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [status, setStatus] = React.useState('')
       const [q, setQ] = React.useState('')
       const [qApplied, setQApplied] = React.useState('')
+      const [focusAssetId, setFocusAssetId] = React.useState(props.focusAssetId || null)
+      React.useEffect(() => { setFocusAssetId(props.focusAssetId || null) }, [eng, props.focusAssetId])
       const [state, setState] = React.useState({ loading: false, error: null, total: 0, items: [], stats: null })
       const [page, setPage] = React.useState(0)
       const pageSize = 100
-      React.useEffect(() => { setPage(0); setOpenId(null) }, [eng, sev, status, qApplied])
+      React.useEffect(() => { setPage(0); setOpenId(null) }, [eng, sev, status, qApplied, focusAssetId])
       const [creds, setCreds] = React.useState([])
       const [accesses, setAccesses] = React.useState([])
       const [files, setFiles] = React.useState([])
@@ -5854,7 +5877,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const load = () => {
         if (!eng) return
         api({
-          op: 'vulns', engagement: eng, severity: sev || undefined,
+          op: 'vulns', engagement: eng, asset_id: focusAssetId || undefined,
+          severity: sev || undefined,
           status: status || undefined, q: qApplied || undefined, limit: pageSize, offset: page * pageSize,
         }).then((r) => {
           if (!r || r.ok === false) {
@@ -5867,7 +5891,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         api({ op: 'access', engagement: eng }).then((r) => setAccesses((r && r.items) || []), () => {})
         api({ op: 'attackFiles', engagement: eng }).then((r) => setFiles((r && r.items) || []), () => {})
       }
-      React.useEffect(load, [eng, sev, status, qApplied, page, refreshKey])
+      React.useEffect(load, [eng, sev, status, qApplied, page, refreshKey, focusAssetId])
 
       const setVulnStatus = (id, next) => {
         setMsg(null)
@@ -6071,7 +6095,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }, clickable(() => setSubTab(key), { label: label + '（' + n + '）', expanded: subTab === key })),
       label + ' ' + n)
 
-      return h('div', { className: 'rt-main' }, toolbar, conclusion,
+      return h('div', { className: 'rt-main' },
+        focusAssetId ? h('div', { className: 'rt-card', role: 'status' },
+          '正在查看 DSH 资产 #' + focusAssetId + ' 的本地漏洞记录；不等于 ARTEX 来源漏洞已验证。',
+          h('button', { className: 'rt-btn', type: 'button', onClick: () => setFocusAssetId(null) }, '显示全部漏洞'),
+          h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'artex', focus: null }) }, '返回 ARTEX')) : null,
+        toolbar, conclusion,
         h('div', { className: 'rt-subtabs' },
           subTabBtn('vulns', '漏洞', state.total || 0),
           subTabBtn('files', '攻击文件', allFiles.length),
@@ -9639,9 +9668,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('div', { className: 'rt-foot' },
                   ({ matched: '已匹配', ambiguous: '多个候选', host_only: '仅主机匹配，服务未确认',
                     unmatched: '本地未发现', unavailable: '来源缺少主机标识' })[item.status] || item.status,
-                  item.candidates.map((candidate) => h('span', { key: candidate.dsh_asset_id },
-                    'DSH #' + candidate.dsh_asset_id + ' ' + (candidate.primary_name || candidate.ip || '')
-                    + (candidate.port_match ? ' · 端口一致' : '') + ' [' + candidate.matched_by + ']'))))),
+                  item.candidates.map((candidate) => h('div', { key: candidate.dsh_asset_id },
+                    h('span', null, 'DSH #' + candidate.dsh_asset_id + ' ' + (candidate.primary_name || candidate.ip || '')
+                      + (candidate.port_match ? ' · 端口一致' : '') + ' [' + candidate.matched_by + ']'),
+                    h('button', { type: 'button', className: 'rt-btn',
+                      onClick: () => props.onGotoAsset(candidate.dsh_asset_id) }, '定位资产'),
+                    h('button', { type: 'button', className: 'rt-btn',
+                      onClick: () => props.onGotoFindings(candidate.dsh_asset_id) }, '查看该资产漏洞'))))),
               h('p', { className: 'rt-foot' },
                 '仅匹配当前选择的 DSH 靶标；主机名/IP/开放端口匹配只是关联线索，不自动导入、确认漏洞或更改得分。')) : null,
           ) : null,
@@ -9951,7 +9984,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       else if (st.tab === 'env' || st.tab === 'knowledge') body = h(EnvTab, { refreshKey: refreshKey })
       else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey })
        else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
-      else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng })
+      else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng,
+        onGotoAsset: (assetId) => {
+          if (!eng || !Number.isSafeInteger(assetId) || assetId < 1) return
+          markTabSeen('assets')
+          setUI({ tab: 'assets', focus: { engagement: eng, kind: 'asset', assetId } })
+        },
+        onGotoFindings: (assetId) => {
+          if (!eng || !Number.isSafeInteger(assetId) || assetId < 1) return
+          markTabSeen('findings')
+          setUI({ tab: 'findings', focus: { engagement: eng, kind: 'vulns', assetId } })
+        } })
       else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng, onRestored: (id) => { api({ op: 'activateEngagement', engagement: id }).finally(() => refreshList(id)) } })
       else if (!eng) {
@@ -9970,12 +10013,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 creating ? '创建中…' : '创建靶标'))))
       } else if (st.tab === 'intel') body = h(IntelTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'local-search') body = h(LocalAssetSearchTab, { engagement: eng, refreshKey: refreshKey })
-      else if (st.tab === 'overview') body = h(OverviewTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onGoto: (tab) => { markTabSeen(tab); setUI({ tab }); setRefreshKey((k) => k + 1) } })
+      else if (st.tab === 'overview') body = h(OverviewTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onGoto: (tab) => { markTabSeen(tab); setUI({ tab, focus: null }); setRefreshKey((k) => k + 1) } })
       else if (st.tab === 'scan-history') body = h(ScanHistoryTab, { engagement: eng, refreshKey: refreshKey })
-      else if (st.tab === 'assets') body = h(AssetsTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
+      else if (st.tab === 'assets') body = h(AssetsTab, { engagement: eng, focusAssetId: st.focus && st.focus.engagement === eng && st.focus.kind === 'asset' ? st.focus.assetId : null, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
       else if (st.tab === 'testing') body = h(AssetsTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
       else if (st.tab === 'sessions') body = h(SessionTab, { engagement: eng, refreshKey: refreshKey })
-      else if (st.tab === 'findings') body = h(FindingsTab, { engagement: eng, refreshKey: refreshKey })
+      else if (st.tab === 'findings') body = h(FindingsTab, { engagement: eng, focusAssetId: st.focus && st.focus.engagement === eng && st.focus.kind === 'vulns' ? st.focus.assetId : null, refreshKey: refreshKey })
       else if (st.tab === 'chain') body = h(ChainTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'report') body = h(ReportTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'attackfiles') body = h(FindingsTab, { engagement: eng, refreshKey: refreshKey })
@@ -10015,6 +10058,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             value: eng || '',
             onChange: (e) => {
               setEng(e.target.value)
+              setUI({ focus: null })
               loadSnapshot(e.target.value)
               /* 同步「当前靶标」：原生 skill 目录按它解析技能根 */
               api({ op: 'activateEngagement', engagement: e.target.value }).catch(() => {})
@@ -10041,14 +10085,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onClick: () => {
                 const page = section.pages[0][0]
                 markTabSeen(page)
-                setUI({ tab: page })
+                setUI({ tab: page, focus: null })
                 setRefreshKey((k) => k + 1)
               },
             }, section.label),
             section.pages.map((t) => {
               const activate = (tab) => {
                 markTabSeen(tab)
-                setUI({ tab })
+                setUI({ tab, focus: null })
                 setRefreshKey((k) => k + 1)
               }
               const unread = unreadOf(t[0])
