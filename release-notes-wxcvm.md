@@ -2,6 +2,7 @@
 
 ## 中文
 
+- **真实作战台视觉重构**：现有 DSH 全面浏览模式直接使用深色工作台、左侧 SVG 图标导航、隐私与测绘卡片网格及三色状态胶囊；窄窗口导航与 Dock 响应式适配，保留原 API、页面状态、配置保存、资产查询与快捷键。同步真实运行包 `client.js`，不再把图片 mockup 当作已实现 UI。真实 Windows/Electron 渲染仍需安装后人工验收。
 - **管理桥接隐私**：修复本地回环请求绕过浏览器 Origin 检查的问题；远程 `/redteam/api` 需要显式配置 `DSH_PURGE_BRIDGE_TOKEN`，本机原有桌面行为保持兼容。令牌仅存在于页面内存，支持可选的本机强制认证。
 - **暴露面状态**：「低干扰与隐私」页面展示 DSH 当前连接端点、服务端口、令牌配置及尚未验证的公网可达性；同时复用已验证的 ARTEX 本机健康探测，不读取 ARTEX 登录凭据。
 - **本地资产库保护**：Linux/macOS 工作区目录与 SQLite 文件使用私有权限；Windows 增加明确选择才执行的 NTFS ACL 工具，默认仅预览，支持临时目录自动测试。
@@ -12,6 +13,7 @@
 
 ## English
 
+- Implement the dark full-window DSH workbench in the actual React runtime and embedded `client.js`: grouped SVG icon navigation, responsive privacy/survey cards, state pills, and dock-width container queries. Preserve real backend actions. Real Windows/Electron visual acceptance remains outstanding.
 - Protect the Purge management bridge from cross-origin browser requests; require an explicit token for non-local `/redteam/api` access while preserving local desktop compatibility.
 - Add truthful bridge, observed connection endpoint and ARTEX local-health status to the existing privacy panel. Do not misstate public network reachability.
 - Restrict Linux/macOS workspace and SQLite file permissions; add an opt-in, preview-first Windows NTFS ACL utility.
