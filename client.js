@@ -9256,6 +9256,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }).join('；')
     }
 
+    function artexEvidenceChanged(finding, saved) {
+      return Boolean(saved && saved.evidence_version !== null && saved.evidence_version !== undefined
+        && finding.evidence_version !== null && finding.evidence_version !== undefined
+        && saved.evidence_version !== finding.evidence_version)
+    }
+
+    function summarizeArtexReviewProgress(queue, progress) {
+      const saved = new Map((progress && Array.isArray(progress.items) ? progress.items : [])
+        .map((item) => [item.source_finding_id, item]))
+      const summary = { total: queue.length, recorded: 0, reviewed: 0, needs_evidence: 0, changed: 0 }
+      for (const finding of queue) {
+        const item = saved.get(finding.finding_id)
+        if (!item) continue
+        summary.recorded++
+        if (item.status === 'reviewed') summary.reviewed++
+        if (item.status === 'needs_evidence') summary.needs_evidence++
+        if (artexEvidenceChanged(finding, item)) summary.changed++
+      }
+      return summary
+    }
+
     function ArtexTab(props) {
       const [state, setState] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -9269,10 +9290,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [reviewNotes, setReviewNotes] = React.useState({})
       const [reviewSaving, setReviewSaving] = React.useState(null)
       const [reviewError, setReviewError] = React.useState('')
+      const [reviewFilter, setReviewFilter] = React.useState('all')
+      const [reviewSaved, setReviewSaved] = React.useState(null)
       React.useEffect(() => {
         let live = true
         setReviewProgress(null)
         setReviewNotes({})
+        setReviewFilter('all')
+        setReviewSaved(null)
         setReviewError('')
         if (!report || !props.engagement || !Array.isArray(report.review_queue)) return undefined
         api({ op: 'artexReviewList', engagement: props.engagement,
@@ -9357,6 +9382,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         && reviewProgress.engagement === props.engagement ? reviewProgress : null
       const progressByFinding = new Map((activeProgress?.items || [])
         .map((item) => [item.source_finding_id, item]))
+      const reviewSummary = summarizeArtexReviewProgress(reviewQueue, activeProgress)
+      const filteredReviews = reviewQueue.filter((finding) => {
+        const saved = progressByFinding.get(finding.finding_id)
+        const changed = artexEvidenceChanged(finding, saved)
+        if (reviewFilter === 'pending') return saved?.status !== 'reviewed' || changed
+        if (reviewFilter === 'changed') return changed
+        if (reviewFilter === 'reviewed') return saved?.status === 'reviewed'
+        return true
+      })
       const reviewStates = {
         pending: '待核查', in_progress: '核查中', needs_evidence: '待补证据', reviewed: '已人工复核',
       }
@@ -9364,8 +9398,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!activeProgress) return 'DSH 核查进度：尚未加载'
         const saved = progressByFinding.get(finding.finding_id)
         if (!saved) return 'DSH 核查进度：待记录'
-        const changed = saved.evidence_version !== null && finding.evidence_version !== null
-          && saved.evidence_version !== finding.evidence_version
+        const changed = artexEvidenceChanged(finding, saved)
         return 'DSH 核查进度：' + (reviewStates[saved.status] || '待核查')
           + (changed ? '（ARTEX 证据版本变化，需重新核对）' : '')
       }
@@ -9374,6 +9407,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         const engagement = props.engagement
         const note = reviewNotes[finding.finding_id] || ''
         setReviewSaving(finding.finding_id)
+        setReviewSaved(null)
         setReviewError('')
         api({ op: 'artexReviewSave', engagement,
           finding_id: finding.finding_id, task_id: finding.task_id,
@@ -9386,6 +9420,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 item.source_finding_id !== result.review.source_finding_id).concat(result.review)
               return { ...previous, items }
             })
+            setReviewSaved({ finding_id: finding.finding_id, engagement, report })
           }).catch((err) => setReviewError(String((err && err.message) || err)))
           .finally(() => setReviewSaving(null))
       }
@@ -9486,10 +9521,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               handoffMessage ? h('p', { className: 'rt-foot', role: 'status' }, handoffMessage) : null,
               props.engagement ? h('details', null,
                 h('summary', null, '记录 DSH 人工核查进度（' + reviewQueue.length + ' 条）'),
+                activeProgress ? h('p', { className: 'rt-foot', role: 'status' },
+                  '已记录 ' + reviewSummary.recorded + '/' + reviewSummary.total
+                  + ' · 已人工复核 ' + reviewSummary.reviewed
+                  + ' · 待补证据 ' + reviewSummary.needs_evidence
+                  + ' · 证据版本变化 ' + reviewSummary.changed) : null,
                 reviewError ? h('p', { className: 'rt-err', role: 'alert' }, reviewError) : null,
-                reviewQueue.map((finding) => {
+                h('select', {
+                  className: 'rt-input', 'aria-label': '筛选 ARTEX 核查任务',
+                  value: reviewFilter, onChange: (event) => setReviewFilter(event.target.value),
+                }, [
+                  h('option', { key: 'all', value: 'all' }, '全部任务'),
+                  h('option', { key: 'pending', value: 'pending' }, '待处理（含需要复核的变更）'),
+                  h('option', { key: 'changed', value: 'changed' }, '证据版本变化'),
+                  h('option', { key: 'reviewed', value: 'reviewed' }, '已人工复核'),
+                ]),
+                filteredReviews.length ? filteredReviews.map((finding) => {
                   const saved = progressByFinding.get(finding.finding_id)
                   const status = saved?.status || 'pending'
+                  const dirtyNote = (reviewNotes[finding.finding_id] || '') !== (saved?.note || '')
+                  const savedHere = reviewSaved && reviewSaved.finding_id === finding.finding_id
+                    && reviewSaved.engagement === props.engagement && reviewSaved.report === report
                   return h('div', { key: finding.finding_id, className: 'rt-card' },
                     h('div', { className: 'rt-kv' },
                       h('b', null, 'ARTEX 漏洞 #' + finding.finding_id),
@@ -9506,16 +9558,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                         className: 'rt-input', type: 'text', maxLength: 1000,
                         'aria-label': '漏洞 #' + finding.finding_id + ' 的核查备注',
                         placeholder: '记录核查结论或待补证据', value: reviewNotes[finding.finding_id] || '',
-                        onChange: (event) => setReviewNotes((old) => ({
-                          ...old, [finding.finding_id]: event.target.value,
-                        })),
+                        disabled: !activeProgress || reviewSaving !== null,
+                        onChange: (event) => {
+                          setReviewNotes((old) => ({ ...old, [finding.finding_id]: event.target.value }))
+                          setReviewSaved(null)
+                        },
                       }),
                       h('button', { type: 'button', className: 'rt-btn',
                         disabled: !activeProgress || reviewSaving !== null,
                         onClick: () => saveReview(finding, status),
-                      }, reviewSaving === finding.finding_id ? '保存中…' : '保存备注')),
+                      }, reviewSaving === finding.finding_id ? '保存中…' : '保存备注'),
+                      dirtyNote && activeProgress ? h('span', { className: 'rt-foot' }, '备注未保存') : null,
+                      savedHere && !dirtyNote ? h('span', { className: 'rt-foot', role: 'status' }, '已保存') : null),
                   )
-                }),
+                }) : h('p', { className: 'rt-foot' }, '当前筛选下没有核查任务。'),
               ) : h('p', { className: 'rt-foot' }, '选择 DSH 靶标后即可保存独立核查进度'))
               : null,
             report.asset_groups && report.asset_groups.length ? h('details', null,

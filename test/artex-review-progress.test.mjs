@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runInNewContext } from 'node:vm'
 import { DDL, RedteamStore, dispatch } from '../lib/redteam/store-core.js'
 
 const methods = {
@@ -80,6 +81,29 @@ test('ARTEX review status validates source IDs and does not create reviews on fa
     finding_ids: ['1'] }).ok, false)
 })
 
+test('progress summary counts recorded, reviewed and changed evidence without inventing verification', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const start = source.indexOf('    function artexEvidenceChanged(')
+  const end = source.indexOf('    function ArtexTab(props)', start)
+  assert.ok(start >= 0 && end > start)
+  const summary = runInNewContext(source.slice(start, end) + '\nsummarizeArtexReviewProgress')
+  const queue = [
+    { finding_id: 1, evidence_version: 3 }, { finding_id: 2, evidence_version: 2 },
+    { finding_id: 3, evidence_version: null }, { finding_id: 4, evidence_version: 1 },
+  ]
+  const s = summary(queue, { items: [
+    { source_finding_id: 1, evidence_version: 2, status: 'reviewed' },
+    { source_finding_id: 2, evidence_version: 2, status: 'needs_evidence' },
+    { source_finding_id: 3, evidence_version: null, status: 'pending' },
+  ] })
+  assert.equal(s.total, 4)
+  assert.equal(s.recorded, 3)
+  assert.equal(s.reviewed, 1)
+  assert.equal(s.needs_evidence, 1)
+  assert.equal(s.changed, 1)
+  assert.equal(summary(queue, null).recorded, 0)
+})
+
 test('source and embedded ARTEX resource page expose manual review progress controls', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
@@ -88,5 +112,10 @@ test('source and embedded ARTEX resource page expose manual review progress cont
     assert.match(source, /记录 DSH 人工核查进度/)
     assert.match(source, /证据版本变化/)
     assert.match(source, /progressLabel/)
+    assert.match(source, /summarizeArtexReviewProgress/)
+    assert.match(source, /筛选 ARTEX 核查任务/)
+    assert.match(source, /备注未保存/)
+    assert.match(source, /disabled: !activeProgress \|\| reviewSaving !== null/)
+    assert.match(source, /证据版本变化/)
   }
 })
