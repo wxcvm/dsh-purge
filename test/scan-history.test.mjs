@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listScanHistory, inspectScanArtifact, recordScanImport } from '../lib/redteam/scan-history.js'
+import { listScanHistory, inspectScanArtifact, recordScanImport, previewScanArtifact } from '../lib/redteam/scan-history.js'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'redteam-scan-history-'))
@@ -198,4 +198,63 @@ test('scan board exposes real read-only statuses, responsive cards and expandabl
   assert.match(client, /metric\('failed', '执行及导入失败', summary.failures, failures, chooseFailures\)/)
   assert.match(client, /maskHistory \? '执行有错误，详情已隐藏' : item.error/)
   assert.match(client, /op: 'scanArtifactInspect'/)
+})
+
+test('execution timeline is derived only from recorded scan and import facts', (t) => {
+  const { store, write, root } = fixture(t)
+  write('alpha', ONE, 'nmap', 'previewed', '<nmaprun/>')
+  const manifestPath = join(root, 'alpha', 'scan-output', ONE + '.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  manifest.stderr = 'diagnostic from tool'
+  manifest.ingestion = { ok: true, dry_run: true, assets: 2, ports: 4, vulns: 1 }
+  writeFileSync(manifestPath, JSON.stringify(manifest))
+  const row = listScanHistory(store, 'alpha').items[0]
+  assert.deepEqual(row.timeline.map((event) => event.phase),
+    ['started', 'finished', 'output', 'ingestion', 'diagnostic'])
+  assert.equal(row.timeline[0].at, manifest.startedAt)
+  assert.equal(row.timeline[1].at, manifest.finishedAt)
+  assert.equal(row.timeline[3].at, null, 'no invented ingestion timestamp')
+  assert.equal(row.timeline[3].title, '仅预览，未导入')
+  assert.equal(row.duration_ms, 20000)
+  assert.equal(row.stderr, 'diagnostic from tool')
+
+  write('alpha', TWO, 'httpx', 'timeout', 'partial')
+  const failed = JSON.parse(readFileSync(join(root, 'alpha', 'scan-output', TWO + '.json'), 'utf8'))
+  failed.error = 'timeout recorded'
+  writeFileSync(join(root, 'alpha', 'scan-output', TWO + '.json'), JSON.stringify(failed))
+  const timeout = listScanHistory(store, 'alpha', { status: 'timeout' }).items[0]
+  assert.equal(timeout.timeline.find((event) => event.phase === 'finished').title, '执行超时')
+  assert.equal(timeout.timeline.some((event) => event.phase === 'ingestion'), false)
+})
+
+test('on-demand preview returns bounded real output from selected engagement only', async (t) => {
+  const { store, write, root } = fixture(t)
+  const longOutput = 'A'.repeat(8000)
+  write('alpha', ONE, 'nmap', 'executed', longOutput)
+  write('beta', TWO, 'httpx', 'failed', 'from other engagement')
+  const preview = previewScanArtifact(store, 'alpha', ONE)
+  assert.equal(preview.ok, true)
+  assert.equal(preview.read_bytes, 4096)
+  assert.equal(preview.preview, longOutput.slice(0, 4096))
+  assert.equal(preview.total_bytes, 8000)
+  assert.equal(preview.truncated, true)
+  assert.equal(previewScanArtifact(store, 'alpha', TWO).ok, false)
+  assert.throws(() => previewScanArtifact(store, 'alpha', '../other'), /invalid scan run id/)
+  assert.throws(() => previewScanArtifact(store, 'unknown', ONE), /engagement not found/)
+  const { dispatch } = await import('../lib/redteam/store-core.js')
+  const viaPanel = dispatch(store, { op: 'scanArtifactPreview', engagement: 'alpha', run_id: ONE })
+  assert.equal(viaPanel.ok, true)
+  assert.equal(viaPanel.read_bytes, 4096)
+  // A preview is read-only; the original output remains untouched.
+  assert.equal(readFileSync(join(root, 'alpha', 'scan-output', ONE + '.xml'), 'utf8'), longOutput)
+})
+
+test('scan board renders real timeline and never leaks masked output previews', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  assert.match(source, /className: 'rt-run-timeline'/)
+  assert.match(source, /event.at \|\| '阶段时间未单独记录'/)
+  assert.match(source, /op: 'scanArtifactPreview'/)
+  assert.match(source, /if \(previewing \|\| maskHistory\) return/)
+  assert.match(source, /excerpt && !maskHistory/)
+  assert.match(source, /maskHistory \? h\('span', null, '诊断内容已隐藏'\)/)
 })
