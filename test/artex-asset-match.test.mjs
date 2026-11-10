@@ -84,3 +84,49 @@ test('missing source IP or domain does not match unrelated blank local fields', 
   assert.deepEqual(result.items.map((item) => item.status), ['unmatched', 'unmatched'])
   assert.equal(result.matched, 0)
 })
+
+test('review handoff links each ARTEX finding to exact, ambiguous or unqueried DSH candidates', async (t) => {
+  const db = fixture(t)
+  const { dispatch, RedteamStore } = await import('../lib/redteam/store-core.js')
+  const store = {
+    db: (id) => { assert.equal(id, 'review-lab'); return db },
+    matchArtexAssets: RedteamStore.prototype.matchArtexAssets,
+  }
+  const result = dispatch(store, {
+    op: 'matchArtexAssets', engagement: 'review-lab',
+    refs: [
+      { asset_id: 101, domain: 'api.example.test', port: 443, type: 'service' },
+      { asset_id: 102, domain: 'shared.example.test' },
+      { asset_id: 103, ip: '192.0.2.1', port: 22, type: 'service' },
+      { asset_id: 104 },
+      { asset_id: 105, ip: '203.0.113.7' },
+    ],
+    review_queue: [
+      { finding_id: 15, asset_ids: [101, 102, 103, 104, 105, 106, 101] },
+      { finding_id: 16, asset_ids: [] },
+    ],
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.engagement, 'review-lab')
+  assert.deepEqual(result.review_links.map((x) => x.finding_id), [15, 16])
+  const links = result.review_links[0].links
+  assert.deepEqual(links.map((x) => x.source_asset_id), [101, 102, 103, 104, 105, 106])
+  assert.deepEqual(links.map((x) => x.status),
+    ['matched', 'ambiguous', 'host_only', 'unavailable', 'unmatched', 'not_compared'])
+  assert.equal(links[0].dsh_asset_id, 1)
+  assert.deepEqual(links[0].candidate_dsh_asset_ids, [])
+  assert.equal(links[1].dsh_asset_id, null)
+  assert.deepEqual(links[1].candidate_dsh_asset_ids, [2, 3])
+  assert.equal(links[2].dsh_asset_id, null, 'closed port must not become a verified service match')
+  assert.deepEqual(links[2].candidate_dsh_asset_ids, [1])
+  assert.equal(result.review_links[1].links.length, 0)
+  assert.equal(db.prepare('SELECT count(*) AS total FROM asset').get().total, 3)
+})
+
+test('missing optional queue keeps legacy match-only API behavior', (t) => {
+  const db = fixture(t)
+  const { review_links: ignored, ...matches } = {
+    ...matchArtexSourceAssets(db, [{ asset_id: 9, ip: '192.0.2.1' }]),
+  }
+  assert.equal(matches.matched, 1)
+})
