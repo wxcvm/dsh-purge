@@ -54,7 +54,7 @@ foreach ($item in $targets) {
         [System.Security.AccessControl.InheritanceFlags]::None
     }
     foreach ($sid in $identities) {
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
             $sid,
             [System.Security.AccessControl.FileSystemRights]::FullControl,
             $inheritance,
