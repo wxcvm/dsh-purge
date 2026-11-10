@@ -9224,11 +9224,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setAssetMatches(null)
         setMatchError('')
         if (!report || !props.engagement || !report.asset_groups || !report.asset_groups.length) return undefined
-        api({ op: 'matchArtexAssets', engagement: props.engagement, refs: report.asset_groups })
+        api({ op: 'matchArtexAssets', engagement: props.engagement,
+          refs: report.asset_groups, review_queue: report.review_queue })
           .then((result) => {
             if (!live) return
             if (!result || result.ok === false) throw new Error((result && result.error) || '资产比对失败')
-            setAssetMatches(result)
+            setAssetMatches({ ...result, _report: report })
           }).catch((err) => {
             if (live) setMatchError(String((err && err.message) || err))
           })
@@ -9284,6 +9285,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const tools = state && Array.isArray(state.tools) ? state.tools : []
       const reused = tools.filter((x) => x.reused).length
       const reviewQueue = report && Array.isArray(report.review_queue) ? report.review_queue : []
+      // Ignore asynchronous matches from a previous report or engagement.
+      const activeMatches = assetMatches && assetMatches._report === report
+        && assetMatches.engagement === props.engagement ? assetMatches : null
+      const reviewLinkByFinding = new Map((activeMatches?.review_links || [])
+        .map((item) => [item.finding_id, item]))
+      const reviewAssetLabel = (finding) => {
+        if (!activeMatches) return 'DSH 对应：尚未比对当前靶标'
+        const links = reviewLinkByFinding.get(finding.finding_id)?.links || []
+        if (!links.length) return 'DSH 对应：ARTEX 未关联资产'
+        return 'DSH 对应：' + links.map((link) => {
+          const source = 'ARTEX #' + link.source_asset_id + ' → '
+          if (link.status === 'matched' && link.dsh_asset_id !== null)
+            return source + 'DSH #' + link.dsh_asset_id + '（资产候选，漏洞待核实）'
+          const candidates = (link.candidate_dsh_asset_ids || []).map((id) => 'DSH #' + id).join('/')
+          if (link.status === 'ambiguous') return source + '多个候选 ' + candidates
+          if (link.status === 'host_only') return source + '仅主机候选 ' + candidates + '（服务未确认）'
+          if (link.status === 'unavailable') return source + '来源缺主机标识'
+          if (link.status === 'not_compared') return source + '本次未比对'
+          return source + '未找到本地资产'
+        }).join('；')
+      }
       // Explicit copy only; no raw HTTP requests/responses and no automatic DSH DB changes.
       const handoffText = reviewQueue.length ? [
         'ARTEX → DSH 核查交接（用户选择的 SARIF，仅供独立核实）',
@@ -9294,6 +9316,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           'ARTEX 漏洞 #' + item.finding_id
           + ' · 任务 ' + (item.task_id ?? '—')
           + ' · ARTEX 资产 ' + (item.asset_ids.join(', ') || '—')
+          + ' · ' + reviewAssetLabel(item)
           + ' · ' + item.severity + ' / ' + item.reported_status
           + ' · 流量引用 ' + (item.traffic_count === null ? '未知' : item.traffic_count)
           + ' · ' + item.review_reason
@@ -9369,7 +9392,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('p', { className: 'rt-foot' },
                 '先核对过期报告，再看待确认事项，随后处理其他状态；同级按严重度排序。交接文本含 SARIF 来源摘要，不含原始请求或响应。'),
               reviewQueue.slice(0, 5).map((item) => h('p', { key: item.finding_id, className: 'rt-foot' },
-                '#' + item.finding_id + ' · ' + item.severity + ' · ' + item.review_reason)),
+                '#' + item.finding_id + ' · ' + item.severity + ' · ' + item.review_reason
+                  + ' · ' + reviewAssetLabel(item))),
               handoffMessage ? h('p', { className: 'rt-foot', role: 'status' }, handoffMessage) : null)
               : null,
             report.asset_groups && report.asset_groups.length ? h('details', null,
@@ -9397,11 +9421,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', { className: 'rt-foot' }, report.note),
             !props.engagement ? h('p', { className: 'rt-foot' }, '选择一个 DSH 靶标后，可与本地资产进行只读匹配。') : null,
             matchError ? h('p', { className: 'rt-err' }, matchError) : null,
-            assetMatches ? h('details', null,
-              h('summary', null, '与当前 DSH 靶标匹配：' + assetMatches.matched + ' 个匹配 · '
-                + assetMatches.ambiguous + ' 个歧义 · ' + assetMatches.host_only + ' 个仅主机候选 · '
-                + assetMatches.unmatched + ' 个未找到'),
-              assetMatches.items.map((item) => h('div', { key: item.source_asset_id, className: 'rt-kv' },
+            activeMatches ? h('details', null,
+              h('summary', null, '与当前 DSH 靶标匹配：' + activeMatches.matched + ' 个匹配 · '
+                + activeMatches.ambiguous + ' 个歧义 · ' + activeMatches.host_only + ' 个仅主机候选 · '
+                + activeMatches.unmatched + ' 个未找到'),
+              activeMatches.items.map((item) => h('div', { key: item.source_asset_id, className: 'rt-kv' },
                 h('b', null, 'ARTEX #' + item.source_asset_id),
                 h('div', { className: 'rt-foot' },
                   ({ matched: '已匹配', ambiguous: '多个候选', host_only: '仅主机匹配，服务未确认',
