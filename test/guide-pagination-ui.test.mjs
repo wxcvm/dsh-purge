@@ -7,7 +7,7 @@ test('asset and finding views page through the existing store API', () => {
   for (const name of ['lib/redteam/client.js','client.js']) {
     const src = read(name)
     assert.match(src, /state: assetState \|\| undefined, sort: sort, limit: pageSize, offset: page \* pageSize/, name)
-    assert.match(src, /status: status \|\| undefined, q: qApplied \|\| undefined, limit: pageSize, offset: page \* pageSize/, name)
+    assert.match(src, /status: status \|\| undefined,\s*evidence: evidence \|\| undefined, gained: gained \|\| undefined,\s*q: qApplied \|\| undefined, limit: pageSize, offset: page \* pageSize/, name)
     assert.match(src, /view === 'list' \? pageControls\(state\.total, page, pageSize, setPage\)/, name)
     assert.match(src, /subTab === 'vulns' \? pageControls\(state\.total, page, pageSize, setPage\)/, name)
   }
