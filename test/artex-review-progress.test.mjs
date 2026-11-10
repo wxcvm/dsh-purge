@@ -143,7 +143,7 @@ test('explicit review feedback export preserves source IDs and inspected version
   assert.equal(out.feedback.schema, 'artex.dsh.review-feedback.v1')
   assert.equal(out.feedback.source, 'dsh-purge')
   assert.equal(out.feedback.engagement, 'lab')
-  assert.match(out.feedback.exported_at, /^\\d{4}-\\d\\d-/)
+  assert.match(out.feedback.exported_at, /^\d{4}-\d\d-/)
   assert.deepEqual(out.feedback.reviews.map((x) => x.finding_id), [15, 16])
   assert.equal(out.feedback.reviews[0].task_id, 4)
   assert.equal(out.feedback.reviews[0].evidence_version, 6)
