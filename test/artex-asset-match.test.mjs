@@ -69,3 +69,18 @@ test('match requires valid source list but does not require any source identifie
   assert.throws(() => matchArtexSourceAssets(db, {}), /资产列表/)
   assert.deepEqual(matchArtexSourceAssets(db, []).items, [])
 })
+
+test('missing source IP or domain does not match unrelated blank local fields', (tt) => {
+  const db = fixture(tt)
+  db.exec(`
+    INSERT INTO asset VALUES (4, '', 'blank-ip.example.test');
+    INSERT INTO asset VALUES (5, '192.0.2.5', '');
+    INSERT INTO asset_name VALUES (5, '');
+  `)
+  const result = matchArtexSourceAssets(db, [
+    { asset_id: 201, domain: 'not-seen.example.test' },
+    { asset_id: 202, ip: '203.0.113.9' },
+  ])
+  assert.deepEqual(result.items.map((item) => item.status), ['unmatched', 'unmatched'])
+  assert.equal(result.matched, 0)
+})
