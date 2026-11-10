@@ -123,10 +123,15 @@ test('review handoff links each ARTEX finding to exact, ambiguous or unqueried D
   assert.equal(db.prepare('SELECT count(*) AS total FROM asset').get().total, 3)
 })
 
-test('missing optional queue keeps legacy match-only API behavior', (t) => {
+test('optional review queue preserves existing match-only API calls', async (t) => {
   const db = fixture(t)
-  const { review_links: ignored, ...matches } = {
-    ...matchArtexSourceAssets(db, [{ asset_id: 9, ip: '192.0.2.1' }]),
-  }
-  assert.equal(matches.matched, 1)
+  const { dispatch, RedteamStore } = await import('../lib/redteam/store-core.js')
+  const store = { db: () => db, matchArtexAssets: RedteamStore.prototype.matchArtexAssets }
+  const result = dispatch(store, {
+    op: 'matchArtexAssets', engagement: 'legacy-lab',
+    refs: [{ asset_id: 9, ip: '192.0.2.1' }],
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.matched, 1)
+  assert.deepEqual(result.review_links, [])
 })
