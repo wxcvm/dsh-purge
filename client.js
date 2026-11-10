@@ -4105,6 +4105,9 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
 .rt-hint{border-radius:6px;padding:7px 9px;margin-bottom:8px;font-size:11.5px;line-height:1.6;
   border:1px dashed #ef444488;background:#ef44440f;color:var(--dsw-alias-label-primary)}
 .rt-hint b{color:#ef4444}
+/* 中性提示条：信息性说明，不要用红色警示样式 */
+.rt-note{border-radius:6px;padding:7px 9px;margin-bottom:8px;font-size:11.5px;line-height:1.6;
+  border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-l2,#00000008)}
 .rt-tag-dead{color:var(--dsw-alias-label-secondary)}
 .rt-expand{grid-column:1/-1;padding:8px 4px 10px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .rt-kv{display:flex;gap:8px;margin-bottom:3px;align-items:baseline}
@@ -5729,7 +5732,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('span', { style: { fontWeight: 600 } }, detail ? detail.name : '技能目录（DSH 原生）'),
             h('div', { className: 'rt-spacer' }),
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => { load(true); loadExternal() } }, busy ? '刷新中…' : '刷新')),
-          h('div', { className: 'rt-hint', style: { marginBottom: 8 } },
+          h('div', { className: 'rt-note', style: { marginBottom: 8 } },
             h('div', { style: { fontWeight: 600, marginBottom: 4 } }, 'AboutSecurity 扩展技能库'),
             h('div', { style: { fontSize: 12, marginBottom: 6 } },
               external
@@ -5756,7 +5759,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             : null,
           meta.registryState && meta.registryState !== 'listed'
             ? h('div', {
-                className: (meta.registryState === 'preset-scope-api-missing' || meta.registryState === 'panel-no-agent') ? 'rt-foot' : 'rt-hint',
+                className: (meta.registryState === 'preset-scope-api-missing' || meta.registryState === 'panel-no-agent') ? 'rt-note' : 'rt-hint',
                 style: { marginBottom: 8 },
               },
                 meta.note || ('宿主注册未确认：' + meta.registryState + '。以下是本地文件清单。'))
@@ -5791,7 +5794,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('pre', { className: 'rt-md', style: { border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 6, maxHeight: '52vh' } }, detail.content || '（空）'))
             : h('div', { className: 'rt-pane' },
                 h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
-                  meta.note || '技能状态来自 DSH 技能服务；本地文件可读不等于已注册或可调用。'),
+                  meta.registryState === 'listed'
+                    ? '技能状态来自 DSH 技能服务；本地文件可读不等于已注册或可调用。'
+                    : '下面是本地文件清单；宿主注册状态见上方提示。'),
                 availSummary
                   ? h('div', { style: { fontSize: 12, marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
                       h('span', { className: 'rt-avail rt-avail-available' }, '正文可读 ' + (availSummary.available || 0)),
