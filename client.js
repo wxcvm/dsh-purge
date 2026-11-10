@@ -9321,11 +9321,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               + (report.omitted ? ' · 另有 ' + report.omitted + ' 条未展示' : '')),
             h('p', { className: 'rt-foot' },
               Object.entries(report.status_counts || {}).map(([status, count]) => status + ': ' + count).join(' · ')),
+            h('p', { className: 'rt-foot' },
+              'ARTEX 来源资产 ' + report.source_assets_total + ' 个 · 无资产关联漏洞 ' + report.unlinked_findings
+              + ' 条 · 旧报告缺少流量元数据 ' + report.findings_without_evidence_metadata + ' 条'),
+            report.asset_groups && report.asset_groups.length ? h('details', null,
+              h('summary', null, '按 ARTEX 资产 ID 查看关联漏洞（只读）'),
+              report.asset_groups.map((group) => h('div', { key: group.asset_id, className: 'rt-kv' },
+                h('b', null, '资产 #' + group.asset_id),
+                h('span', { className: 'rt-foot' },
+                  '漏洞 ' + group.finding_count + ' 条 · 流量引用 ' + group.traffic_references
+                  + ' 条' + (group.evidence_unknown ? ' · ' + group.evidence_unknown + ' 条漏洞证据数量未知' : '')
+                  + (group.stale_reports ? ' · ' + group.stale_reports + ' 份报告可能过期' : '')
+                  + ' · 漏洞 ID ' + group.finding_ids.join(', ')
+                  + (group.finding_ids_omitted ? ' 等（另有 ' + group.finding_ids_omitted + ' 条）' : '')))),
+              report.asset_groups_omitted ? h('p', { className: 'rt-foot' },
+                '还有 ' + report.asset_groups_omitted + ' 个资产分组未展示') : null) : null,
             report.items.map((item) => h('div', { key: item.finding_id, className: 'rt-kv' },
               h('div', null,
                 h('b', null, '#' + item.finding_id + ' · ' + item.severity + ' · ' + item.reported_status),
                 h('div', { className: 'rt-foot' },
-                  '任务 ' + (item.task_id ?? '—') + ' · 资产 ' + (item.asset_ids.join(', ') || '—')),
+                  '任务 ' + (item.task_id ?? '—') + ' · ARTEX 资产 ' + (item.asset_ids.join(', ') || '—')),
+                h('div', { className: 'rt-foot' },
+                  '流量引用 ' + (item.traffic_count === null ? '未知（旧报告）' : item.traffic_count + ' 条')
+                  + (item.report_stale === true ? ' · 详细报告可能过期' : '')),
                 h('div', { className: 'rt-foot', style: { overflowWrap: 'anywhere' } }, item.summary)),
               h('span', { className: 'rt-foot' }, '待本地核实'))),
             h('p', { className: 'rt-foot' }, report.note),
