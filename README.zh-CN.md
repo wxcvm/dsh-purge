@@ -472,7 +472,18 @@ dsh-purge --uninstall
 
 `bin/` 是命令行，`lib/` 是补丁和作战台，`presets/redteam/` 是红队预设，`client.js` 是侧栏。开源版不下发 `skills/` 和知识库。
 
-**本地凭据文件权限：** Purge 的 `redteam/engagements` 中可能保存凭据和 WebShell 密钥，SQLite 中目前仍是明文字段。本维护版会在 macOS/Linux 上将工作区目录收紧到 `0700`、资产库 `assets.db` 收紧到 `0600`，包括重新打开的旧工作区；本地归档目录也会收紧。此改动**不加密数据库、不影响 API 对已有明文的读取**，也不能阻止同一操作系统账户、root 或有备份权限的进程访问。Windows 的 `chmod` 无法提供等价 NTFS ACL 防护，请用仅本人可访问的用户配置目录并检查目录“安全”权限。修改或复制工作区后还应保护备份与导出文件。
+**本地凭据文件权限：** Purge 的 `redteam/engagements` 中可能保存凭据和 WebShell 密钥，SQLite 中目前仍是明文字段。本维护版会在 macOS/Linux 上将工作区目录收紧到 `0700`、资产库 `assets.db` 收紧到 `0600`，包括重新打开的旧工作区；本地归档目录也会收紧。此改动**不加密数据库、不影响 API 对已有明文的读取**，也不能阻止同一操作系统账户、root 或有备份权限的进程访问。Windows 的 `chmod` 无法提供等价 NTFS ACL 防护。Windows 11 可使用本仓库的显式 NTFS ACL 工具来保护工作区，默认**只预览、不更改**：
+
+```powershell
+# 在 dsh-purge 仓库目录运行；默认使用 $env:DSH_HOME\redteam（否则 ~\.dsh\redteam）
+.\scripts\protect-redteam-acl.ps1
+# 确认只有当前 Windows 用户、SYSTEM 和管理员需要访问后，主动应用：
+.\scripts\protect-redteam-acl.ps1 -Apply
+# 自定义工作区：
+.\scripts\protect-redteam-acl.ps1 -Root 'D:\\DSH\\redteam' -Apply
+```
+
+该工具只处理所选工作区内的真实文件和目录，跳过符号链接和 junction，不修改文件内容、SQLite 表结构或其他 DSH 插件；会取消已有 ACL 继承并替换访问规则，因此如果此前是多个 Windows 用户或服务账户共享这个工作区，请先保留原共享配置，**不要执行 `-Apply`**。它仍不提供静态加密，备份和导出文件也要单独保护。修改或复制工作区后还应保护备份与导出文件。
 
 运行时文件在 `$DSH_HOME`：`prompt-inject.md`、`rules/`、`redteam/`。未设 `DSH_HOME` 时，优先用 dsh 安装目录旁边的 `.dsh`，再退回 `~/.dsh`。Web 和桌面端各用自己那一份主目录。
 
