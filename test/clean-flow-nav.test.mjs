@@ -25,9 +25,10 @@ test('client does not overwrite a terminal apply response with late status polli
 test('redteam main section headings are real controls and each page remains navigable', () => {
   assert.match(rt, /h\('button', \{\s*type: 'button', className: 'rt-tab-group-title'/)
   assert.match(rt, /title: '打开' \+ section\.label \+ '首页'/)
-  assert.match(rt, /setUI\(\{ tab: page \}\)/)
+  assert.match(rt, /setUI\(\{ tab: page, focus: null \}\)/)
   assert.match(rt, /\['artex', 'ARTEX'\]/)
-  assert.match(rt, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab, \{ engagement: eng \}\)/)
+  assert.match(rt, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab, \{ engagement: eng,/)
+  assert.match(rt, /onGotoAsset: \(assetId\) =>/)
   assert.match(rt, /h\('button', \{[\s\S]*?className: 'rt-tab' \+ \(st\.tab === t\[0\]/)
 })
 
