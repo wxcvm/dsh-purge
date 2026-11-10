@@ -7195,6 +7195,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               'DSH 服务报告端口：' + (protection.bridge.configuredPort || '未知')),
             h('div', { style: { fontSize: 12, opacity: 0.8 } },
               '这是当前 HTTP 连接实际到达的端点，不是服务器绑定范围。公网可达性、Docker 端口映射和反向代理仍未检测。')) : null,
+          protection && protection.artex ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+            h('h4', null, 'ARTEX 本机联动状态'),
+            h('div', { style: { fontSize: 12 } }, 'DSH 主机 127.0.0.1:8787：'
+              + (protection.artex.state === 'detected' ? '已确认 ARTEX 正在运行'
+                : protection.artex.state === 'degraded' ? 'ARTEX 服务异常'
+                : protection.artex.state === 'service_candidate' ? '发现候选服务，身份尚未确认'
+                : '当前没有发现运行中的 ARTEX')),
+            protection.artex.state === 'detected' && protection.artex.version
+              ? h('div', { style: { fontSize: 12 } }, '版本：' + protection.artex.version) : null,
+            h('div', { style: { fontSize: 12, opacity: 0.8 } },
+              '仅检查 DSH 所在主机的本地健康接口；不共享账号、令牌或数据库。'
+                + 'ARTEX 的监听范围与公网可达性仍未检测。'),
+            h('button', { className: 'rt-btn', type: 'button',
+              onClick: () => setUI({ tab: 'artex' }), style: { marginTop: 8 } },
+              '查看 ARTEX 资源与工具')) : null,
           h('div', { className: 'rt-card' },
             h('h4', null, '保护状态：已保护 / 可启用 / 仍会暴露'),
             protection ? [

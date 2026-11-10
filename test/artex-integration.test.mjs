@@ -190,3 +190,18 @@ test('RedTeam ARTEX tab distinguishes unverified and offline service states', ()
   assert.match(source, /state && state\.online \? h\('a'/)
   assert.match(source, /找到文件不代表可执行已验证/)
 })
+
+test('privacy console reuses local ARTEX health probe without sharing credentials', () => {
+  const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const bundle = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(host, /const artex = await probeLocalArtex\(\)/)
+  assert.match(host, /state\.artex = \{/)
+  assert.match(host, /privacyExposure: 'not_inspected'/)
+  assert.doesNotMatch(host, /state\.artex = await inspectArtex\(\)/)
+  for (const body of [source, bundle]) {
+    assert.match(body, /ARTEX 本机联动状态/)
+    assert.match(body, /setUI\(\{ tab: 'artex' \}\)/)
+    assert.match(body, /ARTEX 的监听范围与公网可达性仍未检测/)
+  }
+})
