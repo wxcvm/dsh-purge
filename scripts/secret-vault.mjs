@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Explicit offline migration of legacy credential fields to AES-256-GCM.
- * Preview is the default; --apply performs per-workspace SQLite transactions.
+ * Default preview uses read-only SQLite and cannot write to workspaces.
  */
-import { existsSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
+import { existsSync, lstatSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
@@ -18,28 +19,47 @@ for (let i = 0; i < args.length; i++) {
   else throw new Error('Usage: node scripts/secret-vault.mjs [--root PATH] [--apply]')
 }
 root = resolve(root)
-if (!existsSync(join(root, 'engagements'))) {
-  throw new Error('Purge red-team workspace does not exist: ' + root)
+const base = join(root, 'engagements')
+if (!existsSync(base) || !lstatSync(base).isDirectory() || lstatSync(base).isSymbolicLink()) {
+  throw new Error('Purge red-team workspace directory does not exist or is not a real directory: ' + base)
 }
-const store = new RedteamStore(root)
-try {
-  if (apply && !store.secretVault.enabled) {
-    throw new Error('Set DSH_PURGE_SECRET_KEY (64 hex digits) before --apply')
+
+const targets = readdirSync(base, { withFileTypes: true })
+  .filter(item => item.isDirectory() && !item.isSymbolicLink())
+  .map(item => ({ id: item.name, file: join(base, item.name, 'assets.db') }))
+  .filter(item => existsSync(item.file) && lstatSync(item.file).isFile() && !lstatSync(item.file).isSymbolicLink())
+
+function preview(file) {
+  const db = new DatabaseSync(file, { readOnly: true })
+  try {
+    const output = { credential: { plaintext: 0, encrypted: 0 }, webshell: { plaintext: 0, encrypted: 0 } }
+    for (const [table, field] of [['credential', 'secret_value'], ['webshell', 'pass_key']]) {
+      for (const { value } of db.prepare(`SELECT ${field} AS value FROM ${table} WHERE ${field} IS NOT NULL AND ${field} <> ''`).all()) {
+        output[table][value.startsWith('dshp:vault:v1:') ? 'encrypted' : 'plaintext']++
+      }
+    }
+    return output
+  } finally {
+    db.close()
   }
-  const engagements = store.listEngagements()
-    .filter(e => existsSync(store.dbPathOf(e.id)))
-  console.log('Purge secret vault: ' + (apply ? 'APPLY' : 'PREVIEW')
-    + ' / workspaces: ' + engagements.length)
-  for (const item of engagements) {
-    const before = store.secretVaultStatus(item.id)
-    console.log(JSON.stringify({ id: item.id, before }))
-    if (apply) {
+}
+
+if (!apply) {
+  console.log('Purge secret vault: PREVIEW / workspaces: ' + targets.length)
+  for (const target of targets) console.log(JSON.stringify({ id: target.id, before: preview(target.file) }))
+  console.log('Preview used read-only databases; no files changed. Back up the key and stop DSH before --apply.')
+} else {
+  const store = new RedteamStore(root)
+  try {
+    if (!store.secretVault.enabled) throw new Error('Set DSH_PURGE_SECRET_KEY (64 hex digits) before --apply')
+    console.log('Purge secret vault: APPLY / workspaces: ' + targets.length)
+    for (const item of targets) {
+      const before = store.secretVaultStatus(item.id)
       const changed = store.encryptExistingSecrets(item.id)
-      console.log(JSON.stringify({ id: item.id, migrated: changed,
+      console.log(JSON.stringify({ id: item.id, before, migrated: changed,
         after: store.secretVaultStatus(item.id) }))
     }
+  } finally {
+    store.close()
   }
-  if (!apply) console.log('No files changed. Stop DSH, preserve your key and database backups, then use --apply to encrypt legacy fields.')
-} finally {
-  store.close()
 }
