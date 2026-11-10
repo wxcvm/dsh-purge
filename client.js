@@ -4961,6 +4961,34 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
   .rt-full .rt-card{padding:12px}
   .rt-full .rt-tab{font-size:11.5px}
 }
+
+/* Embedded Dock navigation responds to the Dock width, not browser viewport.
+   The exact same tabs and handlers remain; compact mode is a native select. */
+.rt-compact-nav{display:none;align-items:center;gap:10px;min-width:0;
+  padding:9px 12px;border-bottom:1px solid var(--rt-line);
+  background:var(--rt-paper-2);font-size:12px;color:var(--rt-mute)}
+.rt-compact-nav>span{flex:none;font-weight:600}
+.rt-compact-nav-select{min-width:0;flex:1;max-width:100%;box-sizing:border-box;
+  border:1px solid var(--rt-line);border-radius:8px;padding:7px 10px;
+  font:inherit;font-size:12px;background:var(--rt-well);color:var(--rt-ink);
+  color-scheme:inherit}
+.rt-compact-nav-select:focus-visible{outline:2px solid var(--rt-accent);outline-offset:2px}
+@container(max-width:1100px){
+  .rt-embedded>.rt-tabs{display:none!important}
+  .rt-embedded>.rt-compact-nav{display:flex!important}
+  .rt-embedded>.rt-head{flex-wrap:wrap;gap:7px;min-height:0}
+  .rt-embedded>.rt-head .rt-eng-select{min-width:0!important;flex:1 1 180px!important}
+  .rt-embedded .rt-privacy-pane,.rt-embedded .rt-survey-pane{display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-content:start}
+  .rt-embedded .rt-privacy-pane>.rt-card,.rt-embedded .rt-survey-pane>.rt-card{min-width:0;margin-bottom:0}
+  .rt-embedded .rt-privacy-pane>.rt-card:first-of-type{grid-column:1/-1}
+  .rt-embedded .rt-privacy-pane>.rt-err,.rt-embedded .rt-survey-pane>.rt-err{grid-column:1/-1}
+}
+@container(max-width:720px){
+  .rt-embedded .rt-privacy-pane,.rt-embedded .rt-survey-pane{grid-template-columns:minmax(0,1fr);gap:10px}
+  .rt-embedded .rt-privacy-pane>.rt-card:first-of-type{grid-column:auto}
+  .rt-embedded>.rt-head .rt-eng-select{flex-basis:100%!important}
+}
 `    /* ---------------------------------------------------------- 桥接与状态 */
     /** 是否在「全面浏览」独立窗口里（URL hash 标记，复用同一套界面代码）。 */
     const isFullWindow = () => {
@@ -10441,6 +10469,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           (full || embedded) ? null : h('button', { className: 'rt-btn', title: '在新浏览器窗口打开完整控制台', onClick: openFull }, '全面浏览'),
           (full || embedded) ? null : h('button', { className: 'rt-btn', title: '收起面板', onClick: () => setUI({ open: false }) }, '收起')),
         /* 原生按钮提供键盘与读屏语义；方向键 / Home / End 在页签间移动。 */
+        h('label', { className: 'rt-compact-nav' },
+          h('span', null, '前往页面'),
+          h('select', { className: 'rt-compact-nav-select', value: st.tab,
+            'aria-label': '选择作战台页面',
+            onChange: (e) => {
+              const tab = e.target.value
+              markTabSeen(tab)
+              setUI({ tab, focus: null })
+              setRefreshKey((k) => k + 1)
+            },
+          }, tabSections.map((section) => h('optgroup', { key: section.label, label: section.label },
+            section.pages.map((tab) => h('option', { key: tab[0], value: tab[0] }, tab[1])))))),
         h('div', { className: 'rt-tabs', role: 'tablist', 'aria-label': '作战台页面' },
           tabSections.map((section) => h('div', { className: 'rt-tab-group', key: section.label },
             h('button', {
