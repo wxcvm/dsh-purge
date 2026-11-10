@@ -474,6 +474,8 @@ dsh-purge --uninstall
 
 ## 可选的凭据静态加密（AES-256-GCM）
 
+Purge 作战台「低干扰与隐私」页面会在「凭据加密覆盖情况」展示当前**默认工作区**中这两个字段的已加密与仍是明文的记录数量，以及密钥是否已配置；不输出真实口令或密钥。**统计仅针对当前默认工作区**，并不表示所有历史工作区、备份、日志和报告均已加密。页面不会自动启动迁移，要加密旧记录仍需按下文显式使用 `--apply`。
+
 本功能是**显式启用**，不会悄悄迁移旧资产，也不会改变界面读取口令的方式。配置 `DSH_PURGE_SECRET_KEY` 后，新的 `credential.secret_value` 和 `webshell.pass_key` 会使用随机 nonce 和 AES-256-GCM 进行加密，数据库内存放的是 `dshp:vault:v1:...` 信封；工具、报表及控制台通过 Store 解密读取。**不配置密钥时，旧版明文行为保持不变。**
 
 1. 使用 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` 生成 **64 位十六进制（32 字节）**随机密钥，保存在单独的密码管理器或安全密钥存储中。把它以 `DSH_PURGE_SECRET_KEY` 环境变量提供给 **启动 DSH 的进程**；不要写进 Git、截图、报告或数据库目录。Windows PowerShell 可用 `$env:DSH_PURGE_SECRET_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Vault key' -AsSecureString)).Password` 在当前终端设置，然后从同一终端启动 DSH；不要把实际密钥直接写到 PowerShell 历史。
