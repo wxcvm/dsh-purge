@@ -62,6 +62,9 @@ test('privacy posture only reports configuration, never secrets or public reacha
     localPeer: true,
     remoteTokenConfigured: true,
     localTokenRequired: true,
+    acceptedAddress: null,
+    acceptedPort: null,
+    configuredPort: null,
     publicReachability: 'not_tested',
     listenerScope: 'not_inspected',
   })
@@ -71,4 +74,18 @@ test('privacy posture only reports configuration, never secrets or public reacha
   assert.equal(remote.localPeer, false)
   assert.equal(remote.remoteTokenConfigured, false)
   assert.equal(remote.publicReachability, 'not_tested')
+})
+
+test('observed socket endpoint is not mistaken for the bound listener', () => {
+  const request = req('127.0.0.1', '127.0.0.1:53380')
+  request.socket.localAddress = '127.0.0.1'
+  request.socket.localPort = 53380
+  const summary = bridgePrivacyPosture(request, {}, 53380)
+  assert.equal(summary.acceptedAddress, '127.0.0.1')
+  assert.equal(summary.acceptedPort, 53380)
+  assert.equal(summary.configuredPort, 53380)
+  // Even when this request arrived through loopback, the listener may have
+  // been bound to all interfaces or forwarded through a reverse proxy.
+  assert.equal(summary.listenerScope, 'not_inspected')
+  assert.equal(summary.publicReachability, 'not_tested')
 })
