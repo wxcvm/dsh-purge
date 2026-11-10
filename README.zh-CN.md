@@ -476,6 +476,26 @@ dsh-purge --uninstall
 
 ---
 
+## Purge 管理接口的隐私与远程访问
+
+作战台的 `POST /redteam/api` 可以管理资产、凭据、工具和代理。**浏览器同源验证不是登录认证**；从本版本起，插件在本地桌面连接（回环 IP + 本地 Host）沿用原行为，但远程请求默认拒绝。
+
+如确需通过远程 DSH Web 访问，请先在**启动 DSH 的同一个进程环境**配置独立令牌，然后启动/重启 DSH：
+
+```sh
+# 示例：用 Node 生成随机 32 字节令牌，妥善保管
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+# Linux/macOS：将生成的令牌填入下方值后启动 DSH
+export DSH_PURGE_BRIDGE_TOKEN='在此填写生成的随机令牌'
+dsh web
+```
+
+Windows PowerShell：在启动 DSH 前运行 `$env:DSH_PURGE_BRIDGE_TOKEN = '在此填写生成的随机令牌'`。设置后通过 HTTPS（或经 VPN/SSH）打开 DSH 网页，首次访问作战台时会弹出**密码输入框**；令牌只留在当前页面内存，不持久化到浏览器存储。自动化客户端也可用请求头 `X-DSH-Purge-Token`，不要把令牌拼进 URL。
+
+设置 `DSH_PURGE_REQUIRE_LOCAL_TOKEN=1` 可选择连本机接口也需要令牌（本机桌面作战台同样会提示输入）。不设置则保持本地桌面零配置可用。**无论哪种模式，远程 DSH 主服务本身及其他插件的接口仍需单独保护**；此令牌只保护 Purge 的 `/redteam/api`。
+
+反向代理请保留真实 Host 并传递 `X-Forwarded-For`；如果代理把所有请求改成 `Host: 127.0.0.1` 且删除转发来源信息，Purge 可能把代理连接错判为本机。对此类部署建议同时启用 `DSH_PURGE_REQUIRE_LOCAL_TOKEN=1`，并在代理或 VPN 层实施独立认证。不要把令牌用明文 HTTP 发送到公网。
+
 ## 使用
 
 ```sh
