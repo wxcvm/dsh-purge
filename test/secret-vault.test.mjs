@@ -13,8 +13,12 @@ const WRONG_KEY = randomBytes(32).toString('hex')
 function fixture(t, secretKey = '') {
   const root = mkdtempSync(join(tmpdir(), 'purge-vault-'))
   const store = new RedteamStore(root, { secretKey })
-  t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
-  return { root, store }
+  const stores = [store]
+  t.after(() => {
+    for (const current of stores.reverse()) current.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+  return { root, store, track: (other) => { stores.push(other); return other } }
 }
 
 test('vault uses random AEAD ciphertext and authenticates field context', () => {
@@ -53,13 +57,12 @@ test('new credentials and WebShell keys are encrypted in SQLite but usable throu
 })
 
 test('existing plaintext remains usable; explicit migration encrypts it atomically', (t) => {
-  const { root, store: legacy } = fixture(t)
+  const { root, store: legacy, track } = fixture(t)
   const id = legacy.openEngagement('old-project').id
   legacy.addCredential(id, { host: 'legacy.test', username: 'u', secret_value: 'legacy-password' })
   legacy.addWebshell(id, { url: 'https://legacy.test/shell', pass_key: 'legacy-key' })
   legacy.close()
-  const secured = new RedteamStore(root, { secretKey: KEY })
-  t.after(() => secured.close())
+  const secured = track(new RedteamStore(root, { secretKey: KEY }))
   assert.deepEqual(secured.secretVaultStatus(id).credential, { plaintext: 1, encrypted: 0 })
   assert.equal(secured.listCredentials(id)[0].secret_value, 'legacy-password')
   assert.deepEqual(secured.encryptExistingSecrets(id), { credential: 1, webshell: 1 })
@@ -67,20 +70,18 @@ test('existing plaintext remains usable; explicit migration encrypts it atomical
   assert.equal(secured.listCredentials(id)[0].secret_value, 'legacy-password')
   assert.equal(secured.listWebshells(id)[0].pass_key, 'legacy-key')
   secured.close()
-  const missingKey = new RedteamStore(root, { secretKey: '' })
-  t.after(() => missingKey.close())
+  const missingKey = track(new RedteamStore(root, { secretKey: '' }))
   assert.throws(() => missingKey.listCredentials(id), /requires DSH_PURGE_SECRET_KEY/)
   assert.throws(() => missingKey.addCredential(id, { host: 'other.test', secret_value: 'should-not-write' }), /requires DSH_PURGE_SECRET_KEY/)
   assert.equal(missingKey.db(id).prepare('SELECT COUNT(*) AS n FROM credential').get().n, 1)
 })
 
 test('incorrect key is rejected before data-changing writes or migration', (t) => {
-  const { root, store } = fixture(t, KEY)
+  const { root, store, track } = fixture(t, KEY)
   const id = store.openEngagement('locked').id
   store.addCredential(id, { host: 'x.test', username: 'u', secret_value: 'locked' })
   store.close()
-  const wrong = new RedteamStore(root, { secretKey: WRONG_KEY })
-  t.after(() => wrong.close())
+  const wrong = track(new RedteamStore(root, { secretKey: WRONG_KEY }))
   assert.throws(() => wrong.listCredentials(id), /Cannot decrypt/)
   assert.throws(() => wrong.addCredential(id, { host: 'z.test', secret_value: 'danger' }), /Cannot decrypt/)
   assert.throws(() => wrong.encryptExistingSecrets(id), /Cannot decrypt/)
