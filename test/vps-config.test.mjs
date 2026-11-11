@@ -120,7 +120,7 @@ test('UI source, bundled client, setup script and both guides include real confi
   const guide = readFileSync(new URL('../docs/OPERATIONS_GUIDE.zh-CN.md', import.meta.url), 'utf8')
   assert.match(guide, /多环境的作用与 VPS 配置方法/)
   assert.match(guide, /VMware Kali SSH/)
-  assert.match(guide, /IPv6 URL/)
+  assert.match(guide, /IPv6 格式/)
   const environmentGuide = readFileSync(new URL('../docs/ENVIRONMENT_CAPABILITY.zh-CN.md', import.meta.url), 'utf8')
   assert.match(environmentGuide, /VPS 双栈与执行环境角色/)
 })
