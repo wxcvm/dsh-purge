@@ -114,3 +114,13 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 在「环境适配 → 发现本机、WSL 与 Docker」的结果里新增 `providers.artex`，固定来源标识 `artex:local`。它只根据当前 ARTEX 工具目录位置查找 ARTEX Tool Manager 已安装的七项本机工具，返回路径、发现时间和来源状态；不会探测 ARTEX HTTP 健康接口，也不会读取 ARTEX 账号/Token/配置/数据库。
 
 `artex:local` 的 `kind=binary-source`、`executionEnvironmentId=local`；不列为第 5 个可执行环境。发现一个文件只返回 `located`，`online=null`、`capabilityVerified=false`、`executionStatus=not-run`，独立于 ARTEX 服务在线与否。既有本机工具查找仍以显式路径、工具箱、binDirs 和 PATH 为优先，ARTEX 依然是最后的本地回退来源。
+
+## 已有本机扫描执行记录的环境来源
+
+`redteam_scan_run` 通过现有的本机 `runDiscoveryScan` 执行 Nmap/httpx 时，已有的扫描 manifest 现在会额外记录 `execution`：
+
+`executionId` 为同一运行 ID，`environmentId=local`，`toolId` 为 Nmap/httpx，`binarySource` 为工具文件实际来源（包括 ARTEX 回退时的 `artex`）。记录是否真正向进程执行器发起调用及进程原始结果（完成、失败、超时、空输出），与之后是否成功解析/导入是两件不同的事。
+
+「作战 → 扫描记录」展开详情，以及 `redteam_scan_history` 返回的数据，都会直接沿用这份真实 manifest；不另外建日志数据库、不伪造旧记录。旧 manifest 没有 `execution` 时显示来源未知。该字段不会因读取工具清单、环境发现或运行版本探针而写入。
+
+当前这只覆盖真正通过 **本机** Nmap/httpx 执行器运行的任务；WSL、SSH Kali、Docker 仍只接入了发现和显式版本命令。不能把远端工具版本检测统计成已经做过目标扫描。
