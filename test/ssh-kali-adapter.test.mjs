@@ -43,6 +43,7 @@ test('discovery lists configured Kali without invoking SSH or misreporting reach
   savePlatformConfig({ kaliVm: vm }, root)
   const result = await discoverEnvironments({
     root, platform: 'linux', execFileFn: () => { throw Error('no discovery connection') },
+    dockerExecFileFn: (_cmd, _args, _opts, done) => done(null, '', ''),
   })
   assert.equal(result.environments.length, 2)
   assert.equal(result.environments[1].id, 'ssh:kali-vm')

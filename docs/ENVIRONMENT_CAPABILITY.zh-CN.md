@@ -26,7 +26,7 @@
 
 1. WSL2：第二阶段已实现 Windows 上的只读发行版枚举与用户显式版本探针；不自动 sudo 或安装发行版。
 2. SSH Kali VM：第三阶段已实现单台 VMware Kali 的连接配置与显式 SSH 身份/版本检测；密钥/agent 认证和主机密钥核验，不保存密码或私钥内容。
-3. Docker：仅选择已存在、正在运行的容器执行探针；不得自动启动、拉取镜像或授予特权。
+3. Docker：第四阶段已实现当前 Docker context 中运行容器的只读清单，以及用户明确选择容器和内置工具后的版本探针；不会创建/启动容器、拉镜像、授予特权或扫描目标。
 4. 统一依赖检查及能力评分、环境界面和工具目录扩充。
 
 ARTEX 仍按原先优先级作为**本地工具路径来源**，不是已连接的远程执行环境。环境诊断不触发任何靶标扫描。
@@ -59,3 +59,15 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 - 默认假设 Kali 的 `sshd` 已经由用户自行启用并可由 Windows 主机访问；**不会尝试启动 VMware、修改网络、安装 OpenSSH、启用 root、提权或自动执行目标任务**。
 
 这批改动是单台 Kali VM 的最小实现。多 SSH 主机、Docker 和通用跨环境任务执行留给独立后续版本。
+
+## 第四阶段：Docker 运行容器发现与显式版本探针
+
+- 在「管理 → 环境适配」点击「发现本机、WSL 与 Docker」时，调用本机 `docker ps --no-trunc --filter status=running --format '{{json .}}'`。只列出当前 **Docker CLI context** 中已经运行的容器（context 也可能连接远端 daemon），不启动 Docker daemon、容器，也不创建/拉取镜像。
+- 找不到 Docker CLI、daemon 不可达和清单解析失败都明确显示状态，不会当作「没有容器」。
+- 从实际发现的容器列表中选择容器和内置工具，点击「显式验证版本」，会重新确认该容器仍在运行，随后执行 `docker exec <列出的容器 ID> <内置工具命令> <固定版本参数>`。不能把 UI 输入当作任意容器、命令或参数使用。
+- 版本命令成功只证明容器内相应程序运行了版本探针，不等于完整依赖验证或任何目标扫描；保留 `dependencyStatus: not-checked`、`capabilityVerified: false` 与 `executionStatus: not-run`。
+- Docker 发现/探针与 Windows 本机、WSL、VMware Kali SSH 的配置彼此独立；不改已有工具路径优先级。
+
+## 待完成的跨环境阶段
+
+统一依赖检查、按任务类型的跨环境能力评分、统一真实执行记录及其来源归属仍需后续实测。需要把版本可运行与任务可执行/已执行区分开，而不是把本机/WSL/SSH/Docker 的工具路径简单合并。真正 Windows Harness、WSL、Kali 与 Docker 实机验收也不由 CI 模拟测试替代。

@@ -37,6 +37,7 @@ test('explicit discovery only lists, never launches WSL distros', async () => {
   const result = await discoverEnvironments({
     platform: 'win32',
     execFileFn: (...args) => { calls++; return runList(...args) },
+    dockerExecFileFn: (_cmd, _args, _opts, done) => done(null, '', ''),
   })
   assert.equal(calls, 1)
   assert.equal(result.environments.length, 4) // local + three WSL distros
