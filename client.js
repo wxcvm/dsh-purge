@@ -8065,6 +8065,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [kaliToolCheck, setKaliToolCheck] = React.useState(null)
       const [kaliBusy, setKaliBusy] = React.useState('')
       const [kaliToolId, setKaliToolId] = React.useState('nmap')
+      const [dockerToolId, setDockerToolId] = React.useState('nmap')
+      const [dockerChecks, setDockerChecks] = React.useState({})
+      const [dockerChecking, setDockerChecking] = React.useState(null)
 
       const applyDraftFrom = (r) => {
         const c = (r && r.config) || {}
@@ -8175,6 +8178,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }
           setEnvironmentSnapshot(result)
           setWslChecks({})
+          setDockerChecks({})
         }, (error) => {
           setEnvironmentBusy(false)
           setEnvironmentError(String((error && error.message) || error))
@@ -8191,6 +8195,22 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setWslChecking(null)
           setWslChecks((prev) => Object.assign({}, prev, {
             [distro + ':' + id]: { status: 'degraded', error: String((error && error.message) || error) },
+          }))
+        })
+      }
+      const checkDockerTool = (containerId) => {
+        if (busy || environmentBusy || dockerChecking) return
+        const id = dockerToolId
+        setDockerChecking(containerId)
+        api({ op: 'dockerToolProbe', containerId, id }).then((result) => {
+          setDockerChecking(null)
+          setDockerChecks((prev) => Object.assign({}, prev, {
+            [containerId + ':' + id]: result || { status: 'degraded', error: '未返回结果' },
+          }))
+        }, (error) => {
+          setDockerChecking(null)
+          setDockerChecks((prev) => Object.assign({}, prev, {
+            [containerId + ':' + id]: { status: 'degraded', error: String((error && error.message) || error) },
           }))
         })
       }
@@ -8271,13 +8291,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           adapt.message
             || '均可选填：留空则用默认路径/自动查找。填了的覆盖默认。密钥类只在需要测绘/反弹时才填。'),
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.65 } },
-          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '执行环境发现 · Windows / WSL'),
+          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '执行环境发现 · 本机 / WSL / Docker / Kali'),
           h('div', { style: { opacity: 0.85, marginBottom: 7 } },
-            '只读发现已注册的 WSL 发行版；不启动发行版、不检测工具、不扫描目标。'),
+            '只读查询已注册的 WSL 发行版、SSH Kali 配置及 Docker 运行中容器；不启动容器、不扫描目标。'),
           h('button', {
             type: 'button', className: 'rt-btn',
             disabled: environmentBusy || !!wslChecking, onClick: discoverEnvironments,
-          }, environmentBusy ? '正在发现…' : '发现本机与 WSL'),
+          }, environmentBusy ? '正在发现…' : '发现执行环境'),
           environmentError ? h('div', { className: 'rt-err', style: { marginTop: 7 } }, environmentError) : null,
           environmentSnapshot ? h('div', { style: { marginTop: 8 } },
             h('div', { style: { marginBottom: 6 } },
@@ -8288,7 +8308,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('span', { style: { fontWeight: 600 } }, item.label),
                 h('span', { style: { marginLeft: 8, opacity: 0.75 } },
                   item.kind === 'wsl' ? ((item.state || 'unknown') + ' · WSL ' + (item.wslVersion || '?'))
-                    : item.kind === 'ssh' ? 'SSH 已配置 · 未连接' : '当前主机'),
+                    : item.kind === 'ssh' ? 'SSH 已配置 · 未连接' : item.kind === 'docker' ? 'Docker · 运行中' : '当前主机'),
                 item.kind === 'wsl' ? h('div', { style: { marginTop: 5 } },
                   h('select', {
                     className: 'rt-input', value: wslSelectedTool, style: { maxWidth: 170, marginRight: 6 },
@@ -8313,6 +8333,44 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 ? environmentSnapshot.providers.wsl.note : '')
               + ' 显式版本检测可能启动已停止的 WSL 发行版；成功也不代表执行过目标任务。'))
             : null),
+        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.65 } },
+          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'Docker · 运行中容器'),
+          h('div', { style: { opacity: 0.85, marginBottom: 8 } },
+            '点击上方「发现执行环境」查询当前 Docker 上下文。这里只列出运行中的容器，不启动容器或拉取镜像。'),
+          environmentSnapshot && environmentSnapshot.providers && environmentSnapshot.providers.docker
+            ? h('div', { style: { opacity: 0.8, fontSize: 11.5, marginBottom: 8 } },
+              environmentSnapshot.providers.docker.note || '')
+            : null,
+          environmentSnapshot && (environmentSnapshot.environments || []).some((item) => item.kind === 'docker')
+            ? h('div', null,
+              (environmentSnapshot.environments || []).filter((item) => item.kind === 'docker').map((item) =>
+                h('div', { key: item.id, style: { padding: '7px 0', borderBottom: '1px solid var(--dsw-alias-border-l1)' } },
+                  h('div', { style: { fontWeight: 600, overflowWrap: 'anywhere' } }, item.label),
+                  h('div', { style: { fontSize: 11, opacity: 0.75, marginTop: 2, overflowWrap: 'anywhere' } },
+                    item.image + ' · ' + item.containerId.slice(0, 12) + ' · 运行中（仅来自列表）'),
+                  h('div', { style: { display: 'flex', gap: 7, marginTop: 6, flexWrap: 'wrap' } },
+                    h('select', {
+                      className: 'rt-input', value: dockerToolId, style: { maxWidth: 155 },
+                      onChange: (e) => setDockerToolId(e.target.value),
+                    }, tools.filter((tool) => tool.canProbe).map((tool) =>
+                      h('option', { key: tool.id, value: tool.id }, tool.label))),
+                    h('button', {
+                      type: 'button', className: 'rt-btn',
+                      disabled: busy || environmentBusy || !!dockerChecking,
+                      onClick: () => checkDockerTool(item.containerId),
+                    }, dockerChecking === item.containerId ? '版本检测中…' : '验证容器工具版本')),
+                  dockerChecks[item.containerId + ':' + dockerToolId]
+                    ? h('div', { style: { marginTop: 5, fontSize: 11.5, overflowWrap: 'anywhere' } },
+                      (() => {
+                        const check = dockerChecks[item.containerId + ':' + dockerToolId]
+                        return check.status === 'probe_verified'
+                          ? '容器版本命令成功：' + (check.version || '无版本输出')
+                          : '未通过版本验证：' + (check.error || check.status)
+                      })())
+                    : null)))
+            : h('div', { style: { fontSize: 11.5, opacity: 0.7 } }, '暂无可供检测的容器。'),
+          h('div', { style: { marginTop: 7, fontSize: 11.5, opacity: 0.8 } },
+            '只有点击验证时才运行固定版本命令；不使用 shell、提权或执行目标扫描。')),
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'VMware Kali · SSH 环境'),
           h('div', { style: { opacity: 0.85, marginBottom: 8 } },
