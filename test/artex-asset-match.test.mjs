@@ -46,6 +46,26 @@ test('matches exact IP / domain alias and open service port without mixing sourc
   assert.equal(db.prepare('SELECT count(*) AS total FROM asset').get().total, 3)
 })
 
+test('normalizes stored DSH DNS names and IP whitespace before matching ARTEX assets', (t) => {
+  const db = fixture(t)
+  db.exec(`
+    UPDATE asset SET ip = ' 192.0.2.1 ', primary_name = ' API.EXAMPLE.TEST. ' WHERE id = 1;
+    UPDATE asset_name SET name = ' SERVICE.EXAMPLE.TEST. ' WHERE asset_id = 1;
+  `)
+  const result = matchArtexSourceAssets(db, [
+    { asset_id: 701, domain: 'api.example.test', type: 'subdomain' },
+    { asset_id: 702, domain: 'service.example.test.', type: 'subdomain' },
+    { asset_id: 703, ip: '192.0.2.1', port: 443, type: 'service' },
+    { asset_id: 704, domain: 'api.example.test', port: 22, type: 'service' },
+  ])
+  assert.deepEqual(result.items.map((item) => item.status),
+    ['matched', 'matched', 'matched', 'host_only'])
+  assert.deepEqual(result.items.slice(0, 3).map((item) => item.candidates[0].dsh_asset_id),
+    [1, 1, 1])
+  assert.equal(result.items[3].candidates[0].port_match, false,
+    'normalizing the host must not bypass the open-service-port requirement')
+})
+
 test('routing the match is scoped to the explicitly requested engagement', async (t) => {
   const db = fixture(t)
   const { dispatch, RedteamStore } = await import('../lib/redteam/store-core.js')
