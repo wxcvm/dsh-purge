@@ -88,3 +88,23 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 - 所有版本探针均通过当前实现的本机/WSL/Kali SSH/Docker 工具目录执行，依赖条件以独立说明显示为「未检查」而非「已验证」。Gowitness 使用固定的 `version` 子命令，不接受浏览器传入任意子命令。
 - `testssl.sh` 是 Bash 脚本。Windows 原生 Node 没有 Bash 执行环境时，可能只找到路径而无法直接运行版本检测；可以使用已有 WSL/Kali/Docker 环境，**不要误报原生已验证**。
 - 工具任务画像只是候选推荐，不会自动选择执行环境或运行扫描。
+
+## 配置 v2 与按任务工具偏好
+
+在现有 `$DSH_HOME/redteam/config.json` 上增加可选的 `planning.preferredToolByTask`，例如：
+
+```json
+{
+  "version": 2,
+  "planning": {
+    "preferredToolByTask": {
+      "services": "nmap",
+      "web": "gowitness"
+    }
+  }
+}
+```
+
+这只是局部配置结构示例，实际配置仍保留原有 `platform`、`tools`、`binDirs`、`env`、`kaliVm` 和其他字段，不要用示例覆盖完整文件。读取旧版 `version:1` 不会立刻写盘；下次用户点击「保存」时才生成 v2 文件，且保留原字段。旧版本回退时仍能读取工具路径等字段。任务工具偏好仅影响推荐排序，**不会授权或执行程序**。
+
+「管理 → 环境适配 → 按任务选择工具」现在可以为每类任务选一个首选工具（或者「自动推荐」），保存后再次匹配。候选仅按真实本机路径、版本探针可用性、已保存偏好及既有路径来源优先级评分。UI 会显示推荐原因和分数；没有运行过版本探针时仍返回 `verification: not-run`。不存在的首选工具不会排挤已找到的其他工具。远端 WSL/Kali/Docker 在此阶段不会被推断成自动执行环境，也不会发生自动切换。
