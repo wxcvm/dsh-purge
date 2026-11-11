@@ -12,7 +12,7 @@ function z(n) { return (n < 10 ? '0' : '') + n; }
 function stamp() { var d = new Date(); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + 'T' + z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds()); }
 function log(m) { var f = fso.OpenTextFile(logPath, 8, true); f.WriteLine(stamp() + ' ' + m); f.Close(); }
 function samePath(a, b) { return String(a || '').replace(/\//g, '\\').toLowerCase() === String(b || '').replace(/\//g, '\\').toLowerCase(); }
-function pids() { var out = []; var e = new Enumerator(wmi.ExecQuery("SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = 'DeepSeek Harness.exe'")); for (; !e.atEnd(); e.moveNext()) { var p = e.item(); if (samePath(p.ExecutablePath, exe)) out.push(p.ProcessId); } return out; }
+function pids() { var out = []; var name = fso.GetFileName(exe).replace(/'/g, "''"); var e = new Enumerator(wmi.ExecQuery("SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = '" + name + "'")); for (; !e.atEnd(); e.moveNext()) { var p = e.item(); if (samePath(p.ExecutablePath, exe)) out.push(p.ProcessId); } return out; }
 function fileSize(fp) { if (!fso.FileExists(fp)) return -1; return fso.GetFile(fp).Size; }
 function fileStamp(fp) { if (!fso.FileExists(fp)) return ''; return String(fso.GetFile(fp).DateLastModified); }
 log('update-begin');
@@ -24,11 +24,14 @@ var deadline = new Date().getTime() + 20000;
 var left = list;
 while (new Date().getTime() < deadline) { left = pids(); if (left.length === 0) break; WScript.Sleep(200); }
 log('left ' + left.length);
+// Never start the installer while the exact installed executable is still running.
+if (left.length) { log('abort: desktop still running'); WScript.Quit(1); }
 var asar = resources + '\\app.asar';
 var bak = asar + '.bak';
 var appDir = resources + '\\app';
 var movedApp = false;
 var prev = '';
+var hadAsar = fso.FileExists(asar);
 if (fso.FolderExists(appDir)) {
   prev = appDir + '.dshpurge-prev';
   if (fso.FolderExists(prev)) prev = appDir + '.dshpurge-prev-' + (new Date().getTime());
@@ -37,14 +40,31 @@ if (fso.FolderExists(appDir)) {
     catch (moveErr) { log('move-app ' + (moveErr && moveErr.message ? moveErr.message : moveErr)); WScript.Sleep(250); }
   }
 }
+// A failed directory move must abort; otherwise NSIS can update one layout while
+// Electron starts the old patched resources/app on the next launch.
+if (fso.FolderExists(appDir)) {
+  log('abort: patched app directory could not be moved');
+  sh.Run('"' + exe + '"', 1, false);
+  WScript.Quit(1);
+}
 var copiedAsar = false;
 if (!fso.FileExists(asar) && fso.FileExists(bak)) {
   try { fso.CopyFile(bak, asar, true); copiedAsar = true; log('restored-asar'); }
   catch (restoreErr) { log('restore-asar ' + (restoreErr && restoreErr.message ? restoreErr.message : restoreErr)); }
 }
+if (!fso.FileExists(asar)) {
+  log('abort: no official app.asar available for update');
+  if (movedApp && fso.FolderExists(prev)) {
+    try { fso.MoveFolder(prev, appDir); log('restored-app'); }
+    catch (restoreDirErr) { log('restore-app ' + restoreDirErr); }
+  }
+  sh.Run('"' + exe + '"', 1, false);
+  WScript.Quit(1);
+}
 var exeBeforeSize = fileSize(exe);
 var exeBeforeStamp = fileStamp(exe);
 var asarBeforeSize = fileSize(asar);
+var asarBeforeStamp = fileStamp(asar);
 function runInstaller(updated) {
   var args = updated ? ' --updated /S /D=' : ' /S /D=';
   return sh.Run('"' + installer + '"' + args + installDir, 0, true);
@@ -52,29 +72,37 @@ function runInstaller(updated) {
 var code = runInstaller(true);
 log('installer ' + code);
 var exeChanged = fileSize(exe) !== exeBeforeSize || fileStamp(exe) !== exeBeforeStamp;
-var asarChanged = fileSize(asar) !== asarBeforeSize;
-var ok = exeChanged || asarChanged;
+var asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarBeforeStamp;
+var changed = exeChanged || asarChanged;
+var ok = code === 0 && changed && fso.FileExists(asar);
 log('changed exe=' + exeChanged + ' asar=' + asarChanged);
-if (!ok) {
+if (!changed && !ok) {
   code = runInstaller(false);
   log('installer-plain ' + code);
   exeChanged = fileSize(exe) !== exeBeforeSize || fileStamp(exe) !== exeBeforeStamp;
-  asarChanged = fileSize(asar) !== asarBeforeSize;
-  ok = exeChanged || asarChanged;
+  asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarBeforeStamp;
+  ok = code === 0 && (exeChanged || asarChanged) && fso.FileExists(asar);
   log('changed-plain exe=' + exeChanged + ' asar=' + asarChanged);
 }
 if (!ok) {
-  if (copiedAsar && fso.FileExists(asar)) {
-    try { fso.DeleteFile(asar, true); log('rehid-asar'); } catch (hideErr) { log('rehid-asar ' + hideErr); }
-  }
-  // A concurrent unpack helper may have recreated resources\app. On failure, move the patched dir back.
+  log('abort: installer exit=' + code + ' changed=' + changed);
+  // Do not recursively delete a directory recreated by another process.
   if (movedApp && prev && fso.FolderExists(prev)) {
     if (fso.FolderExists(appDir)) {
-      try { fso.DeleteFolder(appDir, true); log('cleared-recreated-app'); } catch (clearErr) { log('cleared-recreated-app ' + clearErr); }
+      var failedDir = appDir + '.dshpurge-failed-' + (new Date().getTime());
+      try { fso.MoveFolder(appDir, failedDir); log('preserved-recreated-app'); }
+      catch (clearErr) { log('preserve-recreated-app ' + clearErr); }
     }
     if (!fso.FolderExists(appDir)) {
-      try { fso.MoveFolder(prev, appDir); log('restored-app'); } catch (backErr) { log('restored-app ' + backErr); }
+      try { fso.MoveFolder(prev, appDir); log('restored-app'); }
+      catch (backErr) { log('restore-app ' + backErr); }
     }
+  }
+  // The pre-update layout used resources/app without app.asar. Restore it
+  // only after the original patched app is back, so a failed installer never
+  // leaves a missing entry point or silently boots an older sealed archive.
+  if (!hadAsar && fso.FolderExists(appDir) && fso.FileExists(asar)) {
+    try { fso.DeleteFile(asar, true); log('rehid-asar'); } catch (hideErr) { log('rehid-asar ' + hideErr); }
   }
   try { sh.Environment('PROCESS').Remove('ELECTRON_RUN_AS_NODE'); } catch (ignore) {}
   sh.Run('"' + exe + '"', 1, false);
