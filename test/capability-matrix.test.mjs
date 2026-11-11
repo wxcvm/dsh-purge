@@ -83,6 +83,8 @@ test('matrix discovery is read-only and never runs any remote tool version check
   assert.equal(katana.cells[1].status, 'not-checked')
   assert.equal(matrix.summary.localLocated, 1)
   assert.equal(matrix.summary.executed, 0)
+  assert.equal(matrix.topology.discoveredEnvironments, 2)
+  assert.equal(matrix.localDiagnostics.summary.located, 1)
 })
 
 test('an empty environment inventory never manufactures an execution environment', () => {
