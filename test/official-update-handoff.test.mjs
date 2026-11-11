@@ -9,12 +9,12 @@ const resources = 'C:\\Harness\\resources'
 const app = resources + '\\app'
 const asar = resources + '\\app.asar'
 const bak = asar + '.bak'
-const installer = 'C:\\Temp\\installer.exe'
+const installer = 'C:\\Temp\\deepseek-harness-0.2.2-rc.1-win-x64.exe'
 
-function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false } = {}) {
+function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false, staleVersion = false } = {}) {
   const dirs = new Set([resources, app])
   const files = new Map([
-    [exe, { size: 10, stamp: 1 }],
+    [exe, { size: 10, stamp: 1, version: '0.2.1-rc.5' }],
     [installer, { size: 20, stamp: 1 }],
   ])
   if (!noArchive) files.set(bak, { size: 30, stamp: 1 })
@@ -27,6 +27,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
     FileExists: name => files.has(name),
     FolderExists: name => dirs.has(name),
     GetFileName: name => name.split('\\').at(-1),
+    GetFileVersion: name => files.get(name)?.version || '',
     GetParentFolderName: name => name.slice(0, name.lastIndexOf('\\')),
     GetFile: name => {
       const f = files.get(name)
@@ -62,7 +63,10 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
         return 0
       }
       if (command.startsWith('"' + installer + '"')) {
-        if (changes) files.set(asar, { size: 40, stamp: 2 })
+        if (changes) {
+          files.set(asar, { size: 40, stamp: 2 })
+          if (!staleVersion) files.get(exe).version = '0.2.2-rc.1'
+        }
         if (autoRestart && installCode === 0) running = true
         return installCode
       }
@@ -181,4 +185,13 @@ test('handoff patch does not substitute installer.exe when verified pending meta
   assert.match(core, /desktop verified pending installer missing/)
   assert.match(core, /const infoPath = join\(cache,/)
   assert.match(core, /if \(existsSync\(infoPath\)\)/)
+})
+
+
+test('changed files do not count as an upgrade if executable version remains old', () => {
+  const run = simulate({ staleVersion: true })
+  assert.match(run.logs, /version before=0\.2\.1-rc\.5 target=0\.2\.2-rc\.1 after=0\.2\.1-rc\.5 match=false/)
+  assert.match(run.logs, /abort: installer exit=0 changed=true/)
+  assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), false)
+  assert.ok(run.dirs.has(app), 'keep previous patched host usable')
 })
