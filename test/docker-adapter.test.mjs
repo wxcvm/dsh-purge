@@ -127,3 +127,60 @@ test('actual host bridge, source UI and embedded client expose Docker discovery 
     assert.match(source, /显式验证版本/)
   }
 })
+
+
+test('malformed Docker rows do not block explicit probes of valid running containers', async () => {
+  const mixed = sample + 'not valid JSON\n'
+  const listed = await discoverDockerEnvironments({
+    execFileFn: (_cmd, _args, _opts, done) => done(null, mixed, ''),
+  })
+  assert.equal(listed.state, 'partial')
+  assert.equal(listed.ok, true)
+  assert.equal(listed.environments.length, 1)
+
+  let count = 0
+  const probe = await probeDockerTool(containerId, 'nmap', {
+    execFileFn: (cmd, args, opts, done) => {
+      count++
+      if (args[0] === 'ps') return done(null, mixed, '')
+      assert.deepEqual(args, ['exec', containerId, 'nmap', '--version'])
+      // Some tools write version output to stderr even on a successful exit.
+      done(null, '', 'Nmap version 7.99 from stderr\n')
+    },
+  })
+  assert.equal(count, 2)
+  assert.equal(probe.status, 'probe_verified')
+  assert.equal(probe.version, 'Nmap version 7.99 from stderr')
+  assert.equal(probe.capabilityVerified, false)
+  assert.equal(probe.executionStatus, 'not-run')
+})
+
+test('null JSON records and paused containers are not treated as running', () => {
+  const paused = JSON.stringify({
+    ID: 'b'.repeat(64), Names: 'paused-tools', Image: 'kali:tools',
+    State: 'running', Status: 'Up 1m (Paused)',
+  })
+  const parsed = parseDockerPs('null\n' + paused + '\n')
+  assert.equal(parsed.environments.length, 0)
+  assert.equal(parsed.rejected, 2)
+})
+
+test('WSL and Docker discovery are started concurrently without touching containers', async () => {
+  let finishWsl
+  let finishDocker
+  const discovering = discoverEnvironments({
+    platform: 'win32',
+    execFileFn: (_cmd, _args, _opts, done) => { finishWsl = done },
+    dockerExecFileFn: (_cmd, args, _opts, done) => {
+      assert.deepEqual(args, expectedList)
+      finishDocker = done
+    },
+  })
+  assert.equal(typeof finishWsl, 'function')
+  assert.equal(typeof finishDocker, 'function')
+  finishDocker(null, sample, '')
+  finishWsl(null, '', '')
+  const result = await discovering
+  assert.equal(result.providers.docker.state, 'listed')
+  assert.equal(result.environments.length, 2)
+})
