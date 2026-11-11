@@ -169,6 +169,23 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 
 AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRATION.md)。
 
+### `redteam_artex_knowledge_search`
+【本机只读】从 ARTEX 已安装的 `knowledge.db` 检索知识条目；与 Purge「资源 → ARTEX」复用同一检索模块。适合在核对产品、组件、CVE 或排错关键词时查阅既有记录，返回条目 ID、标题、分类、验证标记及摘要，不执行其中的脚本。
+
+参数：
+- `query` — 必填，产品 / 组件 / CVE / 技术关键词
+- `limit` — 可选，默认 10、最多 30（沿用知识库检索上限）
+
+无需先打开或绑定 DSH 靶标。支持 `ARTEX_KB_DIR`、`ARTEX_HOME/knowledge` 和默认的本机 ARTEX 知识库位置；不会复制数据库、调用 ARTEX 登录接口或自动运行测试。找不到本机知识库时返回明确的错误。返回的 `verified` 是 ARTEX 原记录的标记，不能推断当前 DSH 靶标已经验证。
+
+### `redteam_artex_knowledge_get`
+【本机只读】用上一步的知识条目 ID 读取全文和使用说明；返回文字仅作为来源资料，不触发执行，也不会创建漏洞或修改 DSH 得分。
+
+参数：
+- `id` — 必填，`redteam_artex_knowledge_search` 返回的正整数条目 ID
+
+用户可以在智能体会话中让它先搜索、再按条目 ID 读取；但这不是自动发现或执行漏洞的功能。运行于 DSH 的宿主必须能直接访问本机 ARTEX 知识库，单纯远程部署的数据库不能凭空读取。
+
 ### `redteam_cve_match`
 【离线只读】按现有 SQLite 资产的服务、指纹、产品与端口，或直接输入 CVE / 产品名，查找随包公开漏洞候选索引。只返回候选与原始资料链接，**不执行 PoC、不联网、不写漏洞库、不自动确认成功**。同产品命中不代表版本确实受影响。
 
