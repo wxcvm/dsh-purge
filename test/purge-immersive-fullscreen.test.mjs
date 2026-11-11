@@ -13,10 +13,21 @@ test('native Purge workspace can enter and leave real immersive fullscreen from 
   assert.match(client, /el\.requestFullscreen\(\)/)
   assert.match(client, /document\.exitFullscreen\(\)/)
   assert.match(client, /onClick: toggleImmersive/)
-  assert.match(client, /immersive \? "退出全屏" : "沉浸全屏"/)
+  assert.match(client, /immersive \? "退出系统全屏" : "系统全屏"/)
   assert.match(client, /ref: workspaceRef/)
   assert.match(client, /宿主不允许全屏/)
   assert.doesNotMatch(client, /useEffect\(\(\) => \{\s*el\.requestFullscreen\(\)/)
+})
+
+test('Purge fills the Harness viewport by default without a fullscreen click', () => {
+  const client = read('client.js')
+  assert.match(client, /const \[workspaceVisible, setWorkspaceVisible\] = useState\(true\)/)
+  assert.match(client, /data-default-full/)
+  assert.match(client, /position:fixed!important;inset:0!important;top:0!important;left:0!important/)
+  assert.match(client, /width:100vw!important;height:100vh!important;height:100dvh!important/)
+  assert.match(client, /return rd\.createPortal\(panel, document\.body\)/)
+  assert.match(client, /setWorkspaceVisible\(false\)/)
+  assert.match(client, /setWorkspaceVisible\(true\)/)
 })
 
 test('immersive workspace overrides the old max-size layout and stays dark', () => {
