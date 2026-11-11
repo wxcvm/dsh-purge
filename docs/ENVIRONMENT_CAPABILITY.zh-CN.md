@@ -108,3 +108,9 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 这只是局部配置结构示例，实际配置仍保留原有 `platform`、`tools`、`binDirs`、`env`、`kaliVm` 和其他字段，不要用示例覆盖完整文件。读取旧版 `version:1` 不会立刻写盘；下次用户点击「保存」时才生成 v2 文件，且保留原字段。旧版本回退时仍能读取工具路径等字段。任务工具偏好仅影响推荐排序，**不会授权或执行程序**。
 
 「管理 → 环境适配 → 按任务选择工具」现在可以为每类任务选一个首选工具（或者「自动推荐」），保存后再次匹配。候选仅按真实本机路径、版本探针可用性、已保存偏好及既有路径来源优先级评分。UI 会显示推荐原因和分数；没有运行过版本探针时仍返回 `verification: not-run`。不存在的首选工具不会排挤已找到的其他工具。远端 WSL/Kali/Docker 在此阶段不会被推断成自动执行环境，也不会发生自动切换。
+
+## ARTEX 本机能力来源（不属于远端执行环境）
+
+在「环境适配 → 发现本机、WSL 与 Docker」的结果里新增 `providers.artex`，固定来源标识 `artex:local`。它只根据当前 ARTEX 工具目录位置查找 ARTEX Tool Manager 已安装的七项本机工具，返回路径、发现时间和来源状态；不会探测 ARTEX HTTP 健康接口，也不会读取 ARTEX 账号/Token/配置/数据库。
+
+`artex:local` 的 `kind=binary-source`、`executionEnvironmentId=local`；不列为第 5 个可执行环境。发现一个文件只返回 `located`，`online=null`、`capabilityVerified=false`、`executionStatus=not-run`，独立于 ARTEX 服务在线与否。既有本机工具查找仍以显式路径、工具箱、binDirs 和 PATH 为优先，ARTEX 依然是最后的本地回退来源。
