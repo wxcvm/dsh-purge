@@ -109,6 +109,73 @@
 
 **Windows 小提示：** 本机可执行程序可能是 `.exe`，Kali/Linux 下的程序、shell 脚本及路径不能直接当成 Windows 可执行程序。路径必须对应正在运行 DSH 的那一台机器/虚拟机，不能直接填另一设备的本地路径。
 
+## 五（补充）、多环境的作用与 VPS 配置方法
+
+### 每种环境负责什么？
+
+| 环境 / 来源 | 主要用途 | 当前作用与配置方法 |
+| --- | --- | --- |
+| **Windows 本机** | 运行 Harness/DSH、管理工具路径与本机执行器 | 在「环境适配」配置工具目录；找到文件不等于通过版本验证 |
+| **WSL** | Windows 中使用 Linux/Bash 工具 | 自行安装发行版；发现已注册的 WSL 后可以显式验证工具版本（可能唤醒发行版） |
+| **VMware Kali SSH** | 独立的 Kali/Linux 工具环境 | 配置可访问的 VM 地址、用户及密钥，手动检查 SSH 身份与工具版本；不会自动启动 VM |
+| **Docker** | 已运行容器内的 Linux 工具或特定依赖 | 自行准备 Docker 和容器；发现当前 Docker context 的运行容器，手动运行固定版本探针；不会拉取镜像 |
+| **ARTEX** | 复用本机已有的工具文件 | **只是本机工具路径来源**，不是独立执行环境，也不证明 ARTEX 服务在线 |
+| **VPS** | 公网 SSH 连接、远程服务部署及经授权任务的网络中转 | 需要自行配置公网主机及 SSH 密钥；**目前不是**自动跨环境执行或扫描节点 |
+
+关键区别：环境发现、工具路径定位、工具版本探测、依赖验证和真实任务执行，属于不同状态。能力矩阵不把“已发现”误写成“可执行”，不把版本命令算作目标扫描。
+
+### VPS 各字段填写方法
+
+打开「管理 → 环境适配 → 可选外部测绘资源与 VPS」：
+
+| 字段 | 示例与用途 |
+| --- | --- |
+| FOFA API Key | 无需使用 FOFA 就留空；与 VPS SSH 无关 |
+| SSH 用户名 | `root`、`ubuntu` 或服务商指定的用户名；与主机地址分开 |
+| 域名 | `vps.example.com`；推荐给它配置 A（IPv4）及 AAAA（IPv6）DNS 记录 |
+| IPv4 | `192.0.2.10`；只填写地址，不写用户名或端口 |
+| IPv6 | `2001:db8::10`；只填写 IPv6 地址，不加 `[]`、端口或协议 |
+| 优先地址 | 自动（域名 → IPv4 → IPv6）、只用域名、只用 IPv4、只用 IPv6 |
+| SSH 私钥文件路径 | 如 `C:\Users\me\.ssh\id_ed25519`；必须是本机实际存在的文件路径，**不是私钥正文** |
+
+示例 IPv4/IPv6 和域名是文档保留地址，不能直接连接；请替换为 VPS 实际地址。部分服务器禁用 root 直接 SSH，应使用服务商提供的登录用户。
+
+**双栈说明：** 自动模式只选择优先使用哪个已填写地址，**不会在两个 IP 字面量之间自动故障切换**。若域名同时设置 A 和 AAAA 记录，SSH 与操作系统可以按照 DNS 和网络环境选择 IPv4/IPv6；并非保证每个客户端都有完备故障切换能力。
+
+Windows PowerShell 验证步骤：
+
+```powershell
+# 1. 私钥文件是否存在？
+Test-Path "C:\Users\me\.ssh\id_ed25519"
+
+# 2. 用域名连接 VPS
+ssh -i "C:\Users\me\.ssh\id_ed25519" root@vps.example.com
+
+# 3. 强制 IPv4 或 IPv6，检查两种连通性
+ssh -4 -i "C:\Users\me\.ssh\id_ed25519" -l root 192.0.2.10
+ssh -6 -i "C:\Users\me\.ssh\id_ed25519" -l root 2001:db8::10
+
+# 4. 域名双栈记录
+Resolve-DnsName vps.example.com -Type A
+Resolve-DnsName vps.example.com -Type AAAA
+```
+
+如果 `Test-Path` 返回 `False`，需要先确认私钥确实存在，并把对应公钥配置到 VPS 允许登录的账户。首次连接需要核对服务器的 SSH 主机指纹。SSH 连接成功才代表密钥及网络基本可用，保存配置本身不等于已登录。
+
+**IPv6 格式：** SSH 可使用 `ssh -6 -l root 2001:db8::10`；HTTP URL 则必须加方括号，例如 `http://[2001:db8::10]:9100/`。HTTP/FRP/Chisel 服务地址不能直接使用 `root@host`，否则 URL 与主机解析可能出错。
+
+### 旧配置与配置来源的区别
+
+- 老配置 `REDTEAM_VPS_HOST=root@192.0.2.10` 可以读取；新界面会拆成 SSH 用户 `root` 和纯主机 IPv4。保存后供旧接口使用的变量为 `REDTEAM_VPS_HOST=192.0.2.10`、`REDTEAM_VPS_USER=root` 以及私钥路径 `REDTEAM_VPS_KEY`。
+- 新界面保存到 `$DSH_HOME/redteam/config.json`；旧 Linux `redteam-setup.sh` 可能写入 `$DSH_HOME/.env`。如果两处值不同，实际生效值要看环境变量来源及优先级。
+- 已存在的进程环境变量、`.env` 可能优先于界面里的配置，因此若仍然连接旧 VPS，请先检查这三项变量。**不要把 API Key、私钥正文复制到日志或截图。**
+- Linux 旧脚本现在会识别旧的 `user@host`，避免拼成 `user@user@host`；新脚本输入拆分为纯主机和用户。
+- VPS 与 VMware Kali 是两套独立配置：前者是公网基础设施，后者是可选的 SSH 工具环境。配置 VPS **不会自动创建密钥、修改防火墙、开启监听服务或执行扫描**。
+
+配置完成后先点击「保存」，再点「刷新」确认设置仍然存在；使用 PowerShell 单独验证 SSH，WSL、Kali VM、Docker 的工具可用性则在环境面板分别显式验证。
+
+---
+
 ## 六、低干扰与隐私设置
 
 在「管理 → 低干扰」可以选择以下设置。保存到原有 `$DSH_HOME/redteam/config.json` 的 `scanPreferences`，只影响后续 `redteam_scan_run`；默认维持既有行为。

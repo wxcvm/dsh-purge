@@ -382,7 +382,21 @@ fi
 # --- VPS（反弹 Shell 落地与中转） ---
 VPS_KEY_NOW="$(cur_env REDTEAM_VPS_KEY)";   VPS_KEY_NOW="${VPS_KEY_NOW:-$TK/vps/id_rsa}"
 VPS_HOST_NOW="$(cur_env REDTEAM_VPS_HOST)"
-VPS_USER_NOW="$(cur_env REDTEAM_VPS_USER)"; VPS_USER_NOW="${VPS_USER_NOW:-ubuntu}"
+VPS_USER_NOW="$(cur_env REDTEAM_VPS_USER)"
+# 旧配置可能写成 user@host；新界面把 SSH 用户与纯主机地址分开。
+# 只在 REDTEAM_VPS_USER 没有显式指定时使用旧格式中的用户。
+case "$VPS_HOST_NOW" in
+  *@*)
+    LEGACY_USER="${VPS_HOST_NOW%%@*}"
+    VPS_HOST_NOW="${VPS_HOST_NOW#*@}"
+    VPS_USER_NOW="${VPS_USER_NOW:-$LEGACY_USER}"
+    ;;
+esac
+# SSH 使用原始 IPv6 字面量；仅旧用户输入的 [IPv6] 需要去掉方括号。
+case "$VPS_HOST_NOW" in
+  \[*\]) VPS_HOST_NOW="${VPS_HOST_NOW#?}"; VPS_HOST_NOW="${VPS_HOST_NOW%?}" ;;
+esac
+VPS_USER_NOW="${VPS_USER_NOW:-ubuntu}"
 say ""
 if [ -f "$VPS_KEY_NOW" ]; then
   # 主机地址没配时（只有私钥、没有 user@host），技能里的 $REDTEAM_VPS_HOST 会解析成空
@@ -412,11 +426,13 @@ elif [ ! -f "$VPS_KEY_NOW" ]; then
   warn "未找到 VPS 私钥（$VPS_KEY_NOW）—— 反弹 Shell 落地能力不可用"
   dim "需要一台公网 VPS（用于接收反弹 Shell、中转载荷、做隧道出口）"
   if [ "$CHECK_ONLY" != 1 ]; then
-    NEW_HOST="$(ask 'VPS 登录地址（user@ip）' 'ubuntu@')"
+    NEW_HOST="$(ask 'VPS 主机 IP/IPv6/域名（不含用户）' '')"
+    NEW_USER="$(ask 'VPS SSH 用户名' "$VPS_USER_NOW")"
     NEW_KEY="$(ask 'VPS 私钥路径' "$TK/vps/id_rsa")"
-    if [ -n "$NEW_HOST" ] && [ -f "$NEW_KEY" ]; then
-      env_set REDTEAM_VPS_HOST "$NEW_HOST"; env_set REDTEAM_VPS_KEY "$NEW_KEY"
-      ok "VPS 登录方式已记录（$NEW_HOST）"
+    if [ -n "$NEW_HOST" ] && [ -n "$NEW_USER" ] && [ -f "$NEW_KEY" ]; then
+      env_set REDTEAM_VPS_HOST "$NEW_HOST"; env_set REDTEAM_VPS_USER "$NEW_USER"
+      env_set REDTEAM_VPS_KEY "$NEW_KEY"
+      ok "VPS 登录方式已记录（$NEW_USER@$NEW_HOST）"
       dim "把私钥放到 $NEW_KEY 并 chmod 600；或告知我们由你手动配置"
     else
       warn "已跳过 VPS 配置（无 VPS 时只能做不需要落地的成果：账号、数据、未授权）"

@@ -150,3 +150,24 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 API 返回 `environments`、`providers`、`rows`（每个工具的 `cells`）和 `summary`；原有 `platformTaskPlan`、`environmentDiscover`、`wslToolProbe`、`kaliVmToolProbe`、`dockerToolProbe` 不变。这一步没有配置文件迁移，也没有新的强制门禁。
 
 真正的依赖验证（例如 Bash/OpenSSL、浏览器、Samba 协议环境）和跨环境任务执行需要单独的实现与实机验收，不应由矩阵推断。
+
+
+## 附录：VPS 双栈与执行环境角色
+
+- **Windows 本机**是 Harness/DSH 当前运行的环境，负责本机工具路径发现、版本探测及既有扫描的真实执行记录。
+- **WSL** 是 Windows 下的 Linux 环境，适合 Bash 等 Unix 工具；只读发现发行版，显式探针可能启动已停止的发行版。
+- **VMware Kali SSH** 是独立虚拟机；保存 SSH 连接信息不等于已经上线，明确点击后才读取系统发行版或工具版本。
+- **Docker** 对已运行容器提供隔离的 Linux 工具环境；当前只列举运行中的容器，用户显式触发才运行容器内版本命令。
+- **ARTEX** 只是本机工具文件的额外来源，不是第五个执行环境。
+- **公网 VPS** 为需要公网服务/SSH 的任务提供基础设施；当前只是可选连接配置，不会自动作为能力矩阵的任务执行节点。
+
+### VPS 配置字段的意义
+
+新「环境适配 → 可选外部测绘资源与 VPS」将 SSH 用户名、DNS 域名、IPv4、IPv6、地址选择方式和私钥**路径**分开保存，兼容旧的 `REDTEAM_VPS_HOST` 与 `REDTEAM_VPS_KEY`。
+
+- **域名 + A / AAAA** 是双栈推荐方式。`addressMode=auto` 先选域名，其次 IPv4、最后 IPv6；它是地址**优先级**，不是对两组 IP 的自动重连和故障切换机制。
+- SSH 使用 `user@host` 形式，HTTP URL 中 IPv6 使用 `http://[2001:db8::10]:端口/`。旧 `root@192.0.2.10` 可拆分为用户 `root` 与主机 `192.0.2.10`，新保存的 `REDTEAM_VPS_HOST` 是不带用户名的主机地址。
+- 新界面保存到 `$DSH_HOME/redteam/config.json`，旧 `redteam-setup.sh` 主要读写 `$DSH_HOME/.env`；进程环境变量或旧 `.env` 可能优先于界面值。修改之后应在真实 Windows 中执行 SSH 连通性验证。
+- 私钥字段只保存文件路径，不复制私钥内容。配置 VPS 不代表密钥已经授权，也不代表远端服务已启动。
+
+**完整的逐项填写示例、PowerShell 的 IPv4/IPv6 连接命令及环境用途对照表，见《作战台：从零开始的详细操作指南》“五（补充）、多环境的作用与 VPS 配置方法”。**
