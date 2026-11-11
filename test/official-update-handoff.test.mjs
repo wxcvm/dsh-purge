@@ -83,7 +83,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
     },
   }
   const context = {
-    ActiveXObject: name => name === 'Scripting.FileSystemObject' ? fso : shell,
+    ActiveXObject: function (name) { return name === 'Scripting.FileSystemObject' ? fso : shell },
     GetObject: () => wmi,
     Enumerator,
     Date: FakeDate,
