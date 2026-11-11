@@ -8061,6 +8061,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [wslSelectedTool, setWslSelectedTool] = React.useState('nmap')
       const [wslChecks, setWslChecks] = React.useState({})
       const [wslChecking, setWslChecking] = React.useState(null)
+      const [kaliCheck, setKaliCheck] = React.useState(null)
+      const [kaliToolCheck, setKaliToolCheck] = React.useState(null)
+      const [kaliBusy, setKaliBusy] = React.useState('')
+      const [kaliToolId, setKaliToolId] = React.useState('nmap')
 
       const applyDraftFrom = (r) => {
         const c = (r && r.config) || {}
@@ -8071,6 +8075,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           binDirsText: (c.binDirs || []).join('\n'),
           tools: Object.assign({}, c.tools || {}),
           customTools: Array.isArray(c.customTools) ? c.customTools.map((t) => ({ name: t.name || '', path: t.path || '' })) : [],
+          kaliVm: Object.assign({ host: '', user: 'kali', port: 22, identityFile: '' }, c.kaliVm || {}),
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
         })
@@ -8100,6 +8105,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           binDirs: String(draft.binDirsText || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean),
           tools: draft.tools,
           customTools: draft.customTools || [],
+          kaliVm: draft.kaliVm,
           env: draft.env,
           notes: draft.notes,
           envAdaptConfigured: true,
@@ -8188,6 +8194,31 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }))
         })
       }
+      const setKaliVmField = (field, value) => setDraft((d) => d ? {
+        ...d, kaliVm: Object.assign({}, d.kaliVm, { [field]: value }),
+      } : d)
+      const inspectKali = () => {
+        if (busy || kaliBusy) return
+        setKaliBusy('identity'); setKaliCheck(null)
+        api({ op: 'kaliVmInspect' }).then((result) => {
+          setKaliBusy('')
+          setKaliCheck(result || { ok: false, error: 'SSH 检测无响应' })
+        }, (error) => {
+          setKaliBusy('')
+          setKaliCheck({ ok: false, error: String((error && error.message) || error) })
+        })
+      }
+      const probeKaliTool = () => {
+        if (busy || kaliBusy) return
+        setKaliBusy('tool'); setKaliToolCheck(null)
+        api({ op: 'kaliVmToolProbe', id: kaliToolId }).then((result) => {
+          setKaliBusy('')
+          setKaliToolCheck(result || { ok: false, error: '工具探针无响应' })
+        }, (error) => {
+          setKaliBusy('')
+          setKaliToolCheck({ ok: false, error: String((error && error.message) || error) })
+        })
+      }
       const setTool = (id, value) => setDraft((d) => d ? Object.assign({}, d, { tools: Object.assign({}, d.tools, { [id]: value }) }) : d)
       const setEnv = (key, value) => setDraft((d) => d ? Object.assign({}, d, { env: Object.assign({}, d.env, { [key]: value }) }) : d)
       const addCustomTool = () => setDraft((d) => d ? { ...d, customTools: (d.customTools || []).concat({ name: '', path: '' }) } : d)
@@ -8257,7 +8288,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('span', { style: { fontWeight: 600 } }, item.label),
                 h('span', { style: { marginLeft: 8, opacity: 0.75 } },
                   item.kind === 'wsl' ? ((item.state || 'unknown') + ' · WSL ' + (item.wslVersion || '?'))
-                    : '当前主机'),
+                    : item.kind === 'ssh' ? 'SSH 已配置 · 未连接' : '当前主机'),
                 item.kind === 'wsl' ? h('div', { style: { marginTop: 5 } },
                   h('select', {
                     className: 'rt-input', value: wslSelectedTool, style: { maxWidth: 170, marginRight: 6 },
@@ -8282,6 +8313,48 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 ? environmentSnapshot.providers.wsl.note : '')
               + ' 显式版本检测可能启动已停止的 WSL 发行版；成功也不代表执行过目标任务。'))
             : null),
+        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'VMware Kali · SSH 环境'),
+          h('div', { style: { opacity: 0.85, marginBottom: 8 } },
+            '填写 Kali 虚拟机的 SSH 地址，保存后才能检测。只保存地址、用户、端口与私钥文件路径；不保存密码或私钥内容。'),
+          draft && draft.kaliVm ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 } },
+            [
+              { key: 'host', label: '主机 IP / SSH 别名', hint: '例如 192.168.56.101' },
+              { key: 'user', label: 'SSH 用户名', hint: 'kali' },
+              { key: 'port', label: '端口', hint: '22' },
+              { key: 'identityFile', label: '私钥文件路径（可留空使用 ssh-agent）', hint: '例如 C:\\Users\\me\\.ssh\\id_ed25519' },
+            ].map((item) => h('label', { key: item.key, style: { fontSize: 11.5 } },
+              item.label,
+              h('input', {
+                className: 'rt-input',
+                style: { display: 'block', width: '100%', marginTop: 3 },
+                placeholder: item.hint,
+                value: draft.kaliVm[item.key] == null ? '' : String(draft.kaliVm[item.key]),
+                onChange: (e) => setKaliVmField(item.key, e.target.value),
+              })))) : null,
+          h('div', { style: { marginTop: 8, opacity: 0.8, fontSize: 11.5 } },
+            '先点击右上角「保存」。首次连接须在终端人工核对 SSH 主机指纹；这里不会自动接受未知指纹。'),
+          h('div', { style: { marginTop: 8, display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' } },
+            h('button', { type: 'button', className: 'rt-btn', disabled: busy || !!kaliBusy,
+              onClick: inspectKali }, kaliBusy === 'identity' ? '连接检测中…' : '检查 SSH / Kali 身份'),
+            h('select', {
+              className: 'rt-input', style: { maxWidth: 160 }, value: kaliToolId,
+              onChange: (e) => { setKaliToolId(e.target.value); setKaliToolCheck(null) },
+            }, tools.filter((t) => t.canProbe).map((t) =>
+              h('option', { key: t.id, value: t.id }, t.label))),
+            h('button', { type: 'button', className: 'rt-btn',
+              disabled: busy || !!kaliBusy, onClick: probeKaliTool },
+              kaliBusy === 'tool' ? '版本检测中…' : '验证 Kali 工具版本')),
+          kaliCheck ? h('div', { style: { marginTop: 7, fontSize: 11.5 } },
+            kaliCheck.ok ? '连接成功：' + (kaliCheck.distro && kaliCheck.distro.name || 'Linux')
+              + (kaliCheck.state === 'kali-verified' ? ' · Kali 已确认' : ' · 非 Kali Linux')
+              : '连接未通过：' + (kaliCheck.error || kaliCheck.state)) : null,
+          kaliToolCheck ? h('div', { style: { marginTop: 6, fontSize: 11.5 } },
+            kaliToolCheck.status === 'probe_verified'
+              ? '远端版本命令成功：' + (kaliToolCheck.version || '无版本输出')
+              : '工具版本检测未通过：' + (kaliToolCheck.error || kaliToolCheck.status)) : null,
+          h('div', { style: { opacity: 0.75, fontSize: 11.5, marginTop: 7 } },
+            '连接检查只读取 /etc/os-release；工具检测仅执行内置版本参数，不运行目标扫描。')),
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '整包文件夹 → 自动分配工具'),
           h('div', { style: { marginBottom: 8, opacity: 0.9 } },
