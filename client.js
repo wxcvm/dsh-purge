@@ -11485,6 +11485,25 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			useEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
 			const [page, setPage] = useState(purgeWorkspaceBus.page);
 			const [workspaceVisible, setWorkspaceVisible] = useState(true);
+			// Desktop's Windows preload observes body.style and re-colors Electron's
+			// native caption overlay from these two palette tokens.
+			useEffect(() => {
+				if (!workspaceVisible || !document.body || !document.documentElement.hasAttribute("data-windows-titlebar")) return;
+				const style = document.body.style;
+				const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
+				const previous = palette.map(([name, color]) => ({
+					name, color, value: style.getPropertyValue(name), priority: style.getPropertyPriority(name),
+				}));
+				for (const { name, color } of previous) style.setProperty(name, color);
+				return () => {
+					for (const { name, color, value, priority } of previous) {
+						// Don't overwrite a newer host theme written while Purge was open.
+						if (style.getPropertyValue(name).trim() !== color) continue;
+						if (value) style.setProperty(name, value, priority);
+						else style.removeProperty(name);
+					}
+				};
+			}, [workspaceVisible]);
 			const workspaceRef = useRef(null);
 			const [immersive, setImmersive] = useState(false);
 			const [fullscreenError, setFullscreenError] = useState("");
