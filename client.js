@@ -8072,8 +8072,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [dockerBusy, setDockerBusy] = React.useState(null)
       const [kaliCheck, setKaliCheck] = React.useState(null)
       const [kaliToolCheck, setKaliToolCheck] = React.useState(null)
+      const [kaliProbeResults, setKaliProbeResults] = React.useState({})
       const [kaliBusy, setKaliBusy] = React.useState('')
       const [kaliToolId, setKaliToolId] = React.useState('nmap')
+      const [capabilityMatrix, setCapabilityMatrix] = React.useState(null)
+      const [matrixBusy, setMatrixBusy] = React.useState(false)
+      const [matrixError, setMatrixError] = React.useState('')
+      const [matrixGroup, setMatrixGroup] = React.useState('all')
+      const [matrixQuery, setMatrixQuery] = React.useState('')
 
       const applyDraftFrom = (r) => {
         const c = (r && r.config) || {}
@@ -8097,6 +8103,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         api({ op: 'platformConfigGet' }).then((r) => {
           setBusy(false)
           setToolChecks({})
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setTaskPlan(null)
           if (!r || r.ok === false) { setErr((r && r.error) || '读取失败'); return }
           setErr(null); setData(r)
@@ -8127,6 +8135,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '保存失败' }); return }
           setData(r)
           setToolChecks({})
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setTaskPlan(null)
           setMsg({ ok: '已保存到 '  + ((r.config && r.config.path) || '$DSH_HOME/redteam/config.json') })
           applyDraftFrom(r)
@@ -8142,6 +8152,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '自动分配失败' }); return }
           setData(r)
           setToolChecks({})
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setTaskPlan(null)
           applyDraftFrom(r)
           setMsg({
@@ -8185,6 +8197,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             return
           }
           setEnvironmentSnapshot(result)
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setWslChecks({})
           setDockerResults({})
         }, (error) => {
@@ -8222,6 +8236,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }))
         })
       }
+      const loadCapabilityMatrix = () => {
+        if (busy || environmentBusy || matrixBusy || wslChecking || dockerBusy || kaliBusy) return
+        setMatrixBusy(true); setMatrixError('')
+        api({ op: 'environmentCapabilityMatrix' }).then((result) => {
+          setMatrixBusy(false)
+          if (!result || result.ok === false) {
+            setMatrixError((result && result.error) || '能力矩阵读取失败')
+            return
+          }
+          // This is a new discovery snapshot; old probe results may belong to
+          // a different Docker context or a changed SSH/WSL environment.
+          setCapabilityMatrix(result)
+          setEnvironmentSnapshot(result)
+          setToolChecks({})
+          setWslChecks({})
+          setDockerResults({})
+          setKaliToolCheck(null)
+          setKaliProbeResults({})
+        }, (error) => {
+          setMatrixBusy(false)
+          setMatrixError(String((error && error.message) || error))
+        })
+      }
       const setKaliVmField = (field, value) => setDraft((d) => d ? {
         ...d, kaliVm: Object.assign({}, d.kaliVm, { [field]: value }),
       } : d)
@@ -8238,13 +8275,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       const probeKaliTool = () => {
         if (busy || kaliBusy) return
+        const id = kaliToolId
         setKaliBusy('tool'); setKaliToolCheck(null)
-        api({ op: 'kaliVmToolProbe', id: kaliToolId }).then((result) => {
+        api({ op: 'kaliVmToolProbe', id }).then((result) => {
           setKaliBusy('')
-          setKaliToolCheck(result || { ok: false, error: '工具探针无响应' })
+          const check = result || { ok: false, error: '工具探针无响应' }
+          setKaliToolCheck(check)
+          setKaliProbeResults((prev) => Object.assign({}, prev, { [id]: check }))
         }, (error) => {
           setKaliBusy('')
-          setKaliToolCheck({ ok: false, error: String((error && error.message) || error) })
+          const check = { ok: false, error: String((error && error.message) || error) }
+          setKaliToolCheck(check)
+          setKaliProbeResults((prev) => Object.assign({}, prev, { [id]: check }))
         })
       }
       const setTool = (id, value) => setDraft((d) => d ? Object.assign({}, d, { tools: Object.assign({}, d.tools, { [id]: value }) }) : d)
@@ -8278,6 +8320,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const filteredTools = tools.filter((t) =>
         (toolGroup === 'all' || t.group === toolGroup) &&
         [t.id, t.label, ...(t.names || [])].join(' ').toLowerCase().includes(toolSearch.trim().toLowerCase()))
+      const probeResultForCell = (cell) => {
+        const environment = capabilityMatrix && capabilityMatrix.environments.find((item) => item.id === cell.environmentId)
+        if (!environment) return null
+        if (environment.id === 'local') return toolChecks[cell.toolId] || null
+        if (environment.kind === 'wsl') return wslChecks[environment.distro + ':' + cell.toolId] || null
+        if (environment.kind === 'docker') return dockerResults[environment.containerId + ':' + cell.toolId] || null
+        if (environment.kind === 'ssh') return kaliProbeResults[cell.toolId] || null
+        return null
+      }
+      const matrixCellStatus = (cell) => {
+        const probe = probeResultForCell(cell)
+        if (!probe) return cell.status
+        if (probe.status === 'runnable' || probe.status === 'probe_verified') return 'probe_verified'
+        if (probe.status === 'path-only') return 'located'
+        if (probe.status === 'missing') return 'missing'
+        return 'degraded'
+      }
+      const matrixStatusLabels = {
+        located: '已定位', missing: '未定位', 'not-checked': '未检查',
+        probe_verified: '版本已验证', degraded: '验证未通过',
+      }
       const defaultToolkit = (data && data.toolkitDir) || '$DSH_HOME/redteam/toolkit'
       const defaultNuclei = (data && data.nucleiTemplatesDir) || (defaultToolkit + '/nuclei-templates')
 
@@ -8298,6 +8361,64 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           adapt.message
             || '均可选填：留空则用默认路径/自动查找。填了的覆盖默认。密钥类只在需要测绘/反弹时才填。'),
+        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '跨环境工具能力矩阵'),
+          h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
+            '对比本机、WSL、Kali SSH 与 Docker 的 23 项内置工具。本机仅定位路径；远端默认未检查。读取矩阵不会自动验证版本或执行任务。'),
+          h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
+            disabled: busy || environmentBusy || matrixBusy || !!wslChecking || !!dockerBusy || !!kaliBusy,
+            onClick: loadCapabilityMatrix },
+            matrixBusy ? '正在生成矩阵…' : '生成 / 刷新能力矩阵'),
+          matrixError ? h('div', { className: 'rt-err', style: { marginTop: 7 } }, matrixError) : null,
+          capabilityMatrix ? h('div', { style: { marginTop: 9 } },
+            h('div', { style: { fontSize: 11.5, marginBottom: 8 } },
+              '环境 ' + capabilityMatrix.environments.length
+              + ' · 内置工具 ' + capabilityMatrix.rows.length
+              + ' · 本机定位 ' + capabilityMatrix.summary.localLocated
+              + ' · 远端版本检测：按需执行'),
+            h('div', { style: { display: 'flex', gap: 7, marginBottom: 7, flexWrap: 'wrap' } },
+              h('input', { className: 'rt-input', style: { flex: '1 1 160px' },
+                value: matrixQuery, placeholder: '搜索工具',
+                onChange: (e) => setMatrixQuery(e.target.value) }),
+              h('select', { className: 'rt-input', style: { flex: '1 1 140px' },
+                value: matrixGroup, onChange: (e) => setMatrixGroup(e.target.value) },
+                h('option', { value: 'all' }, '全部工具类别'),
+                toolGroups.map((group) => h('option', { key: group.id, value: group.id }, group.title)))),
+            h('div', { style: { overflowX: 'auto', maxWidth: '100%' }, role: 'region',
+              'aria-label': '工具能力矩阵表' },
+              h('table', { style: { borderCollapse: 'collapse', fontSize: 11.5, width: '100%' } },
+                h('thead', null, h('tr', null,
+                  h('th', { style: { textAlign: 'left', padding: 6, minWidth: 105 } }, '工具'),
+                  capabilityMatrix.environments.map((environment) =>
+                    h('th', { key: environment.id, title: environment.label,
+                      style: { textAlign: 'left', padding: 6, minWidth: 110, maxWidth: 175,
+                        overflowWrap: 'anywhere' } }, environment.label)))),
+                h('tbody', null,
+                  capabilityMatrix.rows.filter((row) =>
+                    (matrixGroup === 'all' || row.group === matrixGroup)
+                    && (row.label + ' ' + row.toolId).toLowerCase().includes(matrixQuery.trim().toLowerCase()))
+                    .map((row) => h('tr', { key: row.toolId,
+                      style: { borderTop: '1px solid var(--dsw-alias-border-l1)' } },
+                      h('th', { scope: 'row', style: { textAlign: 'left', padding: 6 },
+                        title: row.dependencyNote || '' }, row.label),
+                      row.cells.map((cell) => {
+                        const status = matrixCellStatus(cell)
+                        const result = probeResultForCell(cell)
+                        return h('td', { key: cell.environmentId, style: { padding: 6 },
+                          title: result?.version || result?.error || cell.path || (
+                            cell.sourceProviderId === 'artex:local' ? 'ARTEX 本机来源' : '未验证工具或依赖') },
+                          h('span', { className: 'rt-tag'
+                            + (status === 'probe_verified' ? ' rt-tag-live'
+                              : status === 'degraded' || status === 'missing' ? ' rt-tag-warn' : '') },
+                            matrixStatusLabels[status] || status),
+                          cell.sourceProviderId === 'artex:local'
+                            ? h('div', { style: { opacity: 0.75, marginTop: 3 } }, 'ARTEX 来源') : null)
+                      })))))),
+            h('div', { style: { fontSize: 11, opacity: 0.75, marginTop: 8 } },
+              '可使用下方各环境已有的版本验证按钮；结果仅保留于当前页面。'
+              + ' 已定位 ≠ 可运行；版本已验证 ≠ 依赖齐全或任务已执行。ARTEX 是本机来源，不是独立执行环境。'))
+            : h('div', { style: { fontSize: 11.5, opacity: 0.7, marginTop: 7 } },
+              '尚未生成矩阵；请点击上方按钮进行只读环境发现。')),
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.65 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '执行环境发现 · Windows / WSL / Docker'),
           h('div', { style: { opacity: 0.85, marginBottom: 7 } },
