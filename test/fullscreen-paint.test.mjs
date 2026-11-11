@@ -31,3 +31,14 @@ test('source and embedded client use exactly the same full view CSS', () => {
   assert.match(source, /function EnvTab\(props\)/)
   assert.match(bundled, /function EnvTab\(props\)/)
 })
+
+
+test('embedded environment uses one scrolling pane and opaque non-blurred cards', () => {
+  for (const file of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(src, /return h\('div', \{ className: 'rt-main rt-env-main' \},/)
+    assert.match(src, /\.rt-dock\.rt-embedded \.rt-env-main\{overflow:hidden!important;min-height:0\}/)
+    assert.match(src, /\.rt-dock\.rt-embedded \.rt-env-main>\.rt-pane\{[\s\S]*?overflow-y:auto!important;/)
+    assert.match(src, /\.rt-dock\.rt-embedded \.rt-env-main \.rt-card\{[\s\S]*?background:#18283d!important;[\s\S]*?backdrop-filter:none!important;-webkit-backdrop-filter:none!important;/)
+  }
+})
