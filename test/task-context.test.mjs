@@ -187,10 +187,14 @@ test('missing ARTEX knowledge does not block existing task context', (t) => {
     if (prev === undefined) delete process.env.ARTEX_KB_DIR
     else process.env.ARTEX_KB_DIR = prev
   })
+  const originalGet = store.getAsset.bind(store)
+  store.getAsset = (engagement, id) => {
+    const row = originalGet(engagement, id)
+    return row ? { ...row, fingerprints: [] } : row
+  }
   const asset = taskContext(store, 'lab', 'asset #5')
   assert.equal(asset.ok, true)
   assert.equal(asset.artex_knowledge.status, 'no-keyword')
-  const originalGet = store.getAsset.bind(store)
   store.getAsset = (engagement, id) => {
     const row = originalGet(engagement, id)
     return row ? { ...row, fingerprints: [{ product: 'Grafana' }] } : row
