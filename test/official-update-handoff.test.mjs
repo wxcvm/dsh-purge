@@ -11,7 +11,7 @@ const asar = resources + '\\app.asar'
 const bak = asar + '.bak'
 const installer = 'C:\\Temp\\installer.exe'
 
-function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false } = {}) {
+function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false } = {}) {
   const dirs = new Set([resources, app])
   const files = new Map([
     [exe, { size: 10, stamp: 1 }],
@@ -63,6 +63,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
       }
       if (command.startsWith('"' + installer + '"')) {
         if (changes) files.set(asar, { size: 40, stamp: 2 })
+        if (autoRestart && installCode === 0) running = true
         return installCode
       }
       return 0
@@ -158,4 +159,26 @@ test('missing original archive aborts and restores extracted host', () => {
 
 test('WSH source remains ASCII so its path literals work on non-English Windows', () => {
   assert.ok([...source].every(c => c.charCodeAt(0) <= 127))
+})
+
+
+test('installer reporting success without changing the installed payload is not accepted as an update', () => {
+  const run = simulate({ changes: false })
+  assert.match(run.logs, /abort: installer exit=0 changed=false/)
+  assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), false)
+  assert.ok(run.dirs.has(app), 'original patched application must be restored')
+  assert.equal(run.calls.filter(x => x.startsWith('"' + installer + '"')).length, 1)
+})
+
+test('updater does not start a duplicate Harness when NSIS already relaunched it', () => {
+  const run = simulate({ autoRestart: true })
+  assert.match(run.logs, /installer-restarted/)
+  assert.equal(run.calls.filter(x => x === '"' + exe + '"').length, 0)
+})
+
+test('handoff patch does not substitute installer.exe when verified pending metadata exists', () => {
+  const core = readFileSync(new URL('../lib/core.js', import.meta.url), 'utf8')
+  assert.match(core, /desktop verified pending installer missing/)
+  assert.match(core, /const infoPath = join\(cache,/)
+  assert.match(core, /if \(existsSync\(infoPath\)\)/)
 })
