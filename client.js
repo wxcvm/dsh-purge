@@ -9970,9 +9970,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const reviewFile = async (event) => {
         const file = event.target.files && event.target.files[0]
         if (!file) return
-        props.onReportChange(null)
         setReportError('')
-        setHandoffMessage('')
         setReportBusy(true)
         try {
           if (file.size > 9 * 1024 * 1024) throw new Error('报告超过 9 MiB')
@@ -9985,6 +9983,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           const result = await response.json()
           if (!response.ok || !result || result.ok === false)
             throw new Error((result && result.error) || '无法预览 SARIF')
+          setHandoffMessage('')
           props.onReportChange(result)
         } catch (err) {
           setReportError(String((err && err.message) || err))
@@ -10125,7 +10124,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-card' },
           h('h4', null, 'ARTEX SARIF 报告 · 只读预览'),
           h('p', { className: 'rt-foot' },
-            '从 ARTEX 导出漏洞 SARIF 后选择文件，查看漏洞、任务与资产 ID 的对应关系。不会写入作战台资产库或自动计分。'),
+            '从 ARTEX 导出漏洞 SARIF 后选择文件，查看漏洞、任务与资产 ID 的对应关系。新报告解析成功后才会替换当前预览；导入失败时保留现有报告。不会写入作战台资产库或自动计分。'),
           h('input', {
             type: 'file',
             accept: '.sarif,.json,application/json',
@@ -10134,7 +10133,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onChange: reviewFile,
           }),
           reportBusy ? h('p', { className: 'rt-hint' }, '正在解析报告…') : null,
-          reportError ? h('p', { className: 'rt-err', role: 'alert' }, reportError) : null,
+          reportError ? h('p', { className: 'rt-err', role: 'alert' },
+            reportError + (report ? '（当前报告已保留）' : '')) : null,
           report ? h('div', null,
             h('p', { className: 'rt-hint' },
               'ARTEX 记录 ' + report.unique_findings + ' 条 · 去重 ' + report.duplicates_skipped
