@@ -262,9 +262,9 @@ test('scan board renders real timeline and never leaks masked output previews', 
 test('scan output preview can be retried after errors or refreshed after success', () => {
   for (const path of ['../lib/redteam/client.js', '../client.js']) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8')
-    assert.match(source, /disabled: !!previewing \\|\\| maskHistory,/)
-    assert.doesNotMatch(source, /disabled: !!previewing \\|\\| maskHistory \\|\\| !!excerpt/)
-    assert.match(source, /excerpt\\.ok \\? '重新读取输出片段' : '读取失败，重试'/)
-    assert.match(source, /setPreviews\\(\\(old\\) => \\(\\{ \\.\\.\\.old, \\[runId\\]: null \\}\\)\\)/)
+    assert.match(source, /disabled: !!previewing \|\| maskHistory,/)
+    assert.doesNotMatch(source, /disabled: !!previewing \|\| maskHistory \|\| !!excerpt/)
+    assert.match(source, /excerpt\.ok \? '重新读取输出片段' : '读取失败，重试'/)
+    assert.match(source, /setPreviews\(\(old\) => \(\{ \.\.\.old, \[runId\]: null \}\)\)/)
   }
 })
