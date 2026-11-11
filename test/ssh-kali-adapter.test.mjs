@@ -148,5 +148,5 @@ test('both browser client surfaces have visible Kali configuration and operation
   }
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   assert.match(host, /if \(op === 'kaliVmInspect'\) return inspectKaliVm/)
-  assert.match(host, /if \(op === 'kaliVmToolProbe'\) return probeKaliVmTool/)
+  assert.match(host, /if \(op === 'kaliVmToolProbe'\) return observedProbe\(probeKaliVmTool/)
 })
