@@ -31,6 +31,9 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
       'Cookie: session=synthetic-cookie',
       'password=synthetic-password',
       'api_key: synthetic-api-key',
+      'password: "synthetic secret with spaces"',
+      'GET https://operator:in-url-password@example.net/private',
+      'prose: Bearer standalone-secret',
       '10.1.2.3 links to 10.1.2.3',
       '![Screenshot](shots/sample.png)',
       '-----BEGIN PRIVATE KEY-----',
@@ -47,11 +50,15 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   const safe = writeReportBundle({ root, engagement, outDir: output, report, shareable: true })
   const markdown = fs.readFileSync(safe.reportFile, 'utf8')
   for (const secret of ['synthetic-credential', 'synthetic-cookie', 'synthetic-password',
-    'synthetic-api-key', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png']) {
+    'synthetic-api-key', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
+    'synthetic secret with spaces', 'in-url-password', 'standalone-secret', 'operator:']) {
     assert.ok(!markdown.includes(secret), 'shareable markdown must not contain ' + secret)
   }
   assert.match(markdown, /Authorization: \[REDACTED_SECRET\]/)
   assert.match(markdown, /IP-01 links to IP-01/)
+  assert.match(markdown, /password: "\\[REDACTED_SECRET\\]"/)
+  assert.match(markdown, /https:\\/\\/\\[REDACTED_USERINFO\\]@example\\.net\\/private/)
+  assert.match(markdown, /prose: Bearer \\[REDACTED_SECRET\\]/)
   assert.match(markdown, /\[EVIDENCE OMITTED\]/)
   assert.equal(safe.manifest.engagementId, '[REDACTED]')
   assert.equal(safe.manifest.privacy.mode, 'shareable')
