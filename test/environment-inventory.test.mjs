@@ -20,7 +20,7 @@ const put = (file) => {
 
 test('all ARTEX supported binaries have DSH catalog entries (including naabu/katana)', () => {
   const ids = TOOL_CATALOG.map((x) => x.id)
-  assert.equal(ids.length, 17)
+  assert.equal(ids.length, 23)
   assert.equal(new Set(ids).size, ids.length)
   for (const name of ARTEX_SHARED_TOOLS) assert.ok(ids.includes(name), name)
 })

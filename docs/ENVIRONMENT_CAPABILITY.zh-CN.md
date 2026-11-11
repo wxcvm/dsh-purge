@@ -5,7 +5,7 @@
 ## 已实现
 
 - `environmentList`：列出当前 Node 进程所在本机。不能据此推断已连接 WSL、Kali VM 或 Docker。
-- `environmentDiagnose`：只读定位内置 17 个工具的路径，返回每个工具的来源、状态与诊断建议。**不执行版本命令，也不对目标发送请求**。
+- `environmentDiagnose`：只读定位内置 23 个工具的路径，返回每个工具的来源、状态与诊断建议。**不执行版本命令，也不对目标发送请求**。
 - `capabilityProbe`：用户显式传入内置工具 ID 后，使用既有版本探针检查本机二进制文件。不能提交任意命令或路径。
 - 旧接口 `platformConfigGet`、`platformToolProbe`、`platformTaskPlan` 继续可用；旧 `envAdaptStatus.ready` 保持会话入口兼容语义，不能当作工具能力就绪依据。
 
@@ -71,3 +71,20 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 ## 待完成的跨环境阶段
 
 统一依赖检查、按任务类型的跨环境能力评分、统一真实执行记录及其来源归属仍需后续实测。需要把版本可运行与任务可执行/已执行区分开，而不是把本机/WSL/SSH/Docker 的工具路径简单合并。真正 Windows Harness、WSL、Kali 与 Docker 实机验收也不由 CI 模拟测试替代。
+
+## 工具目录增强：新增六项可选工具
+
+现在内置 23 项工具名称及版本探针，原有 17 项保持现有路径解析优先级；新增项不安装程序、不触发扫描、不代替用户设置。
+
+| 工具 | CLI 检测参数 | 对应任务 | 版本验证不代表的依赖 |
+| --- | --- | --- | --- |
+| Feroxbuster | `--version` | Web 资产 | 目标可达、字典可用 |
+| testssl.sh | `--version` | TLS/漏洞准备 | Bash、OpenSSL 及基础 Unix 工具可正常执行实际 TLS 测试 |
+| smbclient | `--version` | 内网与身份 | Samba 协议、目标可达、身份凭据 |
+| Gowitness | `version` | Web 截图 | Chrome/Chromium 等运行依赖 |
+| NetExec（nxc） | `--version` | 内网与身份 | Python/协议插件、认证及目标服务 |
+| OWASP Amass | `-version` | 域名收集 | DNS、外部数据源、API Key |
+
+- 所有版本探针均通过当前实现的本机/WSL/Kali SSH/Docker 工具目录执行，依赖条件以独立说明显示为「未检查」而非「已验证」。Gowitness 使用固定的 `version` 子命令，不接受浏览器传入任意子命令。
+- `testssl.sh` 是 Bash 脚本。Windows 原生 Node 没有 Bash 执行环境时，可能只找到路径而无法直接运行版本检测；可以使用已有 WSL/Kali/Docker 环境，**不要误报原生已验证**。
+- 工具任务画像只是候选推荐，不会自动选择执行环境或运行扫描。

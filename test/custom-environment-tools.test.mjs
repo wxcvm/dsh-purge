@@ -24,7 +24,7 @@ test('custom tool paths persist and augment built-in tools without replacing the
   assert.equal(resolveTool('custom:1', { root }).path, null)
   const all = resolveAllTools({ root })
   assert.ok(all.find((t) => t.id === 'nmap'))
-  assert.equal(all.length, 19)
+  assert.equal(all.length, 25)
   assert.equal(all.at(-2).label, 'My Toolkit')
   assert.ok(platformSummary(root).tools.found >= 1)
   assert.equal(platformSummary(root).tools.items.at(-2).path, file)
@@ -47,7 +47,7 @@ test('blank extra-tool rows can be omitted; probe does not execute custom binary
     root, execFileFn: () => { throw new Error('custom tool should not be launched') },
   })
   assert.equal(result.status, 'unknown')
-  assert.equal(resolveAllTools({ root }).length, 18)
+  assert.equal(resolveAllTools({ root }).length, 24)
   savePlatformConfig({ customTools: [] }, root)
-  assert.equal(resolveAllTools({ root }).length, 17)
+  assert.equal(resolveAllTools({ root }).length, 23)
 })

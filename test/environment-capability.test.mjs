@@ -39,7 +39,7 @@ test('path inventory is not a version probe, capability check, or task execution
   const items = inventoryLocalCapabilities({
     root, config: config(root, { katana }), env: { PATH: '' },
   })
-  assert.equal(items.length, 17)
+  assert.equal(items.length, 23)
   assert.equal(items.filter((x) => x.status === 'located').length, 1)
   const found = items.find((x) => x.toolId === 'katana')
   assert.equal(found.path, katana)
@@ -80,7 +80,7 @@ test('explicit version probe never becomes target execution or a dependency guar
 test('diagnosis remains read-only and is available through store dispatch', (t) => {
   const root = workspace(t)
   const summary = diagnoseLocalEnvironment({ root, config: config(root), env: { PATH: '' } })
-  assert.equal(summary.summary.total, 17)
+  assert.equal(summary.summary.total, 23)
   assert.equal(summary.summary.probeVerified, 0)
   assert.equal(summary.summary.capabilityVerified, 0)
   assert.equal(summary.summary.executed, 0)
