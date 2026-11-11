@@ -7546,6 +7546,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               open ? h('div', { className: 'rt-run-detail' },
                 h('div', null, '任务编号：', h('span', { className: 'rt-mono' }, item.run_id)),
                 h('div', null, '执行：' + (item.started_at || '未知') + ' → ' + (item.finished_at || '未记录结束时间')),
+                h('div', null, item.execution
+                  ? '执行来源：' + (item.execution.environment_id || '未知环境')
+                    + ' · ' + (item.execution.tool_id || item.kind)
+                    + ' · ' + (item.execution.binary_source || '路径来源未知')
+                    + ' · ' + (item.execution.attempted ? '实际调用已发起' : '调用未成功发起')
+                  : '执行来源：旧记录未标注，不能据此推断运行环境'),
                 h('div', null, '文件大小：' + item.bytes + ' 字节 · ' + (item.ingested ? '已写入资产库' : '未确认导入')),
                 item.output_file && !maskHistory ? h('div', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
                   '原始输出：' + item.output_file) : null,
