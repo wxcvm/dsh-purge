@@ -92,7 +92,7 @@ var asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarB
 var changed = exeChanged || asarChanged;
 var afterVersion = fileVersion(exe);
 var versionMatch = !targetVersion || afterVersion.toLowerCase() === targetVersion;
-var ok = code === 0 && changed && fso.FileExists(asar) && versionMatch;
+var ok = code === 0 && asarChanged && fso.FileExists(asar) && versionMatch;
 log('changed exe=' + exeChanged + ' asar=' + asarChanged);
 log('version before=' + beforeVersion + ' target=' + (targetVersion || 'unavailable') + ' after=' + afterVersion + ' match=' + versionMatch);
 // No second installer invocation: silent NSIS may have staged a payload even
