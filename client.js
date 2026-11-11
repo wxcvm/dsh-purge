@@ -8060,6 +8060,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [checkingTool, setCheckingTool] = React.useState(null)
       const [taskId, setTaskId] = React.useState('services')
       const [taskPlan, setTaskPlan] = React.useState(null)
+      const [environmentTaskPlan, setEnvironmentTaskPlan] = React.useState(null)
+      const [preferredEnvironment, setPreferredEnvironment] = React.useState('local')
+      const [environmentTaskBusy, setEnvironmentTaskBusy] = React.useState(false)
       const [taskBusy, setTaskBusy] = React.useState(false)
       const [environmentSnapshot, setEnvironmentSnapshot] = React.useState(null)
       const [environmentBusy, setEnvironmentBusy] = React.useState(false)
@@ -8162,6 +8165,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setTaskBusy(false)
           setTaskPlan({ ok: false, error: String((error && error.message) || error) })
         })
+      }
+      const planAcrossEnvironments = () => {
+        if (busy || environmentTaskBusy) return
+        setEnvironmentTaskBusy(true)
+        setEnvironmentTaskPlan(null)
+        api({ op: 'environmentTaskPlan', task: taskId, preferredEnvironmentId: preferredEnvironment })
+          .then((result) => {
+            setEnvironmentTaskBusy(false)
+            setEnvironmentTaskPlan(result || { ok: false, error: '跨环境规划没有返回结果' })
+          }, (error) => {
+            setEnvironmentTaskBusy(false)
+            setEnvironmentTaskPlan({ ok: false, error: String(error?.message || error) })
+          })
       }
       const checkTool = (id) => {
         if (busy || checkingTool) return
@@ -8528,7 +8544,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               '按本机路径、可版本检测性和已保存的首选工具推荐；先点上方「保存」让新的偏好生效，计划不会运行任何任务。'),
             h('div', { style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } },
               h('select', { className: 'rt-input', style: { flex: '1 1 150px' },
-                value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null) } },
+                value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null); setEnvironmentTaskPlan(null) } },
                 taskProfiles.map((p) => h('option', { key: p.id, value: p.id }, p.label))),
               h('select', {
                 className: 'rt-input', style: { flex: '1 1 170px' },
@@ -8577,6 +8593,36 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   h('div', { style: { opacity: 0.75, fontSize: 11, marginTop: 4 } },
                     '版本验证只检测本机程序，不代表目标测试或任务执行成功。')))
               : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '跨环境候选 · 仅使用已观测结果'),
+            h('p', { className: 'rt-foot' },
+              '先进行上方环境发现，再手动验证需要的工具版本。这里仅按真实发现、显式探针和首选环境排序，不会启动扫描或切换执行环境。'),
+            h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
+              h('select', { className: 'rt-input', 'aria-label': '跨环境首选来源',
+                value: preferredEnvironment, onChange: (e) => { setPreferredEnvironment(e.target.value); setEnvironmentTaskPlan(null) } },
+                h('option', { value: 'local' }, '首选当前主机'),
+                (environmentSnapshot?.environments || []).filter((item) => item.id !== 'local')
+                  .map((item) => h('option', { key: item.id, value: item.id }, item.label || item.id))),
+              h('button', { type: 'button', className: 'rt-btn', disabled: busy || environmentTaskBusy,
+                onClick: planAcrossEnvironments }, environmentTaskBusy ? '规划中…' : '生成跨环境推荐')),
+            environmentTaskPlan ? (environmentTaskPlan.ok === false
+              ? h('p', { className: 'rt-err', role: 'alert' }, environmentTaskPlan.error || '规划失败')
+              : h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
+                h('p', { className: 'rt-foot', role: 'status' },
+                  environmentTaskPlan.selected
+                    ? '推荐：' + environmentTaskPlan.selected.environmentLabel + ' / '
+                      + environmentTaskPlan.selected.toolLabel + ' · ' + environmentTaskPlan.selected.status
+                      + ' · 分数 ' + environmentTaskPlan.selected.score
+                    : '尚没有经过实际观察的可用工具候选；仅发现环境不等于工具可用。'),
+                environmentTaskPlan.selected ? h('p', { className: 'rt-foot' },
+                  (environmentTaskPlan.selected.reasons || []).join('；')) : null,
+                h('details', null,
+                  h('summary', null, '查看所有环境候选（' + (environmentTaskPlan.candidates || []).length + '）'),
+                  (environmentTaskPlan.candidates || []).map((item) =>
+                    h('div', { className: 'rt-kv', key: item.environmentId + ':' + item.toolId },
+                      h('b', null, item.toolLabel),
+                      h('span', null, item.environmentLabel + ' · ' + item.status + ' · ' + item.score)))),
+                h('p', { className: 'rt-foot' }, environmentTaskPlan.note))) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 已找到）'),
             h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
