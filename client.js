@@ -8344,6 +8344,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               + ' 显式版本检测可能启动已停止的 WSL 发行版；成功也不代表执行过目标任务。'))
             : null),
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '跨环境状态 · 只读诊断'),
+          environmentSnapshot?.topology
+            ? h('div', null,
+                h('p', { className: 'rt-foot', role: 'status' },
+                  '本次发现环境 ' + environmentSnapshot.topology.discoveredEnvironments
+                  + ' 个 · 本机工具路径 ' + environmentSnapshot.topology.localLocated
+                  + '/' + environmentSnapshot.topology.localTotal),
+                h('p', { className: 'rt-foot' },
+                  '版本 / 依赖 / 任务执行：本次只读发现均未检查。版本探针结果和实际扫描历史分别查看对应功能。'),
+                Object.entries(environmentSnapshot.topology.providers || {}).map(([name, provider]) =>
+                  h('div', { className: 'rt-kv', key: name },
+                    h('b', null, name + ' · ' + provider.state),
+                    h('span', null, provider.note || '未提供说明'))),
+                (environmentSnapshot.localDiagnostics?.issues || []).map((item) =>
+                  h('p', { key: item.code, className: 'rt-foot' }, item.message)))
+            : h('p', { className: 'rt-foot' }, '点击上方发现按钮，读取本机路径与跨环境提供方状态。')),
+        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'ARTEX · 本机工具来源'),
           environmentSnapshot?.providers?.artex
             ? h('div', null,

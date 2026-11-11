@@ -124,3 +124,11 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 「作战 → 扫描记录」展开详情，以及 `redteam_scan_history` 返回的数据，都会直接沿用这份真实 manifest；不另外建日志数据库、不伪造旧记录。旧 manifest 没有 `execution` 时显示来源未知。该字段不会因读取工具清单、环境发现或运行版本探针而写入。
 
 当前这只覆盖真正通过 **本机** Nmap/httpx 执行器运行的任务；WSL、SSH Kali、Docker 仍只接入了发现和显式版本命令。不能把远端工具版本检测统计成已经做过目标扫描。
+
+## 一次性跨环境状态诊断（不执行工具）
+
+点击「管理 → 环境适配 → 发现本机、WSL 与 Docker」，原来的 `environmentDiscover` 管理接口现在同时返回 `localDiagnostics` 和 `topology`，汇总本机内置工具路径数量及 Windows/WSL/SSH Kali/Docker/ARTEX 各来源状态。每个 provider 仍保留自己的 `state`、`note` 和原始发现条目，未连接的 SSH 不会被标为已运行。
+
+这次操作只进行已有的 WSL 发行版列举和 Docker 当前 context 运行容器列举，以及本机文件路径检查；**不会在任何环境里执行工具版本命令、依赖测试或目标扫描**。所以 `versionProbeState`、`dependencyState` 与 `taskExecutionState` 统一明确为 `not-checked`。需要查看真实执行历史，请在「作战 → 扫描记录」查同一项目的 manifest；不能依据环境发现记录推断存在过去任务执行。
+
+保留旧 `environmentDiagnose`（本机单环境只读）与 `environmentList` 等 API。新 UI 同步来自这份结果，不需要额外配置或安装。
