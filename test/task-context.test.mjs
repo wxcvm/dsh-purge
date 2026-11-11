@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
 import { taskContext } from '../lib/redteam/task-context.js'
 
@@ -127,4 +130,77 @@ test('asset task context automatically includes offline CVE candidates without m
   } finally {
     db.close()
   }
+})
+
+test('task context surfaces compact ARTEX references for product and CVE without importing records', (t) => {
+  const { db, store } = fixture()
+  t.after(() => db.close())
+  const folder = mkdtempSync(join(tmpdir(), 'artex-task-hints-'))
+  t.after(() => rmSync(folder, { recursive: true, force: true }))
+  const previous = process.env.ARTEX_KB_DIR
+  process.env.ARTEX_KB_DIR = folder
+  t.after(() => {
+    if (previous === undefined) delete process.env.ARTEX_KB_DIR
+    else process.env.ARTEX_KB_DIR = previous
+  })
+  const kb = new DatabaseSync(join(folder, 'knowledge.db'))
+  kb.exec("CREATE TABLE poc (id INTEGER PRIMARY KEY, title TEXT, category TEXT, kind TEXT, tags TEXT, verified INTEGER, description TEXT, usage TEXT, content TEXT)")
+  kb.prepare('INSERT INTO poc VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    71, 'Grafana research notes', 'reference', 'markdown', 'grafana', 0,
+    'Previous observations', '', 'UNTRUSTED_HISTORY_SHOULD_NOT_BE_IN_TASK_CONTEXT')
+  kb.prepare('INSERT INTO poc VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    72, 'CVE-2021-43798 investigation', 'reference', 'markdown', 'grafana', 1,
+    'Historical finding', '', 'HISTORICAL_BODY_NOT_CURRENT_EVIDENCE')
+  kb.close()
+
+  const originalAsset = store.getAsset.bind(store)
+  store.getAsset = (engagement, id) => {
+    const asset = originalAsset(engagement, id)
+    return asset && id === 5 ? { ...asset,
+      ports: [{ port: 3000, proto: 'tcp', state: 'open', product: 'Grafana' }],
+      fingerprints: [{ product: 'Grafana', version: '8.2.5' }],
+    } : asset
+  }
+  const countBefore = db.prepare('SELECT count(*) AS n FROM vuln').get().n
+  const assetContext = taskContext(store, 'lab', 'asset #5')
+  assert.equal(assetContext.artex_knowledge.status, 'available')
+  assert.equal(assetContext.artex_knowledge.query, 'Grafana')
+  assert.deepEqual(assetContext.artex_knowledge.items.map(item => item.id), [71, 72])
+  assert.equal(assetContext.artex_knowledge.items[0].content, undefined)
+  assert.equal(JSON.stringify(assetContext).includes('UNTRUSTED_HISTORY'), false)
+
+  db.exec("UPDATE vuln SET cve = 'CVE-2021-43798' WHERE id = 11")
+  const vulnContext = taskContext(store, 'lab', 'vuln #11')
+  assert.equal(vulnContext.artex_knowledge.query, 'CVE-2021-43798')
+  assert.deepEqual(vulnContext.artex_knowledge.items.map(item => item.id), [72])
+  assert.equal(vulnContext.artex_knowledge.items[0].verified, true)
+  assert.equal(JSON.stringify(vulnContext).includes('HISTORICAL_BODY'), false)
+  assert.equal(db.prepare('SELECT count(*) AS n FROM vuln').get().n, countBefore)
+})
+
+test('missing ARTEX knowledge does not block existing task context', (t) => {
+  const { db, store } = fixture()
+  t.after(() => db.close())
+  const prev = process.env.ARTEX_KB_DIR
+  process.env.ARTEX_KB_DIR = join(tmpdir(), 'artex-kb-absent-for-task')
+  t.after(() => {
+    if (prev === undefined) delete process.env.ARTEX_KB_DIR
+    else process.env.ARTEX_KB_DIR = prev
+  })
+  const originalGet = store.getAsset.bind(store)
+  store.getAsset = (engagement, id) => {
+    const row = originalGet(engagement, id)
+    return row ? { ...row, fingerprints: [] } : row
+  }
+  const asset = taskContext(store, 'lab', 'asset #5')
+  assert.equal(asset.ok, true)
+  assert.equal(asset.artex_knowledge.status, 'no-keyword')
+  store.getAsset = (engagement, id) => {
+    const row = originalGet(engagement, id)
+    return row ? { ...row, fingerprints: [{ product: 'Grafana' }] } : row
+  }
+  const withKeyword = taskContext(store, 'lab', 'asset #5')
+  assert.equal(withKeyword.ok, true)
+  assert.equal(withKeyword.artex_knowledge.status, 'not-installed')
+  assert.deepEqual(withKeyword.artex_knowledge.items, [])
 })
