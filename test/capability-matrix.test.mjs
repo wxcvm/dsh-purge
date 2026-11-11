@@ -104,6 +104,8 @@ test('host and both browser clients expose matrix, without silent auto-probing',
     assert.match(ui, /op: 'environmentCapabilityMatrix'/)
     assert.match(ui, /生成 \/ 刷新能力矩阵/)
     assert.match(ui, /matrixCellStatus\(cell\)/)
+    assert.match(ui, /kaliProbeResults\[cell\.toolId\]/)
+    assert.match(ui, /setKaliProbeResults\(\(prev\)/)
     assert.match(ui, /已定位 ≠ 可运行/)
     assert.match(ui, /setCapabilityMatrix\(null\)/)
   }
