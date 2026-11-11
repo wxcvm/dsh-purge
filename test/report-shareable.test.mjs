@@ -56,9 +56,9 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   }
   assert.match(markdown, /Authorization: \[REDACTED_SECRET\]/)
   assert.match(markdown, /IP-01 links to IP-01/)
-  assert.match(markdown, /password: "\\[REDACTED_SECRET\\]"/)
-  assert.match(markdown, /https:\\/\\/\\[REDACTED_USERINFO\\]@example\\.net\\/private/)
-  assert.match(markdown, /prose: Bearer \\[REDACTED_SECRET\\]/)
+  assert.match(markdown, /password: "\[REDACTED_SECRET\]"/)
+  assert.match(markdown, /https:\/\/\[REDACTED_USERINFO\]@example\.net\/private/)
+  assert.match(markdown, /prose: Bearer \[REDACTED_SECRET\]/)
   assert.match(markdown, /\[EVIDENCE OMITTED\]/)
   assert.equal(safe.manifest.engagementId, '[REDACTED]')
   assert.equal(safe.manifest.privacy.mode, 'shareable')
