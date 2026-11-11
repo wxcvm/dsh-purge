@@ -8078,6 +8078,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           binDirsText: (c.binDirs || []).join('\n'),
           tools: Object.assign({}, c.tools || {}),
           customTools: Array.isArray(c.customTools) ? c.customTools.map((t) => ({ name: t.name || '', path: t.path || '' })) : [],
+          planning: { preferredToolByTask: Object.assign({}, c.planning?.preferredToolByTask || {}) },
           kaliVm: Object.assign({ host: '', user: 'kali', port: 22, identityFile: '' }, c.kaliVm || {}),
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
@@ -8108,6 +8109,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           binDirs: String(draft.binDirsText || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean),
           tools: draft.tools,
           customTools: draft.customTools || [],
+          planning: draft.planning,
           kaliVm: draft.kaliVm,
           env: draft.env,
           notes: draft.notes,
@@ -8484,11 +8486,31 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
-              '按任务和本机已发现的程序匹配，不会启动目标测试。'),
+              '按本机路径、可版本检测性和已保存的首选工具推荐；先点上方「保存」让新的偏好生效，计划不会运行任何任务。'),
             h('div', { style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } },
               h('select', { className: 'rt-input', style: { flex: '1 1 150px' },
                 value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null) } },
                 taskProfiles.map((p) => h('option', { key: p.id, value: p.id }, p.label))),
+              h('select', {
+                className: 'rt-input', style: { flex: '1 1 170px' },
+                'aria-label': '当前任务首选工具',
+                value: draft?.planning?.preferredToolByTask?.[taskId] || '',
+                disabled: !draft,
+                onChange: (e) => setDraft((previous) => previous ? {
+                  ...previous,
+                  planning: {
+                    preferredToolByTask: {
+                      ...(previous.planning?.preferredToolByTask || {}),
+                      [taskId]: e.target.value,
+                    },
+                  },
+                } : previous),
+              },
+                h('option', { value: '' }, '自动推荐（默认）'),
+                (taskProfiles.find((item) => item.id === taskId)?.toolIds || []).map((id) => {
+                  const item = tools.find((tool) => tool.id === id)
+                  return h('option', { key: id, value: id }, item?.label || id)
+                })),
               h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
                 disabled: busy || taskBusy || taskProfiles.length === 0,
                 onClick: planForTask }, taskBusy ? '匹配中…' : '匹配本机工具')),
@@ -8498,6 +8520,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 : h('div', null,
                   h('div', { style: { fontWeight: 600 } },
                     taskPlan.selected ? '推荐：' + taskPlan.selected.label : '没有发现这个任务所需的工具'),
+                  taskPlan.selected ? h('p', { className: 'rt-foot' },
+                    '评分：' + taskPlan.selected.score + ' · ' + (taskPlan.selected.reasons || []).join('；')) : null,
                   taskPlan.selected ? h('div', { className: 'rt-mono', style: { fontSize: 11, overflowWrap: 'anywhere' } },
                     '来源：' + (sourceLabels[taskPlan.selected.source] || taskPlan.selected.source) + ' · ' + taskPlan.selected.path) : null,
                   h('div', { style: { opacity: 0.8, marginTop: 4 } },
