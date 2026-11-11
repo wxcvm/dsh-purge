@@ -11110,7 +11110,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const tabs = tabSections.flatMap((section) => section.pages)
       const full = isFullWindow()
       const openFull = () => {
-        try { window.open(window.location.href.split('#')[0] + '#redteam-full', '_blank', 'noopener') } catch (e) { setErr('无法打开新窗口：' + ((e && e.message) || e)) }
+        // A browser popup is not necessarily maximized. Request the available
+        // desktop work area; individual browsers may ignore these hints.
+        try {
+          const screenArea = window.screen || {}
+          const width = Math.round(screenArea.availWidth || window.innerWidth)
+          const height = Math.round(screenArea.availHeight || window.innerHeight)
+          const left = Math.round(screenArea.availLeft || 0)
+          const top = Math.round(screenArea.availTop || 0)
+          const features = ['popup=yes', 'noopener', 'width=' + width, 'height=' + height,
+            'left=' + left, 'top=' + top].join(',')
+          window.open(window.location.href.split('#')[0] + '#redteam-full', '_blank', features)
+        } catch (e) {
+          setErr('无法打开新窗口：' + ((e && e.message) || e))
+        }
       }
       const exitFull = () => {
         /* 优先关掉脚本打开的窗口；关不掉就退回带侧栏的普通界面 */
