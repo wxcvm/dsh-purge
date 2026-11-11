@@ -49,6 +49,11 @@ test('running a local scanner preserves raw output and verifiable metadata', asy
   assert.equal(manifest.sha256, run.sha256)
   assert.equal(manifest.target, '192.0.2.1')
   assert.equal(manifest.source, 'config')
+  assert.equal(manifest.execution.environmentId, 'local')
+  assert.equal(manifest.execution.executionId, run.runId)
+  assert.equal(manifest.execution.toolId, 'nmap')
+  assert.equal(manifest.execution.attempted, true)
+  assert.equal(manifest.execution.resultStatus, 'executed')
 })
 
 test('failed execution preserves diagnostics but never invokes ingestion', async (t) => {
