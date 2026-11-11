@@ -2,6 +2,8 @@
   "redteam_access_add",
   "redteam_access_list",
   "redteam_agent_slot",
+  "redteam_artex_knowledge_get",
+  "redteam_artex_knowledge_search",
   "redteam_asset_add",
   "redteam_asset_assess",
   "redteam_asset_get",
