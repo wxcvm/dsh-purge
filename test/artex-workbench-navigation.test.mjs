@@ -42,3 +42,19 @@ test('ARTEX matching links route into the chosen engagement asset and local find
     assert.match(source, /props.onReportChange\(result\)/)
   }
 })
+
+test('failed ARTEX SARIF replacement keeps the current report and handoff state', () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const begin = source.indexOf('const reviewFile = async (event) => {')
+    const end = source.indexOf('const refresh = () => {', begin)
+    assert.ok(begin >= 0 && end > begin, 'ARTEX report handler exists')
+    const handler = source.slice(begin, end)
+    assert.doesNotMatch(handler, /props\.onReportChange\(null\)/,
+      'do not discard a successful report before validating a replacement')
+    assert.match(handler, /if \(!response\.ok \|\| !result \|\| result\.ok === false\)/)
+    assert.match(handler, /setHandoffMessage\(''\)\s+props\.onReportChange\(result\)/,
+      'handoff state resets only when the replacement has parsed')
+    assert.match(source, /reportError \+ \(report \? '（当前报告已保留）' : ''\)/)
+  }
+})
