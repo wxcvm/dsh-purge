@@ -72,3 +72,18 @@ test('Purge renders an opaque dark workspace before entering system fullscreen',
   assert.match(css, /\.dshp-workspace\[data-workspace="clean"\] \.dshp-root\.dshp-clean-workspace\{[^}]*background:#0c1422!important;/)
   assert.match(css, /\.dshp-workspace \.dshp-workspace-nav\{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max\(9px,calc\(/)
 })
+
+
+test('Windows native caption palette follows the workspace and restores the host on exit', () => {
+  const client = read('client.js')
+  const section = client.slice(client.indexOf('function PurgeWorkspacePage() {'), client.indexOf('const toggleImmersive = () =>'))
+  assert.match(section, /document\.documentElement\.hasAttribute\("data-windows-titlebar"\)/)
+  assert.match(section, /\["--dsw-specific-sidebar-fill", "#101c2d"\]/)
+  assert.match(section, /\["--dsw-alias-label-primary", "#e5eefb"\]/)
+  assert.match(section, /style\.setProperty\(name, color\)/)
+  assert.match(section, /return \(\) => \{/)
+  assert.match(section, /style\.getPropertyValue\(name\)\.trim\(\) !== color/)
+  assert.match(section, /style\.setProperty\(name, value, priority\)/)
+  assert.match(section, /style\.removeProperty\(name\)/)
+  assert.match(section, /\}, \[workspaceVisible\]\)/)
+})
