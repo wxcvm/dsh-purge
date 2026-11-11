@@ -2,6 +2,20 @@
 
 ## 中文
 
+### 本次发布所含的后续改进（#115–#124）
+
+- **#115 发布与安装说明**：完善 `.6` 安装与使用说明；安装包版本由仓库 `package.json` 和发布标签一致确定。
+- **#116 扫描输出预览**：修复读取后无法再次刷新或重试的问题。
+- **#117 ARTEX 资产匹配**：修正 DSH 已保存域名、别名末尾句点和前后空格等导致的匹配遗漏，保留开放端口核验。
+- **#118 ARTEX SARIF 更换报告**：只有新报告解析成功才替换旧报告；失败时保留核查界面。
+- **#119 环境能力基础层**：本机工具发现、状态区分和显式版本检测，保留旧环境入口。
+- **#120 ARTEX 知识库界面**：作战台「资源 → ARTEX」直接搜索本机 `knowledge.db`，查看条目与全文；不复制语料。
+- **#121 WSL 环境**：显式发现 WSL 发行版和执行选定工具版本探针；不自动启动目标测试。
+- **#122 ARTEX 智能体工具**：增加 `redteam_artex_knowledge_search` / `redteam_artex_knowledge_get`。
+- **#123 VMware Kali 环境**：可选 SSH Kali 连接、身份和工具版本检查，不自动扫描目标。
+- **#124 任务知识提示**：`redteam_task_context` 按 CVE、资产产品名提供最多 3 条 ARTEX 历史知识引用；缺库不阻断任务。
+- **交付状态**：相关 PR 已合并并通过 CI；GitHub Release/ZIP 发布与用户 Windows Harness 的原生界面、插件更新、WSL/SSH 实机仍需独立验收。
+
 ### 本版主要交付：原生工作区与真实扫描数据
 
 - **#109 原生主工作区**：Harness `main` 与 `sidebar.panellist` 承载清洗台/作战台，旧浮窗仅作旧宿主回退；不再把 Dock 当主要操作方式。
@@ -25,6 +39,14 @@
 - **仍未验证与限制**：Windows Desktop 真实升级/回滚、VPS 公网可达性、Docker 实际构建/部署，以及生产数据库迁移尚未完成。本功能不是整库加密；扫描原始证据、日志、报告、旧页/WAL、备份和导出仍可能含明文。远程桥接令牌不保护 DSH 主服务或其他插件接口。
 
 ## English
+
+### Additional merged work in this release (#115–#124)
+
+- **#115–#118:** Release/install notes, retryable scan output preview, improved ARTEX asset matching, and preserving SARIF review state when replacement fails.
+- **#119, #121, #123:** Local environment diagnostics, explicit WSL discovery, and optional VMware Kali SSH checks. Discovery does not imply a scan was run.
+- **#120, #122:** Search/read the existing local ARTEX `knowledge.db` from the Resources panel and redteam agent tools, without copying it.
+- **#124:** Add up to three compact ARTEX knowledge references to task context based on recorded CVE/product evidence; full text remains on demand.
+- **Status:** PR CI passed. Publishing GitHub Release assets and acceptance on the user's actual Windows Harness remain separate steps.
 
 ### Main delivery: native workspace and factual scan results
 
