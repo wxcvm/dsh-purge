@@ -27,6 +27,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
     FileExists: name => files.has(name),
     FolderExists: name => dirs.has(name),
     GetFileName: name => name.split('\\').at(-1),
+    GetParentFolderName: name => name.slice(0, name.lastIndexOf('\\')),
     GetFile: name => {
       const f = files.get(name)
       if (!f) throw Error('not found: ' + name)
@@ -52,6 +53,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
     }),
   }
   const shell = {
+    CurrentDirectory: 'C:\\Harness',
     Environment: () => ({ Remove: () => {} }),
     Run: (command) => {
       calls.push(command)
@@ -106,7 +108,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
     if (error.exitCode !== undefined) result = error.exitCode
     else throw error
   }
-  return { dirs, files, calls, logs: logs.join('\n'), exitCode: result }
+  return { dirs, files, calls, logs: logs.join('\n'), exitCode: result, cwd: shell.CurrentDirectory }
 }
 
 test('WSH updater uses current Harness executable name and stops before modifying a live installation', () => {
@@ -141,6 +143,9 @@ test('successful install preserves updated archive and requests patch reapplicat
   assert.equal(run.dirs.has(app), false)
   assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), true)
   assert.match(run.logs, /started/)
+  assert.equal(run.cwd, 'C:\\Temp', 'the detached updater must leave the installation directory')
+  const commands = run.calls.filter(x => x.startsWith('"' + installer + '"'))
+  assert.deepEqual(commands, ['"' + installer + '" --updated /S --force-run'])
 })
 
 test('missing original archive aborts and restores extracted host', () => {
