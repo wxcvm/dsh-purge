@@ -27,7 +27,7 @@
 1. WSL2：第二阶段已实现 Windows 上的只读发行版枚举与用户显式版本探针；不自动 sudo 或安装发行版。
 2. SSH Kali VM：第三阶段已实现单台 VMware Kali 的连接配置与显式 SSH 身份/版本检测；密钥/agent 认证和主机密钥核验，不保存密码或私钥内容。
 3. Docker：第四阶段已实现当前 Docker context 中运行容器的只读清单，以及用户明确选择容器和内置工具后的版本探针；不会创建/启动容器、拉镜像、授予特权或扫描目标。
-4. 统一依赖检查及能力评分、环境界面和工具目录扩充。
+4. 第五阶段：统一能力矩阵已接入环境页面；依赖真实性验证、跨环境自动选用与真实任务执行仍待后续阶段。
 
 ARTEX 仍按原先优先级作为**本地工具路径来源**，不是已连接的远程执行环境。环境诊断不触发任何靶标扫描。
 
@@ -124,3 +124,20 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 「作战 → 扫描记录」展开详情，以及 `redteam_scan_history` 返回的数据，都会直接沿用这份真实 manifest；不另外建日志数据库、不伪造旧记录。旧 manifest 没有 `execution` 时显示来源未知。该字段不会因读取工具清单、环境发现或运行版本探针而写入。
 
 当前这只覆盖真正通过 **本机** Nmap/httpx 执行器运行的任务；WSL、SSH Kali、Docker 仍只接入了发现和显式版本命令。不能把远端工具版本检测统计成已经做过目标扫描。
+
+
+## 第五阶段：跨环境工具能力矩阵
+
+「管理 → 环境适配 → 跨环境工具能力矩阵」点击 **生成 / 刷新能力矩阵** 时，调用 `environmentCapabilityMatrix`。它复用现有 `environmentDiscover` 和 `inventoryLocalCapabilities`，生成全部 **23 种内置工具 × 当前已发现执行环境** 的只读表。
+
+- **本机：** 使用现有配置、工具箱、PATH、ARTEX 回退定位文件，分别显示「已定位」或「未定位」。找到路径并不等于可运行。
+- **WSL、SSH Kali、Docker：** 发现发行版、已配置 VM 或运行容器，并不代表对应工具已安装；所有远端工具默认显示「未检查」，不会被错误判定为「未安装」或「可用」。
+- **ARTEX：** 仍只是 `artex:local` 工具路径来源，在本机表格单元格标注，不被算作独立执行环境。
+- **手动版本验证：** 使用页面已有的本机 / WSL / Kali / Docker 版本检测按钮；检测成功后相应表格项显示「版本已验证」，失败显示「验证未通过」。同一会话内 Kali 的不同工具结果可以分别显示。
+- **结果生命周期：** 手动验证结果仅作为当前面板会话的临时 UI 状态；重新发现环境、重新生成矩阵或保存配置后会清除可能过期的结果。**不会假装拥有跨重启的最新探针记录**。
+- **依赖与任务：** 矩阵始终把 `dependencyStatus` 标为 `not-checked`，`capabilityVerified` 标为 `false`，`executionStatus` 标为 `not-run`。已运行扫描仅依据既有扫描 manifest 的真实执行记录判断，不把版本命令算成扫描。
+- **目标行为：** 读取矩阵会执行已实现的只读 WSL/Docker 环境列举（Docker context 可能指向预先配置的远程 daemon），但不启动容器、虚拟机或版本探针，不安装工具、不运行网络目标测试。
+
+API 返回 `environments`、`providers`、`rows`（每个工具的 `cells`）和 `summary`；原有 `platformTaskPlan`、`environmentDiscover`、`wslToolProbe`、`kaliVmToolProbe`、`dockerToolProbe` 不变。这一步没有配置文件迁移，也没有新的强制门禁。
+
+真正的依赖验证（例如 Bash/OpenSSL、浏览器、Samba 协议环境）和跨环境任务执行需要单独的实现与实机验收，不应由矩阵推断。
