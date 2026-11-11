@@ -15,7 +15,15 @@ function samePath(a, b) { return String(a || '').replace(/\//g, '\\').toLowerCas
 function pids() { var out = []; var name = fso.GetFileName(exe).replace(/'/g, "''"); var e = new Enumerator(wmi.ExecQuery("SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = '" + name + "'")); for (; !e.atEnd(); e.moveNext()) { var p = e.item(); if (samePath(p.ExecutablePath, exe)) out.push(p.ProcessId); } return out; }
 function fileSize(fp) { if (!fso.FileExists(fp)) return -1; return fso.GetFile(fp).Size; }
 function fileStamp(fp) { if (!fso.FileExists(fp)) return ''; return String(fso.GetFile(fp).DateLastModified); }
-log('update-begin');
+// NSIS replaces its entire installation directory. A detached helper started
+// from that directory keeps a live CWD handle and can block the final rename.
+var installCwd = fso.GetParentFolderName(installer);
+try { sh.CurrentDirectory = installCwd; }
+catch (cwdErr) {
+  log('abort: cannot leave install working directory ' + cwdErr);
+  WScript.Quit(1);
+}
+log('update-begin cwd=' + sh.CurrentDirectory + ' installer=' + installer);
 WScript.Sleep(800);
 var list = pids();
 log('pids ' + list.join(','));
@@ -65,25 +73,20 @@ var exeBeforeSize = fileSize(exe);
 var exeBeforeStamp = fileStamp(exe);
 var asarBeforeSize = fileSize(asar);
 var asarBeforeStamp = fileStamp(asar);
-function runInstaller(updated) {
-  var args = updated ? ' --updated /S /D=' : ' /S /D=';
-  return sh.Run('"' + installer + '"' + args + installDir, 0, true);
+function runInstaller() {
+  // The official electron-updater uses this exact NSIS handoff. /D= is
+  // unnecessary for registered upgrades and can override the installed path.
+  return sh.Run('"' + installer + '" --updated /S --force-run', 0, true);
 }
-var code = runInstaller(true);
+var code = runInstaller();
 log('installer ' + code);
 var exeChanged = fileSize(exe) !== exeBeforeSize || fileStamp(exe) !== exeBeforeStamp;
 var asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarBeforeStamp;
 var changed = exeChanged || asarChanged;
 var ok = code === 0 && changed && fso.FileExists(asar);
 log('changed exe=' + exeChanged + ' asar=' + asarChanged);
-if (!changed && !ok) {
-  code = runInstaller(false);
-  log('installer-plain ' + code);
-  exeChanged = fileSize(exe) !== exeBeforeSize || fileStamp(exe) !== exeBeforeStamp;
-  asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarBeforeStamp;
-  ok = code === 0 && (exeChanged || asarChanged) && fso.FileExists(asar);
-  log('changed-plain exe=' + exeChanged + ' asar=' + asarChanged);
-}
+// No second installer invocation: silent NSIS may have staged a payload even
+// when it failed to swap directories. A retry could corrupt the pending update.
 if (!ok) {
   log('abort: installer exit=' + code + ' changed=' + changed);
   // Do not recursively delete a directory recreated by another process.
@@ -116,6 +119,8 @@ if (!ok) {
     log('marker');
   } catch (markerErr) { log('marker ' + markerErr); }
   try { sh.Environment('PROCESS').Remove('ELECTRON_RUN_AS_NODE'); } catch (ignore2) {}
-  sh.Run('"' + exe + '"', 1, false);
-  log('started');
+  // --force-run normally restarts the new app. Only launch it ourselves when
+  // the installer left the application stopped.
+  if (pids().length === 0) { sh.Run('"' + exe + '"', 1, false); log('started'); }
+  else log('installer-restarted');
 }
