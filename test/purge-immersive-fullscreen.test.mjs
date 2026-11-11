@@ -94,6 +94,7 @@ test('Windows caption keeps Purge tabs below the native 40px hit area until full
   const literal = client.match(/const PURGE_WORKSPACE_CSS = ("(?:[^"\\]|\\.)*");/)?.[1]
   assert.ok(literal, 'workspace CSS must exist')
   const css = JSON.parse(literal)
+  assert.match(css, /html\[data-windows-titlebar\] \.dshp-dock\.dshp-workspace\[data-default-full="1"\]\{\s*-webkit-app-region:no-drag;/)
   // The native DSH Windows titlebar owns the first 40 CSS pixels for hit
   // testing. A portal with inset:0 can paint tabs there but not receive clicks.
   const normalWindow = /html\[data-windows-titlebar\]:not\(\[data-fullscreen\]\) \.dshp-dock\.dshp-workspace\[data-maximized="1"\]\[data-default-full="1"\]:not\(:fullscreen\)\{([^}]*)\}/.exec(css)
