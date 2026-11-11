@@ -69,6 +69,13 @@ if (!fso.FileExists(asar)) {
   sh.Run('"' + exe + '"', 1, false);
   WScript.Quit(1);
 }
+function fileVersion(fp) { try { return String(fso.GetFileVersion(fp) || ''); } catch (versionErr) { return ''; } }
+function expectedVersion(fp) {
+  var m = fso.GetFileName(fp).match(/([0-9]+\.[0-9]+\.[0-9]+-(?:rc|beta)\.[0-9]+)-win/i);
+  return m ? m[1].toLowerCase() : '';
+}
+var targetVersion = expectedVersion(installer);
+var beforeVersion = fileVersion(exe);
 var exeBeforeSize = fileSize(exe);
 var exeBeforeStamp = fileStamp(exe);
 var asarBeforeSize = fileSize(asar);
@@ -83,8 +90,11 @@ log('installer ' + code);
 var exeChanged = fileSize(exe) !== exeBeforeSize || fileStamp(exe) !== exeBeforeStamp;
 var asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarBeforeStamp;
 var changed = exeChanged || asarChanged;
-var ok = code === 0 && changed && fso.FileExists(asar);
+var afterVersion = fileVersion(exe);
+var versionMatch = !targetVersion || afterVersion.toLowerCase() === targetVersion;
+var ok = code === 0 && changed && fso.FileExists(asar) && versionMatch;
 log('changed exe=' + exeChanged + ' asar=' + asarChanged);
+log('version before=' + beforeVersion + ' target=' + (targetVersion || 'unavailable') + ' after=' + afterVersion + ' match=' + versionMatch);
 // No second installer invocation: silent NSIS may have staged a payload even
 // when it failed to swap directories. A retry could corrupt the pending update.
 if (!ok) {
