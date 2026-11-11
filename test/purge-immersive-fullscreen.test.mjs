@@ -59,3 +59,16 @@ test('default Windows workspace keeps actions clear of native caption buttons', 
   // Native caption buttons disappear in system fullscreen, so restore normal spacing.
   assert.match(client, /\.dshp-workspace:fullscreen \.dshp-workspace-nav\{padding-right:16px\}/)
 })
+
+
+test('Purge renders an opaque dark workspace before entering system fullscreen', () => {
+  const client = read('client.js')
+  const literal = client.match(/const PURGE_WORKSPACE_CSS = ("(?:[^"\\]|\\.)*");/)?.[1]
+  assert.ok(literal, 'workspace CSS string must exist')
+  const css = JSON.parse(literal)
+  assert.match(css, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]\[data-default-full="1"\]\{[^}]*background:#0c1422!important;[^}]*backdrop-filter:none!important;[^}]*-webkit-backdrop-filter:none!important;/)
+  // The old Dock makes .dshp-root transparent with !important: the native
+  // clean page must override that rule or the light host leaks through.
+  assert.match(css, /\.dshp-workspace\[data-workspace="clean"\] \.dshp-root\.dshp-clean-workspace\{[^}]*background:#0c1422!important;/)
+  assert.match(css, /\.dshp-workspace \.dshp-workspace-nav\{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max\(9px,calc\(/)
+})
