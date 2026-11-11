@@ -30,7 +30,7 @@ test('P0 registry discovers only the local host; no remote environment is implie
   assert.equal(result.environments[0].os, 'windows')
   assert.equal(result.environments[0].discovery.state, 'discovered')
   assert.equal(getEnvironment('wsl:Kali'), null)
-  assert.match(result.note, /尚未接入/)
+  assert.match(result.note, /environmentDiscover/)
 })
 
 test('path inventory is not a version probe, capability check, or task execution', (t) => {
