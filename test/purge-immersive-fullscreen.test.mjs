@@ -87,3 +87,21 @@ test('Windows native caption palette follows the workspace and restores the host
   assert.match(section, /style\.removeProperty\(name\)/)
   assert.match(section, /\}, \[workspaceVisible\]\)/)
 })
+
+
+test('Windows caption keeps Purge tabs below the native 40px hit area until fullscreen', () => {
+  const client = read('client.js')
+  const literal = client.match(/const PURGE_WORKSPACE_CSS = ("(?:[^"\\]|\\.)*");/)?.[1]
+  assert.ok(literal, 'workspace CSS must exist')
+  const css = JSON.parse(literal)
+  assert.match(css, /html\[data-windows-titlebar\] \.dshp-dock\.dshp-workspace\[data-default-full="1"\]\{\s*-webkit-app-region:no-drag;/)
+  // The native DSH Windows titlebar owns the first 40 CSS pixels for hit
+  // testing. A portal with inset:0 can paint tabs there but not receive clicks.
+  const normalWindow = /html\[data-windows-titlebar\]:not\(\[data-fullscreen\]\) \.dshp-dock\.dshp-workspace\[data-maximized="1"\]\[data-default-full="1"\]:not\(:fullscreen\)\{([^}]*)\}/.exec(css)
+  assert.ok(normalWindow, 'default workspace needs its own normal-window caption clearance')
+  assert.match(normalWindow[1], /top:var\(--dsh-windows-titlebar-height,40px\)!important;/)
+  assert.match(normalWindow[1], /height:calc\(100dvh - var\(--dsh-windows-titlebar-height,40px\)\)!important;/)
+  // The existing true-fullscreen rule keeps the entire viewport available.
+  assert.match(css, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:fullscreen\{[^}]*inset:0!important;[^}]*height:100vh!important;/)
+  assert.match(client, /onClick: \(\) => open\(key\)/)
+})
