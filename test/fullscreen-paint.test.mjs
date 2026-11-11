@@ -33,12 +33,21 @@ test('source and embedded client use exactly the same full view CSS', () => {
 })
 
 
-test('embedded environment uses one scrolling pane and opaque non-blurred cards', () => {
-  for (const file of ['../lib/redteam/client.js', '../client.js']) {
-    const src = readFileSync(new URL(file, import.meta.url), 'utf8')
+test('embedded environment keeps one scrolling pane and disables all nested blur layers', () => {
+  const sources = ['../lib/redteam/client.js', '../client.js'].map(file =>
+    readFileSync(new URL(file, import.meta.url), 'utf8'))
+  const envStyles = sources.map(src => {
     assert.match(src, /return h\('div', \{ className: 'rt-main rt-env-main' \},/)
-    assert.match(src, /\.rt-dock\.rt-embedded \.rt-env-main\{overflow:hidden!important;min-height:0\}/)
-    assert.match(src, /\.rt-dock\.rt-embedded \.rt-env-main>\.rt-pane\{[\s\S]*?overflow-y:auto!important;/)
-    assert.match(src, /\.rt-dock\.rt-embedded \.rt-env-main \.rt-card\{[\s\S]*?background:#18283d!important;[\s\S]*?backdrop-filter:none!important;-webkit-backdrop-filter:none!important;/)
-  }
+    const begin = src.indexOf('/* Embedded environment paint stability:')
+    const end = src.indexOf('/* Full-screen paint stability + comfortable reading density.', begin)
+    assert.ok(begin > 0 && end > begin)
+    return src.slice(begin, end)
+  })
+  assert.equal(envStyles[0], envStyles[1], 'embedded CSS must match source')
+  const css = envStyles[0]
+  assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main\{[\s\S]*?background:#101b2b!important;/)
+  assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main,\s*\.rt-dock\.rt-embedded \.rt-env-main \*\{[\s\S]*?backdrop-filter:none!important;-webkit-backdrop-filter:none!important;/)
+  assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main>\.rt-pane\{[\s\S]*?overflow-y:auto!important;/)
+  assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main \.rt-card\{[\s\S]*?background:#18283d!important;/)
+  assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main \.rt-input,[\s\S]*?background:#122238!important;/)
 })
