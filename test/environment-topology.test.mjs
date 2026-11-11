@@ -14,7 +14,7 @@ test('topology combines local paths and provider inventory without treating disc
   let dockerCalls = 0
   const result = await diagnoseEnvironmentTopology({
     root, platform: 'linux', env: { PATH: '', ARTEX_TOOL_DIRS: join(root, 'artex-missing') },
-    config: { platform: 'linux', tools: { nmap }, toolkitDir: join(root, 'absent'), binDirs: [] },
+    config: { platform: 'windows', tools: { nmap }, toolkitDir: join(root, 'absent'), binDirs: [] },
     execFileFn: () => { throw Error('WSL must not run on Linux') },
     dockerExecFileFn: (cmd, args, opts, done) => {
       dockerCalls++
