@@ -58,7 +58,7 @@ jobs:
             node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")"
           test "$archived_version" = "$version"
           if [ "$GITHUB_REPOSITORY" = "wxcvm/dsh-purge" ]; then
-            for file in client.js lib/redteam/client.js lib/redteam/store-core.js scripts/update-desktop-fork.ps1; do
+            for file in client.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1; do
               unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
             done
           fi
