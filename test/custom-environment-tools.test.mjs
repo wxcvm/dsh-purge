@@ -47,7 +47,7 @@ test('blank extra-tool rows can be omitted; probe does not execute custom binary
     root, execFileFn: () => { throw new Error('custom tool should not be launched') },
   })
   assert.equal(result.status, 'unknown')
-  assert.equal(resolveAllTools({ root }).length, 18)
+  assert.equal(resolveAllTools({ root }).length, 24)
   savePlatformConfig({ customTools: [] }, root)
-  assert.equal(resolveAllTools({ root }).length, 17)
+  assert.equal(resolveAllTools({ root }).length, 23)
 })
