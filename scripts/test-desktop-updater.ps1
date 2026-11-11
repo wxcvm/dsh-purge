@@ -7,6 +7,7 @@ $bin = Join-Path $fixture 'bin'
 $oldPath = $env:PATH
 try {
   New-Item -Path (Join-Path $plugin 'lib\redteam') -ItemType Directory -Force | Out-Null
+  New-Item -Path (Join-Path $plugin 'lib\redteam\adapters') -ItemType Directory -Force | Out-Null
   New-Item -Path $bin -ItemType Directory -Force | Out-Null
   $version = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\package.json') -Raw | ConvertFrom-Json).version
   $manifest = '{"name":"dsh-profile-desktop","dsh":{"profile":{"bundles":["dsh-purge"]}},"dependencies":{"dsh-purge":"original-spec"}}'
@@ -14,7 +15,7 @@ try {
   Set-Content -LiteralPath (Join-Path $profile 'cordis.patch.yml') -Value "- insert:`n    - id: dsh-purge" -NoNewline
   Set-Content -LiteralPath (Join-Path $profile 'pnpm-lock.yaml') -Value 'original-lock' -NoNewline
   Set-Content -LiteralPath (Join-Path $plugin 'package.json') -Value ('{"version":"' + $version + '"}') -NoNewline
-  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js')) {
+  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
     Set-Content -LiteralPath (Join-Path $plugin $file) -Value 'fixture' -NoNewline
   }
   & $script -DshHome $fixture -CheckOnly

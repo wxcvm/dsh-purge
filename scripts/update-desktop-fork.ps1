@@ -48,7 +48,7 @@ Write-Host "DSH profile: $profileDir"
 Write-Host "Installed dsh-purge: $oldVersion"
 if ($CheckOnly) {
   if ($oldVersion -ne $version) { throw "Expected $version in this profile; found $oldVersion" }
-  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js')) {
+  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
     if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
       throw "Installed package is incomplete: $file"
     }
@@ -111,7 +111,7 @@ try {
   if (-not (Test-Path -LiteralPath $pluginManifest -PathType Leaf)) { throw 'Installed package manifest is missing' }
   $actual = (Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json).version
   if ($actual -ne $version) { throw "Installed version $actual does not match $version" }
-  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js')) {
+  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
     if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
       throw "Installed package is missing required UI file: $file"
     }
