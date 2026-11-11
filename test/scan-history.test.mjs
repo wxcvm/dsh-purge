@@ -268,3 +268,28 @@ test('scan output preview can be retried after errors or refreshed after success
     assert.match(source, /setPreviews\(\(old\) => \(\{ \.\.\.old, \[runId\]: null \}\)\)/)
   }
 })
+
+test('scan history exposes only real manifest execution lineage; legacy records remain unknown', (t) => {
+  const { store, write, root } = fixture(t)
+  write('alpha', ONE, 'nmap', 'imported', '<nmaprun/>')
+  write('alpha', TWO, 'httpx', 'failed', 'problem')
+  const manifestFile = join(root, 'alpha', 'scan-output', ONE + '.json')
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
+  manifest.execution = {
+    executionId: ONE, environmentId: 'local', toolId: 'nmap',
+    binarySource: 'config', attempted: true,
+    resultStatus: 'executed',
+    startedAt: manifest.startedAt, finishedAt: manifest.finishedAt,
+  }
+  writeFileSync(manifestFile, JSON.stringify(manifest))
+  const history = listScanHistory(store, 'alpha')
+  const recent = history.items.find((item) => item.run_id === ONE)
+  assert.equal(recent.execution.environment_id, 'local')
+  assert.equal(recent.execution.execution_id, ONE)
+  assert.equal(recent.execution.tool_id, 'nmap')
+  assert.equal(recent.execution.result_status, 'executed')
+  assert.equal(recent.execution.attempted, true)
+  const legacy = history.items.find((item) => item.run_id === TWO)
+  assert.equal(legacy.execution, null, 'legacy manifests must not be upgraded to invented execution proof')
+  assert.equal(legacy.environment_id, null)
+})
