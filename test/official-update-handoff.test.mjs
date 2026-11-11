@@ -186,6 +186,7 @@ test('handoff patch does not substitute installer.exe when verified pending meta
   assert.match(core, /desktop verified pending installer missing/)
   assert.match(core, /const infoPath = join\(cache,/)
   assert.match(core, /if \(existsSync\(infoPath\)\)/)
+  assert.match(core, /cwd: process\.env\.TEMP \|\| dirname\(installer\)/)
 })
 
 
