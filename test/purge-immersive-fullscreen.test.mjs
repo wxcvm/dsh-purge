@@ -49,3 +49,13 @@ test('standalone full-window view requests the screen work area and stays in syn
   }
   assert.equal((src.match(/const screenArea = window\.screen \|\| \{\}/g) || []).length, 1)
 })
+
+
+test('default Windows workspace keeps actions clear of native caption buttons', () => {
+  const client = read('client.js')
+  // Window Controls Overlay has a renderer-visible titlebar rectangle.
+  // Reserve the space occupied by the OS buttons without hard-coding DPI/width.
+  assert.match(client, /padding-right:max\(16px,calc\(100vw - env\(titlebar-area-x, 0px\) - env\(titlebar-area-width, 100vw\) \+ 16px\)\)/)
+  // Native caption buttons disappear in system fullscreen, so restore normal spacing.
+  assert.match(client, /\.dshp-workspace:fullscreen \.dshp-workspace-nav\{padding-right:16px\}/)
+})
