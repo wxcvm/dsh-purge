@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createReservations, reservedUsage } from '../lib/redteam/agent-reservations.js'
+import { createReservations, reservedUsage, withReservationUsage } from '../lib/redteam/agent-reservations.js'
 
 const event = (runId, parentSessionId) => ({ runId, parentSessionId })
 
@@ -78,4 +78,21 @@ test('idle or disposed parent reclaims only its unbound reservations', () => {
   assert.equal(r.clearPending('nested'), 1)
   assert.equal(r.end(event('run-a', 'root')), true)
   assert.deepEqual(r.list('root'), [])
+})
+
+test('UI and tool use the same occupied capacity while preserving unknown free slots', () => {
+  const r = createReservations()
+  r.acquire('root', 'root', 'pending')
+  const live = { max: 3, used: 1, available: true, free: 2,
+    per_root: [{ owner: 'root', used: 1, available: true, running_ids: ['child'] }] }
+  const view = withReservationUsage(live, r)
+  assert.equal(view.used, 1)
+  assert.equal(view.free, 1)
+  assert.equal(view.per_root[0].occupied, 2)
+  assert.equal(view.per_root[0].reserved_unobserved, 1)
+  assert.equal(live.free, 2)
+  const unknown = withReservationUsage({ ...live, available: false,
+    per_root: [{ ...live.per_root[0], available: false }] }, r)
+  assert.equal(unknown.free, null)
+  assert.equal(unknown.per_root[0].free, null)
 })
