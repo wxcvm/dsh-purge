@@ -10289,7 +10289,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [concurrency, setConcurrency] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
 
-      const load = () => {
+      const statusRefresh = React.useRef(null)
+      const loadRoles = () => {
         setBusy(true)
         api({ op: eng ? 'prompts' : 'bootstrap', engagement: eng || undefined }).then((r) => {
           setBusy(false)
@@ -10297,24 +10298,47 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setErr(null)
           if (r.roles) setRoles(r.roles)
         }, (e) => { setBusy(false); setErr(String((e && e.message) || e)) })
-        /* 并发名额按"当前跑着的子智能体"算；host 侧读 subagents 注册表 */
-        api({ op: 'agentsStatus' }).then((r) => {
-          setConcurrency(r || { ok: false, error: '没有收到智能体状态' })
-        }, (e) => setConcurrency({ ok: false, error: String((e && e.message) || e) }))
       }
-      React.useEffect(load, [eng, refreshKey])
+      const load = () => {
+        loadRoles()
+        statusRefresh.current?.()
+      }
+      React.useEffect(loadRoles, [eng, refreshKey])
+      React.useEffect(() => {
+        let alive = true
+        let inflight = false
+        const tick = () => {
+          if (!alive || inflight) return
+          inflight = true
+          api({ op: 'agentsStatus' }).then((r) => {
+            if (alive) setConcurrency(r || { ok: false, error: '没有收到智能体状态' })
+          }, (e) => {
+            if (alive) setConcurrency({ ok: false, error: String((e && e.message) || e) })
+          }).finally(() => { inflight = false })
+        }
+        statusRefresh.current = tick
+        tick()
+        const timer = setInterval(tick, 5000)
+        return () => {
+          alive = false
+          clearInterval(timer)
+          if (statusRefresh.current === tick) statusRefresh.current = null
+        }
+      }, [eng, refreshKey])
 
       const used = concurrency && typeof concurrency.used === 'number' ? concurrency.used : null
       const max = concurrency && concurrency.max ? concurrency.max : 3
       const verified = concurrency && concurrency.available === true
       const perRoot = concurrency && Array.isArray(concurrency.per_root) ? concurrency.per_root : []
       const totalRoots = perRoot.length
+      const extra = perRoot.reduce((sum, row) => sum + (row.reserved_unobserved || 0), 0)
+      const pendingLabel = extra ? ' + 预留 ' + extra : ''
       const occupancy = !verified
         ? (concurrency && concurrency.used_is_lower_bound && used !== null
           ? '至少在跑 ' + used + ' / 剩余未知' : '占用未知')
         : totalRoots === 1
-          ? '在跑 ' + used + ' / 剩余 ' + concurrency.free
-          : '在跑 ' + used + '（跨 ' + totalRoots + ' 个会话，剩余名额按会话计算）'
+          ? '在跑 ' + used + pendingLabel + ' / 剩余 ' + concurrency.free
+          : '在跑 ' + used + pendingLabel + '（跨 ' + totalRoots + ' 个会话，剩余名额按会话计算）'
       return h('div', { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
           h('span', { style: { fontWeight: 600 } }, '作战智能体'),
@@ -10349,8 +10373,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 perRoot.map((entry, index) => {
                   const confirmed = entry.available === true && typeof entry.free === 'number'
                   const count = typeof entry.used === 'number' ? entry.used : null
+                  const pending = entry.reserved_unobserved ? ' + 预留 ' + entry.reserved_unobserved : ''
                   const status = confirmed
-                    ? '在跑 ' + count + ' / 剩余 ' + entry.free
+                    ? '在跑 ' + count + pending + ' / 剩余 ' + entry.free
                     : (count === null ? '运行状态未知' : '至少在跑 ' + count + ' / 剩余未知')
                   return h('div', { key: String(entry.owner || index), className: 'rt-kv' },
                     h('b', { className: 'rt-mono', title: String(entry.owner || '') }, String(entry.owner || '未知会话')),
