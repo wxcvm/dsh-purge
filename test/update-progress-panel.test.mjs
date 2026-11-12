@@ -120,3 +120,44 @@ test("recovered update keeps disk, renderer, backend and profile outcomes separa
   assert.match(words(tree), /上次读取的结果/);
   assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
 });
+
+test("restart dispatch distinguishes rejection, acknowledgement, and late failure", () => {
+  const source = readFileSync(new URL("../lib/update.js", import.meta.url), "utf8");
+  const start = source.indexOf("export function dispatchUpdateRestart(");
+  const end = source.indexOf("/** A terminal receipt", start);
+  assert.ok(start >= 0 && end > start);
+  let receipt = { phase: "awaiting_restart", startedAt: "2026-01-01T00:00:00Z", targetSha: "a".repeat(40) };
+  const run = new Function("readJson", "updateReceiptPath", "saveUpdateReceipt",
+    source.slice(start, end).replace("export function", "function") + "\nreturn dispatchUpdateRestart;")(
+    () => receipt, () => "receipt", row => { receipt = row; });
+  const base = { ok: true, applied: true, restartAfter: true };
+  let result = run(base, () => ({ restarting: false, error: "helper failed" }), () => 1000);
+  assert.equal(result.ok, true);
+  assert.equal(result.restartAfter, false);
+  assert.equal(result.needRestart, true);
+  assert.equal(result.reloadClient, false);
+  assert.equal(receipt.restartRequest.status, "failed");
+  delete receipt.restartRequest;
+  let reject;
+  result = run(base, onError => { reject = onError; return { restarting: true }; }, () => 2000);
+  assert.equal(result.restartRequest.status, "scheduled");
+  reject(new Error("runtime rejected"));
+  assert.equal(receipt.restartRequest.status, "failed");
+  receipt = { ...receipt, startedAt: "2026-01-02T00:00:00Z", restartRequest: undefined };
+  reject(new Error("late old error"));
+  assert.equal(receipt.restartRequest, undefined);
+  result = run({ ...base, restartAfter: false, needsFullQuit: true }, () => { throw Error("must not schedule"); }, () => 3000);
+  assert.equal(result.restartRequest.status, "manual");
+});
+test("restart verification requires a new process rather than a scheduled launch", () => {
+  const source = readFileSync(new URL("../lib/update.js", import.meta.url), "utf8");
+  const start = source.indexOf("function classifyUpdateRestart(");
+  const end = source.indexOf("/** Record restart dispatch", start);
+  const classify = new Function(source.slice(start, end) + "\nreturn classifyUpdateRestart;")();
+  const receipt = { phase: "awaiting_restart", restartRequest: { status: "scheduled", at: new Date(1000).toISOString() } };
+  assert.equal(classify(receipt, false, 2000), "waiting");
+  assert.equal(classify(receipt, false, 91000), "unconfirmed");
+  assert.equal(classify(receipt, true, 2000), "process_restarted");
+  assert.equal(classify({ ...receipt, restartRequest: { status: "failed" } }, false, 2000), "dispatch_failed");
+  assert.equal(classify({ ...receipt, restartRequest: { status: "manual" } }, false, 2000), "manual_required");
+});
