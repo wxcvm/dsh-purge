@@ -2,6 +2,15 @@
 
 ## 中文
 
+### 最终联合候选：清洗台、测绘、环境和 Agent（#135、#155、#159、#160、#164、#167、#168）
+
+- **清洗台**：六页原生维护工作区、补丁搜索与诊断、备份来源与逐文件哈希核对、宿主更新前后与实际启动指纹、客户端构建标识。历史备份来源未知时明确标注；未提供自动回滚。
+- **Agent**：生命周期与并发预留回收、真实运行容量统计、每 5 秒状态刷新；宿主事件匹配仍受原生事件信息限制。
+- **网络与隐私**：本地网络快照基线比较、聚合诊断 JSON 导出、只读存储 ACL 审计；ARTEX 隐私概览为可选本机联动，不代表匿名或外部可达性。
+- **测绘**：授权范围内的 InternetDB、Shodan、DNS、CT、子域名资料、历史记录和本机 ARTEX 同步；不自动运行目标测试。
+- **跨环境**：依据实际工具路径和显式版本探针排名，保留未知状态，不自动执行工具。
+- **验收边界**：独立 PR CI 已通过；联合候选须重新跑完整 CI。Windows Desktop 实际安装、更新、恢复、补丁生效及 Harness 0.2.2-rc.2 完整兼容仍须独立验证；声明目标保持 0.2.2-rc.1。预览版尚未发布。
+
 ### 后续合并：Windows 修复、环境与多节点 SSH 管理（#126–#161）
 
 - **环境适配（#126、#128–#134、#136）**：补充运行中的 Docker 环境发现和显式工具版本检查、工具清单、任务偏好、ARTEX 本机工具来源、执行来源记录、环境拓扑和能力矩阵；VPS 登录配置区分域名、IPv4、IPv6、用户名与私钥路径。
@@ -48,6 +57,14 @@
 - **仍未验证与限制**：Windows Desktop 真实升级/回滚、VPS 公网可达性、Docker 实际构建/部署，以及生产数据库迁移尚未完成。本功能不是整库加密；扫描原始证据、日志、报告、旧页/WAL、备份和导出仍可能含明文。远程桥接令牌不保护 DSH 主服务或其他插件接口。
 
 ## English
+
+### Final integrated candidate (#135, #155, #159, #160, #164, #167, #168)
+
+- Maintenance workspace, backup provenance/hash checks, host update and startup fingerprints, client build identity; no automatic rollback.
+- Agent lifecycle/reservation accounting and live status refresh; native event correlation limitations remain.
+- Local network baseline/report, read-only ACL audit and opt-in ARTEX privacy overview; scoped passive asset intelligence and local ARTEX synchronization.
+- Observed cross-environment tool recommendations based on explicit probes, without automatic execution.
+- Individual PR CI passed; integrated CI, real Windows installation/update/restore and patch effectiveness, and full rc.2 compatibility remain separate acceptance gates. The declared target remains rc.1; this candidate is not published.
 
 ### Subsequent merged work: Windows fixes, environments and SSH management (#126–#161)
 

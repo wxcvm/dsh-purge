@@ -7,6 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
+		const CLIENT_BUILD_ID = "845418953d2a8585";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1475,18 +1476,23 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const job = state.apply_progress || {};
 			const lines = [
 				"dsh-purge 清洗台诊断 / Cleaning diagnostics",
-				"插件版本: " + (state.plugin_version || "未知"),
+				"插件磁盘版本: " + (state.plugin_version || "未知"),
+				"后端加载时版本: " + (state.plugin_identity?.loaded || "未知"),
+				"插件目录: " + (state.plugin_identity?.root || "未知"),
 				"宿主类型: " + (state.surface || "未知"),
 				"宿主路径: " + (state.ai_base || "未定位"),
+				"宿主磁盘包: " + (state.host_identity?.package ? state.host_identity.package.name + "@" + state.host_identity.package.version : "未知"),
+				"宿主目录类型: " + (state.host_identity?.location || "未知"),
 				"DSH_HOME: " + (state.dsh_home || "未知"),
-				"补丁: " + tally.applied + "/" + tally.total
+				"补丁: " + (state.ai_base ? tally.applied + "/" + tally.total
 					+ " 已应用; " + tally.pending + " 待应用; "
-					+ tally.unmatched + " 没对上; " + tally.skipped + " 跳过",
+					+ tally.unmatched + " 没对上; " + tally.skipped + " 跳过" : "待检测"),
 				"shim: cmd=" + (state.shim_cmd || "未知")
 					+ ", ps1=" + (state.shim_ps1 || "未知")
 					+ ", unix=" + (state.shim_bin || "未知"),
-				"备份: " + (state.has_backup ? "有" : "无"),
+				"备份: " + (state.ok === false || typeof state.has_backup !== "boolean" ? "未知" : state.has_backup ? "有" : "无"),
 			];
+			if (state.host_identity?.surfaceMismatch) lines.push("注意: 宿主目录类型与当前界面类型不一致，需核对实际运行实例。");
 			if (!state.ai_base && state.missing_ai_base) lines.push("宿主定位说明: " + state.missing_ai_base);
 			if (state.desktop_exe) lines.push("桌面程序: " + state.desktop_exe);
 			if (state.asar_still_sealed) lines.push("桌面运行时: app.asar 仍封装，当前进程可能无法读取解包目录中的补丁");
@@ -1507,6 +1513,169 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				}
 			}
 			return lines.join("\n");
+		}
+
+		function BackupInventory({ busy }) {
+			const [report, setReport] = useState(null);
+			const [checking, setChecking] = useState(false);
+			const [error, setError] = useState("");
+			const inspect = async () => {
+				setChecking(true);
+				setError("");
+				setReport(null);
+				try {
+					const result = await apiJson("/dsh-purge/backups");
+					if (!result?.ok) throw new Error(result?.error || "备份检测失败");
+					setReport(result);
+				} catch (e) { setError(String(e?.message || e)); }
+				finally { setChecking(false); }
+			};
+			const labels = { missing: "无备份", invalid: "空或无效", unreadable: "读取失败", readable: "可读（未比较）", identical: "与当前相同", different: "与当前不同" };
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-sub" }, h("h4", null, "备份检查与恢复预览")),
+				h("p", { className: "dshp-hint" }, "只检查当前已定位的宿主目标，不包含启动器备份或未发现的历史文件。预览不写入任何文件。"),
+				h(Btn, { disabled: busy || checking, onClick: inspect }, checking ? "检查中…" : "检查现有备份"),
+				error ? h("p", { role: "alert" }, error) : null,
+				report ? h("div", null,
+					h("p", { role: "status" }, report.aiBase ? "已检查 " + report.rows.length + " 个宿主目标；旧备份未登记的来源保持未知。" : "未定位宿主，无法检查备份。"),
+					h("p", { className: "dshp-hint" }, "SHA-256 用于记录当前备份内容，不是原版签名；不同不代表可安全恢复。结果为本次检查快照，恢复前请重新检查。"),
+					report.rows.map((row) => h("details", { key: row.path },
+						h("summary", null, (labels[row.status] || row.status) + " · " + row.path),
+						h("p", null, "大小：" + (row.bytes ?? "未知") + " 字节 · 修改时间：" + (row.modifiedAt || "未知")),
+						h("p", { className: "dshp-hint", style: { overflowWrap: "anywhere" } }, "SHA-256：" + (row.sha256 || "未计算")),
+						h("p", { role: "status" }, "来源核对：" + ({ version_match: "已登记版本与当前包一致（非官方签名）", version_mismatch: "版本不一致，禁止覆盖恢复", hash_mismatch: "内容指纹不一致，禁止覆盖恢复", unknown: "来源未知" }[row.provenance?.status] || "来源未知")),
+						h("p", null, "当前包：" + (row.provenance?.currentPackage ? row.provenance.currentPackage.name + "@" + row.provenance.currentPackage.version : "未知")),
+						h("p", null, "备份来源：" + (row.provenance?.record?.package ? row.provenance.record.package.name + "@" + row.provenance.record.package.version : "未知")),
+						row.provenance?.history?.length ? h("ul", null, row.provenance.history.map((entry, i) => h("li", { key: i },
+							(entry.reason === "refresh" ? "刷新" : "建立") + " · " + entry.at + " · " + (entry.package ? entry.package.name + "@" + entry.package.version : "版本未知")))) : null)),
+				) : null,
+			);
+		}
+
+		function UpdateVerification({ state, onRefresh, busy }) {
+			const [checking, setChecking] = useState(false);
+			const [error, setError] = useState("");
+			const receipt = state?.update_receipt;
+			const [target, setTarget] = useState(null);
+			const [targetBusy, setTargetBusy] = useState(false);
+			const [targetError, setTargetError] = useState("");
+			const verifyTarget = async () => {
+				setTargetBusy(true);
+				setTargetError("");
+				setTarget(null);
+				try {
+					const data = await apiJson("/dsh-purge/update-target");
+					if (!data?.ok) throw new Error(data?.error || "远端目标核对失败");
+					setTarget(data);
+				} catch (e) { setTargetError(String(e?.message || e)); }
+				finally { setTargetBusy(false); }
+			};
+			const [copies, setCopies] = useState(null);
+			const [copiesBusy, setCopiesBusy] = useState(false);
+			const [copiesError, setCopiesError] = useState("");
+			const diskBuild = receipt?.rendererDiskBuildId || copies?.copies?.find((copy) => copy.active)?.rendererBuildId || "";
+			const rendererMatch = diskBuild ? diskBuild === CLIENT_BUILD_ID : null;
+			const scanCopies = async () => {
+				setCopiesBusy(true);
+				setCopiesError("");
+				try {
+					const data = await apiJson("/dsh-purge/update-copies");
+					if (!data?.ok) throw new Error(data?.error || "安装副本检查失败");
+					setCopies(data);
+				} catch (e) { setCopiesError(String(e?.message || e)); }
+				finally { setCopiesBusy(false); }
+			};
+			const verify = async () => {
+				setChecking(true);
+				setError("");
+				try { await onRefresh(); }
+				catch (e) { setError(String(e?.message || e)); }
+				finally { setChecking(false); }
+			};
+			const status = !receipt ? "暂无本安装目录的更新记录"
+				: receipt.phase === "failed" ? "更新失败"
+				: ["resolving_target", "writing", "reapplying"].includes(receipt.phase) ? "更新尚未确认完成"
+				: receipt.diskMatch === false ? "磁盘内容与更新记录不一致"
+				: receipt.backendBootMatch === false ? "后端启动时文件尚未匹配更新"
+				: receipt.processRestarted === false ? "后端仍是更新前的进程，尚未确认重启"
+				: receipt.diskMatch === true && receipt.backendBootMatch === true ? "磁盘与后端启动指纹一致"
+				: "验收数据不足";
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-sub" }, h("h4", null, "更新验收")),
+				h("p", { role: "status" }, status),
+				receipt ? h("div", null,
+					h("p", { className: "dshp-hint" }, "目标：" + receipt.ref + " · 更新前：" + (receipt.before?.version || "未知") + " · 写入后：" + (receipt.after?.version || "未知")),
+					h("p", { className: "dshp-hint" }, "开始：" + (receipt.startedAt || "未知") + " · 阶段：" + receipt.phase),
+					h("p", { className: "dshp-hint" }, "目录：" + receipt.root),
+					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；与更新时记录比较。"),
+					h("p", { className: "dshp-hint" }, "后端进程：" + (receipt.processRestarted === true ? "已重新启动" : receipt.processRestarted === false ? "仍为更新前进程" : "缺少进程身份，重启未确认") + "；不代表整个桌面客户端已退出。"),
+					receipt.error ? h("p", { role: "alert" }, receipt.error) : null,
+					receipt.phase === "failed" ? h("p", { className: "dshp-hint" }, receipt.failedPhase === "reapplying" ? "文件可能已更新，但后续处理失败。先检查诊断与备份，完全退出宿主后再决定是否通过版本与恢复页面重新选择版本。" : "写入未确认完成。先检查安装副本和备份，避免直接反复覆盖；需要恢复时使用现有版本选择或官方安装包。") : null,
+				) : null,
+				h(Btn, { disabled: busy || checking, onClick: verify }, checking ? "核对中…" : "重新核对更新结果"),
+				error ? h("p", { role: "alert" }, error) : null,
+				h("div", { className: "dshp-sub" }, h("h4", null, "远端目标核对")),
+				h("p", { className: "dshp-hint" }, "更新前记录的提交：" + (receipt?.targetSha || "未知") + "；仅比较四个关键文件，联网只读。"),
+				h(Btn, { disabled: busy || targetBusy || !receipt?.targetSha, onClick: verifyTarget }, targetBusy ? "核对中…" : "核对远端目标"),
+				targetError ? h("p", { role: "alert" }, targetError) : null,
+				target && target.sha === receipt?.targetSha ? h("div", null,
+					h("p", { role: "status" }, target.status === "match" ? "四个关键文件与记录的远端提交一致" : target.status === "mismatch" ? "存在与远端目标不同的文件（含换行差异）" : "远端核对数据不足"),
+					target.files.map((row) => h("p", { key: row.file, className: "dshp-hint" }, row.file + " · " + ({ match: "一致", mismatch: "不同", unknown: "未知" }[row.status] || "未知"))),
+				) : null,
+				h("div", { className: "dshp-sub" }, h("h4", null, "前端构建身份")),
+				h("p", { className: "dshp-hint" }, "实际运行前端：" + CLIENT_BUILD_ID + " · 磁盘构建：" + (diskBuild || "未知")),
+				h("p", { role: "status" }, rendererMatch === true ? "前端构建标识一致" : rendererMatch === false ? "前端仍加载其他构建，请完整退出 Harness 或刷新页面后再核对。" : "磁盘构建标识未知，请检查安装副本。"),
+				h("div", { className: "dshp-sub" }, h("h4", null, "安装副本一致性")),
+				h(Btn, { disabled: busy || copiesBusy, onClick: scanCopies }, copiesBusy ? "检查中…" : "检查安装副本"),
+				copiesError ? h("p", { role: "alert" }, copiesError) : null,
+				copies ? h("div", null,
+					h("p", { className: "dshp-hint" }, "仅比较当前发现的 profile 插件目录与活动目录的四个关键文件；不证明其他宿主进程已重新加载。"),
+					copies.copies.map((copy) => h("details", { key: copy.root },
+						h("summary", null, (copy.active ? "活动目录" : "安装副本") + " · " + (copy.version || "版本未知") + " · " + (copy.matchesActive === true ? "关键文件一致" : copy.matchesActive === false ? "关键文件不同" : "数据不足")),
+						h("p", { style: { overflowWrap: "anywhere" } }, copy.root),
+						h("p", { className: "dshp-hint" }, "Profile：" + (copy.profiles.join(", ") || "未关联") + " · 前端：" + (copy.rendererBuildId || "未知")))),
+					copies.unresolved.length ? h("p", { role: "alert" }, "未定位的 profile：" + copies.unresolved.join(", ")) : null,
+				) : null,
+			);
+		}
+
+		function CleanDiagnostics({ state, onRefresh, busy }) {
+			const t = useT();
+			const [checking, setChecking] = useState(false);
+			const [feedback, setFeedback] = useState("");
+			const rows = state ? patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) })) : [];
+			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
+			const identity = state?.plugin_identity;
+			const hostIdentity = state?.host_identity;
+			const loaded = identity?.loaded || "";
+			const disk = identity?.disk || "";
+			const mismatch = Boolean(loaded && disk && loaded !== disk);
+			const refresh = async () => {
+				setChecking(true);
+				setFeedback("");
+				try { await onRefresh(); setFeedback("检测完成：已重新读取宿主状态"); }
+				catch (e) { setFeedback("检测失败：" + String(e?.message || e)); }
+				finally { setChecking(false); }
+			};
+			const copy = async () => {
+				try { await navigator.clipboard.writeText(report); setFeedback("诊断已复制（含本机路径）"); }
+				catch { setFeedback("复制失败，请选中下方诊断文本手动复制"); }
+			};
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
+				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
+				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
+				h("p", { className: "dshp-hint" }, "后端模块加载时版本：" + (loaded || "未知") + " · 当前目录磁盘版本：" + (disk || "未知")),
+				h("p", { className: "dshp-hint", role: "status" }, mismatch
+					? "版本不一致：文件已变化，建议完整退出并重启 Harness 后重新检测。"
+					: loaded && disk ? "版本号一致（不代表所有前端资源或补丁已生效）" : "版本身份暂不可用，不能判断是否已加载更新。"),
+				h("div", { className: "dshp-row" },
+					h(Btn, { disabled: busy || checking, onClick: refresh }, checking ? "检测中…" : "重新检测"),
+					h(Btn, { disabled: !state, onClick: copy }, "复制完整诊断")),
+				feedback ? h("p", { role: "status", className: "dshp-hint" }, feedback) : null,
+				h("p", { className: "dshp-hint" }, "诊断含本机目录及错误详情，分享前请检查私人信息。"),
+				h("pre", { className: "dshp-clean-diagnostic", tabIndex: 0, "aria-label": "清洗台完整诊断" }, report),
+			);
 		}
 
 		function PatchGroups({ state, onRefresh, busy }) {
@@ -1917,7 +2086,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return node;
 		}
 
-		function PurgifySection() {
+		function PurgifySection({ section } = {}) {
 			const t = useT();
 			const tRef = useRef(t);
 			tRef.current = t;
@@ -2233,7 +2402,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 									apply_progress: {
 										...((prev && prev.apply_progress) || {}),
 										active: false,
-										error: String(d.error || "宿主拒绝该操作"),
+										error: String(d.error || "宿主拒绝该操作") + (action === "revert" && Array.isArray(d.error_items) ? "\n" + d.error_items.map((item) => (item.path ? item.path + "： " : "") + item.error).join("\n") : ""),
 									},
 								}));
 								setNotice({ kind: "error", text: tr("err.action", { action: label, error: d.error || "" }) });
@@ -2294,7 +2463,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								setAskRestart(true);
 								return;
 							}
-							setNotice({ kind: "ok", text: tr("ok.done") });
+							setState((prev) => Object.assign({}, prev || {}, {
+								apply_progress: { active: false, kind: "revert", stage: "done", error: "" },
+							}));
+							setNotice({ kind: "ok", text: "已还原 " + (d.reverted ?? 0) + " 个宿主文件；请重启后重新检测。" });
 							loadAll();
 						})
 						.catch((e) => {
@@ -2474,7 +2646,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const pct = flowFinished ? 100 : jobOn
 				? Math.round(((job && job.stage === "done" ? jobSteps.length : Math.max(jobIdx, 0) + 0.45) / jobSteps.length) * 100)
 				: 0;
-			const flowInterrupted = Boolean(job && !job.active && job.stage !== "idle" && job.stage !== "done");
+			const flowInterrupted = Boolean(job && !jobOn && !job.error && job.stage !== "idle" && job.stage !== "done");
 			const metricNotes = [];
 			if (tally.pending) metricNotes.push(t("metric.pendingShort", { n: tally.pending }));
 			if (tally.unmatched) metricNotes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
@@ -2496,7 +2668,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				let actionLabel = t("btn.checkUpdate");
 				let actionKind;
 				let actionClick = () => checkUpdate(id);
-				let actionDisabled = updateBusy || Boolean(noBeta);
+				let actionDisabled = jobOn || updateBusy || Boolean(noBeta);
 				if (noBeta) {
 					actionLabel = t("update.noBeta");
 					actionClick = () => {};
@@ -2529,7 +2701,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("select", {
 						className: "dshp-field dshp-ver",
 						value: list.length ? ((hit && hit.ref) || "") : "",
-						disabled: updateBusy || !list.length,
+						disabled: jobOn || updateBusy || !list.length,
 						onChange: (e) => setPick((prev) => Object.assign({}, prev, { [id]: e.target.value })),
 						"aria-label": t("update.pick"),
 					},
@@ -2543,12 +2715,16 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h(Btn, { tiny: true, kind: actionKind, disabled: actionDisabled, onClick: actionClick }, actionLabel),
 				);
 			};
+			// Keep a single mounted state owner and preserve editors/filters across navigation.
+			const cleanPane = (ids, ...children) => h("div", {
+				className: "dshp-clean-subpane", hidden: Boolean(section && !ids.includes(section)),
+			}, ...children);
 			return h("section", { className: "dshp-panel", "aria-label": t("purge.title") },
 				h("div", { className: "dshp-head" },
 					h("h3", { className: "dshp-title" }, t("purge.title")),
 					h("span", { className: "dshp-pill" }, t("surface." + hostSurface)),
 				),
-				h("div", { className: "dshp-rel" },
+				cleanPane(["maintenance"], h("div", { className: "dshp-rel" },
 					h("div", { className: "dshp-now" },
 						h("span", { className: "dshp-now-label" }, t("channel.local")),
 						h("b", { className: "dshp-now-ver" }, localVer ? "v" + localVer : "—"),
@@ -2559,8 +2735,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						renderEdition("beta"),
 					),
 					noticeNode(updateNotice),
-				),
-				s ? h("div", { className: "dshp-metrics" },
+				)),
+				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" },
 						h("b", null, located ? (applied + " / " + total) : (patchesLost ? t("metric.lost.count") : (sealedReady ? t("metric.sealed.count") : t("metric.unlocated.count")))),
 						h("span", null, !located ? (patchesLost ? t("metric.lost") : (sealedReady ? t("metric.sealed") : t("metric.unlocated"))) : (metricNotes.length ? metricNotes.join(" · ") : t("metric.purged"))),
@@ -2576,15 +2752,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("span", null, (s.shim_cmd === "n/a" && s.shim_ps1 === "n/a" && (s.shim_bin === "n/a" || !s.shim_bin)) ? t("metric.shim.na") : t("metric.shim")),
 					),
 					h("div", { className: "dshp-metric" },
-						h("b", null, s.has_backup ? t("metric.bak.yes") : t("metric.bak.no")),
+						h("b", null, s.ok === false || typeof s.has_backup !== "boolean" ? "—" : s.has_backup ? t("metric.bak.yes") : t("metric.bak.no")),
 						h("span", null, t("metric.bak.hint")),
 					),
 				) : h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
 					h("div", { className: "dshp-metric" }, h("div", { className: "dshp-skel" }), h("div", { className: "dshp-skel", style: { width: "40%" } })),
-				),
-				h("div", { className: "dshp-row", style: { margin: "8px 0 10px" } },
+				)),
+				cleanPane(["overview"], h("div", { className: "dshp-row", style: { margin: "8px 0 10px" } },
 					h("button", { type: "button", className: "dshp-btn",
 						onClick: () => {
 							setCleanGuideOpen((v) => !v);
@@ -2601,8 +2777,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					}, cleanGuideOpen ? "收起清洗台指南" : "在当前窗口阅读清洗台指南")),
 				cleanGuideOpen ? h("div", null,
 					cleanGuideError ? h("div", { className: "dshp-notice is-error" }, cleanGuideError) : null,
-					h("pre", { className: "dshp-guide-doc" }, cleanGuideText || (cleanGuideError ? "" : "正在读取本地指南…"))) : null,
-				h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
+					h("pre", { className: "dshp-guide-doc" }, cleanGuideText || (cleanGuideError ? "" : "正在读取本地指南…"))) : null),
+				cleanPane(["overview", "patches", "maintenance"], h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
 				job && (job.error || (job.active && job.detail)) ? h("p", {
 					className: "dshp-clean-progress-note",
 					role: job.error ? "alert" : "status",
@@ -2610,20 +2786,23 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				flowInterrupted ? h("p", { className: "dshp-clean-progress-note", role: "alert" },
 					"上一次操作没有返回完成状态（最后阶段：" + flowLabel(job.stage, t) + "）。请重新检测并查看错误信息，不要把补丁比例当作流程完成。") : null,
 				h("div", { className: "dshp-clean-progress-note", role: "status" },
-					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : "未执行")
-					+ " · 补丁已应用 " + applied + "/" + total
-					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped),
+					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : flowInterrupted ? "结果未确认" : "未执行")
+					+ (located ? " · 补丁已应用 " + applied + "/" + total
+					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped : " · 补丁状态待检测")),
 				h("div", { className: "dshp-bar", role: "progressbar", "aria-label": "清洗流程进度", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": pct },
-					h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
-				h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: patchBusy || uninstallBusy }),
-				h(InjectSwitchSection),
-				h(HooksDenySection, { onSaved: loadAll }),
-				h("div", { className: "dshp-row", style: { marginTop: 12 } },
-					h(Btn, { kind: "primary", disabled: patchBusy || uninstallBusy || !overrideLoaded, onClick: () => doAction("apply", "action.apply") }, patchBusy ? t("btn.apply.busy") : t("btn.apply")),
-					h(Btn, { kind: "danger", disabled: patchBusy || uninstallBusy, onClick: () => doAction("revert", "action.revert") }, t("btn.revert")),
-					h(Btn, { kind: "solid-danger", disabled: patchBusy || uninstallBusy, onClick: () => setAskUninstall(true) }, uninstallBusy ? t("btn.uninstall.busy") : t("btn.uninstall")),
-					noticeNode(notice),
-				),
+					h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } }))),
+				cleanPane(["overview", "patches", "maintenance"], h("div", { className: "dshp-row dshp-clean-actions", style: { margin: "12px 0" } },
+					h(Btn, { kind: "primary", disabled: jobOn || updateBusy || !overrideLoaded, onClick: () => doAction("apply", "action.apply") }, patchBusy ? t("btn.apply.busy") : t("btn.apply")),
+					h(Btn, { kind: "danger", disabled: jobOn || updateBusy, onClick: () => doAction("revert", "action.revert") }, t("btn.revert")),
+					h(Btn, { kind: "solid-danger", disabled: jobOn || updateBusy, onClick: () => setAskUninstall(true) }, uninstallBusy ? t("btn.uninstall.busy") : t("btn.uninstall")),
+				)),
+				noticeNode(notice),
+				cleanPane(["patches"], h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
+				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
+
 				askUninstall ? h("div", {
 					className: "dshp-modal-bg",
 					role: "dialog",
@@ -2636,7 +2815,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("p", null, t("uninstall.body")),
 						h("div", { className: "dshp-modal-ops" },
 							h(Btn, { disabled: uninstallBusy, onClick: () => setAskUninstall(false) }, t("uninstall.cancel")),
-							h(Btn, { kind: "solid-danger", disabled: uninstallBusy, onClick: doUninstall }, t("uninstall.confirm")),
+							h(Btn, { kind: "solid-danger", disabled: jobOn || updateBusy, onClick: doUninstall }, t("uninstall.confirm")),
 						),
 					),
 				) : null,
@@ -2657,7 +2836,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					},
 				}) : null,
 				// h(ContinueRetrySection, null),
-				h("div", { className: "dshp-sub" },
+				cleanPane(["prompt"], h("div", { className: "dshp-sub" },
 					h("h4", null, t("override.title")),
 					h("div", { className: "dshp-row", style: { margin: 0 } },
 						h(Btn, { kind: "primary", tiny: true, disabled: patchBusy || !overrideLoaded, onClick: saveOverride }, t("btn.saveInject")),
@@ -2683,7 +2862,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				h("div", { className: "dshp-sub" },
 					h("h4", null, t("own.title")),
 				),
-				h("p", { className: "dshp-hint", style: { margin: "8px 0 0", color: "var(--dshp-mute)", fontSize: 12 } }, t("own.hint")),
+				h("p", { className: "dshp-hint", style: { margin: "8px 0 0", color: "var(--dshp-mute)", fontSize: 12 } }, t("own.hint"))),
 			);
 		}
 
@@ -3437,7 +3616,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		function SettingsRoot(props) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
 			const [theme, setTheme] = useState(readTheme);
-			const [section, setSection] = useState("patches");
+			const [section, setSection] = useState("overview");
 			useEffect(() => {
 				let cancelled = false;
 				let timer = 0;
@@ -3477,8 +3656,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				);
 			}
 			const sections = [
-				{ id: "patches", title: "清洗与补丁", description: "状态、补丁、版本与提示词" },
+				{ id: "overview", title: "状态总览", description: "宿主、清洗进度与快捷操作" },
+				{ id: "patches", title: "补丁管理", description: "分类、筛选、检测与诊断" },
+				{ id: "prompt", title: "提示词", description: "编辑、注入与本地配置" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
+				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
+				{ id: "diagnostics", title: "诊断中心", description: "运行版本、宿主路径与完整诊断" },
 			];
 			const selected = sections.find((item) => item.id === section) || sections[0];
 			return h("div", { className: "dshp-root dshp-clean-workspace", "data-theme": "dusk" },
@@ -3496,8 +3679,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("h2", null, selected.title),
 						h("p", null, selected.description),
 					),
-					h("div", { className: "dshp-clean-pane", hidden: section !== "patches" },
-						h(PurgifySection, null)),
+					h("div", { className: "dshp-clean-pane", hidden: section === "rules" },
+						h(PurgifySection, { section })),
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 				),
@@ -8109,6 +8292,96 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [surveyBusy, setSurveyBusy] = React.useState(false)
       const [surveyError, setSurveyError] = React.useState('')
       const [surveyResult, setSurveyResult] = React.useState(null)
+      const [inventoryTarget, setInventoryTarget] = React.useState('')
+      const [inventoryBusy, setInventoryBusy] = React.useState(false)
+      const [inventory, setInventory] = React.useState(null)
+      const [syncConfig, setSyncConfig] = React.useState(null)
+      const [syncConsent, setSyncConsent] = React.useState(false)
+      const [syncBusy, setSyncBusy] = React.useState(false)
+      const [syncResult, setSyncResult] = React.useState(null)
+      const loadSyncConfig = () => api({ op: 'scopedIntelSyncConfig' }).then(setSyncConfig, () => setSyncConfig(null))
+      React.useEffect(() => {
+        setSyncConsent(false); setSyncResult(null)
+        loadSyncConfig()
+      }, [eng])
+      const runIntelSync = () => {
+        if (!eng || !inventory?.ok || inventory.engagement !== eng || !syncConfig?.configured || !syncConsent || syncBusy || maskAssets) return
+        setSyncBusy(true); setSyncResult(null); setSyncConsent(false)
+        api({ op: 'scopedIntelSync', engagement: eng, target: inventory.target,
+          companyId: syncConfig.companyId, confirm: true }).then(r => {
+          setSyncBusy(false); setSyncResult(r)
+        }, () => { setSyncBusy(false); setSyncResult({ error: '无法确认同步结果' }) })
+      }
+      const runInventory = () => {
+        if (!eng || !inventoryTarget.trim() || inventoryBusy) return
+        setInventoryBusy(true); setInventory(null); setSyncConsent(false); setSyncResult(null)
+        api({ op: 'scopedIntelInventory', engagement: eng, target: inventoryTarget.trim() }).then(r => {
+          setInventoryBusy(false); setInventory(r)
+        }, () => { setInventoryBusy(false); setInventory({ error: '读取关联清单失败' }) })
+      }
+      const [subTarget, setSubTarget] = React.useState('')
+      const [subTool, setSubTool] = React.useState(false)
+      const [subConsent, setSubConsent] = React.useState(false)
+      const [subCommit, setSubCommit] = React.useState(false)
+      const [subBusy, setSubBusy] = React.useState(false)
+      const [subResult, setSubResult] = React.useState(null)
+      const runSub = (history = false) => {
+        if (!eng || !subTarget.trim() || subBusy || (!history && subTool && !subConsent)) return
+        setSubBusy(true); setSubResult(null)
+        api({ op: history ? 'scopedSubdomainHistory' : 'scopedSubdomains', engagement: eng,
+          target: subTarget.trim(), useSubfinder: subTool, confirmExternal: subConsent, commit: subCommit }).then(r => {
+          setSubBusy(false); setSubResult({ ...r, history })
+        }, () => { setSubBusy(false); setSubResult({ error: '子域查询失败' }) })
+      }
+      const [ctTarget, setCtTarget] = React.useState('')
+      const [ctConsent, setCtConsent] = React.useState(false)
+      const [ctCommit, setCtCommit] = React.useState(false)
+      const [ctBusy, setCtBusy] = React.useState(false)
+      const [ctResult, setCtResult] = React.useState(null)
+      const runCt = (history = false) => {
+        if (!eng || !ctTarget.trim() || ctBusy || (!history && !ctConsent)) return
+        setCtBusy(true); setCtResult(null)
+        api({ op: history ? 'scopedCtHistory' : 'scopedCtLookup', engagement: eng,
+          target: ctTarget.trim(), confirmExternal: ctConsent, commit: ctCommit }).then(r => {
+          setCtBusy(false); setCtResult({ ...r, history })
+        }, () => { setCtBusy(false); setCtResult({ error: 'CT 查询失败' }) })
+      }
+      const [dnsTarget, setDnsTarget] = React.useState('')
+      const [dnsConsent, setDnsConsent] = React.useState(false)
+      const [dnsCommit, setDnsCommit] = React.useState(false)
+      const [dnsBusy, setDnsBusy] = React.useState(false)
+      const [dnsResult, setDnsResult] = React.useState(null)
+      const runDns = (history = false) => {
+        if (!eng || !dnsTarget.trim() || dnsBusy || (!history && !dnsConsent)) return
+        setDnsBusy(true); setDnsResult(null)
+        api({ op: history ? 'scopedDnsHistory' : 'scopedDnsLookup', engagement: eng,
+          target: dnsTarget.trim(), confirmExternal: dnsConsent, commit: dnsCommit }).then(r => {
+          setDnsBusy(false); setDnsResult({ ...r, history })
+        }, () => { setDnsBusy(false); setDnsResult({ error: 'DNS 查询失败' }) })
+      }
+      const [intelTarget, setIntelTarget] = React.useState('')
+      const [intelShodan, setIntelShodan] = React.useState(false)
+      const [intelConsent, setIntelConsent] = React.useState(false)
+      const [intelCommit, setIntelCommit] = React.useState(false)
+      const [intelBusy, setIntelBusy] = React.useState(false)
+      const [intelResult, setIntelResult] = React.useState(null)
+      const readIntelHistory = () => {
+        if (!eng || !intelTarget.trim() || intelBusy) return
+        setIntelBusy(true); setIntelResult(null)
+        api({ op: 'scopedIntelHistory', engagement: eng, target: intelTarget.trim() }).then(r => {
+          setIntelBusy(false); setIntelResult({ ...r, history: true })
+        }, () => { setIntelBusy(false); setIntelResult({ error: '读取历史失败' }) })
+      }
+      const runIntel = () => {
+        if (!eng || !intelConsent || !intelTarget.trim() || intelBusy) return
+        setIntelBusy(true); setIntelResult(null)
+        api({ op: 'scopedIntelLookup', engagement: eng, target: intelTarget.trim(),
+          sources: intelShodan ? ['internetdb', 'shodan'] : ['internetdb'],
+          confirmExternal: true, commit: intelCommit }).then(r => {
+          setIntelBusy(false); setIntelResult(r)
+          if (r?.imported) setRefresh(n => n + 1)
+        }, () => { setIntelBusy(false); setIntelResult({ error: '查询失败' }) })
+      }
       const limit = 30
       React.useEffect(() => {
         let live = true
@@ -8141,7 +8414,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setSourceMsg((r && r.error) || '保存失败'); return }
           const value = r.config && r.config.intelSources
           if (value) { setSavedSources(value); setChosen(value) }
-          setSourceMsg('已保存平台选择。外部平台需要在其网页单独使用；不会自动接入 API。')
+          setSourceMsg('已保存平台选择；不会自动提交外部查询。')
         }, (e) => { setSourceBusy(false); setSourceMsg(String((e && e.message) || e)) })
       }
       const activeSources = sources.filter((x) => chosen.selected.includes(x.id))
@@ -8215,7 +8488,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', null, '这类平台索引互联网上公开可见的主机、端口、服务、网页指纹和证书，适合与本地资产记录交叉核对。'
               + ' 各平台收录范围、查询语言、账号要求和额度不同。'),
             h('div', { style: { marginTop: 5 } },
-              '本地测绘已接通 SQLite 检索；FOFA 保留原有专项技能。其他平台目前提供官网入口和可保存的常用平台选择，尚未接入自动查询 API。')),
+              '本地测绘已接通 SQLite 检索；FOFA 保留原有专项技能。下方可查询 InternetDB 与 Shodan 单 IP 情报；其余外部平台提供官网入口。')),
           h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
             h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
               h('h4', { style: { margin: 0 } }, '选择常用测绘平台'),
@@ -8251,12 +8524,177 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('span', { className: 'rt-tag' },
                 source.mode === 'local' ? '已接通 · 离线查询'
                   : source.mode === 'existing-skill' ? '保留专项技能 · 需 Key'
-                    : '官网入口 · API 未接入'),
+                    : source.mode === 'scoped-api' ? '单 IP 被动查询 · 已接通' : '官网入口 · API 未接入'),
               h('span', { style: { opacity: 0.75 } }, source.language)),
             h('div', null, source.focus),
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '证书透明度 · 子域线索'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '免费 crt.sh 历史证书查询。需在项目登记 *.域名 授权范围；只保留范围内的具体子域，不访问目标、不验证存活。'),
+            h('input', { className: 'rt-input', value: ctTarget, placeholder: '已登记通配范围对应的根域名',
+              onChange: e => { setCtTarget(e.target.value); setCtConsent(false); setCtResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: ctConsent,
+                onChange: e => setCtConsent(e.target.checked) }), ' 同意向 crt.sh 提交域名'),
+              h('label', null, h('input', { type: 'checkbox', checked: ctCommit,
+                onChange: e => setCtCommit(e.target.checked) }), ' 保存 CT 线索')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: ctBusy || !eng || !ctConsent || !ctTarget.trim(), onClick: () => runCt() },
+              ctBusy ? '查询中…' : '查询证书子域'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: ctBusy || !eng || !ctTarget.trim(), onClick: () => runCt(true) }, '读取 CT 历史'),
+            ctResult && (!ctResult.engagement || ctResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                ctResult.error ? h('div', { className: 'rt-err' }, ctResult.error) : null,
+                ctResult.ok && ctResult.history ? h('div', null,
+                  '本地快照：' + (ctResult.items || []).length + ' 条',
+                  (ctResult.items || []).map(item => h('details', { key: item.id },
+                    h('summary', null, item.collected_at + ' · ' + item.names.length + ' 个子域'),
+                    !maskAssets ? h('div', null, item.names.map(n => h('div', { key: n.name }, n.name))) : null)))
+                  : ctResult.ok ? h('div', null,
+                    '子域线索：' + (ctResult.names || []).length + (ctResult.truncated ? ' · 已达到结果上限' : '') + ' · ' + (ctResult.imported ? '已保存' : '未保存'),
+                    !maskAssets ? h('div', { style: { maxHeight: 280, overflowY: 'auto' } },
+                      (ctResult.names || []).map(n => h('div', { key: n.name }, n.name + (n.not_after ? ' · 证书到期 ' + n.not_after : '')))) : null)
+                  : null) : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '统一资产关联 · 离线清单'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '关联已保存的 CT、subfinder、DNS 与 IP 被动情报；仅保留授权域名与明确授权 IP。不触网、不验证服务存活，不自动增加资产。'),
+            h('input', { className: 'rt-input', value: inventoryTarget, placeholder: '已登记域名或通配范围的根域名',
+              onChange: e => { setInventoryTarget(e.target.value); setInventory(null); setSyncConsent(false); setSyncResult(null) } }),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginLeft: 8 },
+              disabled: inventoryBusy || !eng || !inventoryTarget.trim(), onClick: runInventory },
+              inventoryBusy ? '读取中…' : '生成关联清单'),
+            inventory && (!inventory.engagement || inventory.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                inventory.error ? h('div', { className: 'rt-err' }, inventory.error) : null,
+                inventory.ok ? h('div', null,
+                  '域名 ' + inventory.names.length + ' · IP ' + inventory.ips.length + ' · 关联 ' + inventory.edges.length,
+                  h('div', null, '已排除范围外 DNS 线索：' + inventory.excluded.dns_outside_scope + (inventory.truncated ? ' · 结果达到上限' : '')),
+                  !maskAssets ? h('details', null, h('summary', null, '查看关联清单'),
+                    h('div', { style: { maxHeight: 300, overflowY: 'auto' } },
+                      inventory.names.map(n => h('div', { key: n.name }, n.name + ' · ' + n.evidence.map(e => e.source).join(', '),
+                        (n.dns || []).map(r => h('div', { key: r.type + r.value, style: { marginLeft: 12 } }, r.type + ' ' + r.value)))),
+                      inventory.ips.map(ip => h('div', { key: ip.ip }, ip.ip + ' · 历史端口 ' + ip.passive_ports.map(p => p.port + '/' + p.proto).join(', '))))) : null,
+                  !maskAssets ? h('details', null, h('summary', null, '结构化 JSON（可复制）'),
+                    h('textarea', { className: 'rt-textarea', readOnly: true, value: JSON.stringify(inventory, null, 2),
+                      style: { width: '100%', minHeight: 140, fontSize: 11 } })) : null) : null) : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, 'ARTEX 本机情报同步'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '仅发送当前项目的历史关联清单至本机 ARTEX，重新读取已保存证据并检查范围；不启动扫描。需要独立情报令牌和两端一致的公司 ID。'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              syncConfig?.configured ? '已配置接收公司 #' + syncConfig.companyId : '未配置：请按指南设置宿主环境变量'),
+            h('button', { className: 'rt-btn', onClick: loadSyncConfig, disabled: syncBusy }, '刷新联动配置'),
+            h('label', { style: { display: 'block', fontSize: 12, marginTop: 8 } },
+              h('input', { type: 'checkbox', checked: syncConsent, disabled: syncBusy || maskAssets || !syncConfig?.configured || !inventory?.ok || inventory.engagement !== eng,
+                onChange: e => setSyncConsent(e.target.checked) }), ' 确认将当前项目清单发送至上述公司'),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: syncBusy || maskAssets || !syncConfig?.configured || !syncConsent || !inventory?.ok || inventory.engagement !== eng,
+              onClick: runIntelSync }, syncBusy ? '同步中…' : '同步至 ARTEX'),
+            maskAssets ? h('div', { style: { fontSize: 12, marginTop: 8 } }, '资产遮蔽开启时不提供直接同步。') : null,
+            syncResult && (!syncResult.engagement || syncResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                syncResult.ok ? '已保存 ARTEX 历史快照 #' + syncResult.snapshotId + ' · 公司 #' + syncResult.companyId
+                  + ' · 域名 ' + syncResult.names + ' · IP ' + syncResult.ips
+                  : h('div', { className: 'rt-err' }, syncResult.error || '同步未确认')) : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '统一子域线索 · CT + subfinder'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '合并已保存 CT 快照，或调用本机已安装的 subfinder 被动数据源。需登记 *.域名；不执行主动探测。点选子域可交给下方 DNS 查询，仍需单独确认。'),
+            h('input', { className: 'rt-input', value: subTarget, placeholder: '根域名',
+              onChange: e => { setSubTarget(e.target.value); setSubConsent(false); setSubResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: subTool,
+                onChange: e => { setSubTool(e.target.checked); setSubConsent(false) } }), ' 使用 subfinder'),
+              h('label', null, h('input', { type: 'checkbox', checked: subConsent,
+                onChange: e => setSubConsent(e.target.checked) }), ' 同意向工具配置的外部数据源提交域名'),
+              h('label', null, h('input', { type: 'checkbox', checked: subCommit,
+                onChange: e => setSubCommit(e.target.checked) }), ' 保存合并快照')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: subBusy || !eng || !subTarget.trim() || (subTool && !subConsent), onClick: () => runSub() },
+              subBusy ? '处理中…' : '合并子域线索'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: subBusy || !eng || !subTarget.trim(), onClick: () => runSub(true) }, '读取合并历史'),
+            subResult && (!subResult.engagement || subResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                subResult.error ? h('div', { className: 'rt-err' }, subResult.error) : null,
+                subResult.toolStatus ? h('div', null, 'subfinder：' + subResult.toolStatus) : null,
+                subResult.history && subResult.ok ? h('div', null, '历史快照：' + (subResult.items || []).length,
+                  (subResult.items || []).map(item => h('details', { key: item.id },
+                    h('summary', null, item.collected_at + ' · ' + item.names.length + ' 个子域'),
+                    !maskAssets ? h('div', null, item.names.map(n => h('div', { key: n.name }, n.name + ' · ' + n.sources.join(', ')))) : null)))
+                  : subResult.ok ? h('div', null,
+                    '线索：' + (subResult.names || []).length + (subResult.truncated ? ' · 已截断' : '') + ' · ' + (subResult.imported ? '已保存' : '未保存'),
+                    !maskAssets ? h('div', { style: { maxHeight: 280, overflowY: 'auto' } },
+                      (subResult.names || []).map(n => h('div', { key: n.name },
+                        n.name + ' · ' + n.sources.join(', '),
+                        h('button', { className: 'rt-btn', style: { marginLeft: 8 }, onClick: () => {
+                          setDnsTarget(n.name); setDnsConsent(false); setDnsResult(null)
+                        } }, '填入 DNS 核验')))) : null)
+                  : null) : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '免费 DNS 情报 · 单域名'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '使用系统配置的 DNS 解析器查询 A / AAAA / CNAME，不需要 FOFA Key。解析结果仅作为线索，不会自动扩大项目授权范围或主动扫描解析地址。'),
+            h('input', { className: 'rt-input', value: dnsTarget, placeholder: '已登记授权域名',
+              onChange: e => { setDnsTarget(e.target.value); setDnsConsent(false); setDnsResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: dnsConsent,
+                onChange: e => setDnsConsent(e.target.checked) }), ' 同意向 DNS 解析器提交域名'),
+              h('label', null, h('input', { type: 'checkbox', checked: dnsCommit,
+                onChange: e => setDnsCommit(e.target.checked) }), ' 保存 DNS 观察')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: dnsBusy || !eng || !dnsConsent || !dnsTarget.trim(), onClick: () => runDns() },
+              dnsBusy ? '查询中…' : '查询 DNS 记录'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: dnsBusy || !eng || !dnsTarget.trim(), onClick: () => runDns(true) }, '读取 DNS 历史'),
+            dnsResult && (!dnsResult.engagement || dnsResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                dnsResult.error ? h('div', { className: 'rt-err' }, dnsResult.error) : null,
+                dnsResult.history ? h('div', null, '本地历史：' + (dnsResult.items || []).length + ' 条',
+                  (dnsResult.items || []).map(item => h('div', { key: item.id },
+                    item.collected_at + ' · ' + (maskAssets ? (item.records || []).length + ' 条记录' :
+                      (item.records || []).map(r => r.type + ' ' + r.value).join('、')))))
+                  : h('div', null, '记录：' + (dnsResult.records || []).length + ' · ' + (dnsResult.imported ? '已保存' : '未保存'),
+                    (dnsResult.records || []).map(r => h('div', { key: r.type + r.value },
+                      r.type + ' ' + (maskAssets ? '已隐藏' : r.value) + (r.ttl !== undefined ? ' · TTL ' + r.ttl : ''))),
+                    (dnsResult.errors || []).map(e => h('div', { key: e.type }, e.type + ': ' + e.code)))) : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '外部被动情报 · 单 IP'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史线索不会修改实时端口状态；可保存全部观察并离线查询。'),
+            h('input', { className: 'rt-input', value: intelTarget, placeholder: '已登记范围内的 IP',
+              onChange: e => { setIntelTarget(e.target.value); setIntelConsent(false); setIntelResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: intelShodan,
+                onChange: e => { setIntelShodan(e.target.checked); setIntelConsent(false) } }), ' 加查 Shodan API'),
+              h('label', null, h('input', { type: 'checkbox', checked: intelConsent,
+                onChange: e => setIntelConsent(e.target.checked) }), ' 同意将该 IP 提交给所选外部平台'),
+              h('label', null, h('input', { type: 'checkbox', checked: intelCommit,
+                onChange: e => setIntelCommit(e.target.checked) }), ' 保存被动情报到本地库')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: intelBusy || !eng || !intelConsent || !intelTarget.trim(), onClick: runIntel },
+              intelBusy ? '查询中…' : '查询被动情报'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: intelBusy || !eng || !intelTarget.trim(), onClick: readIntelHistory }, '读取本地情报历史'),
+            intelResult && (!intelResult.engagement || intelResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                intelResult.error ? h('div', { className: 'rt-err' }, intelResult.error) : null,
+                (intelResult.errors || []).map(e => h('div', { key: e.source }, e.source + ': ' + e.error)),
+                intelResult.history && intelResult.ok ? h('div', null,
+                  '本地历史：' + (intelResult.items || []).length + ' 条（不访问外部平台）',
+                  (intelResult.items || []).map(item => h('div', { key: item.id, style: { marginTop: 6 } },
+                    item.source + ' · ' + item.collected_at + ' · ' + ((item.data?.ports || []).map(p => p.port + '/' + p.proto).join('、') || '无端口线索')))) : null,
+                intelResult.ok && !intelResult.history ? h('div', null,
+                  '来源：' + (intelResult.results || []).map(r => r.source).join('、') + ' · '
+                    + (intelResult.imported ? '已入库' : '仅预览'),
+                  h('div', null, '端口线索：' + ((intelResult.ports || []).map(p => p.port + '/' + p.proto + ' (' + p.sources.join(', ') + ')').join('、') || '无')),
+                  !maskAssets ? h('div', null, '主机名线索：' + [...new Set((intelResult.results || []).flatMap(r => r.hostnames))].join('、')) : null)
+                  : null) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '本机主动测绘 · 单目标'),
             h('div', { style: { fontSize: 12, opacity: 0.85, lineHeight: 1.65, marginBottom: 8 } },
@@ -8380,6 +8818,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [checkingTool, setCheckingTool] = React.useState(null)
       const [taskId, setTaskId] = React.useState('services')
       const [taskPlan, setTaskPlan] = React.useState(null)
+      const [environmentTaskPlan, setEnvironmentTaskPlan] = React.useState(null)
+      const [preferredEnvironment, setPreferredEnvironment] = React.useState('local')
+      const [environmentTaskBusy, setEnvironmentTaskBusy] = React.useState(false)
       const [taskBusy, setTaskBusy] = React.useState(false)
       const [environmentSnapshot, setEnvironmentSnapshot] = React.useState(null)
       const [environmentBusy, setEnvironmentBusy] = React.useState(false)
@@ -8503,6 +8944,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setTaskBusy(false)
           setTaskPlan({ ok: false, error: String((error && error.message) || error) })
         })
+      }
+      const planAcrossEnvironments = () => {
+        if (busy || environmentTaskBusy) return
+        setEnvironmentTaskBusy(true)
+        setEnvironmentTaskPlan(null)
+        api({ op: 'environmentTaskPlan', task: taskId, preferredEnvironmentId: preferredEnvironment })
+          .then((result) => {
+            setEnvironmentTaskBusy(false)
+            setEnvironmentTaskPlan(result || { ok: false, error: '跨环境规划没有返回结果' })
+          }, (error) => {
+            setEnvironmentTaskBusy(false)
+            setEnvironmentTaskPlan({ ok: false, error: String(error?.message || error) })
+          })
       }
       const checkTool = (id) => {
         if (busy || checkingTool) return
@@ -9104,7 +9558,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               '按本机路径、可版本检测性和已保存的首选工具推荐；先点上方「保存」让新的偏好生效，计划不会运行任何任务。'),
             h('div', { style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } },
               h('select', { className: 'rt-input', style: { flex: '1 1 150px' },
-                value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null) } },
+                value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null); setEnvironmentTaskPlan(null) } },
                 taskProfiles.map((p) => h('option', { key: p.id, value: p.id }, p.label))),
               h('select', {
                 className: 'rt-input', style: { flex: '1 1 170px' },
@@ -9153,6 +9607,36 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   h('div', { style: { opacity: 0.75, fontSize: 11, marginTop: 4 } },
                     '版本验证只检测本机程序，不代表目标测试或任务执行成功。')))
               : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '跨环境候选 · 仅使用已观测结果'),
+            h('p', { className: 'rt-foot' },
+              '先进行上方环境发现，再手动验证需要的工具版本。这里仅按真实发现、显式探针和首选环境排序，不会启动扫描或切换执行环境。'),
+            h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
+              h('select', { className: 'rt-input', 'aria-label': '跨环境首选来源',
+                value: preferredEnvironment, onChange: (e) => { setPreferredEnvironment(e.target.value); setEnvironmentTaskPlan(null) } },
+                h('option', { value: 'local' }, '首选当前主机'),
+                (environmentSnapshot?.environments || []).filter((item) => item.id !== 'local')
+                  .map((item) => h('option', { key: item.id, value: item.id }, item.label || item.id))),
+              h('button', { type: 'button', className: 'rt-btn', disabled: busy || environmentTaskBusy,
+                onClick: planAcrossEnvironments }, environmentTaskBusy ? '规划中…' : '生成跨环境推荐')),
+            environmentTaskPlan ? (environmentTaskPlan.ok === false
+              ? h('p', { className: 'rt-err', role: 'alert' }, environmentTaskPlan.error || '规划失败')
+              : h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
+                h('p', { className: 'rt-foot', role: 'status' },
+                  environmentTaskPlan.selected
+                    ? '推荐：' + environmentTaskPlan.selected.environmentLabel + ' / '
+                      + environmentTaskPlan.selected.toolLabel + ' · ' + environmentTaskPlan.selected.status
+                      + ' · 分数 ' + environmentTaskPlan.selected.score
+                    : '尚没有经过实际观察的可用工具候选；仅发现环境不等于工具可用。'),
+                environmentTaskPlan.selected ? h('p', { className: 'rt-foot' },
+                  (environmentTaskPlan.selected.reasons || []).join('；')) : null,
+                h('details', null,
+                  h('summary', null, '查看所有环境候选（' + (environmentTaskPlan.candidates || []).length + '）'),
+                  (environmentTaskPlan.candidates || []).map((item) =>
+                    h('div', { className: 'rt-kv', key: item.environmentId + ':' + item.toolId },
+                      h('b', null, item.toolLabel),
+                      h('span', null, item.environmentLabel + ' · ' + item.status + ' · ' + item.score)))),
+                h('p', { className: 'rt-foot' }, environmentTaskPlan.note))) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 已找到）'),
             h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
@@ -11830,7 +12314,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				setDock({ open: true, maximized: true, tab: purgeWorkspaceBus.page });
 			}
 		}
-		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;top:0!important;left:0!important;\n  right:0!important;bottom:0!important;z-index:10040!important;\n  width:100vw!important;height:100vh!important;height:100dvh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"]{\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  height:calc(100dvh - var(--dsh-windows-titlebar-height,40px))!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n";
+		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;top:0!important;left:0!important;\n  right:0!important;bottom:0!important;z-index:10040!important;\n  width:100vw!important;height:100vh!important;height:100dvh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"]{\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  height:calc(100dvh - var(--dsh-windows-titlebar-height,40px))!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n";
 		// Both the native main slot and the old Dock use the same runtime stylesheet.
 		// The main slot must not rely on the overlay slot being mounted first.
 		function ensurePurgeWorkspaceStyles() {

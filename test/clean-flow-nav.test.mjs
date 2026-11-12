@@ -15,6 +15,37 @@ test('cleaning bar measures workflow progress and shows patch coverage separatel
   assert.match(root, /flowInterrupted \? h\("p"/)
 })
 
+test('interrupted cleaning is not reported as idle or as an explicit failure', () => {
+  const predicate = root.match(/const flowInterrupted = Boolean\(([^\n]+)\);/)
+  assert.ok(predicate)
+  const interrupted = new Function('job', 'jobOn', 'return Boolean(' + predicate[1] + ')')
+  assert.equal(interrupted(null, false), false)
+  assert.equal(interrupted({ stage: 'idle' }, false), false)
+  assert.equal(interrupted({ stage: 'done' }, false), false)
+  assert.equal(interrupted({ stage: 'patch', active: true }, true), false)
+  assert.equal(interrupted({ stage: 'patch', error: 'failed' }, false), false)
+  assert.equal(interrupted({ stage: 'patch', active: false }, false), true)
+  assert.match(root, /job && job\.error \? "未完整完成" : flowInterrupted \? "结果未确认" : "未执行"/)
+})
+
+test('clean controls precede the patch list and respect host and update activity', () => {
+  const actions = root.indexOf('className: "dshp-row dshp-clean-actions"')
+  const groups = root.indexOf('h(PatchGroups, { state: s,', actions)
+  assert.ok(actions >= 0 && groups > actions)
+  const controls = root.slice(actions, groups)
+  assert.match(controls, /disabled: jobOn \|\| updateBusy \|\| !overrideLoaded/)
+  assert.equal((controls.match(/disabled: jobOn \|\| updateBusy/g) || []).length, 3)
+  assert.match(root, /onRefresh: refreshPatchStatus, busy: jobOn \|\| updateBusy/)
+  assert.match(root, /let actionDisabled = jobOn \|\| updateBusy/)
+  assert.match(root, /disabled: jobOn \|\| updateBusy, onClick: doUninstall/)
+})
+
+test('unavailable host coverage and backup do not appear as zero or absent', () => {
+  assert.match(root, /\(located \? " · 补丁已应用 "/)
+  assert.match(root, /: " · 补丁状态待检测"\)/)
+  assert.match(root, /s\.ok === false \|\| typeof s\.has_backup !== "boolean" \? "—"/)
+})
+
 test('client does not overwrite a terminal apply response with late status polling', () => {
   assert.match(root, /const actionTerminal = useRef\(false\)/)
   assert.match(root, /if \(stop \|\| !d \|\| actionTerminal\.current\) return/)
