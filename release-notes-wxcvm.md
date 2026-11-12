@@ -1,3 +1,22 @@
+# 1.1.92-wxcvm.7-beta.3
+
+## 中文
+
+- 继承 beta.2 的实时版本切换进度、完整运行资源复制及原生工作区修复。
+- #174：独立 Windows 升级支持固定 Git 提交，验证运行资源，安装失败恢复旧插件与 profile。
+- #175：ZIP 更新覆盖前检查发布包，备份全部受影响的文件组；复制失败恢复旧文件，恢复失败保留备份。新增持久化恢复日志和独立恢复工具，阻止未恢复事务进入新更新。
+- 更新收据区分中断、待重启、磁盘不一致和后端启动核验；前端实际加载仍需实机检查。
+- 本候选仅面向 beta。ZIP 文件事务不包含 Git checkout、profile 配置和后续宿主维护，突然断电持久性及 Windows Desktop 实际升级/重启尚未完成验收。正式 master 不变。
+- 发布前需合并 #175、通过联合兼容性 CI、校验归档文件与 SHA256。
+
+## English
+
+- Inherit beta.2 progress, runtime resources and native workspace fixes.
+- #174: independent Windows installer with immutable commit pinning and payload validation.
+- #175: ZIP preflight, multi-copy rollback, persistent recovery journal, explicit offline recovery and unresolved-recovery admission guard.
+- Backend restart verification distinguishes interruption, restart required and mismatched disk/backend. Actual renderer and Windows Desktop restart remain separate acceptance steps.
+- Beta only. No stable promotion. ZIP transaction does not cover Git, profile configuration or subsequent host maintenance. Combined CI and archive verification are release gates.
+
 # 1.1.92-wxcvm.7-beta.2
 
 ## 中文
