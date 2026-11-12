@@ -70,7 +70,17 @@ if (!client.includes(BEGIN) || !client.includes(END)) {
 const beginAt = client.indexOf(BEGIN);
 const endAt = client.indexOf(END);
 if (beginAt < 0 || endAt < 0 || endAt < beginAt) throw new Error("drill markers out of order");
-const generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.length);
+let generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.length);
+// Normalize line endings so a Windows checkout does not change the build identity.
+// FNV-1a is an identity for stale UI detection, not a security signature.
+const buildMarker = /const CLIENT_BUILD_ID = "[^"]*";/;
+if (!buildMarker.test(generated)) throw new Error("client build marker missing");
+const canonical = generated.replace(/\r\n/g, "\n").replace(buildMarker, 'const CLIENT_BUILD_ID = "";');
+let buildHash = 0xcbf29ce484222325n;
+for (let i = 0; i < canonical.length; i++) {
+  buildHash = BigInt.asUintN(64, (buildHash ^ BigInt(canonical.charCodeAt(i))) * 0x100000001b3n);
+}
+generated = generated.replace(buildMarker, 'const CLIENT_BUILD_ID = "' + buildHash.toString(16).padStart(16, "0") + '";');
 if (process.argv.includes("--check")) {
   if (generated !== client) {
     console.error("client.js is stale; run node scripts/build-client.mjs and commit the generated client.js");
