@@ -384,3 +384,27 @@ test('remote target check uses immutable commit and reports per-file differences
   assert.match(source, /receipt.failedPhase = receipt.phase/)
   assert.match(client, /核对远端目标/)
 })
+
+test('host diagnostics report disk package identity and cross-surface uncertainty', async () => {
+  const source = readFileSync(new URL('../lib/core.js', import.meta.url), 'utf8')
+  const start = source.indexOf('export function inspectHostIdentity(')
+  const end = source.indexOf('export async function gatherState()', start)
+  assert.ok(start >= 0 && end > start)
+  const manifests = new Map([
+    ['/desktop/dsh/package.json', JSON.stringify({ name: '@deepseek-ai/dsh', version: '0.2.2-rc.1' })],
+    ['/web/dsh-base/package.json', JSON.stringify({ name: '@deepseek-ai/dsh-base', version: '0.2.1-rc.5' })],
+  ])
+  const inspect = new Function('fs', 'path', 'desktop', 'detectSurface', 'adapterFor',
+    source.slice(start, end).replace('export function', 'function') + '\nreturn inspectHostIdentity;')(
+      { readFileSync(p) { if (!manifests.has(p)) throw new Error('missing'); return manifests.get(p) } },
+      { join: (...parts) => parts.join('/') },
+      { isInsideDesktopInstall: (p) => p === '/desktop' }, () => 'desktop', (s) => s)
+  assert.equal(inspect('/desktop').package.version, '0.2.2-rc.1')
+  assert.equal(inspect('/desktop').surfaceMismatch, false)
+  assert.equal(inspect('/web').surfaceMismatch, true)
+  assert.equal(inspect('/web', 'web').package.name, '@deepseek-ai/dsh-base')
+  assert.equal(inspect('/missing').package, null)
+  assert.equal(inspect(null).location, 'unknown')
+  assert.match(client, /宿主磁盘包/)
+  assert.match(client, /不是运行进程身份凭证/)
+})
