@@ -20,6 +20,19 @@ try {
   }
   & $script -DshHome $fixture -CheckOnly
   if (-not $?) { throw 'CheckOnly did not succeed' }
+  # Reproduce the old ZIP updater's partial payload: the consumer is present but its script is not.
+  $consumer = Join-Path $plugin 'lib\redteam\vps-admin-config.js'
+  Set-Content -LiteralPath $consumer -Value 'fixture' -NoNewline
+  $rejected = $false
+  try { & $script -DshHome $fixture -CheckOnly } catch {
+    $rejected = $_.Exception.Message -like '*scripts*vps-admin-check.mjs*'
+  }
+  if (-not $rejected) { throw 'CheckOnly accepted missing runtime script' }
+  New-Item -Path (Join-Path $plugin 'scripts') -ItemType Directory -Force | Out-Null
+  $runtimeScript = Join-Path $plugin 'scripts\vps-admin-check.mjs'
+  Set-Content -LiteralPath $runtimeScript -Value 'runtime fixture' -NoNewline
+  & $script -DshHome $fixture -CheckOnly
+  if (-not $?) { throw 'CheckOnly rejected restored runtime script' }
   # Files alone must not be treated as proof that the plugin has a host entry.
   $patchPath = Join-Path $profile 'cordis.patch.yml'
   Set-Content -LiteralPath $patchPath -Value '- replace: []' -NoNewline
@@ -75,7 +88,25 @@ exit /b 7
   if ((Get-Content -LiteralPath (Join-Path $plugin 'package.json') -Raw) -ne ('{"version":"' + $version + '"}')) {
     throw 'Previous plugin manifest was not restored'
   }
-  Write-Host 'PASS: read-only verification and failed-install full plugin/profile rollback'
+  # pnpm reports success but omits a runtime file: this must still roll back.
+  $mockPartial = @'
+@echo off
+if /I "%~1"=="add" (
+  del /q "%DSH_TEST_PLUGIN%\scripts\vps-admin-check.mjs"
+  exit /b 0
+)
+exit /b 7
+'@
+  Set-Content -LiteralPath (Join-Path $bin 'pnpm.cmd') -Value $mockPartial -Encoding Ascii
+  $rejected = $false
+  try { & $script -DshHome $fixture -Commit ('a' * 40) } catch {
+    $rejected = $_.Exception.Message -like '*scripts*vps-admin-check.mjs*'
+  }
+  if (-not $rejected) { throw 'Successful pnpm exit concealed a missing runtime file' }
+  if ((Get-Content -LiteralPath $runtimeScript -Raw) -ne 'runtime fixture') {
+    throw 'Rollback failed to restore the runtime script'
+  }
+  Write-Host 'PASS: read-only verification, partial payload rejection and failed-install full plugin/profile rollback'
   # Clear the expected non-zero native exit from our fake pnpm; otherwise the
   # GitHub pwsh wrapper treats a successful test as a failed job.
   $global:LASTEXITCODE = 0
