@@ -15,8 +15,8 @@ concurrency:
 
 jobs:
   release:
-    # 上游保持 master 自动发布；wxcvm fork 只允许在 master 上手动触发，避免每次合并发布。
-    if: github.repository == 'YuJunZhiXue/dsh-purge' || (github.repository == 'wxcvm/dsh-purge' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    # 上游保持 master 自动发布；本 fork 的 master/beta 均只能手动发版。
+    if: github.repository == 'YuJunZhiXue/dsh-purge' || (github.repository == 'wxcvm/dsh-purge' && github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/beta'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,14 @@ jobs:
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REPOSITORY" = "wxcvm/dsh-purge" ]; then
+            case "$GITHUB_REF" in
+              refs/heads/beta)
+                case "$version" in *-beta.*) ;; *) echo "beta branch requires beta version"; exit 1 ;; esac ;;
+              refs/heads/master)
+                case "$version" in *-beta.*) echo "beta version cannot be published from master"; exit 1 ;; esac ;;
+            esac
+          fi
           tag="v${version}"
           notes="release-notes.md"
           if [ "$GITHUB_REPOSITORY" = "wxcvm/dsh-purge" ]; then
@@ -52,6 +60,10 @@ jobs:
           if git rev-parse -q --verify "refs/tags/$tag^{}" >/dev/null; then
             commit="$(git rev-parse "refs/tags/$tag^{}")"
           fi
+          if [ "$GITHUB_REF" = "refs/heads/beta" ] && [ "$commit" != "$GITHUB_SHA" ]; then
+            echo "Existing beta tag points at a different commit; refusing to overwrite"
+            exit 1
+          fi
           git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$commit"
           test -s "$zip"
           archived_version="$(unzip -p "$zip" "dsh-purge-$version/package.json" |
@@ -59,6 +71,11 @@ jobs:
           test "$archived_version" = "$version"
           if [ "$GITHUB_REPOSITORY" = "wxcvm/dsh-purge" ]; then
             for file in client.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1; do
+              unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
+            done
+          fi
+          if [ "$GITHUB_REPOSITORY" = "wxcvm/dsh-purge" ] && [ "$GITHUB_REF" = "refs/heads/beta" ]; then
+            for file in lib/update-payload.js scripts/recover-update.mjs scripts/vps-admin-check.mjs scripts/ensure-profile-bundle.mjs docs/UPDATE_RECOVERY.zh-CN.md; do
               unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
             done
           fi
