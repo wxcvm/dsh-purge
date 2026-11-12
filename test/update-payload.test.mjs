@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { copyUpdatePayload } from '../lib/update-payload.js';
+import { copyUpdatePayload, readUpdateRecovery, restoreInterruptedUpdate } from '../lib/update-payload.js';
+import { spawnSync } from 'node:child_process';
 
 const names = ['lib','scripts','client.js','package.json'];
 async function fixture(t) {
@@ -87,4 +88,32 @@ test('failed rollback reports retained backup instead of claiming success', asyn
   });
   assert.equal(read(path.join(backup,'0'),'client.js'),'old-client');
   assert.equal(read(one,'lib/index.js'),'old');
+});
+
+test('process interruption leaves a journal usable by an independent recovery process', async t => {
+  const {source,one,two,backup} = await fixture(t);
+  const moduleUrl = new URL('../lib/update-payload.js',import.meta.url).href;
+  const child = spawnSync(process.execPath, ['--input-type=module','-e',
+    'import {copyUpdatePayload} from '+JSON.stringify(moduleUrl)+';'+
+    'await copyUpdatePayload(...'+JSON.stringify([source,[one,two],backup,names])+', {onProgress: p => {if(p.copied===1) process.exit(73);}});'
+  ], {encoding:'utf8'});
+  assert.equal(child.status,73,child.stderr);
+  assert.equal(read(one,'lib/index.js'),'new');
+  const journal = await readUpdateRecovery(backup);
+  assert.equal(journal.phase,'copying');
+  assert.equal(journal.touched,1);
+  await restoreInterruptedUpdate(backup);
+  assert.equal(read(one,'lib/index.js'),'old');
+  assert.equal(read(one,'lib/old-only.js'),'old-only');
+  assert.equal(read(two,'lib/index.js'),'old');
+  assert.equal((await readUpdateRecovery(backup)).phase,'restored');
+  await assert.rejects(restoreInterruptedUpdate(backup),/No interrupted file copy/);
+});
+
+test('completed journal is not eligible for interrupted-copy restoration', async t => {
+  const {source,one,backup} = await fixture(t);
+  await copyUpdatePayload(source,[one],backup,names);
+  assert.equal((await readUpdateRecovery(backup)).phase,'complete');
+  await assert.rejects(restoreInterruptedUpdate(backup),/No interrupted file copy/);
+  assert.equal(read(one,'lib/index.js'),'new');
 });
