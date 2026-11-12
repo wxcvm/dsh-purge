@@ -2,14 +2,15 @@
 
 ## 中文
 
-### 最终联合候选：清洗台、测绘、环境和 Agent（#135、#155、#159、#160、#164、#167、#168）
+### 最终联合候选：清洗台、测绘、环境和 Agent（#135、#155、#159、#160、#164、#167、#168、#170）
 
 - **清洗台**：六页原生维护工作区、补丁搜索与诊断、备份来源与逐文件哈希核对、宿主更新前后与实际启动指纹、客户端构建标识。历史备份来源未知时明确标注；未提供自动回滚。
 - **Agent**：生命周期与并发预留回收、真实运行容量统计、每 5 秒状态刷新；宿主事件匹配仍受原生事件信息限制。
 - **网络与隐私**：本地网络快照基线比较、聚合诊断 JSON 导出、只读存储 ACL 审计；ARTEX 隐私概览为可选本机联动，不代表匿名或外部可达性。
 - **测绘**：授权范围内的 InternetDB、Shodan、DNS、CT、子域名资料、历史记录和本机 ARTEX 同步；不自动运行目标测试。
 - **跨环境**：依据实际工具路径和显式版本探针排名，保留未知状态，不自动执行工具。
-- **验收边界**：独立 PR CI 已通过；联合候选须重新跑完整 CI。Windows Desktop 实际安装、更新、恢复、补丁生效及 Harness 0.2.2-rc.2 完整兼容仍须独立验证；声明目标保持 0.2.2-rc.1。预览版尚未发布。
+- **兼容性（#170）**：在最终联合候选上补齐官方 rc.2 测试夹具的 `@deepseek-ai/dsh-error` 依赖；Windows 与 Ubuntu 的 12 项官方 API/单元测试矩阵全部通过（[CI 43167497780](https://github.com/wxcvm/dsh-purge/actions/runs/43167497780)）。未跳过真实契约测试。
+- **验收边界**：上述自动化测试不等于真实 Desktop 安装、更新、恢复或补丁运行效果。实际 Windows 宿主验收仍待完成；声明目标保持 0.2.2-rc.1，rc.2 为已验证 API 兼容性，不宣称完整桌面支持。预览版尚未发布。
 
 ### 后续合并：Windows 修复、环境与多节点 SSH 管理（#126–#161）
 
@@ -58,13 +59,14 @@
 
 ## English
 
-### Final integrated candidate (#135, #155, #159, #160, #164, #167, #168)
+### Final integrated candidate (#135, #155, #159, #160, #164, #167, #168, #170)
 
 - Maintenance workspace, backup provenance/hash checks, host update and startup fingerprints, client build identity; no automatic rollback.
 - Agent lifecycle/reservation accounting and live status refresh; native event correlation limitations remain.
 - Local network baseline/report, read-only ACL audit and opt-in ARTEX privacy overview; scoped passive asset intelligence and local ARTEX synchronization.
 - Observed cross-environment tool recommendations based on explicit probes, without automatic execution.
-- Individual PR CI passed; integrated CI, real Windows installation/update/restore and patch effectiveness, and full rc.2 compatibility remain separate acceptance gates. The declared target remains rc.1; this candidate is not published.
+- Compatibility (#170): pin the official rc.2 fixture's missing `@deepseek-ai/dsh-error`; all 12 Windows/Ubuntu unit and official API contract matrix jobs passed ([CI 43167497780](https://github.com/wxcvm/dsh-purge/actions/runs/43167497780)).
+- Actual Windows Desktop installation, update, restore and runtime patch effectiveness remain unverified. The declared target remains rc.1; rc.2 API compatibility does not establish full Desktop support. This candidate is not published.
 
 ### Subsequent merged work: Windows fixes, environments and SSH management (#126–#161)
 
