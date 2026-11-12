@@ -4,7 +4,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.2 (beta)</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.3 (beta)</strong></p>
 
 > Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This version is a new update identity for the verified .6 integration, not a new feature set.
 
@@ -64,7 +64,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.2**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.3**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
@@ -236,7 +236,7 @@ Success: `node_modules/dsh-purge/package.json` exists, `"dsh-purge"` is in that 
 For the desktop client you can also click the button (`dsh://` deep link; it still downloads the same tarball):
 
 <p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.92-wxcvm.7-beta.2&repo=wxcvm%2Fdsh-purge&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv1.1.92-wxcvm.7-beta.2"><strong>Install in desktop client</strong></a>
+  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.92-wxcvm.7-beta.3&repo=wxcvm%2Fdsh-purge&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv1.1.92-wxcvm.7-beta.3"><strong>Install in desktop client</strong></a>
 </p>
 
 ### 3. Three more clicks after the command
@@ -413,7 +413,7 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.7-beta.2` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
+Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.7-beta.3` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
 
 The first time you open Drill, read the notice, wait for the countdown, scroll to the end and check three boxes. Clean does not need this step. Drill is for your own systems or targets with explicit written authorization, including authorized public-facing assets.
 

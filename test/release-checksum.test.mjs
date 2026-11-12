@@ -9,8 +9,11 @@ test('published zip has a checksum generated from exactly the uploaded file', ()
   assert.match(workflow, /gh release upload "\$tag" "\$zip" SHA256SUMS\.txt --clobber/)
 })
 
-test('fork only permits manual release dispatch on master', () => {
-  assert.match(workflow, /github\.repository == 'wxcvm\/dsh-purge' && github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/master'/)
+test('fork only permits manual release dispatch on master or beta', () => {
+  assert.ok(workflow.includes("github.repository == 'wxcvm/dsh-purge' && github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/beta')"))
+  assert.ok(workflow.includes('beta branch requires beta version'))
+  assert.ok(workflow.includes('beta version cannot be published from master'))
+  assert.ok(workflow.includes('Existing beta tag points at a different commit'))
   assert.doesNotMatch(workflow, /startsWith\(github\.event\.head_commit\.message/)
 })
 
@@ -27,3 +30,9 @@ test('fork release archive and installed profile require the same ARTEX knowledg
   }
 })
 
+
+test('beta archive contains runtime dependencies and independent recovery tool', () => {
+  for (const file of ['lib/update-payload.js', 'scripts/recover-update.mjs', 'scripts/vps-admin-check.mjs', 'scripts/ensure-profile-bundle.mjs', 'docs/UPDATE_RECOVERY.zh-CN.md']) {
+    assert.ok(workflow.includes(file), 'beta ZIP must include ' + file)
+  }
+})
