@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildAdminProbeArgs, parseArgs, checkAdminRoute } from '../scripts/vps-admin-check.mjs'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { buildAdminProbeArgs, parseArgs, checkAdminRoute, readSavedAdminRoute } from '../scripts/vps-admin-check.mjs'
 
 test('direct management probe keeps existing SSH config independent', () => {
   const args = buildAdminProbeArgs('lab')
@@ -43,4 +46,29 @@ test('successful probe returns selected route', async () => {
   const result = await checkAdminRoute('lab', ['entry'], (_exe, _args, _opts, done) => done(null))
   assert.equal(result.ok, true)
   assert.equal(result.error, null)
+})
+
+test('saved mode reads only validated management preferences, preserving hop order', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-admin-check-'))
+  try {
+    assert.throws(() => readSavedAdminRoute(root), /No saved Purge configuration/)
+    writeFileSync(join(root, 'config.json'), JSON.stringify({
+      vps: { ipv4: '192.0.2.10' }, env: { REDTEAM_VPS_KEY: 'not-returned' },
+      vpsAdminRoute: { target: ' lab ', jumps: [' entry ', 'bastion'] },
+    }))
+    const route = parseArgs(['--saved'], () => readSavedAdminRoute(root))
+    assert.deepEqual(route, { target: 'lab', jumps: ['entry', 'bastion'] })
+    assert.throws(() => parseArgs(['--saved', 'entry']))
+    for (const invalid of [
+      { target: '', jumps: [] }, { target: 'lab', jumps: ['LAB'] },
+      { target: 'lab', jumps: 'entry' }, { target: 'lab', jumps: [123] },
+    ]) {
+      writeFileSync(join(root, 'config.json'), JSON.stringify({ vpsAdminRoute: invalid }))
+      assert.throws(() => readSavedAdminRoute(root))
+    }
+    writeFileSync(join(root, 'config.json'), '{bad json')
+    assert.throws(() => readSavedAdminRoute(root), /Cannot read saved Purge configuration/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
