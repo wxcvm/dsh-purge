@@ -48,3 +48,14 @@ DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或�
 接口：scopedSubdomains（异步）、scopedSubdomainHistory（同步）；参数 engagement、target；useSubfinder=true 时需 confirmExternal=true，commit=true 可保存。工具执行上限 75 秒、2 MiB stdout/stderr 缓冲，无 shell。
 
 限制：未自动运行 CT 新查询、批量 DNS 验证或 ARTEX 同步；目前仅复用最近一条保存的 CT 快照。
+
+
+## 统一资产关联（第六阶段）
+
+资源 → 测绘中心 → 统一资产关联 · 离线清单。输入已登记的精确域名或明确 *.域名 范围对应的根域名，点击生成关联清单。
+
+离线读取最近的 CT、合并子域、DNS 快照以及每个 IP 最新的 InternetDB / Shodan 历史观察。域名清单限定所选根域及授权范围；IP 清单包含项目内已保存且明确命中 IP/CIDR 授权规则的资产（可能包括未与所选域名关联的项目 IP）。DNS A/AAAA/CNAME 关系保留采集时间与可用 TTL；未获 IP 授权的解析地址和范围外别名仅计数，不进入导出。未知传输协议的历史端口保持 unknown，不写入实时端口表或漏洞表。
+
+接口 scopedIntelInventory（同步），参数 engagement、target，返回 purge.asset-intel.v1：names、ips、edges、excluded、truncated。面板可查看关联清单与可复制的 JSON；资产遮蔽开启时隐藏详情和 JSON。最多 500 个域名/500 个 IP，每个域名最多 32 条 DNS、每个 IP 最多 64 个历史端口；限量时标注截断。只读取保存的证据，不联网、不执行扫描、不修改资产或授权范围。历史 DNS 不等于当前解析，历史端口不等于实时开放。
+
+本轮仅提供结构化导出，ARTEX 接收端、传输与自动同步仍待开发；没有验证真实环境端到端导入。
