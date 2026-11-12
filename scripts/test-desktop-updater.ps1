@@ -88,10 +88,17 @@ exit /b 7
   if ((Get-Content -LiteralPath (Join-Path $plugin 'package.json') -Raw) -ne ('{"version":"' + $version + '"}')) {
     throw 'Previous plugin manifest was not restored'
   }
+  # A branch name is not an immutable commit pin, and must fail before pnpm runs.
+  $rejected = $false
+  try { & $script -DshHome $fixture -Commit 'beta' } catch {
+    $rejected = $_.Exception.Message -like '*40-character Git SHA*'
+  }
+  if (-not $rejected) { throw 'Installer accepted a mutable branch as a commit pin' }
   # pnpm reports success but omits a runtime file: this must still roll back.
   $mockPartial = @'
 @echo off
 if /I "%~1"=="add" (
+  if not "%~2"=="https://codeload.github.com/wxcvm/dsh-purge/tar.gz/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" exit /b 8
   del /q "%DSH_TEST_PLUGIN%\scripts\vps-admin-check.mjs"
   exit /b 0
 )
