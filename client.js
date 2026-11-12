@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "614dbb12ab5a0090";
+		const CLIENT_BUILD_ID = "d4853800a62172f8";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1481,6 +1481,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				"插件目录: " + (state.plugin_identity?.root || "未知"),
 				"宿主类型: " + (state.surface || "未知"),
 				"宿主路径: " + (state.ai_base || "未定位"),
+				"宿主磁盘包: " + (state.host_identity?.package ? state.host_identity.package.name + "@" + state.host_identity.package.version : "未知"),
+				"宿主目录类型: " + (state.host_identity?.location || "未知"),
 				"DSH_HOME: " + (state.dsh_home || "未知"),
 				"补丁: " + (state.ai_base ? tally.applied + "/" + tally.total
 					+ " 已应用; " + tally.pending + " 待应用; "
@@ -1490,6 +1492,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					+ ", unix=" + (state.shim_bin || "未知"),
 				"备份: " + (state.ok === false || typeof state.has_backup !== "boolean" ? "未知" : state.has_backup ? "有" : "无"),
 			];
+			if (state.host_identity?.surfaceMismatch) lines.push("注意: 宿主目录类型与当前界面类型不一致，需核对实际运行实例。");
 			if (!state.ai_base && state.missing_ai_base) lines.push("宿主定位说明: " + state.missing_ai_base);
 			if (state.desktop_exe) lines.push("桌面程序: " + state.desktop_exe);
 			if (state.asar_still_sealed) lines.push("桌面运行时: app.asar 仍封装，当前进程可能无法读取解包目录中的补丁");
@@ -1641,6 +1644,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const rows = state ? patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) })) : [];
 			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
 			const identity = state?.plugin_identity;
+			const hostIdentity = state?.host_identity;
 			const loaded = identity?.loaded || "";
 			const disk = identity?.disk || "";
 			const mismatch = Boolean(loaded && disk && loaded !== disk);
@@ -1657,6 +1661,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			};
 			return h("div", { className: "dshp-clean-browser" },
 				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
+				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
+				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
 				h("p", { className: "dshp-hint" }, "后端模块加载时版本：" + (loaded || "未知") + " · 当前目录磁盘版本：" + (disk || "未知")),
 				h("p", { className: "dshp-hint", role: "status" }, mismatch
 					? "版本不一致：文件已变化，建议完整退出并重启 Harness 后重新检测。"
