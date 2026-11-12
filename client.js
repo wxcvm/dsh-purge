@@ -7685,6 +7685,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [saved, setSaved] = React.useState(null)
       const [history, setHistory] = React.useState(null)
       const [protection, setProtection] = React.useState(null)
+      const [storageAudit, setStorageAudit] = React.useState(null)
+      const [storageBusy, setStorageBusy] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
       const [message, setMessage] = React.useState('')
@@ -7721,6 +7723,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             if (v && v.ok !== false) setProtection(v)
           }, () => {})
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
+      }
+      const runStorageAudit = () => {
+        if (storageBusy) return
+        setStorageBusy(true); setStorageAudit(null)
+        api({ op: 'storageAclAudit' }).then((result) => {
+          setStorageAudit(result && typeof result.status === 'string'
+            ? result : { ok: false, status: 'unavailable' })
+        }, () => setStorageAudit({ ok: false, status: 'unavailable' }))
+          .finally(() => setStorageBusy(false))
       }
       const checkField = (key, label, description) => h('label', {
         style: { display: 'flex', alignItems: 'flex-start', gap: 10, margin: '12px 0', fontSize: 13 },
@@ -7768,23 +7779,61 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+            h('h4', null, 'Windows 存储权限诊断'),
+            h('div', { style: { fontSize: 12 } },
+              '按需读取 DSH 本机工作区的 NTFS ACL，检查数据库、报告、证据等文件和目录。不修改权限，不读取文件内容。'),
+            h('button', { className: 'rt-btn', type: 'button',
+              disabled: storageBusy || !protection || !protection.storageAudit || !protection.storageAudit.available,
+              onClick: runStorageAudit, style: { marginTop: 8 } },
+              storageBusy ? '正在检查…' : '检查存储权限'),
+            protection && protection.storageAudit && !protection.storageAudit.available
+              ? h('div', { style: { fontSize: 12 } }, '当前宿主不是 Windows，暂不支持 NTFS 检查。') : null,
+            storageAudit && storageAudit.ok && storageAudit.counts
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  h('b', null, storageAudit.status === 'partial' ? '部分检查完成（存在未检查项目）' : '本次检查完成'),
+                  h('div', null, '已检查：' + storageAudit.counts.inspected
+                    + ' · 宽泛读取授权：' + storageAudit.counts.broadRead
+                    + ' · 其他账户读取授权：' + storageAudit.counts.otherRead),
+                  h('div', null, '启用权限继承：' + storageAudit.counts.inheritanceEnabled),
+                  h('div', null, 'ACL 读取失败：' + storageAudit.counts.aclReadErrors
+                    + ' · 跳过重解析点：' + storageAudit.counts.skippedReparse
+                    + ' · 枚举失败：' + storageAudit.counts.enumerationErrors))
+              : storageAudit ? h('div', { className: 'rt-err', style: { marginTop: 8 } },
+                  ({ timeout: '检查超时，请通过命令行预览大型工作区。',
+                    unsupported: '当前宿主不支持 Windows NTFS 检查。',
+                    invalid_response: '审计脚本未返回有效统计。',
+                    unavailable: '无法执行存储检查，请确认 PowerShell 与插件脚本可用。'
+                  })[storageAudit.status] || '无法读取存储权限结果。') : null,
+            h('div', { style: { fontSize: 12, opacity: 0.8 } },
+              '统计的是观察到的读取允许规则，不是有效访问权限证明；继承本身不一定是问题。不返回路径、内容或凭据。')),
           protection && protection.vault ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, '凭据加密覆盖情况'),
             h('div', { style: { fontSize: 12 } },
-              '加密密钥：' + (protection.vault.enabled ? '已配置' : '未配置（仍沿用旧版明文写入）')),
+              '加密密钥：' + (protection.vault.enabled ? '已配置' : '未配置（不能验证已有密文）')),
             protection.vault.engagement ? [
               h('div', { key: 'project', style: { fontSize: 12 } },
                 '统计工作区：' + protection.vault.engagement),
               h('div', { key: 'credential', style: { fontSize: 12 } },
-                '凭据 secret_value：加密 ' + protection.vault.credential.encrypted
+                '凭据 secret_value：加密标记 ' + protection.vault.credential.encrypted
                   + ' · 明文 ' + protection.vault.credential.plaintext),
               h('div', { key: 'webshell', style: { fontSize: 12 } },
-                'WebShell pass_key：加密 ' + protection.vault.webshell.encrypted
+                'WebShell pass_key：加密标记 ' + protection.vault.webshell.encrypted
                   + ' · 明文 ' + protection.vault.webshell.plaintext),
+              protection.vault.integrity ? h('div', { key: 'integrity', style: { fontSize: 12 } },
+                h('b', null, '当前密钥完整性校验'),
+                h('div', null, '凭据：已验证 ' + protection.vault.integrity.credential.verified
+                  + ' · 失败 ' + protection.vault.integrity.credential.failed
+                  + ' · 未校验 ' + protection.vault.integrity.credential.unchecked),
+                h('div', null, 'WebShell：已验证 ' + protection.vault.integrity.webshell.verified
+                  + ' · 失败 ' + protection.vault.integrity.webshell.failed
+                  + ' · 未校验 ' + protection.vault.integrity.webshell.unchecked),
+                h('div', { style: { opacity: 0.8 } },
+                  '失败表示当前密钥无法认证该密文；可能是密钥不匹配或数据损坏。未校验不代表数据损坏。')) : null,
             ] : h('div', { style: { fontSize: 12 } }, '当前没有可统计的工作区'),
             h('div', { style: { fontSize: 12, opacity: 0.8 } },
               '仅统计当前默认工作区，不显示口令或密钥，也不自动迁移。'
-                + ' 配置密钥不代表全部旧数据已加密；扫描证据、日志、备份和报告不在统计范围内。')) : null,
+                + ' 加密标记不等于当前密钥能够解密；扫描证据、日志、备份和报告不在统计范围内。')) : null,
           protection && protection.bridge ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, 'DSH 管理连接诊断'),
             h('div', { style: { fontSize: 12 } },
@@ -7803,9 +7852,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 : '当前没有发现运行中的 ARTEX')),
             protection.artex.state === 'detected' && protection.artex.version
               ? h('div', { style: { fontSize: 12 } }, '版本：' + protection.artex.version) : null,
+            h('div', { style: { fontSize: 12 } }, '隐私联动：'
+              + ({
+                runtime_observed: '已读取实际 HTTP 监听范围',
+                configured_only: '仅有启动配置，尚未观察实际绑定',
+                not_configured: '未配置可选只读联动凭据',
+                auth_rejected: '只读联动凭据被拒绝',
+                unsupported: '当前 ARTEX 不支持只读联动接口',
+                invalid_response: '联动状态响应不符合约定',
+                unavailable: '联动接口暂时不可用',
+                not_inspected: '尚未检测',
+              }[protection.artex.privacyExposure] || '尚未检测')),
+            protection.artex.privacyScope ? h('div', { style: { fontSize: 12 } },
+              'HTTP 监听范围：' + ({
+                loopback: '回环接口', all_interfaces: '所有网络接口',
+                specific_interface: '指定网络接口', unknown: '未知',
+              }[protection.artex.privacyScope] || '未知')
+              + (protection.artex.privacySource === 'runtime_listener' ? '（运行时观察）' : '（配置推断）')) : null,
             h('div', { style: { fontSize: 12, opacity: 0.8 } },
-              '仅检查 DSH 所在主机的本地健康接口；不共享账号、令牌或数据库。'
-                + 'ARTEX 的监听范围与公网可达性仍未检测。'),
+              '仅通过本机健康接口及可选只读凭据联动，不共享管理员 JWT、账号或数据库。'
+                + ' ARTEX 公网可达性、宿主机端口映射与反向代理仍未检测。'),
             h('button', { className: 'rt-btn', type: 'button',
               onClick: () => setUI({ tab: 'artex' }), style: { marginTop: 8 } },
               '查看 ARTEX 资源与工具')) : null,

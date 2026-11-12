@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { authorizeBridgeRequest, isLocalBridgePeer, bridgePrivacyPosture } from '../lib/redteam/bridge-auth.js'
 
 function req(remoteAddress, host, token) {
@@ -65,6 +66,8 @@ test('privacy posture only reports configuration, never secrets or public reacha
     acceptedAddress: null,
     acceptedPort: null,
     configuredPort: null,
+    boundAddress: null,
+    boundPort: null,
     publicReachability: 'not_tested',
     listenerScope: 'not_inspected',
   })
@@ -88,4 +91,53 @@ test('observed socket endpoint is not mistaken for the bound listener', () => {
   // been bound to all interfaces or forwarded through a reverse proxy.
   assert.equal(summary.listenerScope, 'not_inspected')
   assert.equal(summary.publicReachability, 'not_tested')
+})
+
+test('privacy posture distinguishes a bound listener from an accepted loopback connection', () => {
+  for (const [address, scope] of [
+    ['127.0.0.1', 'loopback_bound'],
+    ['::1', 'loopback_bound'],
+    ['0.0.0.0', 'all_interfaces'],
+    ['::', 'all_interfaces'],
+    ['192.0.2.10', 'specific_interface'],
+  ]) {
+    const request = req('127.0.0.1', '127.0.0.1:53380')
+    request.socket.localAddress = '127.0.0.1'
+    request.socket.localPort = 53380
+    request.socket.server = { address: () => ({ address, port: 53380 }) }
+    const summary = bridgePrivacyPosture(request, {}, 53380)
+    assert.equal(summary.listenerScope, scope, address)
+    assert.equal(summary.boundAddress, address)
+    assert.equal(summary.boundPort, 53380)
+    assert.equal(summary.acceptedAddress, '127.0.0.1')
+    assert.equal(summary.publicReachability, 'not_tested')
+  }
+})
+
+test('non-IP or inaccessible listener binding remains explicitly unknown', () => {
+  const request = req('127.0.0.1', 'localhost')
+  request.socket.server = { address: () => { throw new Error('not accessible') } }
+  assert.equal(bridgePrivacyPosture(request).listenerScope, 'not_inspected')
+  request.socket.server = { address: () => '/tmp/test.sock' }
+  assert.equal(bridgePrivacyPosture(request).listenerScope, 'not_inspected')
+})
+
+test('real HTTP server exposes wildcard bind even when the request uses 127.0.0.1', async (t) => {
+  const server = createServer((request, response) => {
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify(bridgePrivacyPosture(request, {}, server.address().port)))
+  })
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '0.0.0.0', resolve)
+  })
+  t.after(() => new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve())))
+  const response = await fetch('http://127.0.0.1:' + server.address().port)
+  assert.equal(response.status, 200)
+  const snapshot = await response.json()
+  assert.equal(snapshot.localPeer, true)
+  assert.equal(snapshot.acceptedAddress, '127.0.0.1')
+  assert.equal(snapshot.boundAddress, '0.0.0.0')
+  assert.equal(snapshot.listenerScope, 'all_interfaces')
+  assert.equal(snapshot.publicReachability, 'not_tested')
 })
