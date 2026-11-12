@@ -3,7 +3,8 @@
 [CmdletBinding()]
 param(
     [string]$Root = '',
-    [switch]$Apply
+    [switch]$Apply,
+    [switch]$Details
 )
 
 $ErrorActionPreference = 'Stop'
@@ -88,8 +89,21 @@ if (-not $Apply) {
             if ($hasBroad) { $summary.broadRead++ }
             if ($hasOther) { $summary.otherRead++ }
             if (-not $acl.AreAccessRulesProtected) { $summary.inheritanceEnabled++ }
+            if ($Details -and ($hasBroad -or $hasOther -or -not $acl.AreAccessRulesProtected)) {
+                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart('\', '/') }
+                Write-Output ('ACL_FINDING ' + ([ordered]@{
+                    path = $relative
+                    broadRead = $hasBroad
+                    otherRead = $hasOther
+                    inheritanceEnabled = -not $acl.AreAccessRulesProtected
+                } | ConvertTo-Json -Compress))
+            }
         } catch {
             $summary.aclReadErrors++
+            if ($Details) {
+                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart('\', '/') }
+                Write-Output ('ACL_FINDING ' + ([ordered]@{ path = $relative; status = 'acl_unreadable' } | ConvertTo-Json -Compress))
+            }
         }
     }
     Write-Output ('ACL_AUDIT ' + ($summary | ConvertTo-Json -Compress))
