@@ -1,5 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
 import { normalizeIntelHost, runScopedIntelLookup } from '../lib/redteam/scoped-intel.js'
 
 const ip = '192.0.2.10'
@@ -53,23 +57,29 @@ test('provider mismatch fails closed; errors never expose credentials', async ()
   assert.equal(r.errors.length, 2)
   assert.equal(JSON.stringify(r).includes('private-test-key'), false)
 })
-test('explicit import preserves prior state and avoids overwriting prior ports', async () => {
-  const s = store()
-  let bundle
-  s.db = () => ({ prepare: sql => sql.includes('FROM asset')
-    ? { get: () => ({ id: 7, state: 'live' }) }
-    : { all: () => [{ port: 443, proto: 'tcp' }] } })
-  s.importBundle = (id, value) => { bundle = value; return { counts: { assets: 1 } } }
-  const r = await runScopedIntelLookup(s, { target: ip, confirmExternal: true,
-    commit: true, sources: ['internetdb', 'shodan'] }, {
+test('saved observations retain unknown transport, deduplicate and never change live ports', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'scoped-intel-'))
+  const s = new RedteamStore(root)
+  t.after(() => { for (const db of s.handles.values()) db.close(); rmSync(root, { recursive: true, force: true }) })
+  const { id } = s.openEngagement('lab', [ip])
+  s.importBundle(id, { assets: [{ ip, state: 'live', ports: [{ port: 443, proto: 'tcp', state: 'open' }] }] })
+  const options = {
     shodanKey: 'private-test-key',
     fetch: async url => url.host === 'api.shodan.io'
       ? reply({ ip_str: ip, data: [{ port: 443, transport: 'tcp' }, { port: 22, transport: 'tcp' }] })
       : reply({ ip, ports: [80, 443] }),
-  })
-  assert.equal(r.ok, true)
-  assert.equal(bundle.assets[0].state, 'live')
-  assert.deepEqual(bundle.assets[0].ports.map(p => p.port), [22])
-  assert.equal(bundle.assets[0].ports[0].provenance, 'passive')
-  assert.equal(JSON.stringify(bundle).includes('private-test-key'), false)
+  }
+  const req = { engagement: id, target: ip, confirmExternal: true, commit: true, sources: ['internetdb', 'shodan'] }
+  const r = await runScopedIntelLookup(s, req, options)
+  assert.equal(r.imported.saved, 2)
+  const db = s.db(id)
+  assert.equal(db.prepare('SELECT state FROM asset WHERE ip=?').get(ip).state, 'live')
+  assert.deepEqual(db.prepare('SELECT port FROM port').all().map(p => p.port), [443])
+  const repeat = await runScopedIntelLookup(s, req, options)
+  assert.equal(repeat.imported.saved, 0)
+  const history = dispatch(s, { op: 'scopedIntelHistory', engagement: id, target: ip })
+  assert.equal(history.items.length, 2)
+  assert.equal(history.items.find(x => x.source === 'internetdb').data.ports[0].proto, 'unknown')
+  assert.equal(JSON.stringify(history).includes('private-test-key'), false)
+  assert.equal(dispatch(s, { op: 'scopedIntelHistory', engagement: id, target: '192.0.2.11' }).ok, false)
 })
