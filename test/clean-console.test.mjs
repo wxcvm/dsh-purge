@@ -387,18 +387,28 @@ test('remote target check uses immutable commit and reports per-file differences
   let unavailable = ''
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
   const seen = []
-  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer',
+  let token = ''
+  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
     () => receipt, () => 'receipt', () => ({ hashes: local }), files,
-    async (url) => {
-      seen.push(url)
-      const file = url.split('/' + sha + '/')[1]
+    async (url, timeout, headers) => {
+      seen.push({ url, headers })
+      const parsed = new URL(url)
+      const file = token ? parsed.pathname.split('/contents/')[1] : url.split('/' + sha + '/')[1]
       if (!file || file === unavailable) throw new Error('unavailable')
       return { arrayBuffer: async () => Buffer.from(file) }
-    }, 'fixture/repo', createHash, Buffer)
+    }, 'fixture/repo', createHash, Buffer, () => token,
+    (ref, file) => 'https://api.github.com/repos/fixture/repo/contents/' + file + '?ref=' + ref)
   assert.equal((await verify()).status, 'match')
   assert.equal(seen.length, 4)
-  assert.ok(seen.every((url) => url.includes('/' + sha + '/')))
+  assert.ok(seen.every(({ url }) => url.includes('/' + sha + '/')))
+  seen.length = 0
+  token = 'fixture-token'
+  assert.equal((await verify()).status, 'match')
+  assert.equal(seen.length, 4)
+  assert.ok(seen.every(({ url, headers }) => new URL(url).searchParams.get('ref') === sha &&
+    headers.accept === 'application/vnd.github.raw+json'))
+  token = ''
   local['client.js'] = 'different'
   assert.equal((await verify()).status, 'mismatch')
   unavailable = 'lib/index.js'
