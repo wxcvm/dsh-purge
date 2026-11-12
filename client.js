@@ -7685,6 +7685,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [saved, setSaved] = React.useState(null)
       const [history, setHistory] = React.useState(null)
       const [protection, setProtection] = React.useState(null)
+      const [storageAudit, setStorageAudit] = React.useState(null)
+      const [storageBusy, setStorageBusy] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
       const [message, setMessage] = React.useState('')
@@ -7721,6 +7723,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             if (v && v.ok !== false) setProtection(v)
           }, () => {})
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
+      }
+      const runStorageAudit = () => {
+        if (storageBusy) return
+        setStorageBusy(true); setStorageAudit(null)
+        api({ op: 'storageAclAudit' }).then((result) => {
+          setStorageAudit(result && typeof result.status === 'string'
+            ? result : { ok: false, status: 'unavailable' })
+        }, () => setStorageAudit({ ok: false, status: 'unavailable' }))
+          .finally(() => setStorageBusy(false))
       }
       const checkField = (key, label, description) => h('label', {
         style: { display: 'flex', alignItems: 'flex-start', gap: 10, margin: '12px 0', fontSize: 13 },
@@ -7768,6 +7779,34 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+            h('h4', null, 'Windows 存储权限诊断'),
+            h('div', { style: { fontSize: 12 } },
+              '按需读取 DSH 本机工作区的 NTFS ACL，检查数据库、报告、证据等文件和目录。不修改权限，不读取文件内容。'),
+            h('button', { className: 'rt-btn', type: 'button',
+              disabled: storageBusy || !protection || !protection.storageAudit || !protection.storageAudit.available,
+              onClick: runStorageAudit, style: { marginTop: 8 } },
+              storageBusy ? '正在检查…' : '检查存储权限'),
+            protection && protection.storageAudit && !protection.storageAudit.available
+              ? h('div', { style: { fontSize: 12 } }, '当前宿主不是 Windows，暂不支持 NTFS 检查。') : null,
+            storageAudit && storageAudit.ok && storageAudit.counts
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  h('b', null, storageAudit.status === 'partial' ? '部分检查完成（存在未检查项目）' : '本次检查完成'),
+                  h('div', null, '已检查：' + storageAudit.counts.inspected
+                    + ' · 宽泛读取授权：' + storageAudit.counts.broadRead
+                    + ' · 其他账户读取授权：' + storageAudit.counts.otherRead),
+                  h('div', null, '启用权限继承：' + storageAudit.counts.inheritanceEnabled),
+                  h('div', null, 'ACL 读取失败：' + storageAudit.counts.aclReadErrors
+                    + ' · 跳过重解析点：' + storageAudit.counts.skippedReparse
+                    + ' · 枚举失败：' + storageAudit.counts.enumerationErrors))
+              : storageAudit ? h('div', { className: 'rt-err', style: { marginTop: 8 } },
+                  ({ timeout: '检查超时，请通过命令行预览大型工作区。',
+                    unsupported: '当前宿主不支持 Windows NTFS 检查。',
+                    invalid_response: '审计脚本未返回有效统计。',
+                    unavailable: '无法执行存储检查，请确认 PowerShell 与插件脚本可用。'
+                  })[storageAudit.status] || '无法读取存储权限结果。') : null,
+            h('div', { style: { fontSize: 12, opacity: 0.8 } },
+              '统计的是观察到的读取允许规则，不是有效访问权限证明；继承本身不一定是问题。不返回路径、内容或凭据。')),
           protection && protection.vault ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, '凭据加密覆盖情况'),
             h('div', { style: { fontSize: 12 } },
