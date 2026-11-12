@@ -36,6 +36,8 @@ test('clean controls precede the patch list and respect host and update activity
   assert.match(controls, /disabled: jobOn \|\| updateBusy \|\| !overrideLoaded/)
   assert.equal((controls.match(/disabled: jobOn \|\| updateBusy/g) || []).length, 3)
   assert.match(root, /onRefresh: refreshPatchStatus, busy: jobOn \|\| updateBusy/)
+  assert.match(root, /let actionDisabled = jobOn \|\| updateBusy/)
+  assert.match(root, /disabled: jobOn \|\| updateBusy, onClick: doUninstall/)
 })
 
 test('unavailable host coverage and backup do not appear as zero or absent', () => {
