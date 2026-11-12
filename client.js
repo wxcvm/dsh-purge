@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "db56be9fd394fec6";
+		const CLIENT_BUILD_ID = "938912e8b00ae266";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2087,6 +2087,50 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return node;
 		}
 
+		// The progress endpoint is authoritative; no simulated overall percentage.
+		const UPDATE_STAGE_LABELS = {
+			checking_versions: "查询版本列表", resolving_target: "确认目标提交",
+			preparing_files: "准备更新文件", caching_install_archive: "准备本地安装包",
+			git_fetch: "获取 Git 版本并切换", downloading: "下载版本包",
+			extracting: "解压版本包", copying: "覆盖插件文件",
+			profile: "更新安装配置", refreshing_versions: "核对版本信息",
+			reapplying: "运行安装后维护", awaiting_restart: "文件已更新，等待重启核验",
+			done: "更新任务完成", failed: "更新失败",
+		};
+		function updateStageLabel(stage) { return UPDATE_STAGE_LABELS[stage] || "正在连接更新服务…"; }
+		function UpdateProgressPanel({ progress: p, pending, unavailable, clock }) {
+			const download = p?.stage === "downloading" || p?.stage === "caching_install_archive";
+			const elapsed = Number.isFinite(p?.elapsedMs) ? p.elapsedMs : p?.startedAt ? (p.finishedAt || clock) - p.startedAt : null;
+			const rate = Number.isFinite(p?.bytesPerSecond) && p.bytesPerSecond >= 0 ? p.bytesPerSecond : null;
+			const received = Math.max(0, Number(p?.received) || 0);
+			const total = Number(p?.total) > 0 ? Number(p.total) : null;
+			const copyTotal = Number(p?.copyTotal) > 0 ? Number(p.copyTotal) : null;
+			const copyCount = Math.max(0, Number(p?.copied) || 0);
+			const fresh = !unavailable && p?.active;
+			const mb = n => (n / 1048576).toFixed(2) + " MB";
+			return h("div", { className: "dshp-notice", role: "status", "aria-live": "polite",
+				style: { display: "grid", gap: 8, marginTop: 8, overflowWrap: "anywhere" } },
+				h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
+					h("b", null, "版本更新进度"),
+					h("span", { className: "dshp-pill" }, p?.stage === "failed" ? "失败" : p?.stage === "awaiting_restart" ? "待核验" : p?.active || pending ? "进行中" : "已结束")),
+				h("b", null, updateStageLabel(p?.stage)),
+				p?.ref ? h("span", null, "目标：" + (p.targetVersion ? p.targetVersion + " · " : "") + p.ref + (p.targetSha ? " · " + p.targetSha.slice(0, 7) : "")) : null,
+				elapsed != null ? h("span", null, "已耗时 " + Math.max(0, Math.floor(elapsed / 1000)) + " 秒" +
+					(p?.active && Number.isFinite(p.stageElapsedMs) ? " · 当前阶段 " + Math.floor(p.stageElapsedMs / 1000) + " 秒" : "")) : null,
+				download ? h("div", { style: { display: "grid", gap: 6 } },
+					h("span", null, "已下载 " + mb(received) + (total ? " / " + mb(total) : " · 总大小未知")),
+					h("progress", { "aria-label": "当前下载进度", value: total ? Math.min(received, total) : undefined, max: total || 1, style: { width: "100%" } }),
+					fresh ? h("span", null, p.downloadStalled ? "正在等待下载数据…" : rate === null ? "正在测量下载速度…" : "当前速度 " + mb(rate) + "/s" + (total ? " · " + Math.min(100, Math.floor(received / total * 100)) + "%" : "")) : null,
+					fresh && !p.downloadStalled && Number.isFinite(p.etaSeconds) && p.etaSeconds > 0 ? h("span", null, "下载约剩 " + p.etaSeconds + " 秒（仅下载估算）") : null) : null,
+				p?.stage === "copying" ? h("div", { style: { display: "grid", gap: 6 } },
+					h("span", null, "文件组 " + copyCount + "/" + (copyTotal || "—") + (p.group ? " · " + p.group : "")),
+					copyTotal ? h("progress", { "aria-label": "当前文件覆盖进度", value: Math.min(copyCount, copyTotal), max: copyTotal, style: { width: "100%" } }) : null) : null,
+				unavailable && (pending || p?.active) ? h("span", null, "状态连接暂时中断，显示上次收到的进度；请勿重复切换。") : null,
+				p?.profileMigrationPending ? h("span", null, "本地安装包已准备，仍需退出宿主后完成 profile 安装来源迁移。") : null,
+				p?.stage === "awaiting_restart" ? h("span", null, "本次文件更新已结束；重启后还需核对实际运行版本。") : null,
+				p?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (p.failedStage ? updateStageLabel(p.failedStage) + "：" : "") + p.error) : null);
+		}
+
 		function PurgifySection({ section } = {}) {
 			const t = useT();
 			const tRef = useRef(t);
@@ -2172,7 +2216,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const updateErrorText = (tr, e) => {
 				const msg = String((e && e.message) || e || "");
 				if (msg === "timeout" || /aborted|abort|超时/i.test(msg)) return tr("update.timeout");
-				if (/\b404\b/.test(msg) || /non-json/.test(msg)) return tr("update.needRestart");
+				// A GitHub 404 is not a missing local API route.
+				if (/无法读取 GitHub 仓库/.test(msg)) return msg;
+				if (/^http 404\b/i.test(msg) || /non-json/.test(msg)) return tr("update.needRestart");
 				return tr("update.fail", { error: msg });
 			};
 
@@ -2765,19 +2811,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						renderEdition("beta"),
 					),
 					noticeNode(updateNotice),
-					(updateProgress || (updatePending && updateJob?.kind !== "check")) ? h("div", { className: "dshp-notice", role: "status", style: { display: "grid", gap: 6, marginTop: 8 } },
-						h("b", null, "版本切换进度 / Update progress"),
-						h("span", null, ({ checking_versions: "查询版本列表", resolving_target: "确认目标提交", preparing_files: "准备更新文件", git_fetch: "获取 Git 版本并切换", downloading: "下载版本包", extracting: "解压版本包", copying: "覆盖插件文件", profile: "更新安装配置", refreshing_versions: "核对版本信息", reapplying: "运行安装后维护", awaiting_restart: "文件已更新，等待重启核验", done: "更新任务完成", failed: "更新失败" })[updateProgress?.stage] || "正在连接更新服务…"),
-						updateProgress?.ref ? h("span", null, "目标：" + updateProgress.ref + (updateProgress.targetSha ? " · " + updateProgress.targetSha.slice(0, 7) : "")) : null,
-						updateProgress?.startedAt ? h("span", null, "已耗时 " + Math.max(0, Math.floor(((updateProgress.finishedAt || progressClock) - updateProgress.startedAt) / 1000)) + " 秒") : null,
-						updateProgress?.stage === "downloading" ? h("span", null, "已下载 " + ((updateProgress.received || 0) / 1048576).toFixed(2) + " MB" + (updateProgress.total ? " / " + (updateProgress.total / 1048576).toFixed(2) + " MB" : " · 总大小未知")) : null,
-						updateProgress?.stage === "downloading" && updateProgress.total ? h("progress", { value: updateProgress.received || 0, max: updateProgress.total, style: { width: "100%" } }) : null,
-						updateProgress?.stage === "downloading" && updateProgress.total > updateProgress.received && updateProgress.received > 0 && progressClock - updateProgress.downloadStartedAt >= 2000 ? h("span", null, "按当前平均速度，下载约剩 " + Math.ceil((progressClock - updateProgress.downloadStartedAt) / 1000 * (updateProgress.total - updateProgress.received) / updateProgress.received) + " 秒（仅下载估算）") : null,
-						updateProgress?.stage === "copying" ? h("span", null, "文件组 " + (updateProgress.copied || 0) + "/" + (updateProgress.copyTotal || 0) + (updateProgress.group ? " · " + updateProgress.group : "")) : null,
-						progressUnavailable && updateBusy ? h("span", null, "暂未收到后台状态，请勿重复切换；正在重试读取。") : null,
-						updateProgress?.active ? h("span", null, "完成时间取决于网络和本机操作，暂不可准确估计。") : null,
-						updateProgress?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (updateProgress.failedStage ? "[" + updateProgress.failedStage + "] " : "") + updateProgress.error) : null,
-					) : null,
+					(updateProgress || (updatePending && updateJob?.kind !== "check")) ? h(UpdateProgressPanel, {
+						progress: updateProgress, pending: updatePending, unavailable: progressUnavailable,
+						clock: progressClock,
+					}) : null,
 				)),
 				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" },
