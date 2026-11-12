@@ -16,7 +16,7 @@ const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
 const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
   patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
 })
-const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'CleanDiagnostics', {
+const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'BackupInventory', {
   tallyPatches: (rows) => rows.reduce((o, row) => {
     o.total += 1
     if (row.st === 'applied' || row.st === 'already') o.applied += 1
@@ -182,4 +182,31 @@ test('version identity retains module-evaluation version while disk changes', ()
   assert.equal(identity().root, 'plugin-root')
   const entry = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
   assert.match(entry, /plugin_identity: updater\.versionIdentity\(\)/)
+})
+
+test('backup inventory reports actual content without changing the files', async () => {
+  const source = readFileSync(new URL('../lib/core.js', import.meta.url), 'utf8')
+  const start = source.indexOf('export async function inspectHostBackups(')
+  const end = source.indexOf('export async function backupAll(', start)
+  const files = new Map([['same', Buffer.from('abc')], ['same.bak', Buffer.from('abc')], ['changed', Buffer.from('new')], ['changed.bak', Buffer.from('old')], ['empty.bak', Buffer.alloc(0)]])
+  const missing = () => Object.assign(new Error('missing'), { code: 'ENOENT' })
+  const fs = { statSync: (p) => { if (!files.has(p)) throw missing(); return { size: files.get(p).length, mtime: new Date(0), isFile: () => true } } }
+  const fsp = { readFile: async (p) => { if (!files.has(p)) throw missing(); return files.get(p) } }
+  const inspect = new Function('fs', 'fsp', 'createHash', 'flattenTargetPaths', 'targetFiles', 'isUserProfilePatchFile', 'BAK_SUFFIX',
+    source.slice(start, end).replace('export async function', 'async function') + 'return inspectHostBackups;')
+    (fs, fsp, (await import('node:crypto')).createHash, (x) => x, () => ['same', 'changed', 'empty', 'missing', 'profile'], (p) => p === 'profile', '.bak')
+  const result = await inspect('host')
+  assert.equal(result.provenance, 'unknown')
+  assert.equal(result.rows.map((r) => r.status).join(','), 'identical,different,invalid,missing')
+  assert.equal(result.rows[0].sha256.length, 64)
+  assert.equal(files.get('changed').toString(), 'new')
+  assert.equal(files.get('empty.bak').length, 0)
+  assert.equal((await inspect(null)).rows.length, 0)
+  assert.match(source, /Invalid or empty host backup; original preserved/)
+  assert.match(source, /await atomicCopyFile\(bak, fp\)/)
+  const entry = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+  assert.match(entry, /path: "\/dsh-purge\/backups"/)
+  assert.match(entry, /ok: result.errors === 0/)
+  assert.match(entry, /value.startsWith\("error:"\)/)
+  assert.match(client, /h\(BackupInventory, \{ busy: jobOn \|\| updateBusy \}\)/)
 })
