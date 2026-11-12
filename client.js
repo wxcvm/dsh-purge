@@ -7991,6 +7991,22 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [surveyBusy, setSurveyBusy] = React.useState(false)
       const [surveyError, setSurveyError] = React.useState('')
       const [surveyResult, setSurveyResult] = React.useState(null)
+      const [intelTarget, setIntelTarget] = React.useState('')
+      const [intelShodan, setIntelShodan] = React.useState(false)
+      const [intelConsent, setIntelConsent] = React.useState(false)
+      const [intelCommit, setIntelCommit] = React.useState(false)
+      const [intelBusy, setIntelBusy] = React.useState(false)
+      const [intelResult, setIntelResult] = React.useState(null)
+      const runIntel = () => {
+        if (!eng || !intelConsent || !intelTarget.trim() || intelBusy) return
+        setIntelBusy(true); setIntelResult(null)
+        api({ op: 'scopedIntelLookup', engagement: eng, target: intelTarget.trim(),
+          sources: intelShodan ? ['internetdb', 'shodan'] : ['internetdb'],
+          confirmExternal: true, commit: intelCommit }).then(r => {
+          setIntelBusy(false); setIntelResult(r)
+          if (r?.imported) setRefresh(n => n + 1)
+        }, () => { setIntelBusy(false); setIntelResult({ error: '查询失败' }) })
+      }
       const limit = 30
       React.useEffect(() => {
         let live = true
@@ -8023,7 +8039,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setSourceMsg((r && r.error) || '保存失败'); return }
           const value = r.config && r.config.intelSources
           if (value) { setSavedSources(value); setChosen(value) }
-          setSourceMsg('已保存平台选择。外部平台需要在其网页单独使用；不会自动接入 API。')
+          setSourceMsg('已保存平台选择；不会自动提交外部查询。')
         }, (e) => { setSourceBusy(false); setSourceMsg(String((e && e.message) || e)) })
       }
       const activeSources = sources.filter((x) => chosen.selected.includes(x.id))
@@ -8097,7 +8113,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', null, '这类平台索引互联网上公开可见的主机、端口、服务、网页指纹和证书，适合与本地资产记录交叉核对。'
               + ' 各平台收录范围、查询语言、账号要求和额度不同。'),
             h('div', { style: { marginTop: 5 } },
-              '本地测绘已接通 SQLite 检索；FOFA 保留原有专项技能。其他平台目前提供官网入口和可保存的常用平台选择，尚未接入自动查询 API。')),
+              '本地测绘已接通 SQLite 检索；FOFA 保留原有专项技能。下方可查询 InternetDB 与 Shodan 单 IP 情报；其余外部平台提供官网入口。')),
           h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
             h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
               h('h4', { style: { margin: 0 } }, '选择常用测绘平台'),
@@ -8139,6 +8155,32 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '外部被动情报 · 单 IP'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史端口线索不是实时验证；未知协议仅预览。'),
+            h('input', { className: 'rt-input', value: intelTarget, placeholder: '已登记范围内的 IP',
+              onChange: e => { setIntelTarget(e.target.value); setIntelConsent(false); setIntelResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: intelShodan,
+                onChange: e => { setIntelShodan(e.target.checked); setIntelConsent(false) } }), ' 加查 Shodan API'),
+              h('label', null, h('input', { type: 'checkbox', checked: intelConsent,
+                onChange: e => setIntelConsent(e.target.checked) }), ' 同意将该 IP 提交给所选外部平台'),
+              h('label', null, h('input', { type: 'checkbox', checked: intelCommit,
+                onChange: e => setIntelCommit(e.target.checked) }), ' 导入资产及明确协议的新端口')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: intelBusy || !eng || !intelConsent || !intelTarget.trim(), onClick: runIntel },
+              intelBusy ? '查询中…' : '查询被动情报'),
+            intelResult && (!intelResult.engagement || intelResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                intelResult.error ? h('div', { className: 'rt-err' }, intelResult.error) : null,
+                (intelResult.errors || []).map(e => h('div', { key: e.source }, e.source + ': ' + e.error)),
+                intelResult.ok ? h('div', null,
+                  '来源：' + (intelResult.results || []).map(r => r.source).join('、') + ' · '
+                    + (intelResult.imported ? '已入库' : '仅预览'),
+                  h('div', null, '端口线索：' + ((intelResult.ports || []).map(p => p.port + '/' + p.proto + ' (' + p.sources.join(', ') + ')').join('、') || '无')),
+                  !maskAssets ? h('div', null, '主机名线索：' + [...new Set((intelResult.results || []).flatMap(r => r.hostnames))].join('、')) : null)
+                  : null) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '本机主动测绘 · 单目标'),
             h('div', { style: { fontSize: 12, opacity: 0.85, lineHeight: 1.65, marginBottom: 8 } },
