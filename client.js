@@ -7740,6 +7740,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [protection, setProtection] = React.useState(null)
       const [storageAudit, setStorageAudit] = React.useState(null)
       const [storageBusy, setStorageBusy] = React.useState(false)
+      const [artexOverview, setArtexOverview] = React.useState(null)
+      const [artexOverviewBusy, setArtexOverviewBusy] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
       const [message, setMessage] = React.useState('')
@@ -7776,6 +7778,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             if (v && v.ok !== false) setProtection(v)
           }, () => {})
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
+      }
+      const runArtexOverview = () => {
+        if (artexOverviewBusy) return
+        setArtexOverviewBusy(true); setArtexOverview(null)
+        api({ op: 'artexPrivacyOverview' }).then((result) => {
+          setArtexOverview(result && typeof result.status === 'string' ? result : { ok: false, status: 'unavailable' })
+        }, () => setArtexOverview({ ok: false, status: 'unavailable' }))
+          .finally(() => setArtexOverviewBusy(false))
       }
       const runStorageAudit = () => {
         if (storageBusy) return
@@ -7929,6 +7939,37 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('button', { className: 'rt-btn', type: 'button',
               onClick: () => setUI({ tab: 'artex' }), style: { marginTop: 8 } },
               '查看 ARTEX 资源与工具')) : null,
+          h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+            h('h4', null, 'ARTEX 隐私总览'),
+            h('div', { style: { fontSize: 12 } }, '独立可选凭据，按需读取模型密钥、敏感配置和近期网络活动的汇总，不传输原始地址或密钥。'),
+            h('button', { className: 'rt-btn', type: 'button', disabled: artexOverviewBusy,
+              onClick: runArtexOverview, style: { marginTop: 8 } }, artexOverviewBusy ? '读取中…' : '检查 ARTEX 隐私总览'),
+            artexOverview && artexOverview.ok && artexOverview.summary
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  h('b', null, '模型密钥'),
+                  artexOverview.summary.modelKeys.state !== 'complete'
+                    ? h('div', null, '数据库不可用，密钥未检查')
+                    : h('div', null, '仅密文 ' + artexOverview.summary.modelKeys.encrypted_only
+                      + ' · 仅明文 ' + artexOverview.summary.modelKeys.plaintext_only
+                      + ' · 混合 ' + artexOverview.summary.modelKeys.mixed
+                      + ' · 认证失败 ' + artexOverview.summary.modelKeys.failed
+                      + ' · 未校验 ' + artexOverview.summary.modelKeys.unchecked),
+                  h('b', null, '敏感配置'),
+                  h('div', null, '已检查模型 ' + artexOverview.summary.config.profiles_checked
+                    + ' · 需关注 ' + artexOverview.summary.config.findings
+                    + ' · 解析不完整 ' + artexOverview.summary.config.incomplete_findings),
+                  h('div', null, '模型配置检查：' + ({ complete: '已完成', partial: '部分完成', unavailable: '无法读取', not_inspected: '未检查' }[artexOverview.summary.config.profiles_state] || '未知')),
+                  h('div', null, '配置文件：' + ({ readable: '已读取', missing: '不存在', invalid: '格式无效', unreadable: '无法读取', not_inspected: '未检查' }[artexOverview.summary.config.file_state] || '未知')
+                    + ' · ' + ({ windows_acl_not_inspected: 'Windows ACL 未检查', group_or_other_read: '存在组或其他用户读取位', no_group_or_other_read: '未发现组或其他用户读取位', not_inspected: '权限未检查' }[artexOverview.summary.config.file_permissions] || '权限未知')),
+                  h('b', null, '模型 HTTP 活动'),
+                  h('div', null, '累计 ' + artexOverview.summary.outbound.total
+                    + ' · 近期 ' + artexOverview.summary.outbound.retained + '/' + artexOverview.summary.outbound.capacity),
+                  h('div', null, '近期非 2xx ' + artexOverview.summary.outbound.http_non_2xx
+                    + ' · 传输失败 ' + artexOverview.summary.outbound.transport_failures
+                    + ' · 超时 ' + artexOverview.summary.outbound.timeouts))
+              : artexOverview ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  ({ not_configured: '未配置独立总览凭据', not_inspected: 'ARTEX 服务尚未确认在线', auth_rejected: '总览凭据被拒绝或旧版不支持', unsupported: '当前 ARTEX 不支持总览接口', invalid_response: '总览响应不符合约定', unavailable: '总览读取失败或超时' }[artexOverview.status] || '无法读取总览')) : null,
+            h('div', { style: { fontSize: 12, opacity: 0.8 } }, '未检查不等于安全；HTTP 记录不证明真实网络出口或任务成功。只读诊断不修改配置或发送模型请求。')),
           h('div', { className: 'rt-card' },
             h('h4', null, '保护状态：已保护 / 可启用 / 仍会暴露'),
             protection ? [
