@@ -8323,8 +8323,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [matrixError, setMatrixError] = React.useState('')
       const [matrixGroup, setMatrixGroup] = React.useState('all')
       const [matrixQuery, setMatrixQuery] = React.useState('')
+      const [adminProbeBusy, setAdminProbeBusy] = React.useState(false)
+      const [adminProbeResult, setAdminProbeResult] = React.useState(null)
+      const adminProbeRevision = React.useRef(0)
 
       const applyDraftFrom = (r) => {
+        adminProbeRevision.current += 1
+        setAdminProbeResult(null)
         const c = (r && r.config) || {}
         setDraft({
           platform: c.platform || 'auto',
@@ -8336,6 +8341,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           planning: { preferredToolByTask: Object.assign({}, c.planning?.preferredToolByTask || {}) },
           kaliVm: Object.assign({ host: '', user: 'kali', port: 22, identityFile: '' }, c.kaliVm || {}),
           vps: Object.assign({ user: 'ubuntu', domain: '', ipv4: '', ipv6: '', addressMode: 'auto', identityFile: '' }, c.vps || {}),
+          vpsAdminRoute: { target: c.vpsAdminRoute?.target || '', jumps: Array.isArray(c.vpsAdminRoute?.jumps) ? [...c.vpsAdminRoute.jumps] : [] },
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
         })
@@ -8370,6 +8376,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           planning: draft.planning,
           kaliVm: draft.kaliVm,
           vps: draft.vps,
+          vpsAdminRoute: draft.vpsAdminRoute,
           env: draft.env,
           notes: draft.notes,
           envAdaptConfigured: true,
@@ -8546,6 +8553,92 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onChange: (e) => setVpsField(key, e.target.value) }),
           h('div', { className: 'rt-foot', style: { fontSize: 11, marginTop: 3 } }, hint))
 
+      // Management-only route; network checks require a deliberate local action.
+      const adminRoute = draft?.vpsAdminRoute || { target: '', jumps: [] }
+      const editAdminRoute = (update) => {
+        adminProbeRevision.current += 1
+        setAdminProbeResult(null)
+        setDraft((d) => d ? { ...d, vpsAdminRoute: update(d.vpsAdminRoute) } : d)
+      }
+      const savedAdminRoute = data?.config?.vpsAdminRoute || { target: '', jumps: [] }
+      const routeKey = (route) => JSON.stringify({ target: route.target.trim(), jumps: route.jumps.map((v) => v.trim()) })
+      const adminRouteKey = routeKey(adminRoute)
+      const adminRouteSaved = adminRouteKey === routeKey(savedAdminRoute)
+      const visibleAdminProbe = adminRouteSaved && adminProbeResult?.routeKey === adminRouteKey ? adminProbeResult : null
+      const runAdminProbe = async () => {
+        if (adminProbeBusy || !adminRouteSaved || !adminValid) return
+        setAdminProbeBusy(true)
+        setAdminProbeResult(null)
+        const revision = ++adminProbeRevision.current
+        const publish = (result) => {
+          if (adminProbeRevision.current !== revision) return
+          setAdminProbeResult({ ...result, routeKey: adminRouteKey })
+        }
+        try {
+          const result = await api({ op: 'vpsAdminProbe' })
+          if (result?.target && routeKey(result) !== adminRouteKey) {
+            publish({ ok: false, error: '已保存的管理路径发生变化，请刷新配置后重新检测' })
+          } else {
+            publish(result || { ok: false, error: '未收到检测结果' })
+          }
+        } catch (error) {
+          publish({ ok: false, error: String(error?.message || error) })
+        } finally {
+          setAdminProbeBusy(false)
+        }
+      }
+      const adminAliases = [...adminRoute.jumps, adminRoute.target].map((value) => value.trim())
+      const adminValid = adminRoute.jumps.length <= 4
+        && adminAliases.every((value) => /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/.test(value))
+        && new Set(adminAliases.map((value) => value.toLowerCase())).size === adminAliases.length
+      const moveAdminJump = (index, offset) => editAdminRoute((route) => {
+        const jumps = [...route.jumps]
+        const next = index + offset
+        if (next < 0 || next >= jumps.length) return route
+        ;[jumps[index], jumps[next]] = [jumps[next], jumps[index]]
+        return { ...route, jumps }
+      })
+      const adminRouteCard = () => h('div', { className: 'rt-card' },
+        h('h4', null, 'SSH 多跳管理路径（独立）'),
+        h('p', { className: 'rt-foot' },
+          '仅管理自有服务器及授权实验室。填写本机 OpenSSH config 中的 Host 别名，按顺序连接；不改变原 VPS、系统代理或红队工具出口。'),
+        h('label', { style: { display: 'block', fontSize: 12 } }, '最终管理服务器 Host 别名',
+          h('input', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 4 },
+            placeholder: 'lab', value: adminRoute.target,
+            onChange: (e) => editAdminRoute((route) => ({ ...route, target: e.target.value })) })),
+        h('div', { style: { marginTop: 10, fontSize: 12, fontWeight: 600 } }, '跳板顺序（最多 4 个）'),
+        adminRoute.jumps.map((alias, index) => h('div', { key: index, style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' } },
+          h('span', { style: { fontSize: 12 } }, String(index + 1) + '.'),
+          h('input', { className: 'rt-input', style: { flex: '1 1 140px', minWidth: 0 },
+            'aria-label': '跳板 ' + (index + 1), placeholder: 'bastion', value: alias,
+            onChange: (e) => editAdminRoute((route) => ({ ...route, jumps: route.jumps.map((value, i) => i === index ? e.target.value : value) })) }),
+          h('button', { type: 'button', className: 'rt-btn', disabled: index === 0, onClick: () => moveAdminJump(index, -1), 'aria-label': '上移跳板' }, '↑'),
+          h('button', { type: 'button', className: 'rt-btn', disabled: index === adminRoute.jumps.length - 1, onClick: () => moveAdminJump(index, 1), 'aria-label': '下移跳板' }, '↓'),
+          h('button', { type: 'button', className: 'rt-btn', onClick: () => editAdminRoute((route) => ({ ...route, jumps: route.jumps.filter((_, i) => i !== index) })) }, '删除'))),
+        h('button', { type: 'button', className: 'rt-btn', style: { marginTop: 8 }, disabled: adminRoute.jumps.length >= 4,
+          onClick: () => editAdminRoute((route) => ({ ...route, jumps: [...route.jumps, ''] })) }, '+ 添加跳板'),
+        h('div', { className: 'rt-foot', style: { marginTop: 10, overflowWrap: 'anywhere' } },
+          '路径：本机 → ' + [...adminRoute.jumps.map((value) => value.trim() || '未填写'), adminRoute.target.trim() || '最终服务器'].join(' → ')),
+        adminValid ? h('div', { style: { marginTop: 8, fontSize: 12 } },
+          h('div', { className: 'rt-foot' }, '配置格式有效。先点击环境适配的保存按钮，再在 Purge 安装目录的本机终端运行以下命令。它读取已保存路径，而非未保存的编辑内容。'),
+          h('input', { className: 'rt-input rt-mono', readOnly: true, 'aria-label': '本机 SSH 管理检查命令',
+            style: { display: 'block', width: '100%', marginTop: 4 },
+            value: 'node scripts/vps-admin-check.mjs --saved',
+            onFocus: (e) => e.target.select() }))
+          : (adminRoute.target || adminRoute.jumps.length) ? h('div', { className: 'rt-err', style: { marginTop: 8 } },
+            '请填写有效且不重复的 SSH Host 别名；最多四个跳板。') : null,
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10 } },
+          h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
+            disabled: busy || adminProbeBusy || !adminValid || !adminRouteSaved,
+            onClick: runAdminProbe }, adminProbeBusy ? '检测中…' : '检测已保存路径'),
+          !adminRouteSaved ? h('span', { className: 'rt-foot' }, '请先保存') : null),
+        visibleAdminProbe ? h('div', { className: visibleAdminProbe.ok ? 'rt-foot' : 'rt-err', style: { marginTop: 8, overflowWrap: 'anywhere' } },
+          (visibleAdminProbe.target ? '检测路径：' + [...(visibleAdminProbe.jumps || []), visibleAdminProbe.target].join(' → ') + '；' : '')
+          + (visibleAdminProbe.ok ? 'SSH 管理连接成功' : '检测失败：' + (visibleAdminProbe.error || '未知错误'))
+          + (Number.isFinite(visibleAdminProbe.durationMs) ? ' · ' + visibleAdminProbe.durationMs + ' ms' : '')
+          + (visibleAdminProbe.checkedAt ? ' · ' + new Date(visibleAdminProbe.checkedAt).toLocaleString() : '')) : null,
+        h('p', { className: 'rt-foot' }, '一键检测需要本机回环管理接口、访问令牌及宿主显式启用。不可用时使用上方终端命令；成功仅代表检测当时的 SSH 路径可用。'))
+      
       const addCustomTool = () => setDraft((d) => d ? { ...d, customTools: (d.customTools || []).concat({ name: '', path: '' }) } : d)
       const editCustomTool = (i, key, value) => setDraft((d) => d ? {
         ...d, customTools: (d.customTools || []).map((item, index) =>
@@ -8927,6 +9020,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             '连接检查：PowerShell 运行 Test-Path "私钥路径"，再运行 ssh -i "私钥路径" 用户名@主机。'
             + ' IPv6 URL 格式为 http://[IPv6]:端口，不能把 user@host 直接用于 HTTP。'
             + ' 详见「操作指南 → 多环境作用与 VPS 配置」。')),
+          adminRouteCard(),
           h('div', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
