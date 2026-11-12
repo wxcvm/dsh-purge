@@ -194,7 +194,7 @@ Resolve-DnsName vps.example.com -Type AAAA
 
 ## 六、低干扰与隐私设置
 
-**本机网络隐私诊断：** 在「管理 → 低干扰与隐私」找到「网络隐私诊断 · 本机快照」，点击「检查本机网络」查看 DSH 宿主的 IPv4/IPv6 地址数量、Node DNS 配置与代理环境变量状态。点击「打开操作指南」直接阅读随包的 [网络隐私指南第 15 章](./NETWORK_PRIVACY_GUIDE.zh-CN.md#15-实际操作从-purge-面板到受控网络验证)，按步骤完成 Windows/Android 路由、受控 HTTPS 出口和 DNS 检查。快照不联网、不修改配置；实际公网出口、DNS 查询路径和浏览器 WebRTC 保持未测。无需创建靶标或保存扫描偏好。
+**本机网络隐私诊断：** 在「管理 → 低干扰与隐私」找到「网络隐私诊断 · 本机快照」，点击「检查本机网络」查看 DSH 宿主的 IPv4/IPv6 地址数量、Node DNS 配置与代理环境变量状态。点击「打开操作指南」直接阅读随包的 [网络隐私指南第 15 章](./NETWORK_PRIVACY_GUIDE.zh-CN.md#15-实际操作从-purge-面板到受控网络验证)，按步骤完成 Windows/Android 路由、受控 HTTPS 出口和 DNS 检查。快照不联网、不修改配置；实际公网出口、DNS 查询路径和浏览器 WebRTC 保持未测。无需创建靶标或保存扫描偏好。 正常时可点击「设为基线」，发生网络变化后再次检查，查看变化/相同/无法判断的字段；点击「导出诊断报告」下载聚合 JSON（不会自动上传）。详细步骤见 [第 16 章](./NETWORK_PRIVACY_GUIDE.zh-CN.md#16-实际操作网络重连前后对比与-json-诊断报告)。
 
 在「管理 → 低干扰」可以选择以下设置。保存到原有 `$DSH_HOME/redteam/config.json` 的 `scanPreferences`，只影响后续 `redteam_scan_run`；默认维持既有行为。
 
