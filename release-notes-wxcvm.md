@@ -1,3 +1,16 @@
+# 1.1.92-wxcvm.7-beta.1
+
+## 中文
+
+- 从已经合并、已发布且维护者确认 Windows 实机验收的 .6（8470eec）继承完整代码。
+- 修正版本交付：测试通道使用独立 `beta` 分支，版本递增为 .7-beta.1，使已经安装 .6 的用户能识别升级；正式通道 master 保留 .6，旧标签和资产不改动。
+- rc.2 API 契约已经通过；声明宿主目标仍为 rc.1。此版本不改变运行时代码或客户端构建标识。新包仍需验证版本识别与安装链路。
+
+## English
+
+- Carry forward the verified .6 integration (8470eec) with a distinct .7 beta version and the actual beta branch update channel. Stable master and existing .6 release remain unchanged.
+- No runtime changes. rc.2 API contracts passed on .6; declared target remains rc.1. Verify the new version identity and package before promotion.
+
 # 1.1.92-wxcvm.6
 
 ## 中文
