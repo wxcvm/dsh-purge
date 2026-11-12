@@ -278,7 +278,7 @@ test('update receipt persists across restart and detects changed disk or boot co
       }
     }
     const load = () => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync',
-      source.slice(start, end).replace('export function', 'function') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
+      source.slice(start, end).replace(/^export /gm, '') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
       fs, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
       (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) })
     setFiles('old')
@@ -346,4 +346,39 @@ test('renderer build identity and profile copy inventory detect stale installs w
   assert.match(client, /const CLIENT_BUILD_ID = "[0-9a-f]{16}";/)
   assert.match(client, /diskBuild === CLIENT_BUILD_ID/)
   assert.match(client, /apiJson\("\/dsh-purge\/update-copies"\)/)
+})
+
+test('remote target check uses immutable commit and reports per-file differences or unknown', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const start = source.indexOf('export async function verifyUpdateTarget(')
+  const end = source.indexOf('function channelStatePath()', start)
+  const { createHash } = await import('node:crypto')
+  const sha = 'a'.repeat(40)
+  const files = ['package.json', 'lib/index.js', 'lib/update.js', 'client.js']
+  let receipt = { targetSha: sha }
+  let unavailable = ''
+  let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
+  const seen = []
+  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer',
+    source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
+    () => receipt, () => 'receipt', () => ({ hashes: local }), files,
+    async (url) => {
+      seen.push(url)
+      const file = url.split('/' + sha + '/')[1]
+      if (!file || file === unavailable) throw new Error('unavailable')
+      return { arrayBuffer: async () => Buffer.from(file) }
+    }, 'fixture/repo', createHash, Buffer)
+  assert.equal((await verify()).status, 'match')
+  assert.equal(seen.length, 4)
+  assert.ok(seen.every((url) => url.includes('/' + sha + '/')))
+  local['client.js'] = 'different'
+  assert.equal((await verify()).status, 'mismatch')
+  unavailable = 'lib/index.js'
+  assert.equal((await verify()).status, 'mismatch')
+  local['client.js'] = createHash('sha256').update('client.js').digest('hex')
+  assert.equal((await verify()).status, 'unknown')
+  receipt = { targetSha: 'master' }
+  assert.equal((await verify()).files.length, 0)
+  assert.match(source, /receipt.failedPhase = receipt.phase/)
+  assert.match(client, /核对远端目标/)
 })
