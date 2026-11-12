@@ -76,3 +76,19 @@ test('native main workspace loads both styles without depending on shell overlay
   assert.match(client, /function PurgeDock\(\)/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
 })
+
+
+test('native maximized redteam workspace has opaque, blur-free scrolling surfaces', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const scope = '.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded'
+  for (const code of [source, client]) {
+    const start = code.indexOf(scope + ',\n' + scope + ' *{')
+    assert.ok(start >= 0, 'native workspace paint rule must be present')
+    const rule = code.slice(start, code.indexOf('}', start))
+    assert.ok(rule.includes('backdrop-filter:none!important'))
+    assert.ok(rule.includes('-webkit-backdrop-filter:none!important'))
+    for (const [selector, color] of [['.rt-tabs', '#0e1a2b'], ['.rt-pane', '#101b2b'], ['.rt-card', '#18283d']]) {
+      assert.ok(code.includes(scope + ' ' + selector + '{\n  background:' + color + '!important'))
+    }
+  }
+})
