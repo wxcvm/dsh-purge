@@ -1548,6 +1548,39 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			);
 		}
 
+		function UpdateVerification({ state, onRefresh, busy }) {
+			const [checking, setChecking] = useState(false);
+			const [error, setError] = useState("");
+			const receipt = state?.update_receipt;
+			const verify = async () => {
+				setChecking(true);
+				setError("");
+				try { await onRefresh(); }
+				catch (e) { setError(String(e?.message || e)); }
+				finally { setChecking(false); }
+			};
+			const status = !receipt ? "暂无本安装目录的更新记录"
+				: receipt.phase === "failed" ? "更新失败"
+				: receipt.phase === "writing" || receipt.phase === "reapplying" ? "更新尚未确认完成"
+				: receipt.diskMatch === false ? "磁盘内容与更新记录不一致"
+				: receipt.backendBootMatch === false ? "后端启动时文件尚未匹配更新"
+				: receipt.diskMatch === true && receipt.backendBootMatch === true ? "磁盘与后端启动指纹一致"
+				: "验收数据不足";
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-sub" }, h("h4", null, "更新验收")),
+				h("p", { role: "status" }, status),
+				receipt ? h("div", null,
+					h("p", { className: "dshp-hint" }, "目标：" + receipt.ref + " · 更新前：" + (receipt.before?.version || "未知") + " · 写入后：" + (receipt.after?.version || "未知")),
+					h("p", { className: "dshp-hint" }, "开始：" + (receipt.startedAt || "未知") + " · 阶段：" + receipt.phase),
+					h("p", { className: "dshp-hint" }, "目录：" + receipt.root),
+					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；实际渲染器加载状态尚未验证。"),
+					receipt.error ? h("p", { role: "alert" }, receipt.error) : null,
+				) : null,
+				h(Btn, { disabled: busy || checking, onClick: verify }, checking ? "核对中…" : "重新核对更新结果"),
+				error ? h("p", { role: "alert" }, error) : null,
+			);
+		}
+
 		function CleanDiagnostics({ state, onRefresh, busy }) {
 			const t = useT();
 			const [checking, setChecking] = useState(false);
@@ -2704,6 +2737,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				)),
 				noticeNode(notice),
 				cleanPane(["patches"], h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
 				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
