@@ -69,3 +69,22 @@ test('successful copy installs runtime resources without touching user files', a
   assert.equal(read(one,'user-config.json'),'keep');
   assert.equal(fs.existsSync(path.join(one,'lib/old-only.js')),false);
 });
+
+test('failed rollback reports retained backup instead of claiming success', async t => {
+  const {source,one,backup} = await fixture(t);
+  const target = path.join(one,'client.js');
+  const io = {...fsp, cp: async (from,to,opts) => {
+    if (to === target && (from === path.join(source,'client.js') || from === path.join(backup,'0','client.js'))) {
+      throw new Error('simulated locked client');
+    }
+    return fsp.cp(from,to,opts);
+  }};
+  await assert.rejects(copyUpdatePayload(source,[one],backup,names,{io}), error => {
+    assert.equal(error.keepUpdateBackup,true);
+    assert.match(error.message,/rollback incomplete/);
+    assert.ok(error.message.includes(backup));
+    return true;
+  });
+  assert.equal(read(path.join(backup,'0'),'client.js'),'old-client');
+  assert.equal(read(one,'lib/index.js'),'old');
+});
