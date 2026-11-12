@@ -1,83 +1,26 @@
-name: Publish verified .6 pre-release (one time)
-
+name: Finalize .6 release notes (one time)
 on:
   push:
     branches: [release/publish-wxcvm-6-8470eec]
-
 permissions:
   contents: write
-
 concurrency:
   group: release-${{ github.repository }}
   cancel-in-progress: false
-
 jobs:
-  publish:
+  notes:
     if: github.repository == 'wxcvm/dsh-purge'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: 8470eecd886c3765f88da094e9142844175c47d5
-          fetch-depth: 0
-      - name: Verify exact accepted master and build release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          commit=8470eecd886c3765f88da094e9142844175c47d5
-          test "$(git rev-parse HEAD)" = "$commit"
-          test "$(git rev-parse HEAD^{tree})" = "342214ee9e2d6fbeeb0695013fbbe000e71f48a8"
-          git fetch origin master
-          git merge-base --is-ancestor "$commit" origin/master
-          node --check lib/index.js
-          node --check lib/core.js
-          node --check lib/reapply.js
-          node --input-type=module -e "import './lib/index.js'"
-          node scripts/build-client.mjs --check
-          version="$(node -p "require('./package.json').version")"
-          test "$version" = "1.1.92-wxcvm.6"
-          test "$(head -n 1 release-notes-wxcvm.md | tr -d '\r')" = "# $version"
-          zip="dsh-purge-$version.zip"
-          git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$commit"
-          unzip -tq "$zip"
-          archived_version="$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")"
-          test "$archived_version" = "$version"
-          unzip -Z1 "$zip" > archive-files.txt
-          for file in client.js lib/index.js lib/core.js lib/reapply.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1 docs/CLEANING_GUIDE.zh-CN.md; do
-            grep -Fx "dsh-purge-$version/$file" archive-files.txt >/dev/null
-          done
-          sha256sum "$zip" > SHA256SUMS.txt
-          sha256sum -c SHA256SUMS.txt
-          cat SHA256SUMS.txt
-      - name: Publish explicitly approved prerelease
+      - name: Correct release notes without changing tag or assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          commit=8470eecd886c3765f88da094e9142844175c47d5
           tag=v1.1.92-wxcvm.6
-          zip=dsh-purge-1.1.92-wxcvm.6.zip
-          # No overwrite of a previously published release or a different tag.
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release already exists; inspect before proceeding."
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag already exists; inspect before proceeding."
-            exit 1
-          fi
-          # Release text records user-reported acceptance, not a machine-run Desktop test.
-          {
-            printf '# 1.1.92-wxcvm.6\n\n'
-            printf '预览版 / Pre-release. PR #169 已合并，发布提交 %s。\n\n' "$commit"
-            printf 'Windows 三项实机验收由维护者确认通过；最终自动化矩阵 12/12 通过（含 rc.2 API 契约）。声明宿主目标仍为 rc.1。\n\n'
-            printf 'Windows desktop acceptance: maintainer-reported pass. Automated matrix: 12/12, including rc.2 API contracts. Declared host target remains rc.1.\n\n'
-            # Keep the rest of the repository release notes, excluding the older historical version sections.
-            awk 'NR>1 && /^# 1\\./ {exit} NR>1 {print}' release-notes-wxcvm.md
-          } > release-published-notes.md
-          # Create with both verified assets, so no public release is visible with missing files.
-          gh release create "$tag" "$zip" SHA256SUMS.txt --target "$commit" --title "$tag" --notes-file release-published-notes.md --prerelease --draft
-          gh release edit "$tag" --draft=false --prerelease
-          gh release view "$tag" --json tagName,isDraft,isPrerelease,url,assets
-          echo "published https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
+          test "$(git ls-remote origin "refs/tags/$tag" | cut -f1)" = "8470eecd886c3765f88da094e9142844175c47d5"
+          test "$(gh release view "$tag" --json isDraft,isPrerelease --jq '.isDraft == false and .isPrerelease == true')" = true
+          gh release edit "$tag" --notes-file .github/wxcvm-6-published-notes.md
+          gh release view "$tag" --json tagName,isDraft,isPrerelease,url
