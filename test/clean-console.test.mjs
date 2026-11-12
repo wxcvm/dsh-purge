@@ -408,3 +408,83 @@ test('host diagnostics report disk package identity and cross-surface uncertaint
   assert.match(client, /宿主磁盘包/)
   assert.match(client, /不是运行进程身份凭证/)
 })
+
+
+test('update applies one immutable target across git, archives, profile specs and history', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const start = source.indexOf('async function _applyUpdateImpl(')
+  const end = source.indexOf('export async function switchChannel(', start)
+  assert.ok(start >= 0 && end > start)
+  const target = 'a'.repeat(40)
+  const newer = 'b'.repeat(40)
+  const events = []
+  let resolutions = 0
+  let resolved = target
+  const deps = {
+    readChannelState: () => ({ channel: 'stable', pin: '' }),
+    safeUpdateRef: value => value,
+    currentChannelRef: () => 'master',
+    STABLE_REF: 'master',
+    normalizeChannel: value => value,
+    realPath: value => value,
+    PLUGIN_ROOT: '/plugin',
+    updateFingerprint: () => ({ version: '1.0.0' }),
+    saveUpdateReceipt: receipt => events.push(['receipt', { ...receipt }]),
+    remoteHeadSha: async () => { resolutions++; return resolutions === 1 ? resolved : newer },
+    gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
+    overlayFromZip: async (dirs, sha) => events.push(['zip', dirs, sha]),
+    pinInstalledSpec: (dir, sha) => events.push(['spec', dir, sha]),
+    ensureAllProfileInstall: () => {},
+    findDshHome: () => '/home',
+    detectVia: () => 'zip',
+    writeChannelState: state => state,
+    localVersion: () => '1.0.0',
+    listRemoteVersions: async () => ({ versions: [], hasBeta: false }),
+    rendererBuildId: () => 'build',
+    runReapplyChild: () => ({ ok: true }),
+    markAutoUpdateGuard: (ref, sha) => events.push(['guard', ref, sha]),
+    writeStamp: sha => events.push(['stamp', sha]),
+    pushHistory: entry => events.push(['history', entry.sha]),
+    versionLabel: () => '1.0.0',
+    rememberUpdate: result => result,
+    lanesOf: () => [],
+    channelPublic: () => ({}),
+  }
+  const apply = new Function(...Object.keys(deps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(deps))
+  const jobs = [{ kind: 'git', dir: '/git' }, { kind: 'dsh', dir: '/zip', profileDir: '/profile' }]
+  const result = await apply(jobs, { ref: 'master' })
+  assert.equal(result.applied, true)
+  assert.equal(resolutions, 1)
+  assert.deepEqual(events.find(e => e[0] === 'git'), ['git', '/git', 'master', target])
+  assert.deepEqual(events.find(e => e[0] === 'zip'), ['zip', ['/zip'], target])
+  assert.deepEqual(events.find(e => e[0] === 'spec'), ['spec', '/profile', target])
+  assert.deepEqual(events.find(e => e[0] === 'stamp'), ['stamp', target])
+  assert.deepEqual(events.find(e => e[0] === 'history'), ['history', target])
+  assert.equal(events.filter(e => e[0] === 'receipt').at(-1)[1].targetSha, target)
+  events.length = 0
+  resolutions = 0
+  resolved = ''
+  await assert.rejects(apply(jobs, { ref: 'master' }), /无法确认更新目标提交/)
+  assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
+  assert.equal(events.at(-1)[1].phase, 'failed')
+  assert.equal(events.at(-1)[1].failedPhase, 'resolving_target')
+})
+
+test('git update keeps channel branch name but never checks out a moving remote ref', () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function gitResetTo(')
+  const end = source.indexOf('function extractZip(', start)
+  const calls = []
+  const reset = new Function('gitTrackedDirty', 'runGit', 'STABLE_REF', 'BETA_REF',
+    source.slice(start, end) + '\nreturn gitResetTo;')(
+    () => false, (_dir, args) => { calls.push(args); if (args[0] === 'cat-file') throw Error('missing object') },
+    'master', 'beta')
+  const sha = 'a'.repeat(40)
+  reset('/git', 'master', { resolvedSha: sha })
+  assert.deepEqual(calls.at(-2), ['fetch', 'origin', sha])
+  assert.deepEqual(calls.at(-1), ['checkout', '-B', 'master', sha])
+  calls.length = 0
+  reset('/git', 'v1.0.0', { resolvedSha: sha })
+  assert.deepEqual(calls.at(-1), ['reset', '--hard', sha])
+})
