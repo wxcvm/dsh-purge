@@ -192,6 +192,8 @@ Resolve-DnsName vps.example.com -Type AAAA
 
 ## 六、低干扰与隐私设置
 
+**本机网络隐私诊断：** 在「管理 → 低干扰与隐私」找到「网络隐私诊断 · 本机快照」，点击「检查本机网络」查看 DSH 宿主的 IPv4/IPv6 地址数量、Node DNS 配置与代理环境变量状态。点击「打开操作指南」直接阅读随包的 [网络隐私指南第 15 章](./NETWORK_PRIVACY_GUIDE.zh-CN.md#15-实际操作从-purge-面板到受控网络验证)，按步骤完成 Windows/Android 路由、受控 HTTPS 出口和 DNS 检查。快照不联网、不修改配置；实际公网出口、DNS 查询路径和浏览器 WebRTC 保持未测。无需创建靶标或保存扫描偏好。
+
 在「管理 → 低干扰」可以选择以下设置。保存到原有 `$DSH_HOME/redteam/config.json` 的 `scanPreferences`，只影响后续 `redteam_scan_run`；默认维持既有行为。
 
 - **标准 / 低影响 Nmap**：标准模式保留 `-sV` 服务版本检测；低影响模式只做 TCP 端口检查并降低重试次数，不执行服务版本探测。会减少部分探测请求，但也可能漏掉服务指纹和响应较慢的端口，不保证目标无法感知。
