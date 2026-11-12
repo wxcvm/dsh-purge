@@ -15,6 +15,19 @@ test('cleaning bar measures workflow progress and shows patch coverage separatel
   assert.match(root, /flowInterrupted \? h\("p"/)
 })
 
+test('interrupted cleaning is not reported as idle or as an explicit failure', () => {
+  const predicate = root.match(/const flowInterrupted = Boolean\(([^\n]+)\);/)
+  assert.ok(predicate)
+  const interrupted = new Function('job', 'jobOn', 'return Boolean(' + predicate[1] + ')')
+  assert.equal(interrupted(null, false), false)
+  assert.equal(interrupted({ stage: 'idle' }, false), false)
+  assert.equal(interrupted({ stage: 'done' }, false), false)
+  assert.equal(interrupted({ stage: 'patch', active: true }, true), false)
+  assert.equal(interrupted({ stage: 'patch', error: 'failed' }, false), false)
+  assert.equal(interrupted({ stage: 'patch', active: false }, false), true)
+  assert.match(root, /job && job\.error \? "未完整完成" : flowInterrupted \? "结果未确认" : "未执行"/)
+})
+
 test('client does not overwrite a terminal apply response with late status polling', () => {
   assert.match(root, /const actionTerminal = useRef\(false\)/)
   assert.match(root, /if \(stop \|\| !d \|\| actionTerminal\.current\) return/)
