@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "845418953d2a8585";
+		const CLIENT_BUILD_ID = "4f456f6ce142d799";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -44,7 +44,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		function apiTimeoutMs(p, init) {
 			const path = String(p || "");
 			const method = String((init && init.method) || "GET").toUpperCase();
-			if (path.indexOf("/dsh-purge/update") !== -1) return method === "POST" ? 180000 : 45000;
+			if (path.indexOf("/dsh-purge/update-progress") !== -1) return 8000;
+			if (path.indexOf("/dsh-purge/update") !== -1) return method === "POST" ? 900000 : 45000;
 			if (path.indexOf("/dsh-purge/uninstall") !== -1) return 90000;
 			if (path.indexOf("/dsh-purge/skill") !== -1) return method === "POST" ? 120000 : 20000;
 			// status 会在"应用"期间被后端的同步落盘阻塞，默认 20s 必然被 abort，界面只会显示"读取失败: timeout"。
@@ -2097,7 +2098,34 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [ownServers, setOwnServers] = useState("");
 			const [ownLoaded, setOwnLoaded] = useState(false);
 			const [patchBusy, setPatchBusy] = useState(false);
-			const [updateBusy, setUpdateBusy] = useState(false);
+			const [updatePending, setUpdateBusy] = useState(false);
+			const [updateProgress, setUpdateProgress] = useState(null);
+			const [progressUnavailable, setProgressUnavailable] = useState(false);
+			const [progressClock, setProgressClock] = useState(Date.now());
+			const updateBusy = updatePending || Boolean(updateProgress?.active);
+			useEffect(() => {
+				let stopped = false, timer;
+				const poll = async () => {
+					try {
+						const data = await apiJson("/dsh-purge/update-progress");
+						if (stopped) return;
+						setUpdateProgress(data?.progress || null);
+						setProgressUnavailable(false);
+						if (updatePending || data?.progress?.active) timer = setTimeout(poll, 1500);
+					} catch {
+						if (stopped) return;
+						setProgressUnavailable(true);
+						if (updatePending || updateProgress?.active) timer = setTimeout(poll, 2500);
+					}
+				};
+				poll();
+				return () => { stopped = true; clearTimeout(timer); };
+			}, [updatePending, Boolean(updateProgress?.active)]);
+			useEffect(() => {
+				if (!updateBusy) return;
+				const timer = setInterval(() => setProgressClock(Date.now()), 1000);
+				return () => clearInterval(timer);
+			}, [updateBusy]);
 			const [canApplyUpdate, setCanApplyUpdate] = useState(false);
 			const [updateJob, setUpdateJob] = useState(null);
 			const [askRestart, setAskRestart] = useState(false);
@@ -2190,6 +2218,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				setUpdateJob({ id: id || "", kind });
 				const tr = tRef.current;
 				setUpdateNotice({ kind: "ok", text: kind === "switched" || kind === "channel" ? tr("update.switching") : tr("update.applying") });
+				setUpdateProgress(null);
+				setProgressClock(Date.now());
 				return apiJson("/dsh-purge/update", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
@@ -2735,6 +2765,18 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						renderEdition("beta"),
 					),
 					noticeNode(updateNotice),
+					(updateProgress || (updatePending && updateJob?.kind !== "check")) ? h("div", { className: "dshp-notice", role: "status", style: { display: "grid", gap: 6, marginTop: 8 } },
+						h("b", null, "版本切换进度 / Update progress"),
+						h("span", null, ({ checking_versions: "查询版本列表", resolving_target: "确认目标提交", preparing_files: "准备更新文件", git_fetch: "获取 Git 版本并切换", downloading: "下载版本包", extracting: "解压版本包", copying: "覆盖插件文件", profile: "更新安装配置", refreshing_versions: "核对版本信息", reapplying: "运行安装后维护", awaiting_restart: "文件已更新，等待重启核验", done: "更新任务完成", failed: "更新失败" })[updateProgress?.stage] || "正在连接更新服务…"),
+						updateProgress?.ref ? h("span", null, "目标：" + updateProgress.ref + (updateProgress.targetSha ? " · " + updateProgress.targetSha.slice(0, 7) : "")) : null,
+						updateProgress?.startedAt ? h("span", null, "已耗时 " + Math.max(0, Math.floor(((updateProgress.finishedAt || progressClock) - updateProgress.startedAt) / 1000)) + " 秒") : null,
+						updateProgress?.stage === "downloading" ? h("span", null, "已下载 " + ((updateProgress.received || 0) / 1048576).toFixed(2) + " MB" + (updateProgress.total ? " / " + (updateProgress.total / 1048576).toFixed(2) + " MB" : " · 总大小未知")) : null,
+						updateProgress?.stage === "downloading" && updateProgress.total ? h("progress", { value: updateProgress.received || 0, max: updateProgress.total, style: { width: "100%" } }) : null,
+						updateProgress?.stage === "copying" ? h("span", null, "文件组 " + (updateProgress.copied || 0) + "/" + (updateProgress.copyTotal || 0) + (updateProgress.group ? " · " + updateProgress.group : "")) : null,
+						progressUnavailable && updateBusy ? h("span", null, "暂未收到后台状态，请勿重复切换；正在重试读取。") : null,
+						updateProgress?.active ? h("span", null, "完成时间取决于网络和本机操作，暂不可准确估计。") : null,
+						updateProgress?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, updateProgress.error) : null,
+					) : null,
 				)),
 				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" },

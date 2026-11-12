@@ -447,6 +447,7 @@ test('update applies one immutable target across git, archives, profile specs an
     bootProcess: { pid: 123, startedAt: 1000 },
     saveUpdateReceipt: receipt => events.push(['receipt', { ...receipt }]),
     remoteHeadSha: async () => { resolutions++; return resolutions === 1 ? resolved : newer },
+    updateStage: (stage, detail) => events.push(['progress', stage, detail]),
     gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
     overlayFromZip: async (dirs, sha) => events.push(['zip', dirs, sha]),
     pinInstalledSpec: (dir, sha) => events.push(['spec', dir, sha]),
@@ -471,6 +472,7 @@ test('update applies one immutable target across git, archives, profile specs an
   const jobs = [{ kind: 'git', dir: '/git' }, { kind: 'dsh', dir: '/zip', profileDir: '/profile' }]
   const result = await apply(jobs, { ref: 'master' })
   assert.equal(result.applied, true)
+  assert.deepEqual(events.filter(e => e[0] === 'progress').map(e => e[1]), ['resolving_target', 'preparing_files', 'git_fetch', 'profile', 'refreshing_versions', 'reapplying'])
   assert.equal(resolutions, 1)
   assert.deepEqual(events.find(e => e[0] === 'git'), ['git', '/git', 'master', target])
   assert.deepEqual(events.find(e => e[0] === 'zip'), ['zip', ['/zip'], target])
@@ -488,9 +490,9 @@ test('update applies one immutable target across git, archives, profile specs an
   assert.equal(events.at(-1)[1].failedPhase, 'resolving_target')
 })
 
-test('git update keeps channel branch name but never checks out a moving remote ref', () => {
+test('git update keeps channel branch name but never checks out a moving remote ref', async () => {
   const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
-  const start = source.indexOf('function gitResetTo(')
+  const start = source.indexOf('async function gitResetTo(')
   const end = source.indexOf('function extractZip(', start)
   const calls = []
   const reset = new Function('gitTrackedDirty', 'runGit', 'STABLE_REF', 'BETA_REF',
@@ -498,10 +500,42 @@ test('git update keeps channel branch name but never checks out a moving remote 
     () => false, (_dir, args) => { calls.push(args); if (args[0] === 'cat-file') throw Error('missing object') },
     'master', 'beta')
   const sha = 'a'.repeat(40)
-  reset('/git', 'master', { resolvedSha: sha })
+  await reset('/git', 'master', { resolvedSha: sha })
   assert.deepEqual(calls.at(-2), ['fetch', 'origin', sha])
   assert.deepEqual(calls.at(-1), ['checkout', '-B', 'master', sha])
   calls.length = 0
-  reset('/git', 'v1.0.0', { resolvedSha: sha })
+  await reset('/git', 'v1.0.0', { resolvedSha: sha })
   assert.deepEqual(calls.at(-1), ['reset', '--hard', sha])
+})
+
+test('version update reports real live stages and prevents duplicate writes', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const state = source.slice(source.indexOf('let liveUpdate = null;'), source.indexOf('export function pluginRoot()')).replace('export function', 'function')
+  const wrapper = source.slice(source.indexOf('export async function handleUpdateOp('), source.indexOf('async function handleUpdateOpImpl(')).replace('export async function', 'async function')
+  let release
+  const pending = new Promise(resolve => { release = resolve })
+  const api = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus, updateStage };')(async body => {
+    if (body.op === 'check') return { ok: true }
+    await pending
+    return { ok: true, restartAfter: true }
+  })
+  const task = api.handleUpdateOp({op:'switch',ref:'beta'})
+  assert.equal(api.updateProgressStatus().stage, 'checking_versions')
+  api.updateStage('downloading', { received: 5, total: 10 })
+  assert.equal(api.updateProgressStatus().received, 5)
+  assert.equal(api.updateProgressStatus().total, 10)
+  await assert.rejects(api.handleUpdateOp({op:'switch',ref:'master'}), /already in progress/)
+  assert.equal((await api.handleUpdateOp({op:'check'})).ok, true)
+  release()
+  await task
+  assert.equal(api.updateProgressStatus().active, false)
+  assert.equal(api.updateProgressStatus().stage, 'awaiting_restart')
+  assert.ok(api.updateProgressStatus().finishedAt >= api.updateProgressStatus().startedAt)
+  const failing = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus };')(async () => { throw Error('network offline') })
+  await assert.rejects(failing.handleUpdateOp({op:'switch',ref:'beta'}), /network offline/)
+  assert.equal(failing.updateProgressStatus().stage, 'failed')
+  assert.equal(failing.updateProgressStatus().error, 'network offline')
+  assert.equal(failing.updateProgressStatus().active, false)
+  assert.match(client, /apiJson\("\/dsh-purge\/update-progress"\)/)
+  assert.match(client, /总大小未知/)
 })
