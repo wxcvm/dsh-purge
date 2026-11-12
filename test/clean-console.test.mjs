@@ -16,7 +16,10 @@ const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
 const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
   patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
 })
+const clientBuildId = client.match(/^\s*const CLIENT_BUILD_ID = "([0-9a-f]{16})";/m)?.[1]
+assert.ok(clientBuildId, 'client build ID must be present in the runtime bundle')
 const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'BackupInventory', {
+  CLIENT_BUILD_ID: clientBuildId,
   tallyPatches: (rows) => rows.reduce((o, row) => {
     o.total += 1
     if (row.st === 'applied' || row.st === 'already') o.applied += 1
@@ -159,6 +162,7 @@ test('diagnostic center distinguishes loaded and disk versions and unavailable h
     has_backup: false,
   }, [], (s) => s)
   assert.match(report, /插件磁盘版本: 2\.0\.0/)
+  assert.ok(report.includes('前端运行构建: ' + clientBuildId))
   assert.match(report, /后端加载时版本: 1\.0\.0/)
   assert.match(report, /插件目录: local-plugin/)
   assert.match(report, /补丁: 待检测/)
