@@ -17,6 +17,8 @@ Personal development workspace for the DeepSeek Harness extension. [中文首页
 
 ## Development & releases
 
+[Release center (中文)](docs/RELEASE_CENTER.zh-CN.md) · [Development status (中文)](docs/DEVELOPMENT_STATUS.zh-CN.md)
+
 This repository is private. Access source and release assets through an authorized GitHub account. Anonymous download links from the former public repository are no longer a supported installation path. Private update and installation compatibility must be validated separately.
 
 - [Package metadata](package.json): source version, dependencies, runtime requirements and scripts.
