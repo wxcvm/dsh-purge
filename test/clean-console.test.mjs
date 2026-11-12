@@ -388,9 +388,9 @@ test('remote target check uses immutable commit and reports per-file differences
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
   const seen = []
   let token = ''
-  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
+  const verify = new Function('readCurrentUpdateReceipt', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
-    () => receipt, () => 'receipt', () => ({ hashes: local }), files,
+    () => receipt, () => ({ hashes: local }), files,
     async (url, timeout, headers) => {
       seen.push({ url, headers })
       const parsed = new URL(url)
