@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong>个人开发工作台 · DeepSeek Harness 扩展</strong><br>
-  <sub>PRIVATE WORKSPACE / WXCVM</sub>
+  <sub>PRIVATE WORKSPACE / WXCVM</sub><br>
+  <a href="README.en.md">English</a> &nbsp;·&nbsp; 中文
 </p>
 
 <p align="center">
