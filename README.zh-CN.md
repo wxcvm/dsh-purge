@@ -35,6 +35,7 @@
 - **[外部分支评估记录](docs/UPSTREAM_REVIEW_2026-11-09.zh-CN.md)**：核对 dsh-purge-safe 来源与兼容性，不盲目合并。
 - **[AboutSecurity 技能库按需安装与检索](docs/ABOUTSECURITY_INTEGRATION.md)**：不与 purge 混装提示词插件，单独安装上游技能并让模型按需搜索/读取。
 - **[作战台详细操作指南](docs/OPERATIONS_GUIDE.zh-CN.md)**：从首次授权、创建项目、熟悉页面，到环境、智能体、证据、报告的完整步骤。
+- **[多跳网络、IP 溯源风险与隐私审计完整指南](docs/NETWORK_PRIVACY_GUIDE.zh-CN.md)**：代理链、多跳 VPN、Tor/I2P、DNS/IPv6/WebRTC、Windows/Android 网络兼容性、受控测试与项目隐私验收。
 
 **最简单的路线：** 安装 → 完全退出重开宿主 → 清洗台「应用」 → 完成重启 → 作战台「指南」 → 创建一个示例项目。你不需要一开始就配置所有工具或启动任何测试。
 
