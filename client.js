@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "15bc33b72c8cc567";
+		const CLIENT_BUILD_ID = "db56be9fd394fec6";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -5358,6 +5358,34 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 .rt-full .rt-btn:hover:not(:disabled){transform:none}
 .rt-full .rt-btn:active:not(:disabled){transform:none}
 .rt-full .rt-pane .rt-err{overflow-wrap:anywhere}
+
+/* Native maximized workspace uses the embedded Panel, not .rt-full.
+   Opaque surfaces must also opt out of literal backdrop blur: otherwise
+   Chromium can lose raster tiles in the navigation and scrolling cards.
+   Keep the compact/floating dock and the clean workspace unchanged. */
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded,
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded *{
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-tabs{
+  background:#0e1a2b!important;overscroll-behavior:contain;
+}
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-pane{
+  background:#101b2b!important;overscroll-behavior:contain;
+}
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-card{
+  background:#18283d!important;border-color:#31455e!important;box-shadow:none!important;
+}
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-input,
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-eng-select,
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-textarea{
+  background:#122238!important;
+}
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-btn:hover:not(:disabled),
+.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded .rt-btn:active:not(:disabled){
+  transform:none!important;
+}
+
 @media(max-width:700px){
   .rt-full .rt-card{padding:13px}
 }
