@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "d4853800a62172f8";
+		const CLIENT_BUILD_ID = "6528388703d1137b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1597,6 +1597,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				: ["resolving_target", "writing", "reapplying"].includes(receipt.phase) ? "更新尚未确认完成"
 				: receipt.diskMatch === false ? "磁盘内容与更新记录不一致"
 				: receipt.backendBootMatch === false ? "后端启动时文件尚未匹配更新"
+				: receipt.processRestarted === false ? "后端仍是更新前的进程，尚未确认重启"
 				: receipt.diskMatch === true && receipt.backendBootMatch === true ? "磁盘与后端启动指纹一致"
 				: "验收数据不足";
 			return h("div", { className: "dshp-clean-browser" },
@@ -1607,6 +1608,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("p", { className: "dshp-hint" }, "开始：" + (receipt.startedAt || "未知") + " · 阶段：" + receipt.phase),
 					h("p", { className: "dshp-hint" }, "目录：" + receipt.root),
 					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；与更新时记录比较。"),
+					h("p", { className: "dshp-hint" }, "后端进程：" + (receipt.processRestarted === true ? "已重新启动" : receipt.processRestarted === false ? "仍为更新前进程" : "缺少进程身份，重启未确认") + "；不代表整个桌面客户端已退出。"),
 					receipt.error ? h("p", { role: "alert" }, receipt.error) : null,
 					receipt.phase === "failed" ? h("p", { className: "dshp-hint" }, receipt.failedPhase === "reapplying" ? "文件可能已更新，但后续处理失败。先检查诊断与备份，完全退出宿主后再决定是否通过版本与恢复页面重新选择版本。" : "写入未确认完成。先检查安装副本和备份，避免直接反复覆盖；需要恢复时使用现有版本选择或官方安装包。") : null,
 				) : null,
