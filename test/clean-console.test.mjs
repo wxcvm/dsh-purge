@@ -534,6 +534,7 @@ test('version update reports real live stages and prevents duplicate writes', as
   const failing = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus };')(async () => { throw Error('network offline') })
   await assert.rejects(failing.handleUpdateOp({op:'switch',ref:'beta'}), /network offline/)
   assert.equal(failing.updateProgressStatus().stage, 'failed')
+  assert.equal(failing.updateProgressStatus().failedStage, 'checking_versions')
   assert.equal(failing.updateProgressStatus().error, 'network offline')
   assert.equal(failing.updateProgressStatus().active, false)
   assert.match(client, /apiJson\("\/dsh-purge\/update-progress"\)/)

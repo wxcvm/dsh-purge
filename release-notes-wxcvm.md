@@ -1,3 +1,14 @@
+# 1.1.92-wxcvm.7-beta.2
+
+## 中文
+
+- 版本切换新增实时后台阶段、真实下载字节/总量（未知则明确显示）、耗时及下载剩余时间估算，文件组进度和失败阶段；Git 与安装后维护异步化，状态查询不阻塞。防止同一操作重复提交，仍以重启后的实际版本为验收依据。
+- 从 beta.1 继承全部改动，正式通道不变；首次从旧版进入新版仍使用旧界面。
+
+## English
+
+- Live version-switch stages, actual download bytes and download-only ETA, elapsed time, file-group progress and failure stage. Nonblocking Git and post-install maintenance keep polling responsive. Stable channel unchanged.
+
 # 1.1.92-wxcvm.7-beta.1
 
 ## 中文

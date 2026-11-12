@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4f456f6ce142d799";
+		const CLIENT_BUILD_ID = "15bc33b72c8cc567";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2772,10 +2772,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						updateProgress?.startedAt ? h("span", null, "已耗时 " + Math.max(0, Math.floor(((updateProgress.finishedAt || progressClock) - updateProgress.startedAt) / 1000)) + " 秒") : null,
 						updateProgress?.stage === "downloading" ? h("span", null, "已下载 " + ((updateProgress.received || 0) / 1048576).toFixed(2) + " MB" + (updateProgress.total ? " / " + (updateProgress.total / 1048576).toFixed(2) + " MB" : " · 总大小未知")) : null,
 						updateProgress?.stage === "downloading" && updateProgress.total ? h("progress", { value: updateProgress.received || 0, max: updateProgress.total, style: { width: "100%" } }) : null,
+						updateProgress?.stage === "downloading" && updateProgress.total > updateProgress.received && updateProgress.received > 0 && progressClock - updateProgress.downloadStartedAt >= 2000 ? h("span", null, "按当前平均速度，下载约剩 " + Math.ceil((progressClock - updateProgress.downloadStartedAt) / 1000 * (updateProgress.total - updateProgress.received) / updateProgress.received) + " 秒（仅下载估算）") : null,
 						updateProgress?.stage === "copying" ? h("span", null, "文件组 " + (updateProgress.copied || 0) + "/" + (updateProgress.copyTotal || 0) + (updateProgress.group ? " · " + updateProgress.group : "")) : null,
 						progressUnavailable && updateBusy ? h("span", null, "暂未收到后台状态，请勿重复切换；正在重试读取。") : null,
 						updateProgress?.active ? h("span", null, "完成时间取决于网络和本机操作，暂不可准确估计。") : null,
-						updateProgress?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, updateProgress.error) : null,
+						updateProgress?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (updateProgress.failedStage ? "[" + updateProgress.failedStage + "] " : "") + updateProgress.error) : null,
 					) : null,
 				)),
 				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
