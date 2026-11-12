@@ -16,7 +16,10 @@ const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
 const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
   patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
 })
+const clientBuildId = client.match(/^\s*const CLIENT_BUILD_ID = "([0-9a-f]{16})";/m)?.[1]
+assert.ok(clientBuildId, 'client build ID must be present in the runtime bundle')
 const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'BackupInventory', {
+  CLIENT_BUILD_ID: clientBuildId,
   tallyPatches: (rows) => rows.reduce((o, row) => {
     o.total += 1
     if (row.st === 'applied' || row.st === 'already') o.applied += 1
@@ -159,6 +162,7 @@ test('diagnostic center distinguishes loaded and disk versions and unavailable h
     has_backup: false,
   }, [], (s) => s)
   assert.match(report, /插件磁盘版本: 2\.0\.0/)
+  assert.ok(report.includes('前端运行构建: ' + clientBuildId))
   assert.match(report, /后端加载时版本: 1\.0\.0/)
   assert.match(report, /插件目录: local-plugin/)
   assert.match(report, /补丁: 待检测/)
@@ -387,18 +391,28 @@ test('remote target check uses immutable commit and reports per-file differences
   let unavailable = ''
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
   const seen = []
-  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer',
+  let token = ''
+  const verify = new Function('readCurrentUpdateReceipt', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
-    () => receipt, () => 'receipt', () => ({ hashes: local }), files,
-    async (url) => {
-      seen.push(url)
-      const file = url.split('/' + sha + '/')[1]
+    () => receipt, () => ({ hashes: local }), files,
+    async (url, timeout, headers) => {
+      seen.push({ url, headers })
+      const parsed = new URL(url)
+      const file = token ? parsed.pathname.split('/contents/')[1] : url.split('/' + sha + '/')[1]
       if (!file || file === unavailable) throw new Error('unavailable')
       return { arrayBuffer: async () => Buffer.from(file) }
-    }, 'fixture/repo', createHash, Buffer)
+    }, 'fixture/repo', createHash, Buffer, () => token,
+    (ref, file) => 'https://api.github.com/repos/fixture/repo/contents/' + file + '?ref=' + ref)
   assert.equal((await verify()).status, 'match')
   assert.equal(seen.length, 4)
-  assert.ok(seen.every((url) => url.includes('/' + sha + '/')))
+  assert.ok(seen.every(({ url }) => url.includes('/' + sha + '/')))
+  seen.length = 0
+  token = 'fixture-token'
+  assert.equal((await verify()).status, 'match')
+  assert.equal(seen.length, 4)
+  assert.ok(seen.every(({ url, headers }) => new URL(url).searchParams.get('ref') === sha &&
+    headers.accept === 'application/vnd.github.raw+json'))
+  token = ''
   local['client.js'] = 'different'
   assert.equal((await verify()).status, 'mismatch')
   unavailable = 'lib/index.js'
@@ -461,6 +475,7 @@ test('update applies one immutable target across git, archives, profile specs an
     updateStage: (stage, detail) => events.push(['progress', stage, detail]),
     gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
     overlayFromZip: async (dirs, sha) => events.push(['zip', dirs, sha]),
+    preparePrivateProfileInstall: async () => null,
     pinInstalledSpec: (dir, sha) => events.push(['spec', dir, sha]),
     ensureAllProfileInstall: () => {},
     findDshHome: () => '/home',
@@ -499,6 +514,32 @@ test('update applies one immutable target across git, archives, profile specs an
   assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
   assert.equal(events.at(-1)[1].phase, 'failed')
   assert.equal(events.at(-1)[1].failedPhase, 'resolving_target')
+  events.length = 0
+  resolutions = 0
+  resolved = target
+  const cached = { sha: target, archivePath: '/cache/dsh-purge.tgz', profiles: [{ profile: 'desktop', migrationNeeded: true }] }
+  const privateDeps = {
+    ...deps,
+    preparePrivateProfileInstall: async (jobs, sha) => {
+      events.push(['cache', sha])
+      return cached
+    },
+  }
+  const privateApply = new Function(...Object.keys(privateDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(privateDeps))
+  const privateResult = await privateApply(jobs, { ref: 'master' })
+  assert.equal(privateResult.profileInstall, cached)
+  assert.ok(events.findIndex(e => e[0] === 'cache') < events.findIndex(e => e[0] === 'git'))
+  assert.equal(events.some(e => e[0] === 'spec'), false, 'private update must not rewrite the profile manifest alone')
+  assert.equal(events.filter(e => e[0] === 'receipt').at(-1)[1].profileInstall, cached)
+  events.length = 0
+  resolutions = 0
+  const failureDeps = { ...deps, preparePrivateProfileInstall: async () => { throw Error('cache download failed') } }
+  const failedApply = new Function(...Object.keys(failureDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(failureDeps))
+  await assert.rejects(failedApply(jobs, { ref: 'master' }), /cache download failed/)
+  assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
+  assert.equal(events.at(-1)[1].phase, 'failed')
 })
 
 test('git update keeps channel branch name but never checks out a moving remote ref', async () => {
@@ -551,3 +592,26 @@ test('version update reports real live stages and prevents duplicate writes', as
   assert.match(client, /apiJson\("\/dsh-purge\/update-progress"\)/)
   assert.match(client, /总大小未知/)
 })
+
+test('recovery selects the newest receipt belonging to the current profile, not another install', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function readCurrentUpdateReceipt()');
+  const end = source.indexOf('export function updateReceiptStatus()', start);
+  const path = await import('node:path');
+  const root = path.resolve('current-plugin'), profile = path.resolve('profiles/desktop');
+  const direct = path.resolve('receipts', 'a'.repeat(64) + '.json');
+  const related = 'b'.repeat(64) + '.json', other = 'c'.repeat(64) + '.json';
+  const old = { startedAt: '2026-01-01T00:00:00Z', targetSha: 'old' };
+  const newer = { startedAt: '2026-02-01T00:00:00Z', targetSha: 'new', profileInstall: { profiles: [{ dir: profile }] } };
+  const unrelated = { startedAt: '2026-03-01T00:00:00Z', targetSha: 'other', profileInstall: { profiles: [{ dir: path.resolve('profiles/web') }] } };
+  const records = new Map([[direct, old], [path.join(path.dirname(direct), related), newer], [path.join(path.dirname(direct), other), unrelated]]);
+  const read = new Function('fs', 'path', 'PLUGIN_ROOT', 'updateReceiptPath', 'readJson', 'realPath', 'findPurgeProfiles', 'profilePluginDir',
+    source.slice(start, end) + '\nreturn readCurrentUpdateReceipt;')(
+      { readdirSync: () => [path.basename(direct), related, other] }, path, root, () => direct,
+      p => records.get(p) || null, p => p, () => [{ dir: profile }], () => root);
+  assert.equal(read().targetSha, 'new');
+  records.delete(path.join(path.dirname(direct), related));
+  assert.equal(read().targetSha, 'old');
+  records.delete(direct);
+  assert.equal(read(), null);
+});
