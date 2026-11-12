@@ -7997,6 +7997,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [intelCommit, setIntelCommit] = React.useState(false)
       const [intelBusy, setIntelBusy] = React.useState(false)
       const [intelResult, setIntelResult] = React.useState(null)
+      const readIntelHistory = () => {
+        if (!eng || !intelTarget.trim() || intelBusy) return
+        setIntelBusy(true); setIntelResult(null)
+        api({ op: 'scopedIntelHistory', engagement: eng, target: intelTarget.trim() }).then(r => {
+          setIntelBusy(false); setIntelResult({ ...r, history: true })
+        }, () => { setIntelBusy(false); setIntelResult({ error: '读取历史失败' }) })
+      }
       const runIntel = () => {
         if (!eng || !intelConsent || !intelTarget.trim() || intelBusy) return
         setIntelBusy(true); setIntelResult(null)
@@ -8158,7 +8165,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-card' },
             h('h4', null, '外部被动情报 · 单 IP'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
-              'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史端口线索不是实时验证；未知协议仅预览。'),
+              'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史线索不会修改实时端口状态；可保存全部观察并离线查询。'),
             h('input', { className: 'rt-input', value: intelTarget, placeholder: '已登记范围内的 IP',
               onChange: e => { setIntelTarget(e.target.value); setIntelConsent(false); setIntelResult(null) } }),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
@@ -8167,15 +8174,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('label', null, h('input', { type: 'checkbox', checked: intelConsent,
                 onChange: e => setIntelConsent(e.target.checked) }), ' 同意将该 IP 提交给所选外部平台'),
               h('label', null, h('input', { type: 'checkbox', checked: intelCommit,
-                onChange: e => setIntelCommit(e.target.checked) }), ' 导入资产及明确协议的新端口')),
+                onChange: e => setIntelCommit(e.target.checked) }), ' 保存被动情报到本地库')),
             h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
               disabled: intelBusy || !eng || !intelConsent || !intelTarget.trim(), onClick: runIntel },
               intelBusy ? '查询中…' : '查询被动情报'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: intelBusy || !eng || !intelTarget.trim(), onClick: readIntelHistory }, '读取本地情报历史'),
             intelResult && (!intelResult.engagement || intelResult.engagement === eng)
               ? h('div', { style: { fontSize: 12, marginTop: 8 } },
                 intelResult.error ? h('div', { className: 'rt-err' }, intelResult.error) : null,
                 (intelResult.errors || []).map(e => h('div', { key: e.source }, e.source + ': ' + e.error)),
-                intelResult.ok ? h('div', null,
+                intelResult.history && intelResult.ok ? h('div', null,
+                  '本地历史：' + (intelResult.items || []).length + ' 条（不访问外部平台）',
+                  (intelResult.items || []).map(item => h('div', { key: item.id, style: { marginTop: 6 } },
+                    item.source + ' · ' + item.collected_at + ' · ' + ((item.data?.ports || []).map(p => p.port + '/' + p.proto).join('、') || '无端口线索')))) : null,
+                intelResult.ok && !intelResult.history ? h('div', null,
                   '来源：' + (intelResult.results || []).map(r => r.source).join('、') + ' · '
                     + (intelResult.imported ? '已入库' : '仅预览'),
                   h('div', null, '端口线索：' + ((intelResult.ports || []).map(p => p.port + '/' + p.proto + ' (' + p.sources.join(', ') + ')').join('、') || '无')),
