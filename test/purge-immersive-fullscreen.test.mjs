@@ -23,8 +23,12 @@ test('Purge fills the Harness viewport by default without a fullscreen click', (
   const client = read('client.js')
   assert.match(client, /const \[workspaceVisible, setWorkspaceVisible\] = useState\(true\)/)
   assert.match(client, /data-default-full/)
-  assert.match(client, /position:fixed!important;inset:0!important;top:0!important;left:0!important/)
-  assert.match(client, /width:100vw!important;height:100vh!important;height:100dvh!important/)
+  const css = JSON.parse(client.match(/const PURGE_WORKSPACE_CSS = ("(?:[^"\\]|\\.)*");/)[1])
+  const rule = css.match(/\.dshp-dock\.dshp-workspace\[data-maximized="1"\]\[data-default-full="1"\]\{([^}]*)\}/)
+  assert.ok(rule)
+  assert.match(rule[1], /position:fixed!important;inset:0!important/)
+  assert.match(rule[1], /width:auto!important;height:auto!important/)
+  assert.doesNotMatch(rule[1], /100(?:d?vh|vw)/)
   assert.match(client, /return rd\.createPortal\(panel, document\.body\)/)
   assert.match(client, /setWorkspaceVisible\(false\)/)
   assert.match(client, /setWorkspaceVisible\(true\)/)
@@ -33,7 +37,7 @@ test('Purge fills the Harness viewport by default without a fullscreen click', (
 test('immersive workspace overrides the old max-size layout and stays dark', () => {
   const client = read('client.js')
   assert.match(client, /\.dshp-dock\.dshp-workspace\[data-maximized=\\"1\\"\]:fullscreen/)
-  assert.match(client, /inset:0!important;width:100vw!important;height:100vh!important/)
+  assert.match(client, /inset:0!important;width:100%!important;height:100%!important/)
   assert.match(client, /\.dshp-dock\.dshp-workspace:fullscreen::backdrop\{background:#0c1422\}/)
 })
 
@@ -74,18 +78,59 @@ test('Purge renders an opaque dark workspace before entering system fullscreen',
 })
 
 
-test('Windows native caption palette follows the workspace and restores the host on exit', () => {
+test('Windows native caption palette follows late mount and restores the latest host theme', () => {
   const client = read('client.js')
-  const section = client.slice(client.indexOf('function PurgeWorkspacePage() {'), client.indexOf('const toggleImmersive = () =>'))
-  assert.match(section, /document\.documentElement\.hasAttribute\("data-windows-titlebar"\)/)
-  assert.match(section, /\["--dsw-specific-sidebar-fill", "#101c2d"\]/)
-  assert.match(section, /\["--dsw-alias-label-primary", "#e5eefb"\]/)
-  assert.match(section, /style\.setProperty\(name, color\)/)
-  assert.match(section, /return \(\) => \{/)
-  assert.match(section, /style\.getPropertyValue\(name\)\.trim\(\) !== color/)
-  assert.match(section, /style\.setProperty\(name, value, priority\)/)
-  assert.match(section, /style\.removeProperty\(name\)/)
-  assert.match(section, /\}, \[workspaceVisible\]\)/)
+  const helper = client.match(/function installPurgeCaptionPalette\(doc, Observer\) \{[\s\S]*?\n\t\t\}/)
+  assert.ok(helper, 'caption lifecycle helper must exist')
+  const install = new Function('return (' + helper[0] + ')')()
+  const fill = '--dsw-specific-sidebar-fill'
+  const ink = '--dsw-alias-label-primary'
+  const values = new Map([[fill, { value: '#ffffff', priority: '' }], [ink, { value: '#202020', priority: '' }]])
+  let writes = 0
+  const style = {
+    getPropertyValue: name => values.get(name)?.value || '',
+    getPropertyPriority: name => values.get(name)?.priority || '',
+    setProperty(name, value, priority = '') { writes++; values.set(name, { value, priority }) },
+    removeProperty(name) { writes++; values.delete(name) },
+  }
+  let mounted = false
+  let callback
+  let disconnected = false
+  const targets = []
+  class Observer {
+    constructor(fn) { callback = fn }
+    observe(target, options) { targets.push({ target, options }) }
+    disconnect() { disconnected = true }
+  }
+  const body = { style }
+  const root = { hasAttribute: name => name === 'data-windows-titlebar' && mounted }
+  const dispose = install({ body, documentElement: root }, Observer)
+  assert.equal(writes, 0, 'Web or a not-yet-mounted caption is untouched')
+  assert.equal(targets.length, 2)
+  mounted = true
+  callback()
+  assert.equal(style.getPropertyValue(fill), '#101c2d')
+  assert.equal(style.getPropertyValue(ink), '#e5eefb')
+  const before = writes
+  callback()
+  assert.equal(writes, before, 'Unrelated mutations must not cause a write loop')
+  style.setProperty(fill, '#cccccc', 'important')
+  callback()
+  assert.equal(style.getPropertyValue(fill), '#101c2d')
+  mounted = false
+  callback()
+  assert.equal(style.getPropertyValue(fill), '#cccccc')
+  assert.equal(style.getPropertyPriority(fill), 'important')
+  assert.equal(style.getPropertyValue(ink), '#202020')
+  mounted = true
+  callback()
+  assert.equal(style.getPropertyValue(fill), '#101c2d')
+  style.setProperty(ink, '#abcdef', 'important')
+  dispose()
+  assert.equal(disconnected, true)
+  assert.equal(style.getPropertyValue(fill), '#cccccc')
+  assert.equal(style.getPropertyValue(ink), '#abcdef', 'A pending host change must not be overwritten')
+  assert.match(client, /return installPurgeCaptionPalette\(document, MutationObserver\)/)
 })
 
 
@@ -94,14 +139,15 @@ test('Windows caption keeps Purge tabs below the native 40px hit area until full
   const literal = client.match(/const PURGE_WORKSPACE_CSS = ("(?:[^"\\]|\\.)*");/)?.[1]
   assert.ok(literal, 'workspace CSS must exist')
   const css = JSON.parse(literal)
-  assert.match(css, /html\[data-windows-titlebar\] \.dshp-dock\.dshp-workspace\[data-default-full="1"\]\{\s*-webkit-app-region:no-drag;/)
+  assert.match(css, /html\[data-windows-titlebar\] \.dshp-dock\.dshp-workspace\[data-default-full="1"\],/)
+  assert.match(css, /\.dshp-workspace :is\(button,input,select,textarea,a,\[role="button"\]\)\s*\{\s*-webkit-app-region:no-drag;/)
   // The native DSH Windows titlebar owns the first 40 CSS pixels for hit
   // testing. A portal with inset:0 can paint tabs there but not receive clicks.
   const normalWindow = /html\[data-windows-titlebar\]:not\(\[data-fullscreen\]\) \.dshp-dock\.dshp-workspace\[data-maximized="1"\]\[data-default-full="1"\]:not\(:fullscreen\)\{([^}]*)\}/.exec(css)
   assert.ok(normalWindow, 'default workspace needs its own normal-window caption clearance')
   assert.match(normalWindow[1], /top:var\(--dsh-windows-titlebar-height,40px\)!important;/)
-  assert.match(normalWindow[1], /height:calc\(100dvh - var\(--dsh-windows-titlebar-height,40px\)\)!important;/)
+  assert.doesNotMatch(normalWindow[1], /height:calc/)
   // The existing true-fullscreen rule keeps the entire viewport available.
-  assert.match(css, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:fullscreen\{[^}]*inset:0!important;[^}]*height:100vh!important;/)
+  assert.match(css, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:fullscreen\{[^}]*inset:0!important;[^}]*height:100%!important;/)
   assert.match(client, /onClick: \(\) => open\(key\)/)
 })
