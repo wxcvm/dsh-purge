@@ -1,5 +1,8 @@
 import { execFile } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 /**
  * A management-only SSH connectivity check for an operator's own hosts.
@@ -35,9 +38,32 @@ export function buildAdminProbeArgs(target, jumps = []) {
   return args
 }
 
-export function parseArgs(argv) {
+/** Read the saved preferences without loading unrelated credentials or starting SSH. */
+export function readSavedAdminRoute(root = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'redteam')) {
+  let config
+  try {
+    config = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'))
+  } catch (error) {
+    throw new Error(error.code === 'ENOENT'
+      ? 'No saved Purge configuration; save the management route in Environment settings first'
+      : 'Cannot read saved Purge configuration')
+  }
+  const route = config?.vpsAdminRoute
+  if (!route || !route.target) throw new Error('No saved management route; save a target SSH alias first')
+  if (typeof route.target !== 'string' || !Array.isArray(route.jumps) ||
+      route.jumps.some((item) => typeof item !== 'string')) {
+    throw new Error('Invalid saved management route')
+  }
+  const target = route.target.trim()
+  const jumps = route.jumps.map((item) => item.trim())
+  buildAdminProbeArgs(target, jumps)
+  return { target, jumps }
+}
+
+export function parseArgs(argv, loadSaved = readSavedAdminRoute) {
+  if (Array.isArray(argv) && argv.length === 1 && argv[0] === '--saved') return loadSaved()
   if (!Array.isArray(argv) || argv.length < 1 || argv.length > 2) {
-    throw new Error('Usage: node scripts/vps-admin-check.mjs TARGET [JUMP1,JUMP2]')
+    throw new Error('Usage: node scripts/vps-admin-check.mjs --saved | TARGET [JUMP1,JUMP2]')
   }
   const [target, via] = argv
   const jumps = via === undefined ? [] : via.split(',')
