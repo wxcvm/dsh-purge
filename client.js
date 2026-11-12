@@ -7,6 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
+		const CLIENT_BUILD_ID = "f624b6f1f875c521";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1552,6 +1553,21 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [checking, setChecking] = useState(false);
 			const [error, setError] = useState("");
 			const receipt = state?.update_receipt;
+			const [copies, setCopies] = useState(null);
+			const [copiesBusy, setCopiesBusy] = useState(false);
+			const [copiesError, setCopiesError] = useState("");
+			const diskBuild = receipt?.rendererDiskBuildId || copies?.copies?.find((copy) => copy.active)?.rendererBuildId || "";
+			const rendererMatch = diskBuild ? diskBuild === CLIENT_BUILD_ID : null;
+			const scanCopies = async () => {
+				setCopiesBusy(true);
+				setCopiesError("");
+				try {
+					const data = await apiJson("/dsh-purge/update-copies");
+					if (!data?.ok) throw new Error(data?.error || "安装副本检查失败");
+					setCopies(data);
+				} catch (e) { setCopiesError(String(e?.message || e)); }
+				finally { setCopiesBusy(false); }
+			};
 			const verify = async () => {
 				setChecking(true);
 				setError("");
@@ -1573,11 +1589,25 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("p", { className: "dshp-hint" }, "目标：" + receipt.ref + " · 更新前：" + (receipt.before?.version || "未知") + " · 写入后：" + (receipt.after?.version || "未知")),
 					h("p", { className: "dshp-hint" }, "开始：" + (receipt.startedAt || "未知") + " · 阶段：" + receipt.phase),
 					h("p", { className: "dshp-hint" }, "目录：" + receipt.root),
-					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；实际渲染器加载状态尚未验证。"),
+					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；与更新时记录比较。"),
 					receipt.error ? h("p", { role: "alert" }, receipt.error) : null,
 				) : null,
 				h(Btn, { disabled: busy || checking, onClick: verify }, checking ? "核对中…" : "重新核对更新结果"),
 				error ? h("p", { role: "alert" }, error) : null,
+				h("div", { className: "dshp-sub" }, h("h4", null, "前端构建身份")),
+				h("p", { className: "dshp-hint" }, "实际运行前端：" + CLIENT_BUILD_ID + " · 磁盘构建：" + (diskBuild || "未知")),
+				h("p", { role: "status" }, rendererMatch === true ? "前端构建标识一致" : rendererMatch === false ? "前端仍加载其他构建，请完整退出 Harness 或刷新页面后再核对。" : "磁盘构建标识未知，请检查安装副本。"),
+				h("div", { className: "dshp-sub" }, h("h4", null, "安装副本一致性")),
+				h(Btn, { disabled: busy || copiesBusy, onClick: scanCopies }, copiesBusy ? "检查中…" : "检查安装副本"),
+				copiesError ? h("p", { role: "alert" }, copiesError) : null,
+				copies ? h("div", null,
+					h("p", { className: "dshp-hint" }, "仅比较当前发现的 profile 插件目录与活动目录的四个关键文件；不证明其他宿主进程已重新加载。"),
+					copies.copies.map((copy) => h("details", { key: copy.root },
+						h("summary", null, (copy.active ? "活动目录" : "安装副本") + " · " + (copy.version || "版本未知") + " · " + (copy.matchesActive === true ? "关键文件一致" : copy.matchesActive === false ? "关键文件不同" : "数据不足")),
+						h("p", { style: { overflowWrap: "anywhere" } }, copy.root),
+						h("p", { className: "dshp-hint" }, "Profile：" + (copy.profiles.join(", ") || "未关联") + " · 前端：" + (copy.rendererBuildId || "未知")))),
+					copies.unresolved.length ? h("p", { role: "alert" }, "未定位的 profile：" + copies.unresolved.join(", ")) : null,
+				) : null,
 			);
 		}
 
