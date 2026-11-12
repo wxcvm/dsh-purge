@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "be4f8d574cb9fc5d";
+		const CLIENT_BUILD_ID = "1c94559d0c0f882f";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2186,7 +2186,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const lastReceipt = recoveredReceipt === undefined ? state?.update_receipt : recoveredReceipt;
 			const receiptCoversProgress = lastReceipt && updateProgress && Date.parse(lastReceipt.startedAt) >= updateProgress.startedAt;
 			useEffect(() => {
-				let stopped = false, timer;
+				let stopped = false, timer, failures = 0;
 				const poll = async () => {
 					try {
 						const data = await apiJson("/dsh-purge/update-progress");
@@ -2194,11 +2194,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						setUpdateProgress(data?.progress || null);
 						if (!data?.progress?.active && Object.prototype.hasOwnProperty.call(data || {}, "receipt")) setRecoveredReceipt(data.receipt);
 						setProgressUnavailable(false);
+						failures = 0;
 						if (updatePending || data?.progress?.active) timer = setTimeout(poll, 1500);
 					} catch {
 						if (stopped) return;
 						setProgressUnavailable(true);
-						if (updatePending || updateProgress?.active) timer = setTimeout(poll, 2500);
+						if (updatePending || updateProgress?.active || ++failures <= 3) timer = setTimeout(poll, 2500);
 					}
 				};
 				poll();
@@ -2388,6 +2389,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					throw new Error((status && status.error) || "宿主状态暂不可用");
 				}
 				setState(status);
+				if (Object.prototype.hasOwnProperty.call(status, "update_receipt")) setRecoveredReceipt(status.update_receipt);
 				return status;
 			}, []);
 
