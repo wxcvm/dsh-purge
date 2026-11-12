@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { copyUpdatePayload, readUpdateRecovery, restoreInterruptedUpdate } from '../lib/update-payload.js';
+import { copyUpdatePayload, readUpdateRecovery, restoreInterruptedUpdate, listPendingUpdateRecovery, assertNoPendingUpdateRecovery } from '../lib/update-payload.js';
 import { spawnSync } from 'node:child_process';
 
 const names = ['lib','scripts','client.js','package.json'];
@@ -116,4 +116,34 @@ test('completed journal is not eligible for interrupted-copy restoration', async
   assert.equal((await readUpdateRecovery(backup)).phase,'complete');
   await assert.rejects(restoreInterruptedUpdate(backup),/No interrupted file copy/);
   assert.equal(read(one,'lib/index.js'),'new');
+});
+
+test('pending or malformed journals block a fresh update until restored', async t => {
+  const {source,one,backup} = await fixture(t);
+  const home = path.join(backup,'recovery-home');
+  const pending = path.join(home,'copy-interrupted');
+  const complete = path.join(home,'copy-complete');
+  const empty = path.join(home,'copy-preparing');
+  const invalid = path.join(home,'copy-invalid');
+  assert.deepEqual(await listPendingUpdateRecovery(home),[]);
+  await fsp.mkdir(empty,{recursive:true});
+  await copyUpdatePayload(source,[one],complete,names);
+  assert.deepEqual(await listPendingUpdateRecovery(home),[]);
+  const moduleUrl = new URL('../lib/update-payload.js',import.meta.url).href;
+  const child = spawnSync(process.execPath,['--input-type=module','-e',
+    'import {copyUpdatePayload} from '+JSON.stringify(moduleUrl)+';'+
+    'await copyUpdatePayload(...'+JSON.stringify([source,[one],pending,names])+', {onProgress: p => {if(p.copied===1) process.exit(73);}});'
+  ],{encoding:'utf8'});
+  assert.equal(child.status,73,child.stderr);
+  await fsp.mkdir(invalid);
+  await fsp.writeFile(path.join(invalid,'recovery.json'),'{broken');
+  const before = await listPendingUpdateRecovery(home);
+  assert.deepEqual(before.map(x=>x.phase).sort(),['copying','unreadable']);
+  await assert.rejects(assertNoPendingUpdateRecovery(home),/copy-interrupted/);
+  await restoreInterruptedUpdate(pending);
+  await assert.rejects(assertNoPendingUpdateRecovery(home),/copy-invalid/);
+  await fsp.rm(invalid,{recursive:true});
+  await assertNoPendingUpdateRecovery(home);
+  assert.equal((await readUpdateRecovery(pending)).phase,'restored');
+  assert.equal((await readUpdateRecovery(complete)).phase,'complete');
 });
