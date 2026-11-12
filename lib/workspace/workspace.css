@@ -1,0 +1,138 @@
+
+/* Native DSH main page, not a floating window. Reuse the real embedded console. */
+.dshp-dock.dshp-workspace[data-maximized="1"]:fullscreen{
+  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;
+  max-width:none!important;max-height:none!important;margin:0!important;box-sizing:border-box;
+  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;
+}
+.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}
+
+.dshp-dock.dshp-workspace[data-maximized="1"][data-default-full="1"]{
+  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */
+  position:fixed!important;inset:0!important;z-index:10040!important;
+  /* Use the actual containing viewport, not competing vw/vh dimensions. */
+  width:auto!important;height:auto!important;box-sizing:border-box!important;
+  max-width:none!important;max-height:none!important;margin:0!important;
+  border:0!important;border-radius:0!important;box-shadow:none!important;
+  /* Render exactly like fullscreen instead of blurring the light host behind us. */
+  background:#0c1422!important;color-scheme:dark;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+
+/* Portalled workspaces are interactive surfaces, not window drag regions.
+   Electron composes drag rectangles geometrically, ignoring visual z-index. */
+html[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full="1"],
+html[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,
+html[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role="button"]){
+  -webkit-app-region:no-drag;
+}
+/* Windows reserves its top caption row for native drag/menu hit testing.
+   The portalled workspace must start below it, not just paint over it. */
+html[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized="1"][data-default-full="1"]:not(:fullscreen){
+  top:var(--dsh-windows-titlebar-height,40px)!important;
+  /* Keep bottom:0 from inset; the browser computes the remaining height. */
+}
+.dshp-dock.dshp-workspace[data-maximized="1"]{
+  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;
+  right:auto!important;bottom:auto!important;z-index:1;
+  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;
+  min-width:0!important;min-height:0!important;border:0;border-radius:0;
+  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;
+}
+.dshp-workspace .dshp-workspace-nav{
+  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;
+  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;
+  border-bottom:1px solid #30435d;
+}
+/* Windows workspaces start below the native caption row, so reserving
+   caption-button width again would unnecessarily shrink the navigation. */
+html[data-windows-titlebar] .dshp-workspace[data-default-full="1"] .dshp-workspace-nav,
+.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}
+.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}
+.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}
+.dshp-workspace .dshp-workspace-tabs button,
+.dshp-workspace .dshp-workspace-back,
+.dshp-workspace .dshp-workspace-fullscreen{
+  appearance:none;border:1px solid transparent;border-radius:8px;
+  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;
+  color:#aabed8;background:transparent;white-space:nowrap;
+}
+.dshp-workspace .dshp-workspace-tabs button:hover,
+.dshp-workspace .dshp-workspace-back:hover,
+.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}
+.dshp-workspace .dshp-workspace-tabs button[aria-selected="true"]{
+  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;
+}
+.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}
+.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}
+.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}
+.dshp-workspace .dshp-dock-body{
+  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;
+  overflow:hidden;background:transparent;
+}
+.dshp-workspace[data-workspace="clean"] .dshp-dock-body{overflow:auto}
+.dshp-workspace[data-workspace="redteam"] .dshp-dock-body>.rt-dock.rt-embedded{
+  min-width:0;min-height:0;width:100%!important;height:100%;
+}
+@media(max-width:720px){
+  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}
+  .dshp-workspace .dshp-workspace-back{margin-left:auto}
+}
+
+/* Clean console: distinct navigation and a full-width content pane. */
+.dshp-workspace[data-workspace="clean"] .dshp-dock-body{overflow:hidden}
+.dshp-workspace[data-workspace="clean"] .dshp-root.dshp-clean-workspace{
+  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;
+  width:100%;height:100%;min-width:0;min-height:0;max-width:none;
+  padding:0;border:0;border-radius:0;overflow:hidden;
+  background:#0c1422!important;color:#e5eefb;
+  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;
+  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;
+  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;
+  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;
+  --dshp-line:#304663;--dshp-fill:#223d61;
+  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;
+  --dshp-hi:#ffffff12;--dshp-glass:none;
+}
+.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;
+  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;
+  min-width:0;min-height:0;overflow:auto}
+.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;
+  color:#7894b4;letter-spacing:.12em;font-weight:700}
+.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;
+  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;
+  border:1px solid transparent;border-radius:10px;
+  text-align:left;font:inherit;cursor:pointer}
+.dshp-clean-nav-item strong{font-size:13px;color:inherit}
+.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}
+.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}
+.dshp-clean-nav-item[aria-current="page"]{background:#213a58;color:#eaf4ff;
+  border-color:#325782}
+.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}
+.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;
+  padding:24px;display:block}
+.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;
+  border-bottom:1px solid #304663}
+.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}
+.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}
+.dshp-clean-pane{min-width:0}
+.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}
+.dshp-clean-workspace .dshp-panel{max-width:none}
+@media(max-width:800px){
+  .dshp-workspace[data-workspace="clean"] .dshp-root.dshp-clean-workspace{
+    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;
+    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;
+    border-bottom:1px solid #30435d}
+  .dshp-clean-nav-heading{display:none}
+  .dshp-clean-nav-item{flex:none;padding:9px 12px}
+  .dshp-clean-nav-item small{display:none}
+  .dshp-clean-content{padding:14px}
+}
+
+/* A failed page must not hide the workspace navigation or block recovery. */
+.dshp-workspace-recovery{margin:auto;max-width:420px;padding:24px;box-sizing:border-box;color:#e5eefb;text-align:center}
+.dshp-workspace-recovery h2{font-size:18px;margin:0 0 10px}
+.dshp-workspace-recovery p{font-size:13px;line-height:1.6;color:#a2b5cf;margin:0 0 18px}
+.dshp-workspace-recovery button{appearance:none;border:1px solid #365477;border-radius:8px;padding:9px 16px;background:#213a58;color:#eaf4ff;font:inherit;cursor:pointer}
+.dshp-workspace-recovery button:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}
