@@ -906,3 +906,5 @@ redteam_score_report             出交付报告
 「资源 → 测绘中心」除了离线筛选外，可使用本机 Nmap/httpx 对**已登记的单个授权目标**执行探测，经 `localActiveSurvey` API 复用 `scan-runner`、原始输出记录与 `importBundle`；默认为仅预览，选择入库后才写资产，结果可在历史页核验。模型既有 `redteam_scan_run` 仍保持范围校验。
 
 「管理 → 低干扰」新增 `scanPreferences.noReverseDns` 和 `scanPreferences.maskAssetResults`：前者真实影响下一次 Nmap 命令的 `-n` 参数，后者只保护测绘中心的可视展示。 `privacyPosture` 根据已保存配置列出已经生效、可启用及目标侧日志等无法保护的项目，不能用它声称实现匿名或隐身。
+
+Purge 的 `privacyPosture.bridge` 现在会在 Node HTTP 请求能获取所属服务器的 `server.address()` 时报告实际监听 `boundAddress`、`boundPort` 和 `listenerScope`（`loopback_bound` / `all_interfaces` / `specific_interface`），并与连接接受地址 `acceptedAddress`、`acceptedPort` 区分；无法读取时仍返回 `not_inspected`。**绑定回环地址并不保证公网不可访问**（例如反向代理、容器端口映射或隧道可转发请求），`publicReachability` 始终为 `not_tested`。本项仅做本地运行时观测，不扫描外网、不更改监听行为。

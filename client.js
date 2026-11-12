@@ -5053,6 +5053,88 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
   .rt-embedded .rt-privacy-pane>.rt-card:first-of-type{grid-column:auto}
   .rt-embedded>.rt-head .rt-eng-select{flex-basis:100%!important}
 }
+
+/* Embedded environment paint stability: one scroller, no GPU blur layers. */
+.rt-dock.rt-embedded .rt-env-main{
+  overflow:hidden!important;min-height:0;background:#101b2b!important;
+  --rt-glass:none;--rt-paper:#18283d;--rt-well:#122238;
+}
+/* Native selects paint while surrounding text/cards vanish on affected Windows
+   Chromium builds. Remove the remaining input/button blur layers as well as
+   card blur; the standalone .rt-full already uses the same flat surfaces. */
+.rt-dock.rt-embedded .rt-env-main,
+.rt-dock.rt-embedded .rt-env-main *{
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+.rt-dock.rt-embedded .rt-env-main>.rt-pane{
+  flex:1 1 auto;min-height:0;overflow-x:hidden!important;overflow-y:auto!important;
+  overscroll-behavior:contain;background:#101b2b!important;
+}
+.rt-dock.rt-embedded .rt-env-main .rt-card{
+  background:#18283d!important;border-color:#31455e!important;box-shadow:none!important;
+}
+.rt-dock.rt-embedded .rt-env-main .rt-input,
+.rt-dock.rt-embedded .rt-env-main .rt-eng-select,
+.rt-dock.rt-embedded .rt-env-main .rt-textarea{
+  background:#122238!important;
+}
+
+/* Full-screen paint stability + comfortable reading density.
+ * The full console already has opaque dark surfaces: nested backdrop blur on
+ * dozens of scrollable cards/inputs allocates extra compositor surfaces and
+ * can cause blank/white raster tiles in Chromium hardware acceleration.
+ * Keep this scoped to the full window; leave the embedded dock untouched.
+ */
+.rt-full{
+  --rt-paper:#18283d;--rt-paper-2:#203149;--rt-well:#122238;
+  --rt-fill:#273e5a;--rt-line:#344961;--rt-line-2:#526b89;
+  --rt-ink:#e0eaf6;--rt-mute:#b3c3d7;
+  --dsw-alias-label-primary:#e0eaf6;
+  --dsw-alias-label-secondary:#b3c3d7;
+}
+.rt-full .rt-body,.rt-full .rt-main,.rt-full .rt-pane{
+  background:#101b2b!important;
+}
+.rt-full .rt-pane{
+  line-height:1.6;overscroll-behavior:contain;
+  scrollbar-color:#49617c #101b2b;scrollbar-width:thin;
+}
+.rt-full .rt-card,.rt-full .rt-ops-section,
+.rt-full .rt-input,.rt-full .rt-textarea,.rt-full .rt-eng-select,
+.rt-full .rt-btn,.rt-full .rt-icon-btn,.rt-full .rt-hbtn,
+.rt-full .rt-row.head,.rt-full .rt-score-row.head,.rt-full .rt-vrow.head{
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+}
+.rt-full .rt-card{
+  background:#18283d!important;border-color:#31455e!important;
+  box-shadow:none!important;padding:16px;margin-bottom:12px;
+  line-height:1.6;
+}
+.rt-full .rt-card h4{
+  font-size:14px;line-height:1.45;letter-spacing:.01em;
+  color:#e4edf8;margin-bottom:9px;
+}
+.rt-full .rt-card .rt-foot{
+  color:#b3c3d7;font-size:12px;line-height:1.65;
+}
+.rt-full .rt-input,.rt-full .rt-textarea,.rt-full .rt-eng-select{
+  background:#122238!important;border-color:#3a5069!important;
+  color:#e0eaf6!important;font-size:13px;line-height:1.5;
+}
+.rt-full .rt-input:focus-visible,.rt-full .rt-textarea:focus-visible,
+.rt-full .rt-eng-select:focus-visible{
+  border-color:#7cb4ed!important;
+}
+.rt-full .rt-btn,.rt-full .rt-hbtn,.rt-full .rt-icon-btn{
+  transition:background-color 120ms ease,border-color 120ms ease,
+    color 120ms ease!important;
+}
+.rt-full .rt-btn:hover:not(:disabled){transform:none}
+.rt-full .rt-btn:active:not(:disabled){transform:none}
+.rt-full .rt-pane .rt-err{overflow-wrap:anywhere}
+@media(max-width:700px){
+  .rt-full .rt-card{padding:13px}
+}
 `    /* ---------------------------------------------------------- 桥接与状态 */
     /** 是否在「全面浏览」独立窗口里（URL hash 标记，复用同一套界面代码）。 */
     const isFullWindow = () => {
@@ -7597,12 +7679,144 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* ---------------------------------------------------------- 低干扰与隐私：仅限真实扫描偏好，不进行规避监测 */
+    // Only compare aggregate observations; never infer routes or connectivity.
+    function compareNetworkPrivacy(before, after) {
+      if (!before || !after || before.platform !== after.platform) return []
+      const rows = []
+      const add = (label, previous, current) => rows.push({ label, previous, current,
+        state: previous === null || current === null ? 'unknown' : previous === current ? 'same' : 'changed' })
+      for (const [group, label, fields] of [
+        ['interfaces', '网络地址', ['ipv4', 'ipv6', 'internal']],
+        ['dns', 'Node DNS', ['ipv4', 'ipv6', 'other']],
+      ]) {
+        const count = (s, k) => s[group] && s[group].status === 'observed' && Number.isFinite(s[group][k]) ? s[group][k] : null
+        for (const field of fields) add(label + ' ' + field, count(before, field), count(after, field))
+      }
+      for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY']) {
+        const flag = s => {
+          const p = (s.proxyEnvironment || []).find(p => p.name === name)
+          return p && typeof p.configured === 'boolean' ? p.configured : null
+        }
+        add(name, flag(before), flag(after))
+      }
+      return rows
+    }
+
+    function networkPrivacyReport(before, after) {
+      const sanitize = s => {
+        if (!s) return null
+        const counts = (group, keys) => {
+          if (!group || group.status !== 'observed') return { status: 'unknown' }
+          return Object.assign({ status: 'observed' }, Object.fromEntries(keys.map(k =>
+            [k, Number.isFinite(group[k]) ? group[k] : null])))
+        }
+        return {
+          observedAt: s.observedAt, platform: s.platform,
+          interfaces: counts(s.interfaces, ['ipv4', 'ipv6', 'internal']),
+          dns: counts(s.dns, ['ipv4', 'ipv6', 'other']),
+          proxyEnvironment: ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'].map(name => {
+            const p = (s.proxyEnvironment || []).find(p => p.name === name)
+            return { name, configured: p && typeof p.configured === 'boolean' ? p.configured : null }
+          }),
+          egress: { ipv4: 'not_tested', ipv6: 'not_tested' },
+          actualDns: 'not_tested', browserWebRtc: 'not_tested',
+        }
+      }
+      const baseline = sanitize(before), current = sanitize(after)
+      return { schemaVersion: 1, scope: 'host_local_snapshot', baseline, current,
+        comparison: compareNetworkPrivacy(baseline, current),
+        limitations: ['aggregate counts only', 'no actual route or connectivity test', 'no public IP, actual DNS or WebRTC test'] }
+    }
+
+    function NetworkPrivacyCard() {
+      const [snapshot, setSnapshot] = React.useState(null)
+      const [baseline, setBaseline] = React.useState(null)
+      const [exportError, setExportError] = React.useState('')
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [guide, setGuide] = React.useState(null)
+      const [guideOpen, setGuideOpen] = React.useState(false)
+      const [guideBusy, setGuideBusy] = React.useState(false)
+      const [guideError, setGuideError] = React.useState('')
+      const refresh = async () => {
+        if (busy) return
+        setBusy(true); setError(''); setSnapshot(null)
+        try {
+          const r = await api({ op: 'networkPrivacySnapshot' })
+          if (!r || r.ok !== true) throw new Error('无法读取本机网络诊断')
+          setSnapshot(r)
+        } catch (_) { setError('无法读取本机网络诊断，请确认插件与宿主版本一致。') }
+        finally { setBusy(false) }
+      }
+      const openGuide = async () => {
+        if (guideOpen) { setGuideOpen(false); return }
+        setGuideOpen(true)
+        if (guide || guideBusy) return
+        setGuideBusy(true); setGuideError('')
+        try {
+          const r = await api({ op: 'guideDoc', doc: 'networkPrivacy' })
+          if (!r || r.ok !== true || typeof r.content !== 'string') throw new Error('guide unavailable')
+          setGuide(r.content)
+        } catch (_) { setGuideError('随包指南不可用，请检查安装版本。') }
+        finally { setGuideBusy(false) }
+      }
+      const summary = (name, data, extra) => h('div', { style: { fontSize: 12, marginTop: 6 } },
+        name + '：' + (data && data.status === 'observed'
+          ? 'IPv4 ' + data.ipv4 + ' · IPv6 ' + data.ipv6 + (extra ? extra(data) : '')
+          : '未知（未取得本机观察）'))
+      return h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+        h('h4', null, '网络隐私诊断 · 本机快照'),
+        h('div', { style: { fontSize: 12 } }, '读取 DSH 宿主的网络地址族、Node DNS 服务器与代理环境变量存在性。不会联网、修改网络配置或显示地址和密码。'),
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 } },
+          h('button', { className: 'rt-btn', type: 'button', disabled: busy, onClick: refresh }, busy ? '读取中…' : '检查本机网络'),
+          h('button', { className: 'rt-btn', type: 'button', disabled: busy || !snapshot, onClick: () => setBaseline(snapshot) }, '设为基线'),
+          h('button', { className: 'rt-btn', type: 'button', disabled: !baseline || busy, onClick: () => setBaseline(null) }, '清除基线'),
+          h('button', { className: 'rt-btn', type: 'button', disabled: busy || !snapshot, onClick: () => {
+            setExportError('')
+            try {
+              const data = networkPrivacyReport(baseline, snapshot)
+              const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+              const link = document.createElement('a')
+              link.href = url; link.download = 'purge-network-privacy.json'
+              document.body.appendChild(link); link.click(); link.remove()
+              setTimeout(() => URL.revokeObjectURL(url), 1000)
+            } catch (_) { setExportError('无法导出报告，请确认当前宿主支持文件下载。') }
+          } }, '导出诊断报告'),
+          h('button', { className: 'rt-btn', type: 'button', onClick: openGuide }, guideOpen ? '收起完整指南' : '打开操作指南')),
+        error ? h('div', { className: 'rt-err' }, error) : null,
+        snapshot ? h('div', null,
+          h('div', { style: { fontSize: 12, marginTop: 8 } }, '观察时间：' + snapshot.observedAt + ' · ' + snapshot.platform),
+          summary('非内部地址数量（不是网卡数量）', snapshot.interfaces, d => ' · 内部地址 ' + d.internal),
+          summary('Node DNS 服务器数量', snapshot.dns, d => ' · 其他 ' + d.other),
+          h('div', { style: { fontSize: 12 } }, '代理环境变量：' + snapshot.proxyEnvironment.map(p => p.name + ' ' + (p.configured ? '已设置' : '未设置')).join(' · ')),
+          h('div', { style: { fontSize: 12, opacity: 0.85 } }, '真实 IPv4/IPv6 公网出口、实际 DNS 查询路径、浏览器 WebRTC：未测。接口地址、变量存在和解析器设置不等于实际路由或泄漏结论。')) :
+          h('div', { style: { fontSize: 12, marginTop: 8 } }, '尚未检查；实际公网出口、DNS 路径和 WebRTC 均未知。'),
+        exportError ? h('div', { className: 'rt-err' }, exportError) : null,
+        baseline ? h('div', { style: { fontSize: 12, marginTop: 10 } },
+          h('b', null, '基线对比 · ' + baseline.observedAt),
+          h('div', { style: { opacity: 0.85 } }, '基线仅保存在当前页面。相同计数不代表地址、路由或连接未变化。'),
+          snapshot && baseline.platform !== snapshot.platform ? h('div', null, '宿主平台不同，不能比较。') :
+          snapshot ? (() => {
+            const rows = compareNetworkPrivacy(baseline, snapshot)
+            const fmt = v => v === null ? '未知' : typeof v === 'boolean' ? (v ? '已设置' : '未设置') : String(v)
+            return h('div', null,
+              h('div', null, '变化 ' + rows.filter(r => r.state === 'changed').length + ' 项 · 未知 ' + rows.filter(r => r.state === 'unknown').length + ' 项'),
+              rows.map(r => h('div', { key: r.label }, r.label + '：' + fmt(r.previous) + ' → ' + fmt(r.current)
+                + '（' + ({ changed: '变化', same: '相同', unknown: '无法判断' }[r.state]) + '）')))
+          })() : h('div', null, '重新检查本机网络后显示对比。')) : null,
+        guideOpen ? h('div', { style: { marginTop: 10 } },
+          guideError ? h('div', { className: 'rt-err' }, guideError) : null,
+          h('pre', { className: 'rt-guide-doc' }, guide || (guideBusy ? '正在读取本地指南…' : ''))) : null)
+    }
+
     function LowImpactTab(props) {
       const eng = props.engagement
       const [draft, setDraft] = React.useState(null)
       const [saved, setSaved] = React.useState(null)
       const [history, setHistory] = React.useState(null)
       const [protection, setProtection] = React.useState(null)
+      const [storageAudit, setStorageAudit] = React.useState(null)
+      const [storageBusy, setStorageBusy] = React.useState(false)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
       const [message, setMessage] = React.useState('')
@@ -7639,6 +7853,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             if (v && v.ok !== false) setProtection(v)
           }, () => {})
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
+      }
+      const runStorageAudit = () => {
+        if (storageBusy) return
+        setStorageBusy(true); setStorageAudit(null)
+        api({ op: 'storageAclAudit' }).then((result) => {
+          setStorageAudit(result && typeof result.status === 'string'
+            ? result : { ok: false, status: 'unavailable' })
+        }, () => setStorageAudit({ ok: false, status: 'unavailable' }))
+          .finally(() => setStorageBusy(false))
       }
       const checkField = (key, label, description) => h('label', {
         style: { display: 'flex', alignItems: 'flex-start', gap: 10, margin: '12px 0', fontSize: 13 },
@@ -7686,23 +7909,62 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h(NetworkPrivacyCard),
+          h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+            h('h4', null, 'Windows 存储权限诊断'),
+            h('div', { style: { fontSize: 12 } },
+              '按需读取 DSH 本机工作区的 NTFS ACL，检查数据库、报告、证据等文件和目录。不修改权限，不读取文件内容。'),
+            h('button', { className: 'rt-btn', type: 'button',
+              disabled: storageBusy || !protection || !protection.storageAudit || !protection.storageAudit.available,
+              onClick: runStorageAudit, style: { marginTop: 8 } },
+              storageBusy ? '正在检查…' : '检查存储权限'),
+            protection && protection.storageAudit && !protection.storageAudit.available
+              ? h('div', { style: { fontSize: 12 } }, '当前宿主不是 Windows，暂不支持 NTFS 检查。') : null,
+            storageAudit && storageAudit.ok && storageAudit.counts
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  h('b', null, storageAudit.status === 'partial' ? '部分检查完成（存在未检查项目）' : '本次检查完成'),
+                  h('div', null, '已检查：' + storageAudit.counts.inspected
+                    + ' · 宽泛读取授权：' + storageAudit.counts.broadRead
+                    + ' · 其他账户读取授权：' + storageAudit.counts.otherRead),
+                  h('div', null, '启用权限继承：' + storageAudit.counts.inheritanceEnabled),
+                  h('div', null, 'ACL 读取失败：' + storageAudit.counts.aclReadErrors
+                    + ' · 跳过重解析点：' + storageAudit.counts.skippedReparse
+                    + ' · 枚举失败：' + storageAudit.counts.enumerationErrors))
+              : storageAudit ? h('div', { className: 'rt-err', style: { marginTop: 8 } },
+                  ({ timeout: '检查超时，请通过命令行预览大型工作区。',
+                    unsupported: '当前宿主不支持 Windows NTFS 检查。',
+                    invalid_response: '审计脚本未返回有效统计。',
+                    unavailable: '无法执行存储检查，请确认 PowerShell 与插件脚本可用。'
+                  })[storageAudit.status] || '无法读取存储权限结果。') : null,
+            h('div', { style: { fontSize: 12, opacity: 0.8 } },
+              '统计的是观察到的读取允许规则，不是有效访问权限证明；继承本身不一定是问题。不返回路径、内容或凭据。')),
           protection && protection.vault ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, '凭据加密覆盖情况'),
             h('div', { style: { fontSize: 12 } },
-              '加密密钥：' + (protection.vault.enabled ? '已配置' : '未配置（仍沿用旧版明文写入）')),
+              '加密密钥：' + (protection.vault.enabled ? '已配置' : '未配置（不能验证已有密文）')),
             protection.vault.engagement ? [
               h('div', { key: 'project', style: { fontSize: 12 } },
                 '统计工作区：' + protection.vault.engagement),
               h('div', { key: 'credential', style: { fontSize: 12 } },
-                '凭据 secret_value：加密 ' + protection.vault.credential.encrypted
+                '凭据 secret_value：加密标记 ' + protection.vault.credential.encrypted
                   + ' · 明文 ' + protection.vault.credential.plaintext),
               h('div', { key: 'webshell', style: { fontSize: 12 } },
-                'WebShell pass_key：加密 ' + protection.vault.webshell.encrypted
+                'WebShell pass_key：加密标记 ' + protection.vault.webshell.encrypted
                   + ' · 明文 ' + protection.vault.webshell.plaintext),
+              protection.vault.integrity ? h('div', { key: 'integrity', style: { fontSize: 12 } },
+                h('b', null, '当前密钥完整性校验'),
+                h('div', null, '凭据：已验证 ' + protection.vault.integrity.credential.verified
+                  + ' · 失败 ' + protection.vault.integrity.credential.failed
+                  + ' · 未校验 ' + protection.vault.integrity.credential.unchecked),
+                h('div', null, 'WebShell：已验证 ' + protection.vault.integrity.webshell.verified
+                  + ' · 失败 ' + protection.vault.integrity.webshell.failed
+                  + ' · 未校验 ' + protection.vault.integrity.webshell.unchecked),
+                h('div', { style: { opacity: 0.8 } },
+                  '失败表示当前密钥无法认证该密文；可能是密钥不匹配或数据损坏。未校验不代表数据损坏。')) : null,
             ] : h('div', { style: { fontSize: 12 } }, '当前没有可统计的工作区'),
             h('div', { style: { fontSize: 12, opacity: 0.8 } },
               '仅统计当前默认工作区，不显示口令或密钥，也不自动迁移。'
-                + ' 配置密钥不代表全部旧数据已加密；扫描证据、日志、备份和报告不在统计范围内。')) : null,
+                + ' 加密标记不等于当前密钥能够解密；扫描证据、日志、备份和报告不在统计范围内。')) : null,
           protection && protection.bridge ? h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, 'DSH 管理连接诊断'),
             h('div', { style: { fontSize: 12 } },
@@ -7721,9 +7983,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 : '当前没有发现运行中的 ARTEX')),
             protection.artex.state === 'detected' && protection.artex.version
               ? h('div', { style: { fontSize: 12 } }, '版本：' + protection.artex.version) : null,
+            h('div', { style: { fontSize: 12 } }, '隐私联动：'
+              + ({
+                runtime_observed: '已读取实际 HTTP 监听范围',
+                configured_only: '仅有启动配置，尚未观察实际绑定',
+                not_configured: '未配置可选只读联动凭据',
+                auth_rejected: '只读联动凭据被拒绝',
+                unsupported: '当前 ARTEX 不支持只读联动接口',
+                invalid_response: '联动状态响应不符合约定',
+                unavailable: '联动接口暂时不可用',
+                not_inspected: '尚未检测',
+              }[protection.artex.privacyExposure] || '尚未检测')),
+            protection.artex.privacyScope ? h('div', { style: { fontSize: 12 } },
+              'HTTP 监听范围：' + ({
+                loopback: '回环接口', all_interfaces: '所有网络接口',
+                specific_interface: '指定网络接口', unknown: '未知',
+              }[protection.artex.privacyScope] || '未知')
+              + (protection.artex.privacySource === 'runtime_listener' ? '（运行时观察）' : '（配置推断）')) : null,
             h('div', { style: { fontSize: 12, opacity: 0.8 } },
-              '仅检查 DSH 所在主机的本地健康接口；不共享账号、令牌或数据库。'
-                + 'ARTEX 的监听范围与公网可达性仍未检测。'),
+              '仅通过本机健康接口及可选只读凭据联动，不共享管理员 JWT、账号或数据库。'
+                + ' ARTEX 公网可达性、宿主机端口映射与反向代理仍未检测。'),
             h('button', { className: 'rt-btn', type: 'button',
               onClick: () => setUI({ tab: 'artex' }), style: { marginTop: 8 } },
               '查看 ARTEX 资源与工具')) : null,
@@ -8075,10 +8354,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [dockerBusy, setDockerBusy] = React.useState(null)
       const [kaliCheck, setKaliCheck] = React.useState(null)
       const [kaliToolCheck, setKaliToolCheck] = React.useState(null)
+      const [kaliProbeResults, setKaliProbeResults] = React.useState({})
       const [kaliBusy, setKaliBusy] = React.useState('')
       const [kaliToolId, setKaliToolId] = React.useState('nmap')
+      const [capabilityMatrix, setCapabilityMatrix] = React.useState(null)
+      const [matrixBusy, setMatrixBusy] = React.useState(false)
+      const [matrixError, setMatrixError] = React.useState('')
+      const [matrixGroup, setMatrixGroup] = React.useState('all')
+      const [matrixQuery, setMatrixQuery] = React.useState('')
+      const [adminProbeBusy, setAdminProbeBusy] = React.useState(false)
+      const [adminProbeResult, setAdminProbeResult] = React.useState(null)
+      const adminProbeRevision = React.useRef(0)
 
       const applyDraftFrom = (r) => {
+        adminProbeRevision.current += 1
+        setAdminProbeResult(null)
         const c = (r && r.config) || {}
         setDraft({
           platform: c.platform || 'auto',
@@ -8089,6 +8379,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           customTools: Array.isArray(c.customTools) ? c.customTools.map((t) => ({ name: t.name || '', path: t.path || '' })) : [],
           planning: { preferredToolByTask: Object.assign({}, c.planning?.preferredToolByTask || {}) },
           kaliVm: Object.assign({ host: '', user: 'kali', port: 22, identityFile: '' }, c.kaliVm || {}),
+          vps: Object.assign({ user: 'ubuntu', domain: '', ipv4: '', ipv6: '', addressMode: 'auto', identityFile: '' }, c.vps || {}),
+          vpsAdminRoute: { target: c.vpsAdminRoute?.target || '', jumps: Array.isArray(c.vpsAdminRoute?.jumps) ? [...c.vpsAdminRoute.jumps] : [] },
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
         })
@@ -8100,6 +8392,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         api({ op: 'platformConfigGet' }).then((r) => {
           setBusy(false)
           setToolChecks({})
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setTaskPlan(null)
           if (!r || r.ok === false) { setErr((r && r.error) || '读取失败'); return }
           setErr(null); setData(r)
@@ -8120,6 +8414,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           customTools: draft.customTools || [],
           planning: draft.planning,
           kaliVm: draft.kaliVm,
+          vps: draft.vps,
+          vpsAdminRoute: draft.vpsAdminRoute,
           env: draft.env,
           notes: draft.notes,
           envAdaptConfigured: true,
@@ -8130,6 +8426,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '保存失败' }); return }
           setData(r)
           setToolChecks({})
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setTaskPlan(null)
           setMsg({ ok: '已保存到 '  + ((r.config && r.config.path) || '$DSH_HOME/redteam/config.json') })
           applyDraftFrom(r)
@@ -8145,6 +8443,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '自动分配失败' }); return }
           setData(r)
           setToolChecks({})
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setTaskPlan(null)
           applyDraftFrom(r)
           setMsg({
@@ -8201,6 +8501,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             return
           }
           setEnvironmentSnapshot(result)
+          setCapabilityMatrix(null)
+          setKaliProbeResults({})
           setWslChecks({})
           setDockerResults({})
         }, (error) => {
@@ -8238,6 +8540,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }))
         })
       }
+      const loadCapabilityMatrix = () => {
+        if (busy || environmentBusy || matrixBusy || wslChecking || dockerBusy || kaliBusy) return
+        setMatrixBusy(true); setMatrixError('')
+        api({ op: 'environmentCapabilityMatrix' }).then((result) => {
+          setMatrixBusy(false)
+          if (!result || result.ok === false) {
+            setMatrixError((result && result.error) || '能力矩阵读取失败')
+            return
+          }
+          // This is a new discovery snapshot; old probe results may belong to
+          // a different Docker context or a changed SSH/WSL environment.
+          setCapabilityMatrix(result)
+          setEnvironmentSnapshot(result)
+          setToolChecks({})
+          setWslChecks({})
+          setDockerResults({})
+          setKaliToolCheck(null)
+          setKaliProbeResults({})
+        }, (error) => {
+          setMatrixBusy(false)
+          setMatrixError(String((error && error.message) || error))
+        })
+      }
       const setKaliVmField = (field, value) => setDraft((d) => d ? {
         ...d, kaliVm: Object.assign({}, d.kaliVm, { [field]: value }),
       } : d)
@@ -8254,17 +8579,118 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       const probeKaliTool = () => {
         if (busy || kaliBusy) return
+        const id = kaliToolId
         setKaliBusy('tool'); setKaliToolCheck(null)
-        api({ op: 'kaliVmToolProbe', id: kaliToolId }).then((result) => {
+        api({ op: 'kaliVmToolProbe', id }).then((result) => {
           setKaliBusy('')
-          setKaliToolCheck(result || { ok: false, error: '工具探针无响应' })
+          const check = result || { ok: false, error: '工具探针无响应' }
+          setKaliToolCheck(check)
+          setKaliProbeResults((prev) => Object.assign({}, prev, { [id]: check }))
         }, (error) => {
           setKaliBusy('')
-          setKaliToolCheck({ ok: false, error: String((error && error.message) || error) })
+          const check = { ok: false, error: String((error && error.message) || error) }
+          setKaliToolCheck(check)
+          setKaliProbeResults((prev) => Object.assign({}, prev, { [id]: check }))
         })
       }
       const setTool = (id, value) => setDraft((d) => d ? Object.assign({}, d, { tools: Object.assign({}, d.tools, { [id]: value }) }) : d)
       const setEnv = (key, value) => setDraft((d) => d ? Object.assign({}, d, { env: Object.assign({}, d.env, { [key]: value }) }) : d)
+      const setVpsField = (key, value) => setDraft((d) => d
+        ? { ...d, vps: { ...d.vps, [key]: value } } : d)
+      const vpsField = (key, title, example, hint) =>
+        h('label', { key, style: { fontSize: 12 } }, title,
+          h('input', { className: 'rt-input',
+            style: { display: 'block', width: '100%', marginTop: 4 },
+            placeholder: example, value: draft?.vps?.[key] || '',
+            onChange: (e) => setVpsField(key, e.target.value) }),
+          h('div', { className: 'rt-foot', style: { fontSize: 11, marginTop: 3 } }, hint))
+
+      // Management-only route; network checks require a deliberate local action.
+      const adminRoute = draft?.vpsAdminRoute || { target: '', jumps: [] }
+      const editAdminRoute = (update) => {
+        adminProbeRevision.current += 1
+        setAdminProbeResult(null)
+        setDraft((d) => d ? { ...d, vpsAdminRoute: update(d.vpsAdminRoute) } : d)
+      }
+      const savedAdminRoute = data?.config?.vpsAdminRoute || { target: '', jumps: [] }
+      const routeKey = (route) => JSON.stringify({ target: route.target.trim(), jumps: route.jumps.map((v) => v.trim()) })
+      const adminRouteKey = routeKey(adminRoute)
+      const adminRouteSaved = adminRouteKey === routeKey(savedAdminRoute)
+      const visibleAdminProbe = adminRouteSaved && adminProbeResult?.routeKey === adminRouteKey ? adminProbeResult : null
+      const runAdminProbe = async () => {
+        if (adminProbeBusy || !adminRouteSaved || !adminValid) return
+        setAdminProbeBusy(true)
+        setAdminProbeResult(null)
+        const revision = ++adminProbeRevision.current
+        const publish = (result) => {
+          if (adminProbeRevision.current !== revision) return
+          setAdminProbeResult({ ...result, routeKey: adminRouteKey })
+        }
+        try {
+          const result = await api({ op: 'vpsAdminProbe' })
+          if (result?.target && routeKey(result) !== adminRouteKey) {
+            publish({ ok: false, error: '已保存的管理路径发生变化，请刷新配置后重新检测' })
+          } else {
+            publish(result || { ok: false, error: '未收到检测结果' })
+          }
+        } catch (error) {
+          publish({ ok: false, error: String(error?.message || error) })
+        } finally {
+          setAdminProbeBusy(false)
+        }
+      }
+      const adminAliases = [...adminRoute.jumps, adminRoute.target].map((value) => value.trim())
+      const adminValid = adminRoute.jumps.length <= 4
+        && adminAliases.every((value) => /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/.test(value))
+        && new Set(adminAliases.map((value) => value.toLowerCase())).size === adminAliases.length
+      const moveAdminJump = (index, offset) => editAdminRoute((route) => {
+        const jumps = [...route.jumps]
+        const next = index + offset
+        if (next < 0 || next >= jumps.length) return route
+        ;[jumps[index], jumps[next]] = [jumps[next], jumps[index]]
+        return { ...route, jumps }
+      })
+      const adminRouteCard = () => h('div', { className: 'rt-card' },
+        h('h4', null, 'SSH 多跳管理路径（独立）'),
+        h('p', { className: 'rt-foot' },
+          '仅管理自有服务器及授权实验室。填写本机 OpenSSH config 中的 Host 别名，按顺序连接；不改变原 VPS、系统代理或红队工具出口。'),
+        h('label', { style: { display: 'block', fontSize: 12 } }, '最终管理服务器 Host 别名',
+          h('input', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 4 },
+            placeholder: 'lab', value: adminRoute.target,
+            onChange: (e) => editAdminRoute((route) => ({ ...route, target: e.target.value })) })),
+        h('div', { style: { marginTop: 10, fontSize: 12, fontWeight: 600 } }, '跳板顺序（最多 4 个）'),
+        adminRoute.jumps.map((alias, index) => h('div', { key: index, style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' } },
+          h('span', { style: { fontSize: 12 } }, String(index + 1) + '.'),
+          h('input', { className: 'rt-input', style: { flex: '1 1 140px', minWidth: 0 },
+            'aria-label': '跳板 ' + (index + 1), placeholder: 'bastion', value: alias,
+            onChange: (e) => editAdminRoute((route) => ({ ...route, jumps: route.jumps.map((value, i) => i === index ? e.target.value : value) })) }),
+          h('button', { type: 'button', className: 'rt-btn', disabled: index === 0, onClick: () => moveAdminJump(index, -1), 'aria-label': '上移跳板' }, '↑'),
+          h('button', { type: 'button', className: 'rt-btn', disabled: index === adminRoute.jumps.length - 1, onClick: () => moveAdminJump(index, 1), 'aria-label': '下移跳板' }, '↓'),
+          h('button', { type: 'button', className: 'rt-btn', onClick: () => editAdminRoute((route) => ({ ...route, jumps: route.jumps.filter((_, i) => i !== index) })) }, '删除'))),
+        h('button', { type: 'button', className: 'rt-btn', style: { marginTop: 8 }, disabled: adminRoute.jumps.length >= 4,
+          onClick: () => editAdminRoute((route) => ({ ...route, jumps: [...route.jumps, ''] })) }, '+ 添加跳板'),
+        h('div', { className: 'rt-foot', style: { marginTop: 10, overflowWrap: 'anywhere' } },
+          '路径：本机 → ' + [...adminRoute.jumps.map((value) => value.trim() || '未填写'), adminRoute.target.trim() || '最终服务器'].join(' → ')),
+        adminValid ? h('div', { style: { marginTop: 8, fontSize: 12 } },
+          h('div', { className: 'rt-foot' }, '配置格式有效。先点击环境适配的保存按钮，再在 Purge 安装目录的本机终端运行以下命令。它读取已保存路径，而非未保存的编辑内容。'),
+          h('input', { className: 'rt-input rt-mono', readOnly: true, 'aria-label': '本机 SSH 管理检查命令',
+            style: { display: 'block', width: '100%', marginTop: 4 },
+            value: 'node scripts/vps-admin-check.mjs --saved',
+            onFocus: (e) => e.target.select() }))
+          : (adminRoute.target || adminRoute.jumps.length) ? h('div', { className: 'rt-err', style: { marginTop: 8 } },
+            '请填写有效且不重复的 SSH Host 别名；最多四个跳板。') : null,
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10 } },
+          h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
+            disabled: busy || adminProbeBusy || !adminValid || !adminRouteSaved,
+            onClick: runAdminProbe }, adminProbeBusy ? '检测中…' : '检测已保存路径'),
+          !adminRouteSaved ? h('span', { className: 'rt-foot' }, '请先保存') : null),
+        visibleAdminProbe ? h('div', { className: visibleAdminProbe.ok ? 'rt-foot' : 'rt-err', style: { marginTop: 8, overflowWrap: 'anywhere' } },
+          (visibleAdminProbe.target ? '检测路径：' + [...(visibleAdminProbe.jumps || []), visibleAdminProbe.target].join(' → ') + '；' : '')
+          + (visibleAdminProbe.ok ? 'SSH 管理连接成功' : '检测失败：' + (visibleAdminProbe.error || '未知错误'))
+          + (Number.isFinite(visibleAdminProbe.durationMs) ? ' · ' + visibleAdminProbe.durationMs + ' ms' : '')
+          + (visibleAdminProbe.checkedAt ? ' · ' + new Date(visibleAdminProbe.checkedAt).toLocaleString() : '')) : null,
+        h('p', { className: 'rt-foot' }, '一键检测需要本机回环管理接口、访问令牌及宿主显式启用。不可用时使用上方终端命令；成功仅代表检测当时的 SSH 路径可用。'))
+      
       const addCustomTool = () => setDraft((d) => d ? { ...d, customTools: (d.customTools || []).concat({ name: '', path: '' }) } : d)
       const editCustomTool = (i, key, value) => setDraft((d) => d ? {
         ...d, customTools: (d.customTools || []).map((item, index) =>
@@ -8294,10 +8720,31 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const filteredTools = tools.filter((t) =>
         (toolGroup === 'all' || t.group === toolGroup) &&
         [t.id, t.label, ...(t.names || [])].join(' ').toLowerCase().includes(toolSearch.trim().toLowerCase()))
+      const probeResultForCell = (cell) => {
+        const environment = capabilityMatrix && capabilityMatrix.environments.find((item) => item.id === cell.environmentId)
+        if (!environment) return null
+        if (environment.id === 'local') return toolChecks[cell.toolId] || null
+        if (environment.kind === 'wsl') return wslChecks[environment.distro + ':' + cell.toolId] || null
+        if (environment.kind === 'docker') return dockerResults[environment.containerId + ':' + cell.toolId] || null
+        if (environment.kind === 'ssh') return kaliProbeResults[cell.toolId] || null
+        return null
+      }
+      const matrixCellStatus = (cell) => {
+        const probe = probeResultForCell(cell)
+        if (!probe) return cell.status
+        if (probe.status === 'runnable' || probe.status === 'probe_verified') return 'probe_verified'
+        if (probe.status === 'path-only') return 'located'
+        if (probe.status === 'missing') return 'missing'
+        return 'degraded'
+      }
+      const matrixStatusLabels = {
+        located: '已定位', missing: '未定位', 'not-checked': '未检查',
+        probe_verified: '版本已验证', degraded: '验证未通过',
+      }
       const defaultToolkit = (data && data.toolkitDir) || '$DSH_HOME/redteam/toolkit'
       const defaultNuclei = (data && data.nucleiTemplatesDir) || (defaultToolkit + '/nuclei-templates')
 
-      return h('div', { className: 'rt-main' },
+      return h('div', { className: 'rt-main rt-env-main' },
         h('div', { className: 'rt-toolbar' },
           h('span', { style: { fontWeight: 600 } }, '环境适配'),
           h('span', { className: 'rt-tag' }, runtime.effective === 'windows' ? 'Windows' : 'Linux/Kali'),
@@ -8314,6 +8761,64 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           adapt.message
             || '均可选填：留空则用默认路径/自动查找。填了的覆盖默认。密钥类只在需要测绘/反弹时才填。'),
+        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+          h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '跨环境工具能力矩阵'),
+          h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
+            '对比本机、WSL、Kali SSH 与 Docker 的 23 项内置工具。本机仅定位路径；远端默认未检查。读取矩阵不会自动验证版本或执行任务。'),
+          h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
+            disabled: busy || environmentBusy || matrixBusy || !!wslChecking || !!dockerBusy || !!kaliBusy,
+            onClick: loadCapabilityMatrix },
+            matrixBusy ? '正在生成矩阵…' : '生成 / 刷新能力矩阵'),
+          matrixError ? h('div', { className: 'rt-err', style: { marginTop: 7 } }, matrixError) : null,
+          capabilityMatrix ? h('div', { style: { marginTop: 9 } },
+            h('div', { style: { fontSize: 11.5, marginBottom: 8 } },
+              '环境 ' + capabilityMatrix.environments.length
+              + ' · 内置工具 ' + capabilityMatrix.rows.length
+              + ' · 本机定位 ' + capabilityMatrix.summary.localLocated
+              + ' · 远端版本检测：按需执行'),
+            h('div', { style: { display: 'flex', gap: 7, marginBottom: 7, flexWrap: 'wrap' } },
+              h('input', { className: 'rt-input', style: { flex: '1 1 160px' },
+                value: matrixQuery, placeholder: '搜索工具',
+                onChange: (e) => setMatrixQuery(e.target.value) }),
+              h('select', { className: 'rt-input', style: { flex: '1 1 140px' },
+                value: matrixGroup, onChange: (e) => setMatrixGroup(e.target.value) },
+                h('option', { value: 'all' }, '全部工具类别'),
+                toolGroups.map((group) => h('option', { key: group.id, value: group.id }, group.title)))),
+            h('div', { style: { overflowX: 'auto', maxWidth: '100%' }, role: 'region',
+              'aria-label': '工具能力矩阵表' },
+              h('table', { style: { borderCollapse: 'collapse', fontSize: 11.5, width: '100%' } },
+                h('thead', null, h('tr', null,
+                  h('th', { style: { textAlign: 'left', padding: 6, minWidth: 105 } }, '工具'),
+                  capabilityMatrix.environments.map((environment) =>
+                    h('th', { key: environment.id, title: environment.label,
+                      style: { textAlign: 'left', padding: 6, minWidth: 110, maxWidth: 175,
+                        overflowWrap: 'anywhere' } }, environment.label)))),
+                h('tbody', null,
+                  capabilityMatrix.rows.filter((row) =>
+                    (matrixGroup === 'all' || row.group === matrixGroup)
+                    && (row.label + ' ' + row.toolId).toLowerCase().includes(matrixQuery.trim().toLowerCase()))
+                    .map((row) => h('tr', { key: row.toolId,
+                      style: { borderTop: '1px solid var(--dsw-alias-border-l1)' } },
+                      h('th', { scope: 'row', style: { textAlign: 'left', padding: 6 },
+                        title: row.dependencyNote || '' }, row.label),
+                      row.cells.map((cell) => {
+                        const status = matrixCellStatus(cell)
+                        const result = probeResultForCell(cell)
+                        return h('td', { key: cell.environmentId, style: { padding: 6 },
+                          title: result?.version || result?.error || cell.path || (
+                            cell.sourceProviderId === 'artex:local' ? 'ARTEX 本机来源' : '未验证工具或依赖') },
+                          h('span', { className: 'rt-tag'
+                            + (status === 'probe_verified' ? ' rt-tag-live'
+                              : status === 'degraded' || status === 'missing' ? ' rt-tag-warn' : '') },
+                            matrixStatusLabels[status] || status),
+                          cell.sourceProviderId === 'artex:local'
+                            ? h('div', { style: { opacity: 0.75, marginTop: 3 } }, 'ARTEX 来源') : null)
+                      })))))),
+            h('div', { style: { fontSize: 11, opacity: 0.75, marginTop: 8 } },
+              '可使用下方各环境已有的版本验证按钮；结果仅保留于当前页面。'
+              + ' 已定位 ≠ 可运行；版本已验证 ≠ 依赖齐全或任务已执行。ARTEX 是本机来源，不是独立执行环境。'))
+            : h('div', { style: { fontSize: 11.5, opacity: 0.7, marginTop: 7 } },
+              '尚未生成矩阵；请点击上方按钮进行只读环境发现。')),
         h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.65 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '执行环境发现 · Windows / WSL / Docker'),
           h('div', { style: { opacity: 0.85, marginBottom: 7 } },
@@ -8524,20 +9029,50 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   value: draft.binDirsText,
                   onChange: (e) => setDraft(Object.assign({}, draft, { binDirsText: e.target.value })),
                 })))),
-          h('div', { className: 'rt-card' },
-            h('h4', null, '可选外部测绘资源与 VPS'),
-            h('div', { style: { fontSize: 12, opacity: 0.8, marginBottom: 8 } },
-              'FOFA 只是可选来源之一。其它常用平台的总介绍和多选入口请到「资源 → 测绘中心」；'
-              + ' 此处的 FOFA_KEY 只供已有的 FOFA 专项技能使用，不会自动授权其它平台。'),
-            h('div', { style: { display: 'grid', gap: 8 } },
-              ['FOFA_KEY', 'REDTEAM_VPS_HOST', 'REDTEAM_VPS_KEY'].map((k) => h('label', { key: k, style: { fontSize: 12 } }, (k === 'FOFA_KEY' ? 'FOFA API Key（仅 FOFA）' : k) + '（可选）',
-                h('input', {
-                  className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 4 },
-                  type: k === 'FOFA_KEY' ? 'password' : 'text',
-                  placeholder: k === 'REDTEAM_VPS_KEY' ? '留空；需要时填私钥绝对路径' : (k === 'REDTEAM_VPS_HOST' ? '留空；需要时填 user@host' : '留空；测绘时再填'),
-                  value: (draft.env && draft.env[k]) || '',
-                  onChange: (e) => setEnv(k, e.target.value),
-                }))))),
+        h('div', { className: 'rt-card' },
+          h('h4', null, '可选外部测绘资源与 VPS'),
+          h('p', { className: 'rt-foot' },
+            'FOFA 只是可选来源之一。其他平台请在「资源 → 测绘中心」选择；不填写 API Key 也能使用本机工具。'),
+          h('label', { style: { display: 'block', fontSize: 12, marginBottom: 10 } },
+            'FOFA API Key（仅 FOFA，可选）',
+            h('input', { className: 'rt-input', type: 'password',
+              style: { display: 'block', width: '100%', marginTop: 4 },
+              value: draft?.env?.FOFA_KEY || '', placeholder: '暂时不用 FOFA 可以留空',
+              onChange: (e) => setEnv('FOFA_KEY', e.target.value) })),
+          h('h4', null, 'VPS SSH 登录与网络地址（可选）'),
+          h('p', { className: 'rt-foot' },
+            'VPS 是公网服务器，用于需要远程连接、测试中转或服务部署的任务。'
+            + ' SSH 用户名单独填写；IPv4、IPv6、域名都不包含 root@、协议或端口。'),
+          h('div', { style: { display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 } },
+            vpsField('user', 'SSH 用户名', 'root 或 ubuntu', '填写服务器真实的 SSH 登录用户。'),
+            vpsField('domain', '域名（推荐双栈）', 'vps.example.com',
+              '给域名配置 A/AAAA 记录，SSH 可按网络情况选择地址族。'),
+            vpsField('ipv4', '公网 IPv4', '192.0.2.10',
+              '填纯 IPv4，不写用户、端口或 http://。'),
+            vpsField('ipv6', '公网 IPv6', '2001:db8::10',
+              '填纯 IPv6，不写方括号或端口。'),
+            vpsField('identityFile', 'SSH 私钥文件路径', 'C:\\Users\\me\\.ssh\\id_ed25519',
+              '填本机现有私钥的绝对路径；不要粘贴私钥内容。')),
+          h('label', { style: { display: 'block', fontSize: 12, marginTop: 10 } },
+            '优先使用的地址',
+            h('select', { className: 'rt-input',
+              style: { display: 'block', width: '100%', marginTop: 4 },
+              value: draft?.vps?.addressMode || 'auto',
+              onChange: (e) => setVpsField('addressMode', e.target.value) },
+              h('option', { value: 'auto' }, '自动（域名 → IPv4 → IPv6）'),
+              h('option', { value: 'domain' }, '只使用域名'),
+              h('option', { value: 'ipv4' }, '只使用 IPv4'),
+              h('option', { value: 'ipv6' }, '只使用 IPv6'))),
+          h('p', { className: 'rt-foot' },
+            '自动模式只决定优先用哪种地址，不会在两个 IP 之间自动故障切换。'
+            + ' 域名配置 A/AAAA 后，可由 SSH 和系统解析器决定 IPv4 / IPv6。'
+            + ' 旧 REDTEAM_VPS_HOST / REDTEAM_VPS_KEY 仍兼容；保存后将同步主机、用户名与私钥路径。'),
+          h('p', { className: 'rt-foot' },
+            '连接检查：PowerShell 运行 Test-Path "私钥路径"，再运行 ssh -i "私钥路径" 用户名@主机。'
+            + ' IPv6 URL 格式为 http://[IPv6]:端口，不能把 user@host 直接用于 HTTP。'
+            + ' 详见「操作指南 → 多环境作用与 VPS 配置」。')),
+          adminRouteCard(),
           h('div', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
@@ -9877,7 +10412,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [concurrency, setConcurrency] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
 
-      const load = () => {
+      const statusRefresh = React.useRef(null)
+      const loadRoles = () => {
         setBusy(true)
         api({ op: eng ? 'prompts' : 'bootstrap', engagement: eng || undefined }).then((r) => {
           setBusy(false)
@@ -9885,24 +10421,47 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setErr(null)
           if (r.roles) setRoles(r.roles)
         }, (e) => { setBusy(false); setErr(String((e && e.message) || e)) })
-        /* 并发名额按"当前跑着的子智能体"算；host 侧读 subagents 注册表 */
-        api({ op: 'agentsStatus' }).then((r) => {
-          setConcurrency(r || { ok: false, error: '没有收到智能体状态' })
-        }, (e) => setConcurrency({ ok: false, error: String((e && e.message) || e) }))
       }
-      React.useEffect(load, [eng, refreshKey])
+      const load = () => {
+        loadRoles()
+        statusRefresh.current?.()
+      }
+      React.useEffect(loadRoles, [eng, refreshKey])
+      React.useEffect(() => {
+        let alive = true
+        let inflight = false
+        const tick = () => {
+          if (!alive || inflight) return
+          inflight = true
+          api({ op: 'agentsStatus' }).then((r) => {
+            if (alive) setConcurrency(r || { ok: false, error: '没有收到智能体状态' })
+          }, (e) => {
+            if (alive) setConcurrency({ ok: false, error: String((e && e.message) || e) })
+          }).finally(() => { inflight = false })
+        }
+        statusRefresh.current = tick
+        tick()
+        const timer = setInterval(tick, 5000)
+        return () => {
+          alive = false
+          clearInterval(timer)
+          if (statusRefresh.current === tick) statusRefresh.current = null
+        }
+      }, [eng, refreshKey])
 
       const used = concurrency && typeof concurrency.used === 'number' ? concurrency.used : null
       const max = concurrency && concurrency.max ? concurrency.max : 3
       const verified = concurrency && concurrency.available === true
       const perRoot = concurrency && Array.isArray(concurrency.per_root) ? concurrency.per_root : []
       const totalRoots = perRoot.length
+      const extra = perRoot.reduce((sum, row) => sum + (row.reserved_unobserved || 0), 0)
+      const pendingLabel = extra ? ' + 预留 ' + extra : ''
       const occupancy = !verified
         ? (concurrency && concurrency.used_is_lower_bound && used !== null
           ? '至少在跑 ' + used + ' / 剩余未知' : '占用未知')
         : totalRoots === 1
-          ? '在跑 ' + used + ' / 剩余 ' + concurrency.free
-          : '在跑 ' + used + '（跨 ' + totalRoots + ' 个会话，剩余名额按会话计算）'
+          ? '在跑 ' + used + pendingLabel + ' / 剩余 ' + concurrency.free
+          : '在跑 ' + used + pendingLabel + '（跨 ' + totalRoots + ' 个会话，剩余名额按会话计算）'
       return h('div', { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
           h('span', { style: { fontWeight: 600 } }, '作战智能体'),
@@ -9937,8 +10496,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 perRoot.map((entry, index) => {
                   const confirmed = entry.available === true && typeof entry.free === 'number'
                   const count = typeof entry.used === 'number' ? entry.used : null
+                  const pending = entry.reserved_unobserved ? ' + 预留 ' + entry.reserved_unobserved : ''
                   const status = confirmed
-                    ? '在跑 ' + count + ' / 剩余 ' + entry.free
+                    ? '在跑 ' + count + pending + ' / 剩余 ' + entry.free
                     : (count === null ? '运行状态未知' : '至少在跑 ' + count + ' / 剩余未知')
                   return h('div', { key: String(entry.owner || index), className: 'rt-kv' },
                     h('b', { className: 'rt-mono', title: String(entry.owner || '') }, String(entry.owner || '未知会话')),
@@ -10937,7 +11497,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const tabs = tabSections.flatMap((section) => section.pages)
       const full = isFullWindow()
       const openFull = () => {
-        try { window.open(window.location.href.split('#')[0] + '#redteam-full', '_blank', 'noopener') } catch (e) { setErr('无法打开新窗口：' + ((e && e.message) || e)) }
+        // A browser popup is not necessarily maximized. Request the available
+        // desktop work area; individual browsers may ignore these hints.
+        try {
+          const screenArea = window.screen || {}
+          const width = Math.round(screenArea.availWidth || window.innerWidth)
+          const height = Math.round(screenArea.availHeight || window.innerHeight)
+          const left = Math.round(screenArea.availLeft || 0)
+          const top = Math.round(screenArea.availTop || 0)
+          const features = ['popup=yes', 'noopener', 'width=' + width, 'height=' + height,
+            'left=' + left, 'top=' + top].join(',')
+          window.open(window.location.href.split('#')[0] + '#redteam-full', '_blank', features)
+        } catch (e) {
+          setErr('无法打开新窗口：' + ((e && e.message) || e))
+        }
       }
       const exitFull = () => {
         /* 优先关掉脚本打开的窗口；关不掉就退回带侧栏的普通界面 */
@@ -11262,7 +11835,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				setDock({ open: true, maximized: true, tab: purgeWorkspaceBus.page });
 			}
 		}
-		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n";
+		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;top:0!important;left:0!important;\n  right:0!important;bottom:0!important;z-index:10040!important;\n  width:100vw!important;height:100vh!important;height:100dvh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"]{\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  height:calc(100dvh - var(--dsh-windows-titlebar-height,40px))!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n";
 		// Both the native main slot and the old Dock use the same runtime stylesheet.
 		// The main slot must not rely on the overlay slot being mounted first.
 		function ensurePurgeWorkspaceStyles() {
@@ -11287,8 +11860,61 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			const t = useT();
 			useEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
 			const [page, setPage] = useState(purgeWorkspaceBus.page);
+			const [workspaceVisible, setWorkspaceVisible] = useState(true);
+			// Desktop's Windows preload observes body.style and re-colors Electron's
+			// native caption overlay from these two palette tokens.
 			useEffect(() => {
-				const fn = (next) => setPage(next);
+				if (!workspaceVisible || !document.body || !document.documentElement.hasAttribute("data-windows-titlebar")) return;
+				const style = document.body.style;
+				const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
+				const previous = palette.map(([name, color]) => ({
+					name, color, value: style.getPropertyValue(name), priority: style.getPropertyPriority(name),
+				}));
+				for (const { name, color } of previous) style.setProperty(name, color);
+				return () => {
+					for (const { name, color, value, priority } of previous) {
+						// Don't overwrite a newer host theme written while Purge was open.
+						if (style.getPropertyValue(name).trim() !== color) continue;
+						if (value) style.setProperty(name, value, priority);
+						else style.removeProperty(name);
+					}
+				};
+			}, [workspaceVisible]);
+			const workspaceRef = useRef(null);
+			const [immersive, setImmersive] = useState(false);
+			const [fullscreenError, setFullscreenError] = useState("");
+			useEffect(() => {
+				const onChange = () => {
+					setImmersive(document.fullscreenElement === workspaceRef.current);
+					setFullscreenError("");
+				};
+				document.addEventListener("fullscreenchange", onChange);
+				return () => document.removeEventListener("fullscreenchange", onChange);
+			}, []);
+			const toggleImmersive = () => {
+				const el = workspaceRef.current;
+				if (!el) return;
+				setFullscreenError("");
+				try {
+					if (document.fullscreenElement === el) {
+						const result = document.exitFullscreen();
+						if (result && typeof result.catch === "function") {
+							result.catch(() => setFullscreenError("退出全屏失败，可以使用 Esc"));
+						}
+					} else if (typeof el.requestFullscreen === "function") {
+						const result = el.requestFullscreen();
+						if (result && typeof result.catch === "function") {
+							result.catch(() => setFullscreenError("宿主不允许全屏，可试试 F11 或最大化 DSH 窗口"));
+						}
+					} else {
+						setFullscreenError("当前宿主不支持此全屏方式，可试试 F11");
+					}
+				} catch {
+					setFullscreenError("全屏切换被宿主拒绝，可试试 F11");
+				}
+			};
+			useEffect(() => {
+				const fn = (next) => { setPage(next); setWorkspaceVisible(true); };
 				purgeWorkspaceBus.listeners.add(fn);
 				return () => purgeWorkspaceBus.listeners.delete(fn);
 			}, []);
@@ -11299,12 +11925,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}, [page]);
 			const open = (next) => selectPurgeWorkspacePage(next);
 			const back = () => {
+				setWorkspaceVisible(false);
 				const ctx = purgeWorkspaceCtx;
 				const layout = ctx && typeof ctx.get === "function" ? ctx.get("layout") : ctx && ctx.layout;
 				if (layout && typeof layout.selectPanel === "function") layout.selectPanel(null);
 			};
-			return h("section", {
+			if (!workspaceVisible) return null;
+			const panel = h("section", {
+				ref: workspaceRef,
 				className: "dshp-dock dshp-workspace",
+				"data-default-full": "1",
 				"data-workspace": page === "clean" ? "clean" : "redteam",
 				"data-maximized": "1", "data-open": "1", "data-theme": "dusk",
 				"aria-label": "Purge 工作区",
@@ -11317,9 +11947,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 							"aria-selected": String(page === key),
 							onClick: () => open(key),
 						}, key === "clean" ? "清洗台" : "作战台"))),
-					h("button", { type: "button", className: "dshp-workspace-back", onClick: back }, "返回会话")),
+					h("button", { type: "button", className: "dshp-workspace-back", onClick: back }, "返回会话"),
+					h("button", { type: "button", className: "dshp-workspace-fullscreen",
+						"aria-pressed": immersive ? "true" : "false", title: "可选系统级全屏，Purge 默认已铺满 Harness 窗口",
+						onClick: toggleImmersive }, immersive ? "退出系统全屏" : "系统全屏"),
+					fullscreenError ? h("span", { className: "dshp-workspace-fullscreen-error",
+						role: "status" }, fullscreenError) : null),
 				h("div", { className: "dshp-dock-body" },
 					page === "clean" ? h(SettingsRoot, { t, workspace: true }) : h(__dshPurgeDrill.Panel, { embedded: true })));
+			// Portal escapes the Harness main-panel layout and its sidebar/clipping container.
+			// Keep the same React state and host API; no separate browser window.
+			try {
+				const rd = require("react-dom");
+				if (rd && typeof rd.createPortal === "function" && document.body) {
+					return rd.createPortal(panel, document.body);
+				}
+			} catch { /* Fixed-position fallback for hosts without react-dom. */ }
+			return panel;
 		}
 		function PurgeWorkspaceIcon(props) {
 			return h("svg", { width: props.size || 18, height: props.size || 18,
