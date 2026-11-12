@@ -2474,7 +2474,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const pct = flowFinished ? 100 : jobOn
 				? Math.round(((job && job.stage === "done" ? jobSteps.length : Math.max(jobIdx, 0) + 0.45) / jobSteps.length) * 100)
 				: 0;
-			const flowInterrupted = Boolean(job && !job.active && job.stage !== "idle" && job.stage !== "done");
+			const flowInterrupted = Boolean(job && !jobOn && !job.error && job.stage !== "idle" && job.stage !== "done");
 			const metricNotes = [];
 			if (tally.pending) metricNotes.push(t("metric.pendingShort", { n: tally.pending }));
 			if (tally.unmatched) metricNotes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
@@ -2610,7 +2610,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				flowInterrupted ? h("p", { className: "dshp-clean-progress-note", role: "alert" },
 					"上一次操作没有返回完成状态（最后阶段：" + flowLabel(job.stage, t) + "）。请重新检测并查看错误信息，不要把补丁比例当作流程完成。") : null,
 				h("div", { className: "dshp-clean-progress-note", role: "status" },
-					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : "未执行")
+					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : flowInterrupted ? "结果未确认" : "未执行")
 					+ " · 补丁已应用 " + applied + "/" + total
 					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped),
 				h("div", { className: "dshp-bar", role: "progressbar", "aria-label": "清洗流程进度", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": pct },
