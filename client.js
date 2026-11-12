@@ -8149,7 +8149,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('span', { className: 'rt-tag' },
                 source.mode === 'local' ? '已接通 · 离线查询'
                   : source.mode === 'existing-skill' ? '保留专项技能 · 需 Key'
-                    : '官网入口 · API 未接入'),
+                    : source.mode === 'scoped-api' ? '单 IP 被动查询 · 已接通' : '官网入口 · API 未接入'),
               h('span', { style: { opacity: 0.75 } }, source.language)),
             h('div', null, source.focus),
             h('div', { style: { opacity: 0.85 } }, source.details),
