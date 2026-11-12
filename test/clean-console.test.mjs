@@ -302,6 +302,8 @@ test('update receipt persists across restart and detects changed disk or boot co
     assert.equal(status.diskMatch, false)
     assert.equal(status.backendBootMatch, true)
     fs.unlinkSync(path.join(root, 'lib', 'index.js'))
+    assert.equal(restarted.updateReceiptStatus().diskMatch, false)
+    fs.writeFileSync(path.join(root, 'client.js'), 'client.jsnew')
     assert.equal(restarted.updateReceiptStatus().diskMatch, null)
     restarted.saveUpdateReceipt({ root, phase: 'failed', error: 'reapply failed', before, after })
     assert.equal(load().updateReceiptStatus().phase, 'failed')
