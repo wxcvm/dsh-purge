@@ -171,7 +171,7 @@ test('diagnostic center distinguishes loaded and disk versions and unavailable h
 test('version identity retains module-evaluation version while disk changes', () => {
   const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
   const from = source.indexOf('const loadedVersion = localVersion();')
-  const to = source.indexOf('function channelStatePath()', from)
+  const to = source.indexOf('// Fingerprints describe files on disk', from)
   assert.ok(from >= 0 && to > from)
   let disk = '1.0.0'
   const identity = new Function('localVersion', 'PLUGIN_ROOT', source.slice(from, to).replace('export function', 'function') + 'return versionIdentity;')(() => disk, 'plugin-root')
@@ -256,4 +256,58 @@ test('backup history records actual package and hash, keeps legacy unknown, and 
   assert.match(source, /Backup identity mismatch; original preserved/)
   assert.match(source, /recordBackup\(original, originalBuf, "refresh"\)/)
   assert.match(client, /版本不一致，禁止覆盖恢复/)
+})
+
+test('update receipt persists across restart and detects changed disk or boot contents', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const start = source.indexOf('const UPDATE_IDENTITY_FILES =')
+  const end = source.indexOf('function channelStatePath()', start)
+  assert.ok(start >= 0 && end > start)
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const os = await import('node:os')
+  const { createHash } = await import('node:crypto')
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-update-receipt-'))
+  const root = path.join(home, 'plugin')
+  try {
+    fs.mkdirSync(path.join(root, 'lib'), { recursive: true })
+    const setFiles = (suffix) => {
+      fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ version: '1.0.0' }))
+      for (const file of ['lib/index.js', 'lib/update.js', 'client.js']) {
+        fs.writeFileSync(path.join(root, file), file + suffix)
+      }
+    }
+    const load = () => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync',
+      source.slice(start, end).replace('export function', 'function') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
+      fs, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
+      (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) })
+    setFiles('old')
+    const old = load()
+    assert.equal(old.updateReceiptStatus(), null)
+    const before = old.updateFingerprint()
+    setFiles('new')
+    const after = old.updateFingerprint()
+    old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after })
+    let status = old.updateReceiptStatus()
+    assert.equal(status.diskMatch, true)
+    assert.equal(status.backendBootMatch, false)
+    assert.equal(status.clientDiskMatch, true)
+    const restarted = load()
+    status = restarted.updateReceiptStatus()
+    assert.equal(status.backendBootMatch, true)
+    assert.equal(status.diskMatch, true)
+    fs.writeFileSync(path.join(root, 'client.js'), 'unexpected')
+    status = restarted.updateReceiptStatus()
+    assert.equal(status.clientDiskMatch, false)
+    assert.equal(status.diskMatch, false)
+    assert.equal(status.backendBootMatch, true)
+    fs.unlinkSync(path.join(root, 'lib', 'index.js'))
+    assert.equal(restarted.updateReceiptStatus().diskMatch, null)
+    restarted.saveUpdateReceipt({ root, phase: 'failed', error: 'reapply failed', before, after })
+    assert.equal(load().updateReceiptStatus().phase, 'failed')
+    assert.equal(load().updateReceiptStatus().error, 'reapply failed')
+  } finally { fs.rmSync(home, { recursive: true, force: true }) }
+  assert.match(source, /receipt.phase = "reapplying"/)
+  assert.match(source, /receipt.phase = "failed"/)
+  assert.match(client, /实际渲染器加载状态尚未验证/)
 })
