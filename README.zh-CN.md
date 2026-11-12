@@ -198,8 +198,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\update-desktop-fork.ps1 -DshH
 
 运行前请完整退出 DSH Desktop（包括托盘进程）。如果实际 DSH_HOME 不是默认目录，请传入真实路径。脚本只操作所选 profile；安装失败时恢复 profile 配置和锁文件并尝试恢复依赖，不自动应用宿主补丁、不重启应用。运行后可增加 `-CheckOnly` 只读验证**安装版本、UI 文件、profile bundles 和 Cordis insert 入口**；检查失败时会提示执行 `node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs`。检查通过仅说明文件与配置到位，仍需重启宿主确认 UI 已加载。
 
-**内置更新中途崩溃或强制退出（支持恢复日志的版本）：** 更新前的文件快照位于实际 `DSH_HOME/dsh-purge/update-recovery/copy-*`，每个目录的 `recovery.json` 记录已开始覆盖的文件组。完全退出 Desktop（含托盘）与 Web 后，从一份完整、可信的新版本源码包中运行 `node scripts/recover-update.mjs "<copy-目录>"` 查看状态，再加 `--restore` 恢复未完成的文件复制。不要从可能已损坏的安装目录执行。只恢复插件发布文件；不会自动撤销 Git、profile 配置或宿主维护，也不会在启动时自动改文件。已完成复制的记录不允许误回滚。
-
 **本维护分支请从 `wxcvm/dsh-purge` 安装。** 原作者仓库仅供追溯来源及历史版本，不能代替本分支的新 UI、归档和诊断修复。更新前先确认 DSH 实际使用的 profile；独立 Git 工作区拉取新提交，不等于桌面插件已经更新。
 
 按下面三步走。**不要走插件市场**：[dsh-plugin.org](https://dsh-plugin.org) 或设置里的「插件市场」一键安装会报 `already queued: dsh-purge`，命令也走不成。npm 仓库没有 `dsh-purge` 这个名字，不要 `pnpm add dsh-purge`；本机只有 pnpm 时走第 2 步里的 pnpm 地址。
