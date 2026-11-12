@@ -7679,6 +7679,59 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* ---------------------------------------------------------- 低干扰与隐私：仅限真实扫描偏好，不进行规避监测 */
+    function NetworkPrivacyCard() {
+      const [snapshot, setSnapshot] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [guide, setGuide] = React.useState(null)
+      const [guideOpen, setGuideOpen] = React.useState(false)
+      const [guideBusy, setGuideBusy] = React.useState(false)
+      const [guideError, setGuideError] = React.useState('')
+      const refresh = async () => {
+        if (busy) return
+        setBusy(true); setError(''); setSnapshot(null)
+        try {
+          const r = await api({ op: 'networkPrivacySnapshot' })
+          if (!r || r.ok !== true) throw new Error('无法读取本机网络诊断')
+          setSnapshot(r)
+        } catch (_) { setError('无法读取本机网络诊断，请确认插件与宿主版本一致。') }
+        finally { setBusy(false) }
+      }
+      const openGuide = async () => {
+        if (guideOpen) { setGuideOpen(false); return }
+        setGuideOpen(true)
+        if (guide || guideBusy) return
+        setGuideBusy(true); setGuideError('')
+        try {
+          const r = await api({ op: 'guideDoc', doc: 'networkPrivacy' })
+          if (!r || r.ok !== true || typeof r.content !== 'string') throw new Error('guide unavailable')
+          setGuide(r.content)
+        } catch (_) { setGuideError('随包指南不可用，请检查安装版本。') }
+        finally { setGuideBusy(false) }
+      }
+      const summary = (name, data, extra) => h('div', { style: { fontSize: 12, marginTop: 6 } },
+        name + '：' + (data && data.status === 'observed'
+          ? 'IPv4 ' + data.ipv4 + ' · IPv6 ' + data.ipv6 + (extra ? extra(data) : '')
+          : '未知（未取得本机观察）'))
+      return h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+        h('h4', null, '网络隐私诊断 · 本机快照'),
+        h('div', { style: { fontSize: 12 } }, '读取 DSH 宿主的网络地址族、Node DNS 服务器与代理环境变量存在性。不会联网、修改网络配置或显示地址和密码。'),
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 } },
+          h('button', { className: 'rt-btn', type: 'button', disabled: busy, onClick: refresh }, busy ? '读取中…' : '检查本机网络'),
+          h('button', { className: 'rt-btn', type: 'button', onClick: openGuide }, guideOpen ? '收起完整指南' : '打开操作指南')),
+        error ? h('div', { className: 'rt-err' }, error) : null,
+        snapshot ? h('div', null,
+          h('div', { style: { fontSize: 12, marginTop: 8 } }, '观察时间：' + snapshot.observedAt + ' · ' + snapshot.platform),
+          summary('非内部地址数量（不是网卡数量）', snapshot.interfaces, d => ' · 内部地址 ' + d.internal),
+          summary('Node DNS 服务器数量', snapshot.dns, d => ' · 其他 ' + d.other),
+          h('div', { style: { fontSize: 12 } }, '代理环境变量：' + snapshot.proxyEnvironment.map(p => p.name + ' ' + (p.configured ? '已设置' : '未设置')).join(' · ')),
+          h('div', { style: { fontSize: 12, opacity: 0.85 } }, '真实 IPv4/IPv6 公网出口、实际 DNS 查询路径、浏览器 WebRTC：未测。接口地址、变量存在和解析器设置不等于实际路由或泄漏结论。')) :
+          h('div', { style: { fontSize: 12, marginTop: 8 } }, '尚未检查；实际公网出口、DNS 路径和 WebRTC 均未知。'),
+        guideOpen ? h('div', { style: { marginTop: 10 } },
+          guideError ? h('div', { className: 'rt-err' }, guideError) : null,
+          h('pre', { className: 'rt-guide-doc' }, guide || (guideBusy ? '正在读取本地指南…' : ''))) : null)
+    }
+
     function LowImpactTab(props) {
       const eng = props.engagement
       const [draft, setDraft] = React.useState(null)
@@ -7779,6 +7832,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h(NetworkPrivacyCard),
           h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, 'Windows 存储权限诊断'),
             h('div', { style: { fontSize: 12 } },
