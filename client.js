@@ -7994,9 +7994,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [inventoryTarget, setInventoryTarget] = React.useState('')
       const [inventoryBusy, setInventoryBusy] = React.useState(false)
       const [inventory, setInventory] = React.useState(null)
+      const [syncConfig, setSyncConfig] = React.useState(null)
+      const [syncConsent, setSyncConsent] = React.useState(false)
+      const [syncBusy, setSyncBusy] = React.useState(false)
+      const [syncResult, setSyncResult] = React.useState(null)
+      const loadSyncConfig = () => api({ op: 'scopedIntelSyncConfig' }).then(setSyncConfig, () => setSyncConfig(null))
+      React.useEffect(() => {
+        setSyncConsent(false); setSyncResult(null)
+        loadSyncConfig()
+      }, [eng])
+      const runIntelSync = () => {
+        if (!eng || !inventory?.ok || inventory.engagement !== eng || !syncConfig?.configured || !syncConsent || syncBusy || maskAssets) return
+        setSyncBusy(true); setSyncResult(null); setSyncConsent(false)
+        api({ op: 'scopedIntelSync', engagement: eng, target: inventory.target,
+          companyId: syncConfig.companyId, confirm: true }).then(r => {
+          setSyncBusy(false); setSyncResult(r)
+        }, () => { setSyncBusy(false); setSyncResult({ error: '无法确认同步结果' }) })
+      }
       const runInventory = () => {
         if (!eng || !inventoryTarget.trim() || inventoryBusy) return
-        setInventoryBusy(true); setInventory(null)
+        setInventoryBusy(true); setInventory(null); setSyncConsent(false); setSyncResult(null)
         api({ op: 'scopedIntelInventory', engagement: eng, target: inventoryTarget.trim() }).then(r => {
           setInventoryBusy(false); setInventory(r)
         }, () => { setInventoryBusy(false); setInventory({ error: '读取关联清单失败' }) })
@@ -8246,7 +8263,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '关联已保存的 CT、subfinder、DNS 与 IP 被动情报；仅保留授权域名与明确授权 IP。不触网、不验证服务存活，不自动增加资产。'),
             h('input', { className: 'rt-input', value: inventoryTarget, placeholder: '已登记域名或通配范围的根域名',
-              onChange: e => { setInventoryTarget(e.target.value); setInventory(null) } }),
+              onChange: e => { setInventoryTarget(e.target.value); setInventory(null); setSyncConsent(false); setSyncResult(null) } }),
             h('button', { className: 'rt-btn rt-btn-primary', style: { marginLeft: 8 },
               disabled: inventoryBusy || !eng || !inventoryTarget.trim(), onClick: runInventory },
               inventoryBusy ? '读取中…' : '生成关联清单'),
@@ -8264,6 +8281,25 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   !maskAssets ? h('details', null, h('summary', null, '结构化 JSON（可复制）'),
                     h('textarea', { className: 'rt-textarea', readOnly: true, value: JSON.stringify(inventory, null, 2),
                       style: { width: '100%', minHeight: 140, fontSize: 11 } })) : null) : null) : null),
+          h('div', { className: 'rt-card' },
+            h('h4', null, 'ARTEX 本机情报同步'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '仅发送当前项目的历史关联清单至本机 ARTEX，重新读取已保存证据并检查范围；不启动扫描。需要独立情报令牌和两端一致的公司 ID。'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              syncConfig?.configured ? '已配置接收公司 #' + syncConfig.companyId : '未配置：请按指南设置宿主环境变量'),
+            h('button', { className: 'rt-btn', onClick: loadSyncConfig, disabled: syncBusy }, '刷新联动配置'),
+            h('label', { style: { display: 'block', fontSize: 12, marginTop: 8 } },
+              h('input', { type: 'checkbox', checked: syncConsent, disabled: syncBusy || maskAssets || !syncConfig?.configured || !inventory?.ok || inventory.engagement !== eng,
+                onChange: e => setSyncConsent(e.target.checked) }), ' 确认将当前项目清单发送至上述公司'),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: syncBusy || maskAssets || !syncConfig?.configured || !syncConsent || !inventory?.ok || inventory.engagement !== eng,
+              onClick: runIntelSync }, syncBusy ? '同步中…' : '同步至 ARTEX'),
+            maskAssets ? h('div', { style: { fontSize: 12, marginTop: 8 } }, '资产遮蔽开启时不提供直接同步。') : null,
+            syncResult && (!syncResult.engagement || syncResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                syncResult.ok ? '已保存 ARTEX 历史快照 #' + syncResult.snapshotId + ' · 公司 #' + syncResult.companyId
+                  + ' · 域名 ' + syncResult.names + ' · IP ' + syncResult.ips
+                  : h('div', { className: 'rt-err' }, syncResult.error || '同步未确认')) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '统一子域线索 · CT + subfinder'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
