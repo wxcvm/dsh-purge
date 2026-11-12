@@ -1,0 +1,48 @@
+name: Candidate package preflight
+
+on:
+  push:
+    branches: [release/wxcvm-6-package-preflight]
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: a8f2077ebed2c92e54f68ffb2b7bbfac6797ee9a
+          fetch-depth: 1
+      - name: Build and verify immutable candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "a8f2077ebed2c92e54f68ffb2b7bbfac6797ee9a"
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "1.1.92-wxcvm.6"
+          test "$(head -n 1 release-notes-wxcvm.md | tr -d '\r')" = "# $version"
+          zip="dsh-purge-$version.zip"
+          git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" HEAD
+          unzip -tq "$zip"
+          archived_version="$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")"
+          test "$archived_version" = "$version"
+          unzip -Z1 "$zip" > archive-files.txt
+          for file in client.js lib/index.js lib/core.js lib/reapply.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1 docs/CLEANING_GUIDE.zh-CN.md; do
+            grep -Fx "dsh-purge-$version/$file" archive-files.txt >/dev/null
+          done
+          sha256sum "$zip" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          git rev-parse HEAD > CANDIDATE_COMMIT.txt
+          cat SHA256SUMS.txt
+          ls -lh "$zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-purge-1.1.92-wxcvm.6-candidate-a8f2077
+          path: |
+            dsh-purge-1.1.92-wxcvm.6.zip
+            SHA256SUMS.txt
+            CANDIDATE_COMMIT.txt
+          if-no-files-found: error
+          retention-days: 14
