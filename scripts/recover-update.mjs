@@ -1,9 +1,16 @@
 import path from "node:path";
-import { readUpdateRecovery, restoreInterruptedUpdate } from "../lib/update-payload.js";
+import { readUpdateRecovery, restoreInterruptedUpdate, listPendingUpdateRecovery } from "../lib/update-payload.js";
 
 const [dir, flag, ...rest] = process.argv.slice(2);
-if (!dir || rest.length || (flag && flag !== "--restore")) {
-  console.error('Usage: node scripts/recover-update.mjs <copy-directory> [--restore]');
+if (dir === "--list" && flag && !rest.length) {
+  try {
+    console.log(JSON.stringify(await listPendingUpdateRecovery(path.resolve(flag)), null, 2));
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+} else if (!dir || rest.length || (flag && flag !== "--restore")) {
+  console.error('Usage: node scripts/recover-update.mjs <copy-directory> [--restore] | --list <recovery-home>');
   process.exitCode = 2;
 } else {
   try {
