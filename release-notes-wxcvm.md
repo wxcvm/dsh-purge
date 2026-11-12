@@ -2,6 +2,15 @@
 
 ## 中文
 
+### 后续合并：Windows 修复、环境与多节点 SSH 管理（#126–#161）
+
+- **环境适配（#126、#128–#134、#136）**：补充运行中的 Docker 环境发现和显式工具版本检查、工具清单、任务偏好、ARTEX 本机工具来源、执行来源记录、环境拓扑和能力矩阵；VPS 登录配置区分域名、IPv4、IPv6、用户名与私钥路径。
+- **Windows 界面（#137–#144、#146）**：原生工作区默认全窗口，修复空白画面、滚动绘制、普通窗口浅色背景、系统标题栏遮挡及按钮点击位置问题。真实 Windows 桌面渲染仍待验收。
+- **宿主更新（#145、#147）**：修复补丁影响官方升级、升级后实际版本未变化及陈旧安装器回退问题；仍需真实 Windows Harness 升级验证。
+- **隐私与存储（#150–#154、#156–#158）**：共享报告嵌入凭据遮蔽、实际监听绑定信息、ARTEX 本机状态、凭据库完整性与只读 ACL 审计、本机网络隐私诊断及操作指南。诊断不代表匿名、也不证明外部可达性。
+- **独立 SSH 多跳管理（#161）**：环境适配新增管理目标、最多四个有序跳板别名、拓扑、保存、校验；本机命令 `node scripts/vps-admin-check.mjs --saved` 检查已保存的路径。可选界面检测要求宿主明确启用、本机回环监听及桥接访问令牌；显示真实连接结果、耗时与时间，路径变化后丢弃旧结果。旧 VPS 配置保持独立。不提供 VPN 流量代理链，也不修改红队工具出口、系统代理或 DNS。使用说明见 `docs/vps-admin-route.md`。
+- **交付状态**：#161 最终提交的维护兼容性与 Pending specifications CI 已通过并合并。实际 SSH 登录、用户 Windows 桌面安装及界面验收、Release 发布仍需独立验证。
+
 ### 本次发布所含的后续改进（#115–#124）
 
 - **#115 发布与安装说明**：完善 `.6` 安装与使用说明；安装包版本由仓库 `package.json` 和发布标签一致确定。
@@ -39,6 +48,14 @@
 - **仍未验证与限制**：Windows Desktop 真实升级/回滚、VPS 公网可达性、Docker 实际构建/部署，以及生产数据库迁移尚未完成。本功能不是整库加密；扫描原始证据、日志、报告、旧页/WAL、备份和导出仍可能含明文。远程桥接令牌不保护 DSH 主服务或其他插件接口。
 
 ## English
+
+### Subsequent merged work: Windows fixes, environments and SSH management (#126–#161)
+
+- **Environments:** Docker discovery and explicit version probes, tool catalog/preferences, ARTEX local tool provenance, execution provenance, topology/capability matrix and structured dual-stack VPS addressing.
+- **Windows:** Full-window native workspace, blank/white paint and caption overlap/click fixes; official updater handoff and stale-version/installer fixes. Real desktop rendering and upgrade acceptance remain outstanding.
+- **Privacy:** Embedded credential redaction in shared reports, observed listener binding, ARTEX local posture, vault integrity, read-only ACL and local network diagnostics; these do not establish anonymity or public reachability.
+- **#161 SSH administration:** Separate saved management path with up to four ordered jump aliases, add/delete/reorder, topology and validation. Local CLI `node scripts/vps-admin-check.mjs --saved`; optional UI check requires explicit host opt-in, loopback binding and authenticated bridge token. Real result, timing and stale-result invalidation. Existing VPS configuration is preserved. No VPN chain, system proxy/DNS change or redteam traffic rerouting.
+- **Status:** #161 final-head maintenance compatibility and pending specifications CI passed and the PR merged. Release publication, actual SSH authentication and real Windows acceptance remain separate unverified steps.
 
 ### Additional merged work in this release (#115–#124)
 
