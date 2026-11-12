@@ -9,7 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wxcvm/dsh-purge/releases">版本中心</a> &nbsp;·&nbsp;
+  <a href="docs/RELEASE_CENTER.zh-CN.md">版本中心</a> &nbsp;·&nbsp;
+  <a href="docs/DEVELOPMENT_STATUS.zh-CN.md">开发进度</a> &nbsp;·&nbsp;
   <a href="https://github.com/wxcvm/dsh-purge/actions">构建记录</a> &nbsp;·&nbsp;
   <a href="https://github.com/wxcvm/dsh-purge/pulls">开发审查</a> &nbsp;·&nbsp;
   <a href="https://github.com/wxcvm/dsh-purge/issues">问题追踪</a>
@@ -32,6 +33,10 @@ Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检�
 > 当前仓库不再提供匿名公开下载。历史版本的公开链接不代表当前可用的私有安装渠道。请登录获授权的 GitHub 账号访问本仓库与发布资源。
 
 ## 02 / 版本与交付
+
+> [**版本中心**](docs/RELEASE_CENTER.zh-CN.md) · Stable / Beta 快照、发布阶段、资产核对与实机验收记录。
+>
+> [**开发进度**](docs/DEVELOPMENT_STATUS.zh-CN.md) · 已合并工作、待处理事项与优先级。
 
 | 入口 | 用途 |
 | --- | --- |
