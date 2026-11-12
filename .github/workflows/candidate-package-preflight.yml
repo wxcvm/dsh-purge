@@ -13,13 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: a8f2077ebed2c92e54f68ffb2b7bbfac6797ee9a
+          ref: e33a8d5a0e659bf4483b42cc8fc2401840ed3788
           fetch-depth: 1
       - name: Build and verify immutable candidate archive
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "a8f2077ebed2c92e54f68ffb2b7bbfac6797ee9a"
+          test "$(git rev-parse HEAD)" = "e33a8d5a0e659bf4483b42cc8fc2401840ed3788"
           version="$(node -p "require('./package.json').version")"
           test "$version" = "1.1.92-wxcvm.6"
           test "$(head -n 1 release-notes-wxcvm.md | tr -d '\r')" = "# $version"
@@ -39,7 +39,7 @@ jobs:
           ls -lh "$zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: dsh-purge-1.1.92-wxcvm.6-candidate-a8f2077
+          name: dsh-purge-1.1.92-wxcvm.6-candidate-e33a8d5
           path: |
             dsh-purge-1.1.92-wxcvm.6.zip
             SHA256SUMS.txt
