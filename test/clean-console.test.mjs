@@ -471,6 +471,7 @@ test('update applies one immutable target across git, archives, profile specs an
     updateStage: (stage, detail) => events.push(['progress', stage, detail]),
     gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
     overlayFromZip: async (dirs, sha) => events.push(['zip', dirs, sha]),
+    preparePrivateProfileInstall: async () => null,
     pinInstalledSpec: (dir, sha) => events.push(['spec', dir, sha]),
     ensureAllProfileInstall: () => {},
     findDshHome: () => '/home',
@@ -509,6 +510,32 @@ test('update applies one immutable target across git, archives, profile specs an
   assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
   assert.equal(events.at(-1)[1].phase, 'failed')
   assert.equal(events.at(-1)[1].failedPhase, 'resolving_target')
+  events.length = 0
+  resolutions = 0
+  resolved = target
+  const cached = { sha: target, archivePath: '/cache/dsh-purge.tgz', profiles: [{ profile: 'desktop', migrationNeeded: true }] }
+  const privateDeps = {
+    ...deps,
+    preparePrivateProfileInstall: async (jobs, sha) => {
+      events.push(['cache', sha])
+      return cached
+    },
+  }
+  const privateApply = new Function(...Object.keys(privateDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(privateDeps))
+  const privateResult = await privateApply(jobs, { ref: 'master' })
+  assert.equal(privateResult.profileInstall, cached)
+  assert.ok(events.findIndex(e => e[0] === 'cache') < events.findIndex(e => e[0] === 'git'))
+  assert.equal(events.some(e => e[0] === 'spec'), false, 'private update must not rewrite the profile manifest alone')
+  assert.equal(events.filter(e => e[0] === 'receipt').at(-1)[1].profileInstall, cached)
+  events.length = 0
+  resolutions = 0
+  const failureDeps = { ...deps, preparePrivateProfileInstall: async () => { throw Error('cache download failed') } }
+  const failedApply = new Function(...Object.keys(failureDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(failureDeps))
+  await assert.rejects(failedApply(jobs, { ref: 'master' }), /cache download failed/)
+  assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
+  assert.equal(events.at(-1)[1].phase, 'failed')
 })
 
 test('git update keeps channel branch name but never checks out a moving remote ref', async () => {
