@@ -1475,17 +1475,19 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const job = state.apply_progress || {};
 			const lines = [
 				"dsh-purge 清洗台诊断 / Cleaning diagnostics",
-				"插件版本: " + (state.plugin_version || "未知"),
+				"插件磁盘版本: " + (state.plugin_version || "未知"),
+				"后端加载时版本: " + (state.plugin_identity?.loaded || "未知"),
+				"插件目录: " + (state.plugin_identity?.root || "未知"),
 				"宿主类型: " + (state.surface || "未知"),
 				"宿主路径: " + (state.ai_base || "未定位"),
 				"DSH_HOME: " + (state.dsh_home || "未知"),
-				"补丁: " + tally.applied + "/" + tally.total
+				"补丁: " + (state.ai_base ? tally.applied + "/" + tally.total
 					+ " 已应用; " + tally.pending + " 待应用; "
-					+ tally.unmatched + " 没对上; " + tally.skipped + " 跳过",
+					+ tally.unmatched + " 没对上; " + tally.skipped + " 跳过" : "待检测"),
 				"shim: cmd=" + (state.shim_cmd || "未知")
 					+ ", ps1=" + (state.shim_ps1 || "未知")
 					+ ", unix=" + (state.shim_bin || "未知"),
-				"备份: " + (state.has_backup ? "有" : "无"),
+				"备份: " + (state.ok === false || typeof state.has_backup !== "boolean" ? "未知" : state.has_backup ? "有" : "无"),
 			];
 			if (!state.ai_base && state.missing_ai_base) lines.push("宿主定位说明: " + state.missing_ai_base);
 			if (state.desktop_exe) lines.push("桌面程序: " + state.desktop_exe);
@@ -1507,6 +1509,42 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				}
 			}
 			return lines.join("\n");
+		}
+
+		function CleanDiagnostics({ state, onRefresh, busy }) {
+			const t = useT();
+			const [checking, setChecking] = useState(false);
+			const [feedback, setFeedback] = useState("");
+			const rows = state ? patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) })) : [];
+			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
+			const identity = state?.plugin_identity;
+			const loaded = identity?.loaded || "";
+			const disk = identity?.disk || "";
+			const mismatch = Boolean(loaded && disk && loaded !== disk);
+			const refresh = async () => {
+				setChecking(true);
+				setFeedback("");
+				try { await onRefresh(); setFeedback("检测完成：已重新读取宿主状态"); }
+				catch (e) { setFeedback("检测失败：" + String(e?.message || e)); }
+				finally { setChecking(false); }
+			};
+			const copy = async () => {
+				try { await navigator.clipboard.writeText(report); setFeedback("诊断已复制（含本机路径）"); }
+				catch { setFeedback("复制失败，请选中下方诊断文本手动复制"); }
+			};
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
+				h("p", { className: "dshp-hint" }, "后端模块加载时版本：" + (loaded || "未知") + " · 当前目录磁盘版本：" + (disk || "未知")),
+				h("p", { className: "dshp-hint", role: "status" }, mismatch
+					? "版本不一致：文件已变化，建议完整退出并重启 Harness 后重新检测。"
+					: loaded && disk ? "版本号一致（不代表所有前端资源或补丁已生效）" : "版本身份暂不可用，不能判断是否已加载更新。"),
+				h("div", { className: "dshp-row" },
+					h(Btn, { disabled: busy || checking, onClick: refresh }, checking ? "检测中…" : "重新检测"),
+					h(Btn, { disabled: !state, onClick: copy }, "复制完整诊断")),
+				feedback ? h("p", { role: "status", className: "dshp-hint" }, feedback) : null,
+				h("p", { className: "dshp-hint" }, "诊断含本机目录及错误详情，分享前请检查私人信息。"),
+				h("pre", { className: "dshp-clean-diagnostic", tabIndex: 0, "aria-label": "清洗台完整诊断" }, report),
+			);
 		}
 
 		function PatchGroups({ state, onRefresh, busy }) {
@@ -2626,6 +2664,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				)),
 				noticeNode(notice),
 				cleanPane(["patches"], h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
 
 				askUninstall ? h("div", {
@@ -3486,6 +3525,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				{ id: "prompt", title: "提示词", description: "编辑、注入与本地配置" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
 				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
+				{ id: "diagnostics", title: "诊断中心", description: "运行版本、宿主路径与完整诊断" },
 			];
 			const selected = sections.find((item) => item.id === section) || sections[0];
 			return h("div", { className: "dshp-root dshp-clean-workspace", "data-theme": "dusk" },
