@@ -32,6 +32,7 @@
 > Third-party fork review: [CallMeGuLab/dsh-purge-safe (Chinese)](docs/UPSTREAM_REVIEW_2026-11-09.zh-CN.md).
 >
 > New Chinese beginner walk-throughs: [Cleaning console](docs/CLEANING_GUIDE.zh-CN.md) · [Operations console](docs/OPERATIONS_GUIDE.zh-CN.md).
+> [Network privacy, multi-hop networking and IP exposure audit guide (Chinese)](docs/NETWORK_PRIVACY_GUIDE.zh-CN.md).
 
 ## Original author and branch notes
 
