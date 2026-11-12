@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        host: [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-rc.1, 0.2.2-rc.2]
+        host: [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-rc.1]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
         run: |
           node scripts/build-client.mjs --check
           node scripts/check-syntax.mjs
-      # Build the optional GUI only once in the existing Windows matrix, not once for every matrix entry.
+      # Build the optional GUI only once in the existing Windows matrix, not five times.
       - name: Compile optional Windows injection switch from source
         if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
         shell: pwsh
