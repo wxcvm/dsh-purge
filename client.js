@@ -2496,7 +2496,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				let actionLabel = t("btn.checkUpdate");
 				let actionKind;
 				let actionClick = () => checkUpdate(id);
-				let actionDisabled = updateBusy || Boolean(noBeta);
+				let actionDisabled = jobOn || updateBusy || Boolean(noBeta);
 				if (noBeta) {
 					actionLabel = t("update.noBeta");
 					actionClick = () => {};
@@ -2529,7 +2529,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("select", {
 						className: "dshp-field dshp-ver",
 						value: list.length ? ((hit && hit.ref) || "") : "",
-						disabled: updateBusy || !list.length,
+						disabled: jobOn || updateBusy || !list.length,
 						onChange: (e) => setPick((prev) => Object.assign({}, prev, { [id]: e.target.value })),
 						"aria-label": t("update.pick"),
 					},
@@ -2637,7 +2637,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("p", null, t("uninstall.body")),
 						h("div", { className: "dshp-modal-ops" },
 							h(Btn, { disabled: uninstallBusy, onClick: () => setAskUninstall(false) }, t("uninstall.cancel")),
-							h(Btn, { kind: "solid-danger", disabled: uninstallBusy, onClick: doUninstall }, t("uninstall.confirm")),
+							h(Btn, { kind: "solid-danger", disabled: jobOn || updateBusy, onClick: doUninstall }, t("uninstall.confirm")),
 						),
 					),
 				) : null,
