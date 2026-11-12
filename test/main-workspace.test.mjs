@@ -31,15 +31,37 @@ test('regenerating the embedded redteam component does not overwrite the main wo
 })
 
 test('native clean workspace has separate navigation without discarding edits', () => {
-  assert.match(client, /const \[section, setSection\] = useState\("patches"\)/)
+  assert.match(client, /const \[section, setSection\] = useState\("overview"\)/)
   assert.match(client, /"aria-label": "清洗台功能导航"/)
   assert.match(client, /"aria-current": section === item.id \? "page" : undefined/)
-  assert.match(client, /className: "dshp-clean-pane", hidden: section !== "patches"/)
+  assert.match(client, /className: "dshp-clean-pane", hidden: section === "rules"/)
   assert.match(client, /className: "dshp-clean-pane", hidden: section !== "rules"/)
   assert.match(client, /h\(PurgifySection, null\)/)
   assert.match(client, /h\(RulesSection, null\)/)
   assert.match(client, /if \(props\.workspace !== true\)/)
-  assert.match(client, /\.dshp-clean-pane\[hidden\]\{display:none!important\}/)
+  assert.match(client, /\.dshp-clean-pane\[hidden\],\.dshp-clean-subpane\[hidden\]\{display:none!important\}/)
+})
+
+test('clean pages reuse one state owner and keep hidden editors mounted', () => {
+  assert.match(client, /h\(PurgifySection, \{ section \}\)/)
+  assert.match(client, /function PurgifySection\(\{ section \} = \{\}\)/)
+  for (const id of ['overview', 'patches', 'prompt', 'maintenance', 'rules']) {
+    assert.ok(client.includes('{ id: "' + id + '", title:'))
+  }
+  const helper = client.match(/const cleanPane = ([\s\S]*?\}, \.\.\.children\));/)
+  assert.ok(helper)
+  const makePane = new Function('h', 'section', 'return (' + helper[1] + ')')
+  const h = (type, props, ...children) => ({ type, props, children })
+  const editor = { value: 'unsaved' }
+  assert.equal(makePane(h, 'prompt')(['prompt'], editor).props.hidden, false)
+  const hidden = makePane(h, 'patches')(['prompt'], editor)
+  assert.equal(hidden.props.hidden, true)
+  assert.equal(hidden.children[0], editor)
+  assert.equal(makePane(h, undefined)(['prompt'], editor).props.hidden, false)
+  assert.match(client, /cleanPane\(\["patches"\], h\(PatchGroups/)
+  assert.match(client, /cleanPane\(\["prompt"\], h\(InjectSwitchSection\)/)
+  assert.match(client, /cleanPane\(\["maintenance"\], h\("div", \{ className: "dshp-rel"/)
+  assert.match(client, /cleanPane\(\["overview", "maintenance"\], s \? h\("div", \{ className: "dshp-metrics"/)
 })
 
 test('closed legacy Dock does not mount duplicate forms or run hidden API effects', () => {
