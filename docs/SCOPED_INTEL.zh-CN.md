@@ -36,4 +36,15 @@ DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或�
 
 接口：scopedCtLookup（异步）/ scopedCtHistory（同步），参数 engagement、target；查询需 confirmExternal=true，可选 commit=true。历史证书不代表域名当前解析或服务存活；不自动扩大范围、生成资产或启动扫描。
 
-当前未完成：subfinder 自动化集成、ARTEX 情报同步及其他厂商 REST API。
+当前未完成：ARTEX 情报同步及其他厂商 REST API。
+
+
+## 统一子域线索（第五阶段）
+
+资源 → 测绘中心 → 统一子域线索 · CT + subfinder。输入已登记 *.域名 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可勾选 subfinder 并确认向其配置的被动数据源提交域名。通过已有 resolveTool 查找本机工具（包括 ARTEX 工具目录），不下载或另建工具链，不使用主动解析或扫描参数。subfinder 使用当前安装版本及其配置的来源；部分来源可能需要 API Key。
+
+合并去重具体子域名，保留 crt.sh/subfinder 来源，最多 1000 项；工具缺失、失败或超时时仍可查看已有 CT 线索，状态如实显示。可选保存到当前项目 SQLite subdomain_intel_snapshot，离线读取最近 20 条快照。选择某一子域的「填入 DNS 核验」只填入现有 DNS 面板，须另行确认并执行；解析结果不会自动添加资产或扩大授权范围。
+
+接口：scopedSubdomains（异步）、scopedSubdomainHistory（同步）；参数 engagement、target；useSubfinder=true 时需 confirmExternal=true，commit=true 可保存。工具执行上限 75 秒、2 MiB stdout/stderr 缓冲，无 shell。
+
+限制：未自动运行 CT 新查询、批量 DNS 验证或 ARTEX 同步；目前仅复用最近一条保存的 CT 快照。
