@@ -2303,7 +2303,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 									apply_progress: {
 										...((prev && prev.apply_progress) || {}),
 										active: false,
-										error: String(d.error || "宿主拒绝该操作"),
+										error: String(d.error || "宿主拒绝该操作") + (action === "revert" && Array.isArray(d.error_items) ? "\n" + d.error_items.map((item) => (item.path ? item.path + "： " : "") + item.error).join("\n") : ""),
 									},
 								}));
 								setNotice({ kind: "error", text: tr("err.action", { action: label, error: d.error || "" }) });
@@ -2364,7 +2364,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								setAskRestart(true);
 								return;
 							}
-							setNotice({ kind: "ok", text: tr("ok.done") });
+							setState((prev) => Object.assign({}, prev || {}, {
+								apply_progress: { active: false, kind: "revert", stage: "done", error: "" },
+							}));
+							setNotice({ kind: "ok", text: "已还原 " + (d.reverted ?? 0) + " 个宿主文件；请重启后重新检测。" });
 							loadAll();
 						})
 						.catch((e) => {
