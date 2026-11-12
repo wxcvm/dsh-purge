@@ -49,15 +49,28 @@ $oldVersion = '(not installed)'
 if (Test-Path -LiteralPath $pluginManifest -PathType Leaf) {
   $oldVersion = (Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json).version
 }
-Write-Host "DSH profile: $profileDir"
-Write-Host "Installed dsh-purge: $oldVersion"
-if ($CheckOnly) {
-  if ($oldVersion -ne $version) { throw "Expected $version in this profile; found $oldVersion" }
-  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
+# Share package payload validation across read-only and transactional install.
+function Assert-PluginPayload {
+  $required = @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')
+  $package = Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json
+  if ((Test-Path -LiteralPath (Join-Path $plugin 'lib\redteam\vps-admin-config.js') -PathType Leaf) -or
+      (Test-Path -LiteralPath (Join-Path $plugin 'lib\redteam\vps-admin-probe.js') -PathType Leaf)) {
+    $required += 'scripts\vps-admin-check.mjs'
+  }
+  if (@($package.files) -contains 'scripts') {
+    $required += 'scripts\ensure-profile-bundle.mjs'
+  }
+  foreach ($file in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
       throw "Installed package is incomplete: $file"
     }
   }
+}
+Write-Host "DSH profile: $profileDir"
+Write-Host "Installed dsh-purge: $oldVersion"
+if ($CheckOnly) {
+  if ($oldVersion -ne $version) { throw "Expected $version in this profile; found $oldVersion" }
+  Assert-PluginPayload
   # The package can exist without its Cordis profile entry (postinstall may have been skipped).
   # This is read-only: do not silently modify the user's profile during -CheckOnly.
   $profilePackage = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
@@ -116,11 +129,7 @@ try {
   if (-not (Test-Path -LiteralPath $pluginManifest -PathType Leaf)) { throw 'Installed package manifest is missing' }
   $actual = (Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json).version
   if ($actual -ne $version) { throw "Installed version $actual does not match $version" }
-  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
-    if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
-      throw "Installed package is missing required UI file: $file"
-    }
-  }
+  Assert-PluginPayload
   $success = $true
   Write-Host "PASS: installed dsh-purge $version in $profileDir"
 } catch {
