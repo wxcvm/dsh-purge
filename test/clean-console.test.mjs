@@ -309,5 +309,41 @@ test('update receipt persists across restart and detects changed disk or boot co
   } finally { fs.rmSync(home, { recursive: true, force: true }) }
   assert.match(source, /receipt.phase = "reapplying"/)
   assert.match(source, /receipt.phase = "failed"/)
-  assert.match(client, /实际渲染器加载状态尚未验证/)
+  assert.match(client, /前端构建标识一致/)
+})
+
+test('renderer build identity and profile copy inventory detect stale installs without writing', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function rendererBuildId(')
+  const end = source.indexOf('export function updateReceiptStatus()', start)
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const os = await import('node:os')
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-copy-inspection-'))
+  const active = path.join(home, 'active')
+  const stale = path.join(home, 'stale')
+  try {
+    for (const [dir, marker] of [[active, '0123456789abcdef'], [stale, 'fedcba9876543210']]) {
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'client.js'), 'const CLIENT_BUILD_ID = "' + marker + '";')
+    }
+    const api = new Function('fs', 'path', 'PLUGIN_ROOT', 'realPath', 'updateFingerprint', 'fingerprintMatches', 'UPDATE_IDENTITY_FILES', 'findPurgeProfiles', 'isLinkSpec', 'resolveLinkDir', 'isArchiveFile', 'profilePluginDir',
+      source.slice(start, end).replace('export function', 'function') + '\nreturn { inspectPluginCopies, rendererBuildId };')(
+      fs, path, active, (p) => p, (p) => ({ version: '1.0.0', hashes: { client: p } }),
+      (a, b) => a.hashes.client === b.hashes.client, ['client'],
+      () => [{ name: 'desktop', dir: active, spec: 'link' }, { name: 'web', dir: stale, spec: 'link' }, { name: 'missing', dir: '', spec: 'registry' }],
+      (s) => s === 'link', (dir) => dir, () => false, () => '')
+    const result = api.inspectPluginCopies()
+    assert.equal(result.copies.length, 2)
+    assert.equal(result.copies[0].active, true)
+    assert.equal(result.copies[0].profiles[0], 'desktop')
+    assert.equal(result.copies[0].matchesActive, true)
+    assert.equal(result.copies[1].matchesActive, false)
+    assert.equal(result.copies[1].rendererBuildId, 'fedcba9876543210')
+    assert.equal(result.unresolved[0], 'missing')
+    assert.equal(api.rendererBuildId(path.join(home, 'absent')), '')
+  } finally { fs.rmSync(home, { recursive: true, force: true }) }
+  assert.match(client, /const CLIENT_BUILD_ID = "[0-9a-f]{16}";/)
+  assert.match(client, /diskBuild === CLIENT_BUILD_ID/)
+  assert.match(client, /apiJson\("\/dsh-purge\/update-copies"\)/)
 })
