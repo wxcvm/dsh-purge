@@ -277,23 +277,33 @@ test('update receipt persists across restart and detects changed disk or boot co
         fs.writeFileSync(path.join(root, file), file + suffix)
       }
     }
-    const load = () => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync',
+    const load = (pid = 123, startedAt = 1000) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
       source.slice(start, end).replace(/^export /gm, '') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
       fs, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
-      (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) })
+      (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) }, { pid }, { timeOrigin: startedAt })
     setFiles('old')
     const old = load()
     assert.equal(old.updateReceiptStatus(), null)
     const before = old.updateFingerprint()
+    const originProcess = { pid: 123, startedAt: 1000 }
+    old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after: before, originProcess })
+    assert.equal(old.updateReceiptStatus().diskMatch, true)
+    assert.equal(old.updateReceiptStatus().backendBootMatch, true)
+    assert.equal(old.updateReceiptStatus().processRestarted, false)
+    assert.equal(load().updateReceiptStatus().processRestarted, false)
+    assert.equal(load(123, 2000).updateReceiptStatus().processRestarted, true)
+    assert.equal(load(124, 1000).updateReceiptStatus().processRestarted, true)
     setFiles('new')
     const after = old.updateFingerprint()
-    old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after })
+    old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after, originProcess })
     let status = old.updateReceiptStatus()
     assert.equal(status.diskMatch, true)
     assert.equal(status.backendBootMatch, false)
     assert.equal(status.clientDiskMatch, true)
-    const restarted = load()
+    assert.equal(status.processRestarted, false)
+    const restarted = load(124, 2000)
     status = restarted.updateReceiptStatus()
+    assert.equal(status.processRestarted, true)
     assert.equal(status.backendBootMatch, true)
     assert.equal(status.diskMatch, true)
     fs.writeFileSync(path.join(root, 'client.js'), 'unexpected')
@@ -308,10 +318,15 @@ test('update receipt persists across restart and detects changed disk or boot co
     restarted.saveUpdateReceipt({ root, phase: 'failed', error: 'reapply failed', before, after })
     assert.equal(load().updateReceiptStatus().phase, 'failed')
     assert.equal(load().updateReceiptStatus().error, 'reapply failed')
+    assert.equal(load().updateReceiptStatus().processRestarted, null)
+    old.saveUpdateReceipt({ root, phase: 'awaiting_restart', before, after, originProcess: { pid: 123 } })
+    assert.equal(load().updateReceiptStatus().processRestarted, null)
   } finally { fs.rmSync(home, { recursive: true, force: true }) }
   assert.match(source, /receipt.phase = "reapplying"/)
   assert.match(source, /receipt.phase = "failed"/)
   assert.match(client, /前端构建标识一致/)
+  assert.match(client, /receipt\.processRestarted === false \? "后端仍是更新前的进程/)
+  assert.match(client, /缺少进程身份，重启未确认/)
 })
 
 test('renderer build identity and profile copy inventory detect stale installs without writing', async () => {
@@ -429,6 +444,7 @@ test('update applies one immutable target across git, archives, profile specs an
     realPath: value => value,
     PLUGIN_ROOT: '/plugin',
     updateFingerprint: () => ({ version: '1.0.0' }),
+    bootProcess: { pid: 123, startedAt: 1000 },
     saveUpdateReceipt: receipt => events.push(['receipt', { ...receipt }]),
     remoteHeadSha: async () => { resolutions++; return resolutions === 1 ? resolved : newer },
     gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
@@ -462,6 +478,7 @@ test('update applies one immutable target across git, archives, profile specs an
   assert.deepEqual(events.find(e => e[0] === 'stamp'), ['stamp', target])
   assert.deepEqual(events.find(e => e[0] === 'history'), ['history', target])
   assert.equal(events.filter(e => e[0] === 'receipt').at(-1)[1].targetSha, target)
+  assert.deepEqual(events.filter(e => e[0] === 'receipt').at(-1)[1].originProcess, { pid: 123, startedAt: 1000 })
   events.length = 0
   resolutions = 0
   resolved = ''
