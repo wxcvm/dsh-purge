@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const version = process.argv[2] || '0.2.2-rc.1';
-if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1'].includes(version)) {
+if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2'].includes(version)) {
   throw new Error('Select one of the explicitly reviewed fixture versions.');
 }
 const root = fileURLToPath(new URL('../', import.meta.url));
