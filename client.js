@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "8f21b1bd4184bed5";
+		const CLIENT_BUILD_ID = "bd175b05fc2a445b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1484,6 +1484,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				"宿主路径: " + (state.ai_base || "未定位"),
 				"宿主磁盘包: " + (state.host_identity?.package ? state.host_identity.package.name + "@" + state.host_identity.package.version : "未知"),
 				"宿主目录类型: " + (state.host_identity?.location || "未知"),
+				"宿主声明目标: " + (state.host_compatibility?.targets?.join(", ") || "未知"),
+				"宿主目标匹配: " + (state.host_compatibility?.status || "unknown"),
+				"前端运行构建: " + CLIENT_BUILD_ID,
+				"前端磁盘构建: " + (state.plugin_renderer_disk_build_id || "未知"),
 				"DSH_HOME: " + (state.dsh_home || "未知"),
 				"补丁: " + (state.ai_base ? tally.applied + "/" + tally.total
 					+ " 已应用; " + tally.pending + " 待应用; "
@@ -1648,6 +1652,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
 			const identity = state?.plugin_identity;
 			const hostIdentity = state?.host_identity;
+			const compatibility = state?.host_compatibility;
+			const diskBuild = state?.plugin_renderer_disk_build_id || "";
 			const loaded = identity?.loaded || "";
 			const disk = identity?.disk || "";
 			const mismatch = Boolean(loaded && disk && loaded !== disk);
@@ -1666,6 +1672,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
 				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
 				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
+				compatibility?.status === "declared" ? h("p", { className: "dshp-hint" }, "宿主磁盘版本在当前插件声明的适配范围内（不代表实机功能已验收）。") : null,
+				compatibility?.status === "not_listed" ? h("p", { role: "status" }, "当前宿主磁盘版本未列入插件声明目标：" + compatibility.version + "。这不是不兼容结论，请先核对新版宿主的实际行为。") : null,
+				h("p", { className: "dshp-hint" }, "前端运行构建：" + CLIENT_BUILD_ID + " · 磁盘构建：" + (diskBuild || "未知")),
+				diskBuild && diskBuild !== CLIENT_BUILD_ID ? h("p", { role: "alert" }, "前端构建不一致：当前页面尚未加载磁盘上的客户端版本。请完整退出宿主后重新打开。") : null,
 				h("p", { className: "dshp-hint" }, "后端模块加载时版本：" + (loaded || "未知") + " · 当前目录磁盘版本：" + (disk || "未知")),
 				h("p", { className: "dshp-hint", role: "status" }, mismatch
 					? "版本不一致：文件已变化，建议完整退出并重启 Harness 后重新检测。"
