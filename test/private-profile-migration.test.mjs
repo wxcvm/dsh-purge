@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { stagePrivateInstallArchive } from "../lib/private-install-cache.js";
-import { migratePrivateProfile, privateMigrationCommand } from "../lib/private-profile-migration.js";
+import { migratePrivateProfile, privateMigrationCommand, inspectPrivateProfileResolution } from "../lib/private-profile-migration.js";
 
 const sha = "a".repeat(40), version = "1.2.3";
 const old = JSON.stringify({ dependencies: { "dsh-purge": "https://example.invalid/old.tgz", other: "1.0.0" } });
@@ -81,4 +81,22 @@ test("Windows launcher rejects command wrappers", () => {
   assert.throws(() => privateMigrationCommand("pnpm.cmd", [], "win32"), /pnpm.exe/);
   const js = path.resolve("pnpm.cjs");
   assert.deepEqual(privateMigrationCommand(js, ["install"], "win32"), { file: process.execPath, args: [js, "install"] });
+});
+
+test("profile verification reads current source and installed version independently", async t => {
+  const opts = await fixture(t);
+  const cache = await stagePrivateInstallArchive({ home: opts.home, sha, version, fetchArchive: async () => archive() });
+  assert.deepEqual(await inspectPrivateProfileResolution(opts.dir, cache.archivePath, version), { sourceMatch: false, versionMatch: false });
+  const result = await migratePrivateProfile({ ...opts, run: async (_, args, dir) => {
+    if (args.includes("--lockfile-only")) await resolveLock(dir);
+    else {
+      const dest = path.join(dir, "node_modules", "dsh-purge");
+      await fs.mkdir(dest, { recursive: true });
+      await fs.writeFile(path.join(dest, "package.json"), JSON.stringify({ name: "dsh-purge", version }));
+    }
+  }});
+  assert.deepEqual(await inspectPrivateProfileResolution(opts.dir, cache.archivePath, version), { sourceMatch: true, versionMatch: true });
+  await fs.writeFile(path.join(opts.dir, "pnpm-lock.yaml"), oldLock);
+  assert.deepEqual(await inspectPrivateProfileResolution(opts.dir, cache.archivePath, version), { sourceMatch: false, versionMatch: true });
+  assert.equal(result.ok, true);
 });
