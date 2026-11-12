@@ -16,7 +16,7 @@ const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
 const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
   patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
 })
-const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'PatchGroups', {
+const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'CleanDiagnostics', {
   tallyPatches: (rows) => rows.reduce((o, row) => {
     o.total += 1
     if (row.st === 'applied' || row.st === 'already') o.applied += 1
@@ -151,4 +151,35 @@ test('rescan and filtered diagnostic export use read-only host endpoint without 
   assert.match(client, /copyDiagnostics\(filteredDiagnostics, "当前筛选"\)/)
   assert.match(client, /setShownDiagnostics\(text\)/)
   assert.match(client, /shownDiagnostics \|\| diagnostics/)
+})
+
+test('diagnostic center distinguishes loaded and disk versions and unavailable host', () => {
+  const report = formatPatchDiagnostics({
+    ok: false, plugin_version: '2.0.0', plugin_identity: { loaded: '1.0.0', disk: '2.0.0', root: 'local-plugin' },
+    has_backup: false,
+  }, [], (s) => s)
+  assert.match(report, /插件磁盘版本: 2\.0\.0/)
+  assert.match(report, /后端加载时版本: 1\.0\.0/)
+  assert.match(report, /插件目录: local-plugin/)
+  assert.match(report, /补丁: 待检测/)
+  assert.match(report, /备份: 未知/)
+  assert.match(client, /cleanPane\(\["diagnostics"\], h\(CleanDiagnostics/)
+  assert.match(client, /loaded && disk && loaded !== disk/)
+  assert.match(client, /版本号一致（不代表所有前端资源或补丁已生效）/)
+})
+
+test('version identity retains module-evaluation version while disk changes', () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
+  const from = source.indexOf('const loadedVersion = localVersion();')
+  const to = source.indexOf('function channelStatePath()', from)
+  assert.ok(from >= 0 && to > from)
+  let disk = '1.0.0'
+  const identity = new Function('localVersion', 'PLUGIN_ROOT', source.slice(from, to).replace('export function', 'function') + 'return versionIdentity;')(() => disk, 'plugin-root')
+  assert.equal(identity().loaded, '1.0.0')
+  disk = '2.0.0'
+  assert.equal(identity().loaded, '1.0.0')
+  assert.equal(identity().disk, '2.0.0')
+  assert.equal(identity().root, 'plugin-root')
+  const entry = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+  assert.match(entry, /plugin_identity: updater\.versionIdentity\(\)/)
 })
