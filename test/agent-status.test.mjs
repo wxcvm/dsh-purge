@@ -155,3 +155,38 @@ test('optional Cordis bindings attach after UI initialization and clear on dispo
   cleanups.get('sessionQuery')()
   assert.equal((await read()).available, false)
 })
+
+test('scoped read checks only the requested root and needs no global session registry', async () => {
+  const queried = []
+  let released = 0
+  const read = bindAgentStatus({
+    sessionQuery: { observeSession(id) {
+      queried.push(id)
+      return { projections: { values: { subagentCatalog: [
+        { id: 'child', mode: 'continuable', label: 'worker' },
+      ] } }, [Symbol.dispose]() { released++ } }
+    } },
+    agents: { get: () => ({ status: 'running' }) },
+  })
+  const result = await read({ rootSessionId: 'owner' })
+  assert.equal(result.available, true)
+  assert.equal(result.used, 1)
+  assert.equal(result.free, 2)
+  assert.equal(result.running[0].parent, 'owner')
+  assert.deepEqual(queried, ['owner'])
+  assert.equal(released, 1)
+})
+
+test('scoped legacy read retains known running activity on a partial registry', async () => {
+  const result = await collectAgentStatus({
+    subagents: { listChildren: id => {
+      assert.equal(id, 'owner')
+      return [{ id: 'known', kind: 'child', activity: 'running' },
+        { id: 'unknown', kind: 'child' }]
+    } },
+  }, { rootSessionId: 'owner' })
+  assert.equal(result.used, 1)
+  assert.equal(result.available, false)
+  assert.equal(result.free, null)
+  assert.equal(result.used_is_lower_bound, true)
+})
