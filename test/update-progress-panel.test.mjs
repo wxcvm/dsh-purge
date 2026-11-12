@@ -100,3 +100,23 @@ test("update panel distinguishes pending restart, migration and failure", () => 
   assert.match(words(failed), /准备本地安装包：network offline/);
   assert.match(client, /if \(\/无法读取 GitHub 仓库\/\.test\(msg\)\) return msg;/);
 });
+
+test("recovered update keeps disk, renderer, backend and profile outcomes separate", () => {
+  const start = client.indexOf("function UpdateRecoveryPanel(");
+  const end = client.indexOf("function PurgifySection(", start);
+  const h = (type, props, ...children) => ({ type, props, children });
+  const render = new Function("h", "CLIENT_BUILD_ID", client.slice(start, end) + "\nreturn UpdateRecoveryPanel;")(h, "current-build");
+  const receipt = { phase: "awaiting_restart", verification: "backend_verified", diskMatch: true,
+    clientDiskMatch: true, backendBootMatch: true, processRestarted: true, rendererDiskBuildId: "current-build",
+    profileVerification: { status: "pending", rows: [{ profile: "desktop", status: "migration_required", cachePresent: true }] } };
+  let tree = render({ receipt });
+  assert.match(words(tree), /当前宿主运行版本已核验/);
+  assert.match(words(tree), /需要迁移安装来源/);
+  tree = render({ receipt: { ...receipt, rendererDiskBuildId: "old-build" } });
+  assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
+  assert.match(words(tree), /实际前端构建 不匹配/);
+  tree = render({ receipt: { ...receipt, verification: "interrupted", phase: "writing" }, unavailable: true });
+  assert.match(words(tree), /上次更新中断/);
+  assert.match(words(tree), /上次读取的结果/);
+  assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
+});
