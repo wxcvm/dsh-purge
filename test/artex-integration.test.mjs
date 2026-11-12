@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import {
-  artexToolRoots, findArtexTool, inspectArtex, probeLocalArtex, ARTEX_SHARED_TOOLS,
+  artexToolRoots, findArtexTool, inspectArtex, probeLocalArtex, probeLocalArtexPrivacy, ARTEX_SHARED_TOOLS,
 } from '../lib/artex-integration.js'
 import { resolveTool } from '../lib/redteam/platform-config.js'
 
@@ -191,17 +191,102 @@ test('RedTeam ARTEX tab distinguishes unverified and offline service states', ()
   assert.match(source, /找到文件不代表可执行已验证/)
 })
 
-test('privacy console reuses local ARTEX health probe without sharing credentials', () => {
+test('privacy console uses scoped ARTEX status without sharing administrator credentials', () => {
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
   const bundle = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   assert.match(host, /const artex = await probeLocalArtex\(\)/)
   assert.match(host, /state\.artex = \{/)
-  assert.match(host, /privacyExposure: 'not_inspected'/)
+  assert.match(host, /const artexPrivacy = await probeLocalArtexPrivacy\(\{ health: artex \}\)/)
+  assert.match(host, /\.\.\.artexPrivacy/)
   assert.doesNotMatch(host, /state\.artex = await inspectArtex\(\)/)
   for (const body of [source, bundle]) {
     assert.match(body, /ARTEX 本机联动状态/)
     assert.match(body, /setUI\(\{ tab: 'artex' \}\)/)
-    assert.match(body, /ARTEX 的监听范围与公网可达性仍未检测/)
+    assert.match(body, /已读取实际 HTTP 监听范围/)
+    assert.match(body, /仅有启动配置，尚未观察实际绑定/)
+    assert.match(body, /ARTEX 公网可达性、宿主机端口映射与反向代理仍未检测/)
   }
+})
+
+test('ARTEX privacy probe never sends a token without a confirmed health marker and opt-in config', async () => {
+  let calls = 0
+  const fetchFn = async () => { calls++; throw new Error('must not fetch') }
+  const env = { DSH_PURGE_ARTEX_PRIVACY_TOKEN: 'test-read-only-token' }
+  for (const state of ['absent', 'service_candidate', 'degraded']) {
+    const got = await probeLocalArtexPrivacy({ health: { state }, env, fetchFn })
+    assert.equal(got.privacyExposure, 'not_inspected')
+    assert.equal(got.publicReachability, 'not_tested')
+  }
+  const unconfigured = await probeLocalArtexPrivacy({
+    health: { state: 'detected' }, env: {}, fetchFn,
+  })
+  assert.equal(unconfigured.privacyExposure, 'not_configured')
+  assert.equal(calls, 0)
+})
+
+test('ARTEX scoped privacy probe distinguishes runtime observations from configured values', async () => {
+  const token = 'test-read-only-token-123456'
+  const env = { DSH_PURGE_ARTEX_PRIVACY_TOKEN: token }
+  for (const [source, expected] of [
+    ['runtime_listener', 'runtime_observed'],
+    ['configured', 'configured_only'],
+    ['not_inspected', 'not_inspected'],
+  ]) {
+    const got = await probeLocalArtexPrivacy({
+      health: { state: 'detected' }, env,
+      fetchFn: async (url, options) => {
+        assert.equal(url, 'http://127.0.0.1:8787/api/privacy/bridge-status')
+        assert.equal(options.method, 'GET')
+        assert.equal(options.redirect, 'manual')
+        assert.deepEqual(options.headers, { 'X-Artex-Privacy-Token': token })
+        return { status: 200, ok: true, json: async () => ({
+          service: 'artex', scope: 'loopback', binding_source: source,
+          public_reachability: 'not_tested', token, extra: 'do not forward',
+        }) }
+      },
+    })
+    assert.equal(got.privacyExposure, expected)
+    assert.equal(got.privacyHttpStatus, 200)
+    assert.equal(got.privacyScope, source === 'not_inspected' ? null : 'loopback')
+    assert.equal(got.publicReachability, 'not_tested')
+    assert.ok(!JSON.stringify(got).includes(token))
+    assert.ok(!JSON.stringify(got).includes('do not forward'))
+  }
+})
+
+test('ARTEX privacy probe fails without overstating scope or leaking errors', async () => {
+  const health = { state: 'detected' }
+  const env = { DSH_PURGE_ARTEX_PRIVACY_TOKEN: 'private-test-token' }
+  const examples = [
+    { status: 401, expected: 'auth_rejected' },
+    { status: 403, expected: 'auth_rejected' },
+    { status: 404, expected: 'unsupported' },
+    { status: 405, expected: 'unsupported' },
+    { status: 302, expected: 'unavailable' },
+    { status: 503, expected: 'unavailable' },
+    { status: 200, body: { service: 'other' }, expected: 'invalid_response' },
+    { status: 200, body: { service: 'artex', scope: 'loopback',
+      binding_source: 'runtime_listener', public_reachability: 'reachable' }, expected: 'invalid_response' },
+    { status: 200, body: { service: 'artex', scope: 'invented',
+      binding_source: 'runtime_listener', public_reachability: 'not_tested' }, expected: 'invalid_response' },
+  ]
+  for (const item of examples) {
+    const got = await probeLocalArtexPrivacy({ health, env, fetchFn: async () => ({
+      status: item.status, ok: item.status === 200, json: async () => item.body,
+    }) })
+    assert.equal(got.privacyExposure, item.expected)
+    assert.equal(got.privacyScope, null)
+    assert.equal(got.publicReachability, 'not_tested')
+    assert.ok(!JSON.stringify(got).includes(env.DSH_PURGE_ARTEX_PRIVACY_TOKEN))
+  }
+  const malformed = await probeLocalArtexPrivacy({ health, env, fetchFn: async () => ({
+    status: 200, ok: true, json: async () => { throw new Error('malformed private-test-token') },
+  }) })
+  assert.equal(malformed.privacyExposure, 'invalid_response')
+  const unreachable = await probeLocalArtexPrivacy({ health, env,
+    fetchFn: async () => { throw new Error('private-test-token') },
+  })
+  assert.equal(unreachable.privacyExposure, 'unavailable')
+  assert.ok(!JSON.stringify(unreachable).includes('private-test-token'))
 })
