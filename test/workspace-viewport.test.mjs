@@ -27,3 +27,20 @@ test("workspace styles are installed before paint and back releases fullscreen",
   assert.match(source, /useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/);
   assert.match(source, /const back = \(\) => \{[\s\S]{0,700}document\.exitFullscreen\(\)[\s\S]{0,300}setWorkspaceVisible\(false\)/);
 });
+
+test("host layout failures fall back to the Dock instead of escaping", () => {
+  assert.match(source, /function selectPurgeHostPanel\(panel\) \{\s*try \{[\s\S]*?ctx\.get\("layout"\)[\s\S]*?layout\.selectPanel\(panel\)[\s\S]*?catch \(error\)[\s\S]*?return false/);
+  assert.match(source, /if \(!selectPurgeHostPanel\(PURGE_PANEL_ID\)\) \{[\s\S]*?setDock\(\{ open: true, maximized: true/);
+});
+
+test("failed host navigation keeps the workspace visible", () => {
+  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*setNavigationError\(""\);\s*setWorkspaceVisible\(false\)/);
+});
+
+test("a page render failure leaves navigation available and supports retry", () => {
+  assert.match(source, /class PurgeWorkspaceBoundary extends Component/);
+  assert.match(source, /static getDerivedStateFromError\(\) \{ return \{ failed: true \}; \}/);
+  assert.match(source, /onClick: \(\) => this\.setState\(\{ failed: false \}\)/);
+  assert.match(source, /h\(PurgeWorkspaceBoundary, \{ key: page \}, h\(PurgeWorkspaceContent, \{ page, t \}\)\)/);
+  assert.match(css, /\.dshp-workspace-recovery\{/);
+});
