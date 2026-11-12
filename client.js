@@ -2576,7 +2576,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("span", null, (s.shim_cmd === "n/a" && s.shim_ps1 === "n/a" && (s.shim_bin === "n/a" || !s.shim_bin)) ? t("metric.shim.na") : t("metric.shim")),
 					),
 					h("div", { className: "dshp-metric" },
-						h("b", null, s.has_backup ? t("metric.bak.yes") : t("metric.bak.no")),
+						h("b", null, s.ok === false || typeof s.has_backup !== "boolean" ? "—" : s.has_backup ? t("metric.bak.yes") : t("metric.bak.no")),
 						h("span", null, t("metric.bak.hint")),
 					),
 				) : h("div", { className: "dshp-metrics" },
@@ -2611,19 +2611,20 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					"上一次操作没有返回完成状态（最后阶段：" + flowLabel(job.stage, t) + "）。请重新检测并查看错误信息，不要把补丁比例当作流程完成。") : null,
 				h("div", { className: "dshp-clean-progress-note", role: "status" },
 					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : flowInterrupted ? "结果未确认" : "未执行")
-					+ " · 补丁已应用 " + applied + "/" + total
-					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped),
+					+ (located ? " · 补丁已应用 " + applied + "/" + total
+					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped : " · 补丁状态待检测")),
 				h("div", { className: "dshp-bar", role: "progressbar", "aria-label": "清洗流程进度", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": pct },
 					h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })),
-				h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: patchBusy || uninstallBusy }),
-				h(InjectSwitchSection),
-				h(HooksDenySection, { onSaved: loadAll }),
-				h("div", { className: "dshp-row", style: { marginTop: 12 } },
-					h(Btn, { kind: "primary", disabled: patchBusy || uninstallBusy || !overrideLoaded, onClick: () => doAction("apply", "action.apply") }, patchBusy ? t("btn.apply.busy") : t("btn.apply")),
-					h(Btn, { kind: "danger", disabled: patchBusy || uninstallBusy, onClick: () => doAction("revert", "action.revert") }, t("btn.revert")),
-					h(Btn, { kind: "solid-danger", disabled: patchBusy || uninstallBusy, onClick: () => setAskUninstall(true) }, uninstallBusy ? t("btn.uninstall.busy") : t("btn.uninstall")),
+				h("div", { className: "dshp-row dshp-clean-actions", style: { margin: "12px 0" } },
+					h(Btn, { kind: "primary", disabled: jobOn || updateBusy || !overrideLoaded, onClick: () => doAction("apply", "action.apply") }, patchBusy ? t("btn.apply.busy") : t("btn.apply")),
+					h(Btn, { kind: "danger", disabled: jobOn || updateBusy, onClick: () => doAction("revert", "action.revert") }, t("btn.revert")),
+					h(Btn, { kind: "solid-danger", disabled: jobOn || updateBusy, onClick: () => setAskUninstall(true) }, uninstallBusy ? t("btn.uninstall.busy") : t("btn.uninstall")),
 					noticeNode(notice),
 				),
+				h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy }),
+				h(InjectSwitchSection),
+				h(HooksDenySection, { onSaved: loadAll }),
+
 				askUninstall ? h("div", {
 					className: "dshp-modal-bg",
 					role: "dialog",
