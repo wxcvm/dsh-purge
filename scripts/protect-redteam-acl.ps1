@@ -25,6 +25,9 @@ if (-not $rootItem.PSIsContainer -or ($rootItem.Attributes -band [IO.FileAttribu
     throw 'Workspace root must be a real directory, not a junction or symlink.'
 }
 
+# Use the canonical directory path for relative diagnostic names.
+$Root = $rootItem.FullName.TrimEnd([char[]]'\/')
+
 $identities = @(
     [System.Security.Principal.WindowsIdentity]::GetCurrent().User,
     (New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-18'),
@@ -90,7 +93,7 @@ if (-not $Apply) {
             if ($hasOther) { $summary.otherRead++ }
             if (-not $acl.AreAccessRulesProtected) { $summary.inheritanceEnabled++ }
             if ($Details -and ($hasBroad -or $hasOther -or -not $acl.AreAccessRulesProtected)) {
-                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart('\', '/') }
+                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart([char[]]'\/') }
                 Write-Output ('ACL_FINDING ' + ([ordered]@{
                     path = $relative
                     broadRead = $hasBroad
@@ -101,7 +104,7 @@ if (-not $Apply) {
         } catch {
             $summary.aclReadErrors++
             if ($Details) {
-                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart('\', '/') }
+                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart([char[]]'\/') }
                 Write-Output ('ACL_FINDING ' + ([ordered]@{ path = $relative; status = 'acl_unreadable' } | ConvertTo-Json -Compress))
             }
         }
