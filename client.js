@@ -8284,8 +8284,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [matrixQuery, setMatrixQuery] = React.useState('')
       const [adminProbeBusy, setAdminProbeBusy] = React.useState(false)
       const [adminProbeResult, setAdminProbeResult] = React.useState(null)
+      const adminProbeRevision = React.useRef(0)
 
       const applyDraftFrom = (r) => {
+        adminProbeRevision.current += 1
+        setAdminProbeResult(null)
         const c = (r && r.config) || {}
         setDraft({
           platform: c.platform || 'auto',
@@ -8509,24 +8512,36 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onChange: (e) => setVpsField(key, e.target.value) }),
           h('div', { className: 'rt-foot', style: { fontSize: 11, marginTop: 3 } }, hint))
 
-      // Management-only route; no automatic network execution from the web UI.
+      // Management-only route; network checks require a deliberate local action.
       const adminRoute = draft?.vpsAdminRoute || { target: '', jumps: [] }
       const editAdminRoute = (update) => {
+        adminProbeRevision.current += 1
         setAdminProbeResult(null)
         setDraft((d) => d ? { ...d, vpsAdminRoute: update(d.vpsAdminRoute) } : d)
       }
       const savedAdminRoute = data?.config?.vpsAdminRoute || { target: '', jumps: [] }
-      const adminRouteSaved = JSON.stringify({ target: adminRoute.target.trim(), jumps: adminRoute.jumps.map((v) => v.trim()) })
-        === JSON.stringify(savedAdminRoute)
+      const routeKey = (route) => JSON.stringify({ target: route.target.trim(), jumps: route.jumps.map((v) => v.trim()) })
+      const adminRouteKey = routeKey(adminRoute)
+      const adminRouteSaved = adminRouteKey === routeKey(savedAdminRoute)
+      const visibleAdminProbe = adminRouteSaved && adminProbeResult?.routeKey === adminRouteKey ? adminProbeResult : null
       const runAdminProbe = async () => {
         if (adminProbeBusy || !adminRouteSaved || !adminValid) return
         setAdminProbeBusy(true)
         setAdminProbeResult(null)
+        const revision = ++adminProbeRevision.current
+        const publish = (result) => {
+          if (adminProbeRevision.current !== revision) return
+          setAdminProbeResult({ ...result, routeKey: adminRouteKey })
+        }
         try {
           const result = await api({ op: 'vpsAdminProbe' })
-          setAdminProbeResult(result || { ok: false, error: '未收到检测结果' })
+          if (result?.target && routeKey(result) !== adminRouteKey) {
+            publish({ ok: false, error: '已保存的管理路径发生变化，请刷新配置后重新检测' })
+          } else {
+            publish(result || { ok: false, error: '未收到检测结果' })
+          }
         } catch (error) {
-          setAdminProbeResult({ ok: false, error: String(error?.message || error) })
+          publish({ ok: false, error: String(error?.message || error) })
         } finally {
           setAdminProbeBusy(false)
         }
@@ -8576,11 +8591,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             disabled: busy || adminProbeBusy || !adminValid || !adminRouteSaved,
             onClick: runAdminProbe }, adminProbeBusy ? '检测中…' : '检测已保存路径'),
           !adminRouteSaved ? h('span', { className: 'rt-foot' }, '请先保存') : null),
-        adminProbeResult ? h('div', { className: adminProbeResult.ok ? 'rt-foot' : 'rt-err', style: { marginTop: 8, overflowWrap: 'anywhere' } },
-          (adminProbeResult.target ? '检测路径：' + [...(adminProbeResult.jumps || []), adminProbeResult.target].join(' → ') + '；' : '')
-          + (adminProbeResult.ok ? 'SSH 管理连接成功' : '检测失败：' + (adminProbeResult.error || '未知错误'))
-          + (Number.isFinite(adminProbeResult.durationMs) ? ' · ' + adminProbeResult.durationMs + ' ms' : '')
-          + (adminProbeResult.checkedAt ? ' · ' + new Date(adminProbeResult.checkedAt).toLocaleString() : '')) : null,
+        visibleAdminProbe ? h('div', { className: visibleAdminProbe.ok ? 'rt-foot' : 'rt-err', style: { marginTop: 8, overflowWrap: 'anywhere' } },
+          (visibleAdminProbe.target ? '检测路径：' + [...(visibleAdminProbe.jumps || []), visibleAdminProbe.target].join(' → ') + '；' : '')
+          + (visibleAdminProbe.ok ? 'SSH 管理连接成功' : '检测失败：' + (visibleAdminProbe.error || '未知错误'))
+          + (Number.isFinite(visibleAdminProbe.durationMs) ? ' · ' + visibleAdminProbe.durationMs + ' ms' : '')
+          + (visibleAdminProbe.checkedAt ? ' · ' + new Date(visibleAdminProbe.checkedAt).toLocaleString() : '')) : null,
         h('p', { className: 'rt-foot' }, '一键检测需要本机回环管理接口、访问令牌及宿主显式启用。不可用时使用上方终端命令；成功仅代表检测当时的 SSH 路径可用。'))
       
       const addCustomTool = () => setDraft((d) => d ? { ...d, customTools: (d.customTools || []).concat({ name: '', path: '' }) } : d)
