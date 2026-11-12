@@ -7991,6 +7991,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [surveyBusy, setSurveyBusy] = React.useState(false)
       const [surveyError, setSurveyError] = React.useState('')
       const [surveyResult, setSurveyResult] = React.useState(null)
+      const [ctTarget, setCtTarget] = React.useState('')
+      const [ctConsent, setCtConsent] = React.useState(false)
+      const [ctCommit, setCtCommit] = React.useState(false)
+      const [ctBusy, setCtBusy] = React.useState(false)
+      const [ctResult, setCtResult] = React.useState(null)
+      const runCt = (history = false) => {
+        if (!eng || !ctTarget.trim() || ctBusy || (!history && !ctConsent)) return
+        setCtBusy(true); setCtResult(null)
+        api({ op: history ? 'scopedCtHistory' : 'scopedCtLookup', engagement: eng,
+          target: ctTarget.trim(), confirmExternal: ctConsent, commit: ctCommit }).then(r => {
+          setCtBusy(false); setCtResult({ ...r, history })
+        }, () => { setCtBusy(false); setCtResult({ error: 'CT 查询失败' }) })
+      }
       const [dnsTarget, setDnsTarget] = React.useState('')
       const [dnsConsent, setDnsConsent] = React.useState(false)
       const [dnsCommit, setDnsCommit] = React.useState(false)
@@ -8175,6 +8188,35 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '证书透明度 · 子域线索'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '免费 crt.sh 历史证书查询。需在项目登记 *.域名 授权范围；只保留范围内的具体子域，不访问目标、不验证存活。'),
+            h('input', { className: 'rt-input', value: ctTarget, placeholder: '已登记通配范围对应的根域名',
+              onChange: e => { setCtTarget(e.target.value); setCtConsent(false); setCtResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: ctConsent,
+                onChange: e => setCtConsent(e.target.checked) }), ' 同意向 crt.sh 提交域名'),
+              h('label', null, h('input', { type: 'checkbox', checked: ctCommit,
+                onChange: e => setCtCommit(e.target.checked) }), ' 保存 CT 线索')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: ctBusy || !eng || !ctConsent || !ctTarget.trim(), onClick: () => runCt() },
+              ctBusy ? '查询中…' : '查询证书子域'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: ctBusy || !eng || !ctTarget.trim(), onClick: () => runCt(true) }, '读取 CT 历史'),
+            ctResult && (!ctResult.engagement || ctResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                ctResult.error ? h('div', { className: 'rt-err' }, ctResult.error) : null,
+                ctResult.ok && ctResult.history ? h('div', null,
+                  '本地快照：' + (ctResult.items || []).length + ' 条',
+                  (ctResult.items || []).map(item => h('details', { key: item.id },
+                    h('summary', null, item.collected_at + ' · ' + item.names.length + ' 个子域'),
+                    !maskAssets ? h('div', null, item.names.map(n => h('div', { key: n.name }, n.name))) : null)))
+                  : ctResult.ok ? h('div', null,
+                    '子域线索：' + (ctResult.names || []).length + (ctResult.truncated ? ' · 已达到结果上限' : '') + ' · ' + (ctResult.imported ? '已保存' : '未保存'),
+                    !maskAssets ? h('div', { style: { maxHeight: 280, overflowY: 'auto' } },
+                      (ctResult.names || []).map(n => h('div', { key: n.name }, n.name + (n.not_after ? ' · 证书到期 ' + n.not_after : '')))) : null)
+                  : null) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '免费 DNS 情报 · 单域名'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
