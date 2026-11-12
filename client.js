@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "d4256113af7aab27";
+		const CLIENT_BUILD_ID = "d8f8634b01ce81bd";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12435,29 +12435,56 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function PurgeWorkspaceContent({ page, t }) {
 			return page === "clean" ? h(SettingsRoot, { t, workspace: true }) : h(__dshPurgeDrill.Panel, { embedded: true });
 		}
+		// Keep the native Windows caption palette aligned with the active workspace.
+		// Capture the host's latest values, so leaving Purge restores its own theme.
+		function installPurgeCaptionPalette(doc, Observer) {
+			const body = doc.body;
+			const root = doc.documentElement;
+			if (!body || !root) return;
+			const style = body.style;
+			const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
+			const previous = new Map();
+			const restore = () => {
+				for (const [name, saved] of previous) {
+					// A host change not yet observed belongs to the host, not Purge.
+					if (style.getPropertyValue(name).trim() !== saved.color || style.getPropertyPriority(name)) continue;
+					if (saved.value) style.setProperty(name, saved.value, saved.priority);
+					else style.removeProperty(name);
+				}
+				previous.clear();
+			};
+			const sync = () => {
+				if (!root.hasAttribute("data-windows-titlebar")) {
+					restore();
+					return;
+				}
+				for (const [name, color] of palette) {
+					const value = style.getPropertyValue(name);
+					if (value.trim() === color) continue;
+					previous.set(name, { color, value, priority: style.getPropertyPriority(name) });
+					style.setProperty(name, color);
+				}
+			};
+			// Only the two native caption inputs are changed; unrelated body
+			// style mutations do not cause a write or a repaint loop.
+			const observer = new Observer(sync);
+			observer.observe(root, { attributes: true, attributeFilter: ["data-windows-titlebar"] });
+			observer.observe(body, { attributes: true, attributeFilter: ["style"] });
+			sync();
+			return () => {
+				observer.disconnect();
+				restore();
+			};
+		}
 		function PurgeWorkspacePage() {
 			const t = useT();
 			useLayoutEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
 			const [page, setPage] = useState(purgeWorkspaceBus.page);
 			const [workspaceVisible, setWorkspaceVisible] = useState(true);
-			// Desktop's Windows preload observes body.style and re-colors Electron's
-			// native caption overlay from these two palette tokens.
-			useEffect(() => {
-				if (!workspaceVisible || !document.body || !document.documentElement.hasAttribute("data-windows-titlebar")) return;
-				const style = document.body.style;
-				const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
-				const previous = palette.map(([name, color]) => ({
-					name, color, value: style.getPropertyValue(name), priority: style.getPropertyPriority(name),
-				}));
-				for (const { name, color } of previous) style.setProperty(name, color);
-				return () => {
-					for (const { name, color, value, priority } of previous) {
-						// Don't overwrite a newer host theme written while Purge was open.
-						if (style.getPropertyValue(name).trim() !== color) continue;
-						if (value) style.setProperty(name, value, priority);
-						else style.removeProperty(name);
-					}
-				};
+			// Install before paint, and also follow a late native caption mount.
+			useLayoutEffect(() => {
+				if (!workspaceVisible) return;
+				return installPurgeCaptionPalette(document, MutationObserver);
 			}, [workspaceVisible]);
 			const workspaceRef = useRef(null);
 			const [immersive, setImmersive] = useState(false);
