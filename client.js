@@ -8295,6 +8295,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           planning: { preferredToolByTask: Object.assign({}, c.planning?.preferredToolByTask || {}) },
           kaliVm: Object.assign({ host: '', user: 'kali', port: 22, identityFile: '' }, c.kaliVm || {}),
           vps: Object.assign({ user: 'ubuntu', domain: '', ipv4: '', ipv6: '', addressMode: 'auto', identityFile: '' }, c.vps || {}),
+          vpsAdminRoute: { target: c.vpsAdminRoute?.target || '', jumps: Array.isArray(c.vpsAdminRoute?.jumps) ? [...c.vpsAdminRoute.jumps] : [] },
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
         })
@@ -8329,6 +8330,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           planning: draft.planning,
           kaliVm: draft.kaliVm,
           vps: draft.vps,
+          vpsAdminRoute: draft.vpsAdminRoute,
           env: draft.env,
           notes: draft.notes,
           envAdaptConfigured: true,
@@ -8505,6 +8507,52 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onChange: (e) => setVpsField(key, e.target.value) }),
           h('div', { className: 'rt-foot', style: { fontSize: 11, marginTop: 3 } }, hint))
 
+      // Management-only route; no automatic network execution from the web UI.
+      const adminRoute = draft?.vpsAdminRoute || { target: '', jumps: [] }
+      const editAdminRoute = (update) => setDraft((d) => d
+        ? { ...d, vpsAdminRoute: update(d.vpsAdminRoute) } : d)
+      const adminAliases = [...adminRoute.jumps, adminRoute.target].map((value) => value.trim())
+      const adminValid = adminRoute.jumps.length <= 4
+        && adminAliases.every((value) => /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/.test(value))
+        && new Set(adminAliases.map((value) => value.toLowerCase())).size === adminAliases.length
+      const moveAdminJump = (index, offset) => editAdminRoute((route) => {
+        const jumps = [...route.jumps]
+        const next = index + offset
+        if (next < 0 || next >= jumps.length) return route
+        ;[jumps[index], jumps[next]] = [jumps[next], jumps[index]]
+        return { ...route, jumps }
+      })
+      const adminRouteCard = () => h('div', { className: 'rt-card' },
+        h('h4', null, 'SSH 多跳管理路径（独立）'),
+        h('p', { className: 'rt-foot' },
+          '仅管理自有服务器及授权实验室。填写本机 OpenSSH config 中的 Host 别名，按顺序连接；不改变原 VPS、系统代理或红队工具出口。'),
+        h('label', { style: { display: 'block', fontSize: 12 } }, '最终管理服务器 Host 别名',
+          h('input', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 4 },
+            placeholder: 'lab', value: adminRoute.target,
+            onChange: (e) => editAdminRoute((route) => ({ ...route, target: e.target.value })) })),
+        h('div', { style: { marginTop: 10, fontSize: 12, fontWeight: 600 } }, '跳板顺序（最多 4 个）'),
+        adminRoute.jumps.map((alias, index) => h('div', { key: index, style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' } },
+          h('span', { style: { fontSize: 12 } }, String(index + 1) + '.'),
+          h('input', { className: 'rt-input', style: { flex: '1 1 140px', minWidth: 0 },
+            'aria-label': '跳板 ' + (index + 1), placeholder: 'bastion', value: alias,
+            onChange: (e) => editAdminRoute((route) => ({ ...route, jumps: route.jumps.map((value, i) => i === index ? e.target.value : value) })) }),
+          h('button', { type: 'button', className: 'rt-btn', disabled: index === 0, onClick: () => moveAdminJump(index, -1), 'aria-label': '上移跳板' }, '↑'),
+          h('button', { type: 'button', className: 'rt-btn', disabled: index === adminRoute.jumps.length - 1, onClick: () => moveAdminJump(index, 1), 'aria-label': '下移跳板' }, '↓'),
+          h('button', { type: 'button', className: 'rt-btn', onClick: () => editAdminRoute((route) => ({ ...route, jumps: route.jumps.filter((_, i) => i !== index) })) }, '删除'))),
+        h('button', { type: 'button', className: 'rt-btn', style: { marginTop: 8 }, disabled: adminRoute.jumps.length >= 4,
+          onClick: () => editAdminRoute((route) => ({ ...route, jumps: [...route.jumps, ''] })) }, '+ 添加跳板'),
+        h('div', { className: 'rt-foot', style: { marginTop: 10, overflowWrap: 'anywhere' } },
+          '路径：本机 → ' + [...adminRoute.jumps.map((value) => value.trim() || '未填写'), adminRoute.target.trim() || '最终服务器'].join(' → ')),
+        adminValid ? h('div', { style: { marginTop: 8, fontSize: 12 } },
+          h('div', { className: 'rt-foot' }, '配置格式有效。保存后保留路径；在 Purge 安装目录的本机终端运行以下命令，执行实际连接检测。'),
+          h('input', { className: 'rt-input rt-mono', readOnly: true, 'aria-label': '本机 SSH 管理检查命令',
+            style: { display: 'block', width: '100%', marginTop: 4 },
+            value: 'node scripts/vps-admin-check.mjs ' + adminRoute.target.trim() + (adminRoute.jumps.length ? ' ' + adminRoute.jumps.map((value) => value.trim()).join(',') : ''),
+            onFocus: (e) => e.target.select() }))
+          : (adminRoute.target || adminRoute.jumps.length) ? h('div', { className: 'rt-err', style: { marginTop: 8 } },
+            '请填写有效且不重复的 SSH Host 别名；最多四个跳板。') : null,
+        h('p', { className: 'rt-foot' }, '本页不主动发起 SSH，也不显示未验证的在线状态；连接结果以本机检查命令为准。'))
+      
       const addCustomTool = () => setDraft((d) => d ? { ...d, customTools: (d.customTools || []).concat({ name: '', path: '' }) } : d)
       const editCustomTool = (i, key, value) => setDraft((d) => d ? {
         ...d, customTools: (d.customTools || []).map((item, index) =>
@@ -8886,6 +8934,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             '连接检查：PowerShell 运行 Test-Path "私钥路径"，再运行 ssh -i "私钥路径" 用户名@主机。'
             + ' IPv6 URL 格式为 http://[IPv6]:端口，不能把 user@host 直接用于 HTTP。'
             + ' 详见「操作指南 → 多环境作用与 VPS 配置」。')),
+          adminRouteCard(),
           h('div', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
