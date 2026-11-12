@@ -16,3 +16,13 @@
 离线历史接口：op=scopedIntelHistory，参数 engagement、target。返回来源、采集时间、标准化端口与主机名线索；不会联系外部平台。
 
 尚未实现：其他厂商 REST 接口、ARTEX 自动同步。
+
+## 免费 DNS 情报（第三阶段）
+
+资源 → 测绘中心 → 免费 DNS 情报 · 单域名。登记授权域名，输入完整主机名（不能填 URL、IP 或通配符），确认将域名提交给系统配置的 DNS 解析器，查询 A、AAAA、CNAME；无需商业 API Key。A/AAAA 返回 TTL 时保留。默认预览，可选保存，并可按域名离线查询最近 100 条历史快照。
+
+DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或漏洞，也不扩大授权范围；部分记录查询失败时仍保留成功记录。快照包含错误类别与 TTL；完全相同的连续快照刷新采集时间。
+
+接口：scopedDnsLookup（异步）/ scopedDnsHistory（同步），参数 engagement、target；查询需 confirmExternal=true，可选 commit=true。数据保存在原项目 SQLite 的 dns_intel_snapshot 表。
+
+本阶段只解析单个已知域名，尚未接入 CT 证书透明度和自动子域发现，也未实现 ARTEX 同步。
