@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createReservations } from '../lib/redteam/agent-reservations.js'
+import { createReservations, reservedUsage } from '../lib/redteam/agent-reservations.js'
 
 const event = (runId, parentSessionId) => ({ runId, parentSessionId })
 
@@ -52,4 +52,30 @@ test('manual release without a key removes one reservation, not the whole root',
   const second = r.acquire('root', 'root', 'second')
   assert.equal(r.release('root'), true)
   assert.deepEqual(r.list('root').map(x => x.key), [second])
+})
+
+test('usage counts the union of observed running children and outstanding reservations', () => {
+  const r = createReservations()
+  r.acquire('root', 'root', 'observed')
+  r.acquire('root', 'root', 'pending')
+  r.start({ ...event('run-a', 'root'), id: 'child-a' })
+  assert.equal(reservedUsage({ running: 2, running_ids: ['child-a', 'unreserved'] }, r.list('root')), 3)
+  assert.equal(reservedUsage({ running: 1, running_ids: ['unreserved'] }, r.list('root')), 3)
+  assert.equal(reservedUsage({ running: 0, running_ids: [] }, r.list('root')), 2)
+  r.end(event('run-a', 'root'))
+  assert.equal(reservedUsage({ running: 1, running_ids: ['unreserved'] }, r.list('root')), 2)
+})
+
+test('idle or disposed parent reclaims only its unbound reservations', () => {
+  const r = createReservations()
+  const active = r.acquire('root', 'root', 'active', 1)
+  r.acquire('root', 'root', 'failed start', 2)
+  const nested = r.acquire('root', 'nested', 'nested pending', 3)
+  r.start({ ...event('run-a', 'root'), id: 'child-a' })
+  assert.equal(r.clearPending('root'), 1)
+  assert.deepEqual(r.list('root').map(x => x.key), [active, nested])
+  assert.equal(r.clearPending('root'), 0)
+  assert.equal(r.clearPending('nested'), 1)
+  assert.equal(r.end(event('run-a', 'root')), true)
+  assert.deepEqual(r.list('root'), [])
 })
