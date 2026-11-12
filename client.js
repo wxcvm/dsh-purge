@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "938912e8b00ae266";
+		const CLIENT_BUILD_ID = "be4f8d574cb9fc5d";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2131,6 +2131,41 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				p?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (p.failedStage ? updateStageLabel(p.failedStage) + "：" : "") + p.error) : null);
 		}
 
+		function UpdateRecoveryPanel({ receipt: r, unavailable }) {
+			if (!r) return null;
+			const profile = r.profileVerification;
+			const rendererMatch = r.rendererDiskBuildId && r.clientDiskMatch === true
+				? r.rendererDiskBuildId === CLIENT_BUILD_ID : null;
+			const runtimeVerified = r.verification === "backend_verified" && rendererMatch === true;
+			const label = r.phase === "failed" ? "上次更新失败" : r.verification === "interrupted" ? "上次更新中断"
+				: runtimeVerified ? "当前宿主运行版本已核验" : "上次更新待核验";
+			const row = (name, value) => h("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
+				h("span", null, name), h("b", null, value));
+			const tri = value => value === true ? "匹配" : value === false ? "不匹配" : "未知";
+			const profileLabels = { verified: "安装来源与关键文件已核验", migration_required: "需要迁移安装来源",
+				mismatch: "安装版本或文件不匹配", unknown: "尚未核验" };
+			return h("div", { className: "dshp-notice", role: "status", style: { display: "grid", gap: 8, marginTop: 8, overflowWrap: "anywhere" } },
+				h("b", null, "上次更新记录 · " + label),
+				h("span", null, "目标：" + (r.after?.version || r.profileInstall?.version || r.ref || "未知") +
+					(r.targetSha ? " · " + r.targetSha.slice(0, 12) : "")),
+				r.finishedAt ? h("span", { className: "dshp-hint" }, "结束：" + r.finishedAt) : null,
+				row("磁盘关键文件", r.runtimeMissing ? "缺少运行文件" : tri(r.diskMatch)),
+				row("后端运行版本", r.processRestarted === false ? "待重启" : r.processRestarted === true ? tri(r.backendBootMatch) : "重启未确认"),
+				row("实际前端构建", tri(rendererMatch)),
+				row("Profile 安装来源", profile?.status === "verified" ? "已核验" : profile?.status === "pending" ? "仍需处理" : "没有迁移记录"),
+				...(profile?.rows || []).map(item => h("div", { key: item.profile, className: "dshp-hint" },
+					item.profile + " · " + (profileLabels[item.status] || "尚未核验") +
+					(item.cachePresent === false ? " · 本地安装包缺失" : ""))),
+				r.phase === "failed" ? h("span", { role: "alert" }, "失败阶段：" + (r.failedPhase || r.phase) + " · " + (r.error || "未知错误")) : null,
+				r.verification === "interrupted" ? h("span", { role: "alert" }, "后台已重启，但上次写入未确认完成。请先检查更新恢复记录，不要直接重复覆盖。") : null,
+				profile?.rows?.some(item => item.status === "migration_required") ? h("div", null,
+					h("span", null, "请完全退出对应 Harness 后，使用私有安装迁移命令。"),
+					r.targetSha ? h("p", { className: "dshp-hint", style: { overflowWrap: "anywhere" } },
+						"目标完整 SHA：" + r.targetSha) : null) : null,
+				unavailable ? h("span", { className: "dshp-hint" }, "状态连接暂不可用，以上为上次读取的结果。") : null,
+				h("span", { className: "dshp-hint" }, "仅核验记录中的四个关键文件和当前宿主，不代表其他宿主已重启。"));
+		}
+
 		function PurgifySection({ section } = {}) {
 			const t = useT();
 			const tRef = useRef(t);
@@ -2144,9 +2179,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [patchBusy, setPatchBusy] = useState(false);
 			const [updatePending, setUpdateBusy] = useState(false);
 			const [updateProgress, setUpdateProgress] = useState(null);
+			const [recoveredReceipt, setRecoveredReceipt] = useState(undefined);
 			const [progressUnavailable, setProgressUnavailable] = useState(false);
 			const [progressClock, setProgressClock] = useState(Date.now());
 			const updateBusy = updatePending || Boolean(updateProgress?.active);
+			const lastReceipt = recoveredReceipt === undefined ? state?.update_receipt : recoveredReceipt;
+			const receiptCoversProgress = lastReceipt && updateProgress && Date.parse(lastReceipt.startedAt) >= updateProgress.startedAt;
 			useEffect(() => {
 				let stopped = false, timer;
 				const poll = async () => {
@@ -2154,6 +2192,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						const data = await apiJson("/dsh-purge/update-progress");
 						if (stopped) return;
 						setUpdateProgress(data?.progress || null);
+						if (!data?.progress?.active && Object.prototype.hasOwnProperty.call(data || {}, "receipt")) setRecoveredReceipt(data.receipt);
 						setProgressUnavailable(false);
 						if (updatePending || data?.progress?.active) timer = setTimeout(poll, 1500);
 					} catch {
@@ -2811,10 +2850,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						renderEdition("beta"),
 					),
 					noticeNode(updateNotice),
-					(updateProgress || (updatePending && updateJob?.kind !== "check")) ? h(UpdateProgressPanel, {
+					((updateProgress && (updateProgress.active || !receiptCoversProgress)) || (updatePending && updateJob?.kind !== "check")) ? h(UpdateProgressPanel, {
 						progress: updateProgress, pending: updatePending, unavailable: progressUnavailable,
 						clock: progressClock,
 					}) : null,
+					!updateBusy && lastReceipt ? h(UpdateRecoveryPanel, { receipt: lastReceipt, unavailable: progressUnavailable }) : null,
 				)),
 				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" },
