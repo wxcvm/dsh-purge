@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "d8f8634b01ce81bd";
+		const CLIENT_BUILD_ID = "299da35c1f578d35";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12364,6 +12364,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		}
 
 
+/* __DSH_PURGE_WORKSPACE_BEGIN__ */
 		// Use the same native main-panel slots as Armory: navigation stays in the DSH shell.
 		const PURGE_PANEL_ID = "dsh-purge-workspace";
 		let purgeWorkspaceCtx = null;
@@ -12590,7 +12591,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				h("path", { d: "M12 2 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z" }),
 				h("path", { d: "m8.5 12 2.5 2.5 4.5-5" }));
 		}
-
+/* __DSH_PURGE_WORKSPACE_END__ */
 		function requestDrill(kind) {
 			const pending = kind || "tab";
 			const openEnv = () => {
