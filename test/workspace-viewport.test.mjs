@@ -25,7 +25,9 @@ test("Windows titlebar is reserved without a second height calculation", () => {
 
 test("workspace styles are installed before paint and back releases fullscreen", () => {
   assert.match(source, /useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/);
-  assert.match(source, /const back = \(\) => \{[\s\S]{0,700}document\.exitFullscreen\(\)[\s\S]{0,300}setWorkspaceVisible\(false\)/);
+  const back = source.match(/const back = \(\) => \{([\s\S]*?)\n\t\t\t\};\n\t\t\tif \(!workspaceVisible\)/);
+  assert.ok(back, "workspace back handler must exist");
+  assert.match(back[1], /document\.exitFullscreen\(\)[\s\S]*selectPurgeHostPanel\(null\)[\s\S]*setWorkspaceVisible\(false\)/);
 });
 
 test("host layout failures fall back to the Dock instead of escaping", () => {
