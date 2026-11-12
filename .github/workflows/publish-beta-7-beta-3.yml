@@ -1,0 +1,63 @@
+name: Publish beta.3 (one-time)
+
+on:
+  push:
+    branches: [release/publish-beta-7-beta-3]
+    paths: ['.github/workflows/publish-beta-7-beta-3.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/release/publish-beta-7-beta-3'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 7b8e764f8111b3d062dfbd14f46c3e06f30ebc6e
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify and publish the immutable beta candidate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="7b8e764f8111b3d062dfbd14f46c3e06f30ebc6e"
+          version="1.1.92-wxcvm.7-beta.3"
+          tag="v$version"
+          test "$(git rev-parse HEAD)" = "$commit"
+          test "$(git rev-parse HEAD^{tree})" = "4f4be2e6b8ce1a890d969803f3743e2e85c5a385"
+          test "$(node -p "require('./package.json').version")" = "$version"
+          test "$(head -n 1 release-notes-wxcvm.md | tr -d '\r')" = "# $version"
+          if git rev-parse -q --verify "refs/tags/$tag^{}" >/dev/null; then
+            echo "Tag already exists; refusing to overwrite"
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite"
+            exit 1
+          fi
+          node --check lib/index.js
+          node --check lib/core.js
+          node --check lib/reapply.js
+          node --input-type=module -e "import './lib/index.js'"
+          zip="dsh-purge-$version.zip"
+          git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$commit"
+          test -s "$zip"
+          test "$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")" = "$version"
+          unzip -Z1 "$zip" > archive-files.txt
+          for file in client.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1 lib/update-payload.js scripts/recover-update.mjs scripts/vps-admin-check.mjs scripts/ensure-profile-bundle.mjs docs/UPDATE_RECOVERY.zh-CN.md; do
+            grep -Fx "dsh-purge-$version/$file" archive-files.txt >/dev/null
+          done
+          sha256sum "$zip" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          gh release create "$tag" "$zip" SHA256SUMS.txt --target "$commit" --title "$tag" --notes-file release-notes-wxcvm.md --prerelease
+          gh release view "$tag" --json tagName,isPrerelease,assets,url
