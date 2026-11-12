@@ -358,3 +358,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\update-desktop-fork.ps1 -DshH
 ```
 
 如果实际 DSH_HOME 在其他目录，要按实际路径修改；不要把独立 Git 工作区当作正在加载的插件目录。安装完成后完全重开 Desktop，再通过「管理 → 指南 → 运行中插件源码」检查实际目录、版本和差异，进入「技能库」「已归档靶标」核对界面。可用 `-CheckOnly` 做只读版本及入口文件检查。自动化 Windows 运行器只能验证脚本逻辑，不能替代真实桌面加载验收。
+
+
+## Windows 工作区访问权限诊断
+
+在仓库目录打开 PowerShell，运行以下命令可只读检查 Purge 的本地工作区（默认 `$HOME/.dsh/redteam` 或 `DSH_HOME/redteam`；也可用 `-Root` 指定实际目录）：
+
+```powershell
+.\scripts\protect-redteam-acl.ps1
+.\scripts\protect-redteam-acl.ps1 -Details
+```
+
+默认只输出聚合统计，`ACL_AUDIT` 包含已检查项目数、宽泛账户组读取授权（Everyone、Authenticated Users、BUILTIN\\Users）、其他非当前用户/SYSTEM/Administrators 的读取授权、启用 ACL 继承、ACL 读取失败、跳过的重解析点及枚举失败数。`-Details` 额外输出需要关注的工作区相对路径与发现标记；这些路径可能包含项目名称，不宜直接分享。统计反映观察到的允许规则，不是对实际有效访问权限的完整计算；拒绝规则、组成员资格、上级目录及共享权限仍需独立核对。跳过目录联接/符号链接等重解析点，检查失败不会被计为已确认安全。
+
+预览不修改 ACL、数据或原始证据，也不会自动启动权限保护。原有 `-Apply` 是显式选择的权限收紧操作：请先确认运行服务的账户与预期访问账户，备份现有 ACL，再按需要执行。该检查不代表文件内容已加密，也不检查工作区之外的备份或云同步副本。
