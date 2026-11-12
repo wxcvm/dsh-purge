@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f624b6f1f875c521";
+		const CLIENT_BUILD_ID = "614dbb12ab5a0090";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1553,6 +1553,20 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [checking, setChecking] = useState(false);
 			const [error, setError] = useState("");
 			const receipt = state?.update_receipt;
+			const [target, setTarget] = useState(null);
+			const [targetBusy, setTargetBusy] = useState(false);
+			const [targetError, setTargetError] = useState("");
+			const verifyTarget = async () => {
+				setTargetBusy(true);
+				setTargetError("");
+				setTarget(null);
+				try {
+					const data = await apiJson("/dsh-purge/update-target");
+					if (!data?.ok) throw new Error(data?.error || "远端目标核对失败");
+					setTarget(data);
+				} catch (e) { setTargetError(String(e?.message || e)); }
+				finally { setTargetBusy(false); }
+			};
 			const [copies, setCopies] = useState(null);
 			const [copiesBusy, setCopiesBusy] = useState(false);
 			const [copiesError, setCopiesError] = useState("");
@@ -1577,7 +1591,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			};
 			const status = !receipt ? "暂无本安装目录的更新记录"
 				: receipt.phase === "failed" ? "更新失败"
-				: receipt.phase === "writing" || receipt.phase === "reapplying" ? "更新尚未确认完成"
+				: ["resolving_target", "writing", "reapplying"].includes(receipt.phase) ? "更新尚未确认完成"
 				: receipt.diskMatch === false ? "磁盘内容与更新记录不一致"
 				: receipt.backendBootMatch === false ? "后端启动时文件尚未匹配更新"
 				: receipt.diskMatch === true && receipt.backendBootMatch === true ? "磁盘与后端启动指纹一致"
@@ -1591,9 +1605,18 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("p", { className: "dshp-hint" }, "目录：" + receipt.root),
 					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；与更新时记录比较。"),
 					receipt.error ? h("p", { role: "alert" }, receipt.error) : null,
+					receipt.phase === "failed" ? h("p", { className: "dshp-hint" }, receipt.failedPhase === "reapplying" ? "文件可能已更新，但后续处理失败。先检查诊断与备份，完全退出宿主后再决定是否通过版本与恢复页面重新选择版本。" : "写入未确认完成。先检查安装副本和备份，避免直接反复覆盖；需要恢复时使用现有版本选择或官方安装包。") : null,
 				) : null,
 				h(Btn, { disabled: busy || checking, onClick: verify }, checking ? "核对中…" : "重新核对更新结果"),
 				error ? h("p", { role: "alert" }, error) : null,
+				h("div", { className: "dshp-sub" }, h("h4", null, "远端目标核对")),
+				h("p", { className: "dshp-hint" }, "更新前记录的提交：" + (receipt?.targetSha || "未知") + "；仅比较四个关键文件，联网只读。"),
+				h(Btn, { disabled: busy || targetBusy || !receipt?.targetSha, onClick: verifyTarget }, targetBusy ? "核对中…" : "核对远端目标"),
+				targetError ? h("p", { role: "alert" }, targetError) : null,
+				target && target.sha === receipt?.targetSha ? h("div", null,
+					h("p", { role: "status" }, target.status === "match" ? "四个关键文件与记录的远端提交一致" : target.status === "mismatch" ? "存在与远端目标不同的文件（含换行差异）" : "远端核对数据不足"),
+					target.files.map((row) => h("p", { key: row.file, className: "dshp-hint" }, row.file + " · " + ({ match: "一致", mismatch: "不同", unknown: "未知" }[row.status] || "未知"))),
+				) : null,
 				h("div", { className: "dshp-sub" }, h("h4", null, "前端构建身份")),
 				h("p", { className: "dshp-hint" }, "实际运行前端：" + CLIENT_BUILD_ID + " · 磁盘构建：" + (diskBuild || "未知")),
 				h("p", { role: "status" }, rendererMatch === true ? "前端构建标识一致" : rendererMatch === false ? "前端仍加载其他构建，请完整退出 Harness 或刷新页面后再核对。" : "磁盘构建标识未知，请检查安装副本。"),
