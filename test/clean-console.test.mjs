@@ -192,11 +192,11 @@ test('backup inventory reports actual content without changing the files', async
   const missing = () => Object.assign(new Error('missing'), { code: 'ENOENT' })
   const fs = { statSync: (p) => { if (!files.has(p)) throw missing(); return { size: files.get(p).length, mtime: new Date(0), isFile: () => true } } }
   const fsp = { readFile: async (p) => { if (!files.has(p)) throw missing(); return files.get(p) } }
-  const inspect = new Function('fs', 'fsp', 'createHash', 'flattenTargetPaths', 'targetFiles', 'isUserProfilePatchFile', 'BAK_SUFFIX',
+  const inspect = new Function('fs', 'fsp', 'createHash', 'flattenTargetPaths', 'targetFiles', 'isUserProfilePatchFile', 'BAK_SUFFIX', 'backupProvenance',
     source.slice(start, end).replace('export async function', 'async function') + 'return inspectHostBackups;')
-    (fs, fsp, (await import('node:crypto')).createHash, (x) => x, () => ['same', 'changed', 'empty', 'missing', 'profile'], (p) => p === 'profile', '.bak')
+    (fs, fsp, (await import('node:crypto')).createHash, (x) => x, () => ['same', 'changed', 'empty', 'missing', 'profile'], (p) => p === 'profile', '.bak', () => ({ status: 'unknown', history: [] }))
   const result = await inspect('host')
-  assert.equal(result.provenance, 'unknown')
+  assert.equal(result.provenance, 'per-file')
   assert.equal(result.rows.map((r) => r.status).join(','), 'identical,different,invalid,missing')
   assert.equal(result.rows[0].sha256.length, 64)
   assert.equal(files.get('changed').toString(), 'new')
@@ -209,4 +209,51 @@ test('backup inventory reports actual content without changing the files', async
   assert.match(entry, /ok: result.errors === 0/)
   assert.match(entry, /value.startsWith\("error:"\)/)
   assert.match(client, /h\(BackupInventory, \{ busy: jobOn \|\| updateBusy \}\)/)
+})
+
+test('backup history records actual package and hash, keeps legacy unknown, and detects changes', async () => {
+  const source = readFileSync(new URL('../lib/core.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function backupRecordPath(')
+  const end = source.indexOf('function shouldRestoreOriginal(', start)
+  assert.ok(start >= 0 && end > start)
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const os = await import('node:os')
+  const { createHash } = await import('node:crypto')
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-backup-history-'))
+  try {
+    const pkg = path.join(home, 'host', 'package.json')
+    const original = path.join(home, 'host', 'lib', 'index.js')
+    fs.mkdirSync(path.dirname(original), { recursive: true })
+    fs.writeFileSync(pkg, JSON.stringify({ name: 'fixture-host', version: '1.0.0' }))
+    const api = new Function('fs', 'path', 'createHash', 'findDshHome', 'atomicWriteSync',
+      source.slice(start, end) + '\nreturn { recordBackup, backupProvenance };')(
+      fs, path, createHash, () => home, (p, data) => {
+        fs.mkdirSync(path.dirname(p), { recursive: true })
+        fs.writeFileSync(p, data)
+      })
+    const bytes = Buffer.from('original')
+    const hash = createHash('sha256').update(bytes).digest('hex')
+    assert.equal(api.backupProvenance(original, hash).status, 'unknown')
+    api.recordBackup(original, bytes, 'create')
+    let info = api.backupProvenance(original, hash)
+    assert.equal(info.status, 'version_match')
+    assert.equal(info.record.package.version, '1.0.0')
+    assert.equal(info.history.length, 1)
+    assert.equal(api.backupProvenance(original, 'changed-hash').status, 'hash_mismatch')
+    fs.writeFileSync(pkg, JSON.stringify({ name: 'fixture-host', version: '2.0.0' }))
+    assert.equal(api.backupProvenance(original, hash).status, 'version_mismatch')
+    const fresh = Buffer.from('new original')
+    api.recordBackup(original, fresh, 'refresh')
+    info = api.backupProvenance(original, createHash('sha256').update(fresh).digest('hex'))
+    assert.equal(info.status, 'version_match')
+    assert.equal(info.history[0].reason, 'refresh')
+    assert.equal(info.history[1].package.version, '1.0.0')
+    for (let i = 0; i < 25; i++) api.recordBackup(original, fresh, 'refresh')
+    assert.equal(api.backupProvenance(original, hash).history.length, 20)
+    assert.equal(api.backupProvenance(original, null).status, 'unknown')
+  } finally { fs.rmSync(home, { recursive: true, force: true }) }
+  assert.match(source, /Backup identity mismatch; original preserved/)
+  assert.match(source, /recordBackup\(original, originalBuf, "refresh"\)/)
+  assert.match(client, /版本不一致，禁止覆盖恢复/)
 })
