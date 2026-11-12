@@ -16,12 +16,29 @@
 
 私有模式不再自动将 profile 的依赖地址改成匿名 codeload，也不手改 pnpm 锁文件。更新收据 `profileInstall` 提供本地安装包路径及各 profile 是否需要迁移。当前阶段先保留原有 manifest/lockfile；因此已完成插件文件覆盖不代表 profile 已完成迁移。
 
-如果需要重装或修复依赖，完全退出对应 Harness 宿主，备份该 profile 的 package.json 和 pnpm-lock.yaml（若存在），使用该 profile 实际采用的 pnpm 在其目录执行 `pnpm add "<本地缓存 .tgz 的完整路径>"`，由包管理器同时更新依赖声明和锁文件。依赖包可能仍需网络；本地缓存只消除了 Purge 私有 GitHub 安装包的匿名下载依赖。按原有安装文档处理 postinstall 审批，并重新核对安装版本、bundles 与 cordis insert。不要把本地归档删除；profile 可能仍引用该文件。尚未完成 Windows/Desktop 实机验证，不建议在运行中的宿主上执行 pnpm。
+### 使用独立迁移命令
+
+使用已经包含本修复的插件源码或安装目录，完全退出要迁移的 Harness 宿主（Desktop 包括托盘，Web 包括实际后端），在插件目录执行：
+
+```text
+node scripts/migrate-private-profile.mjs <profile> <完整SHA> --host-stopped
+```
+
+Windows 需额外指定该 profile 实际使用的 pnpm 可执行文件或 JavaScript 入口，例如：
+
+```text
+node scripts/migrate-private-profile.mjs desktop <完整SHA> --host-stopped --pnpm "C:/path/to/pnpm.cjs"
+```
+
+完整 SHA 来自更新收据 `targetSha`，不是七位短提交号。命令会再次核验缓存，并只迁移指定的现有 profile。它先备份 package.json、pnpm-lock.yaml 和 pnpm-workspace.yaml（存在时），仅解析锁文件；核验来源后才执行冻结锁文件安装，最终核对实际安装包名称及版本。解析失败时尝试恢复原配置；若实际安装阶段失败，则保留已解析的配置与备份，报告 install_incomplete，不能宣称 node_modules 已回滚。可在宿主保持停止的情况下修复问题并重新运行命令。
+
+`--host-stopped` 是操作者确认，不代表程序检测到了所有宿主进程。迁移不自动杀进程，不运行在内置更新请求里，不将 GitHub Token 传给 pnpm。安装阶段使用 --ignore-scripts，不执行依赖生命周期脚本；仍应按原安装文档检查 bundles、cordis insert 以及必要的构建审批。其他依赖可能需要网络，不能保证整次安装离线完成。迁移记录及备份保存在 `<DSH_HOME>/dsh-purge/profile-migrations/`，不要删除仍被 profile 引用的安装包。异常退出遗留的 `.dsh-purge-private-migration.lock` 只可在确认没有迁移进程、已检查备份和配置状态后手动清理。重启后仍需验收实际运行版本。
+
 
 ## 仍需验收
 
 - Windows Desktop 与 Web 的真实授权网络、归档下载、版本切换和重启验收。
-- 初次安装、实际 pnpm/profile 迁移及私有 Git checkout 凭据仍需分别验收；已实现本地安装包缓存，但没有自动执行 pnpm，也不替代 Git credential helper。
+- 初次安装、实际 pnpm/profile 迁移及私有 Git checkout 凭据仍需分别验收；已实现本地安装包缓存和独立迁移命令，但运行中的更新器不会自动调用 pnpm；真实宿主迁移尚需验证，不替代 Git credential helper。
 - 不会自动公开仓库、发布资产或提升 Beta。应先使用授权取得的新构建安装，再验证内置更新。
 
 令牌过期、权限不足或网络中断时检查访问权限及进程环境。GitHub 对无权读取的私有仓库可能返回 404；不应据此认为仓库或测试版不存在。
