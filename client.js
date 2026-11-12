@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "1c94559d0c0f882f";
+		const CLIENT_BUILD_ID = "8f21b1bd4184bed5";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2151,6 +2151,13 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				r.finishedAt ? h("span", { className: "dshp-hint" }, "结束：" + r.finishedAt) : null,
 				row("磁盘关键文件", r.runtimeMissing ? "缺少运行文件" : tri(r.diskMatch)),
 				row("后端运行版本", r.processRestarted === false ? "待重启" : r.processRestarted === true ? tri(r.backendBootMatch) : "重启未确认"),
+				r.restartCheck && r.restartCheck !== "not_applicable" ? row("重启请求", ({
+					process_restarted: "已确认新进程", dispatch_failed: "启动请求失败", manual_required: "需要手动重启",
+					unconfirmed: "90 秒内未确认", waiting: "已发出，等待新进程", not_requested: "尚未确认请求",
+				})[r.restartCheck] || "未知") : null,
+				r.restartCheck === "dispatch_failed" ? h("span", { role: "alert" }, "文件已更新，但重启请求失败：" + (r.restartRequest?.error || "未知错误") + "。请完全退出宿主后重新打开，无需重复下载。") : null,
+				r.restartCheck === "unconfirmed" ? h("span", { role: "alert" }, "尚未确认后端进程更换。请检查托盘或 Web 新窗口，不要把重新连接当成更新完成。") : null,
+				r.verification === "backend_verified" && rendererMatch === false ? h("span", { role: "alert" }, "后端已加载目标文件，但当前前端构建仍旧。Desktop 请完整退出后重新打开；Web 请使用重启后新打开的页面。") : null,
 				row("实际前端构建", tri(rendererMatch)),
 				row("Profile 安装来源", profile?.status === "verified" ? "已核验" : profile?.status === "pending" ? "仍需处理" : "没有迁移记录"),
 				...(profile?.rows || []).map(item => h("div", { key: item.profile, className: "dshp-hint" },
@@ -2182,6 +2189,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [recoveredReceipt, setRecoveredReceipt] = useState(undefined);
 			const [progressUnavailable, setProgressUnavailable] = useState(false);
 			const [progressClock, setProgressClock] = useState(Date.now());
+			const restartWatchUntil = useRef(0);
 			const updateBusy = updatePending || Boolean(updateProgress?.active);
 			const lastReceipt = recoveredReceipt === undefined ? state?.update_receipt : recoveredReceipt;
 			const receiptCoversProgress = lastReceipt && updateProgress && Date.parse(lastReceipt.startedAt) >= updateProgress.startedAt;
@@ -2195,11 +2203,18 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						if (!data?.progress?.active && Object.prototype.hasOwnProperty.call(data || {}, "receipt")) setRecoveredReceipt(data.receipt);
 						setProgressUnavailable(false);
 						failures = 0;
-						if (updatePending || data?.progress?.active) timer = setTimeout(poll, 1500);
+						const receipt = data?.receipt;
+						if (receipt?.restartCheck === "waiting") {
+							const at = Date.parse(receipt.restartRequest?.at);
+							if (Number.isFinite(at)) restartWatchUntil.current = at + 90000;
+						} else if (receipt) {
+							restartWatchUntil.current = 0;
+						}
+						if (updatePending || data?.progress?.active || Date.now() < restartWatchUntil.current) timer = setTimeout(poll, 1500);
 					} catch {
 						if (stopped) return;
 						setProgressUnavailable(true);
-						if (updatePending || updateProgress?.active || ++failures <= 3) timer = setTimeout(poll, 2500);
+						if (updatePending || updateProgress?.active || Date.now() < restartWatchUntil.current || ++failures <= 3) timer = setTimeout(poll, 2500);
 					}
 				};
 				poll();
@@ -2305,6 +2320,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				const tr = tRef.current;
 				setUpdateNotice({ kind: "ok", text: kind === "switched" || kind === "channel" ? tr("update.switching") : tr("update.applying") });
 				setUpdateProgress(null);
+				restartWatchUntil.current = 0;
 				setProgressClock(Date.now());
 				return apiJson("/dsh-purge/update", {
 					method: "POST",
@@ -2314,6 +2330,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					.then((d) => {
 						if (!d || (d.ok === false && d.error)) throw new Error((d && d.error) || "update failed");
 						applyUpdateInfo(d, tr, kind);
+						if (d.restartRequest?.status === "failed") {
+							setUpdateNotice({ kind: "error", text: "文件已更新，重启请求失败：" + (d.restartRequest.error || "未知错误") + "。请完全退出宿主后重新打开，无需重复更新。" });
+							return d;
+						}
 						if (d.needsFullQuit) {
 							suppressRestartAsk.current = false;
 							setAskRestart(true);
@@ -2321,7 +2341,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							return d;
 						}
 						if (d.restartAfter) {
-							setUpdateNotice({ kind: "ok", text: tr("update.restarting") });
+							restartWatchUntil.current = Date.now() + 90000;
+							setUpdateNotice({ kind: "ok", text: "重启请求已发出，等待新进程与运行版本核验。" });
 							return d;
 						}
 						if (d.applied && d.reloadClient !== false) {
