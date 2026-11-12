@@ -588,3 +588,26 @@ test('version update reports real live stages and prevents duplicate writes', as
   assert.match(client, /apiJson\("\/dsh-purge\/update-progress"\)/)
   assert.match(client, /总大小未知/)
 })
+
+test('recovery selects the newest receipt belonging to the current profile, not another install', async () => {
+  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function readCurrentUpdateReceipt()');
+  const end = source.indexOf('export function updateReceiptStatus()', start);
+  const path = await import('node:path');
+  const root = path.resolve('current-plugin'), profile = path.resolve('profiles/desktop');
+  const direct = path.resolve('receipts', 'a'.repeat(64) + '.json');
+  const related = 'b'.repeat(64) + '.json', other = 'c'.repeat(64) + '.json';
+  const old = { startedAt: '2026-01-01T00:00:00Z', targetSha: 'old' };
+  const newer = { startedAt: '2026-02-01T00:00:00Z', targetSha: 'new', profileInstall: { profiles: [{ dir: profile }] } };
+  const unrelated = { startedAt: '2026-03-01T00:00:00Z', targetSha: 'other', profileInstall: { profiles: [{ dir: path.resolve('profiles/web') }] } };
+  const records = new Map([[direct, old], [path.join(path.dirname(direct), related), newer], [path.join(path.dirname(direct), other), unrelated]]);
+  const read = new Function('fs', 'path', 'PLUGIN_ROOT', 'updateReceiptPath', 'readJson', 'realPath', 'findPurgeProfiles', 'profilePluginDir',
+    source.slice(start, end) + '\nreturn readCurrentUpdateReceipt;')(
+      { readdirSync: () => [path.basename(direct), related, other] }, path, root, () => direct,
+      p => records.get(p) || null, p => p, () => [{ dir: profile }], () => root);
+  assert.equal(read().targetSha, 'new');
+  records.delete(path.join(path.dirname(direct), related));
+  assert.equal(read().targetSha, 'old');
+  records.delete(direct);
+  assert.equal(read(), null);
+});
