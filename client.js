@@ -7991,6 +7991,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [surveyBusy, setSurveyBusy] = React.useState(false)
       const [surveyError, setSurveyError] = React.useState('')
       const [surveyResult, setSurveyResult] = React.useState(null)
+      const [dnsTarget, setDnsTarget] = React.useState('')
+      const [dnsConsent, setDnsConsent] = React.useState(false)
+      const [dnsCommit, setDnsCommit] = React.useState(false)
+      const [dnsBusy, setDnsBusy] = React.useState(false)
+      const [dnsResult, setDnsResult] = React.useState(null)
+      const runDns = (history = false) => {
+        if (!eng || !dnsTarget.trim() || dnsBusy || (!history && !dnsConsent)) return
+        setDnsBusy(true); setDnsResult(null)
+        api({ op: history ? 'scopedDnsHistory' : 'scopedDnsLookup', engagement: eng,
+          target: dnsTarget.trim(), confirmExternal: dnsConsent, commit: dnsCommit }).then(r => {
+          setDnsBusy(false); setDnsResult({ ...r, history })
+        }, () => { setDnsBusy(false); setDnsResult({ error: 'DNS 查询失败' }) })
+      }
       const [intelTarget, setIntelTarget] = React.useState('')
       const [intelShodan, setIntelShodan] = React.useState(false)
       const [intelConsent, setIntelConsent] = React.useState(false)
@@ -8162,6 +8175,33 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '免费 DNS 情报 · 单域名'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } },
+              '使用系统配置的 DNS 解析器查询 A / AAAA / CNAME，不需要 FOFA Key。解析结果仅作为线索，不会自动扩大项目授权范围或主动扫描解析地址。'),
+            h('input', { className: 'rt-input', value: dnsTarget, placeholder: '已登记授权域名',
+              onChange: e => { setDnsTarget(e.target.value); setDnsConsent(false); setDnsResult(null) } }),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
+              h('label', null, h('input', { type: 'checkbox', checked: dnsConsent,
+                onChange: e => setDnsConsent(e.target.checked) }), ' 同意向 DNS 解析器提交域名'),
+              h('label', null, h('input', { type: 'checkbox', checked: dnsCommit,
+                onChange: e => setDnsCommit(e.target.checked) }), ' 保存 DNS 观察')),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
+              disabled: dnsBusy || !eng || !dnsConsent || !dnsTarget.trim(), onClick: () => runDns() },
+              dnsBusy ? '查询中…' : '查询 DNS 记录'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
+              disabled: dnsBusy || !eng || !dnsTarget.trim(), onClick: () => runDns(true) }, '读取 DNS 历史'),
+            dnsResult && (!dnsResult.engagement || dnsResult.engagement === eng)
+              ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                dnsResult.error ? h('div', { className: 'rt-err' }, dnsResult.error) : null,
+                dnsResult.history ? h('div', null, '本地历史：' + (dnsResult.items || []).length + ' 条',
+                  (dnsResult.items || []).map(item => h('div', { key: item.id },
+                    item.collected_at + ' · ' + (maskAssets ? (item.records || []).length + ' 条记录' :
+                      (item.records || []).map(r => r.type + ' ' + r.value).join('、')))))
+                  : h('div', null, '记录：' + (dnsResult.records || []).length + ' · ' + (dnsResult.imported ? '已保存' : '未保存'),
+                    (dnsResult.records || []).map(r => h('div', { key: r.type + r.value },
+                      r.type + ' ' + (maskAssets ? '已隐藏' : r.value) + (r.ttl !== undefined ? ' · TTL ' + r.ttl : ''))),
+                    (dnsResult.errors || []).map(e => h('div', { key: e.type }, e.type + ': ' + e.code)))) : null),
           h('div', { className: 'rt-card' },
             h('h4', null, '外部被动情报 · 单 IP'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
