@@ -7803,9 +7803,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 : '当前没有发现运行中的 ARTEX')),
             protection.artex.state === 'detected' && protection.artex.version
               ? h('div', { style: { fontSize: 12 } }, '版本：' + protection.artex.version) : null,
+            h('div', { style: { fontSize: 12 } }, '隐私联动：'
+              + ({
+                runtime_observed: '已读取实际 HTTP 监听范围',
+                configured_only: '仅有启动配置，尚未观察实际绑定',
+                not_configured: '未配置可选只读联动凭据',
+                auth_rejected: '只读联动凭据被拒绝',
+                unsupported: '当前 ARTEX 不支持只读联动接口',
+                invalid_response: '联动状态响应不符合约定',
+                unavailable: '联动接口暂时不可用',
+                not_inspected: '尚未检测',
+              }[protection.artex.privacyExposure] || '尚未检测')),
+            protection.artex.privacyScope ? h('div', { style: { fontSize: 12 } },
+              'HTTP 监听范围：' + ({
+                loopback: '回环接口', all_interfaces: '所有网络接口',
+                specific_interface: '指定网络接口', unknown: '未知',
+              }[protection.artex.privacyScope] || '未知')
+              + (protection.artex.privacySource === 'runtime_listener' ? '（运行时观察）' : '（配置推断）')) : null,
             h('div', { style: { fontSize: 12, opacity: 0.8 } },
-              '仅检查 DSH 所在主机的本地健康接口；不共享账号、令牌或数据库。'
-                + 'ARTEX 的监听范围与公网可达性仍未检测。'),
+              '仅通过本机健康接口及可选只读凭据联动，不共享管理员 JWT、账号或数据库。'
+                + ' ARTEX 公网可达性、宿主机端口映射与反向代理仍未检测。'),
             h('button', { className: 'rt-btn', type: 'button',
               onClick: () => setUI({ tab: 'artex' }), style: { marginTop: 8 } },
               '查看 ARTEX 资源与工具')) : null,
