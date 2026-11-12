@@ -362,6 +362,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\update-desktop-fork.ps1 -DshH
 
 ## Windows 工作区访问权限诊断
 
+在新版作战台「管理 → 低干扰与隐私 → Windows 存储权限诊断」点击「检查存储权限」，可直接运行同一只读预览并查看聚合结果。检查针对 DSH 宿主的实际工作区，不是浏览器客户端的文件系统；不自动运行、不允许通过界面选择任意目录或执行 `-Apply`。Windows PowerShell 仅在此次子进程中使用随包脚本的执行策略参数，不修改系统执行策略。检查最多运行 60 秒，超时、异常或部分未检查项目会明确提示；大型工作区可使用下方命令行方式。
+
 在仓库目录打开 PowerShell，运行以下命令可只读检查 Purge 的本地工作区（默认 `$HOME/.dsh/redteam` 或 `DSH_HOME/redteam`；也可用 `-Root` 指定实际目录）：
 
 ```powershell
