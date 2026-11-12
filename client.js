@@ -1511,6 +1511,38 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return lines.join("\n");
 		}
 
+		function BackupInventory({ busy }) {
+			const [report, setReport] = useState(null);
+			const [checking, setChecking] = useState(false);
+			const [error, setError] = useState("");
+			const inspect = async () => {
+				setChecking(true);
+				setError("");
+				setReport(null);
+				try {
+					const result = await apiJson("/dsh-purge/backups");
+					if (!result?.ok) throw new Error(result?.error || "备份检测失败");
+					setReport(result);
+				} catch (e) { setError(String(e?.message || e)); }
+				finally { setChecking(false); }
+			};
+			const labels = { missing: "无备份", invalid: "空或无效", unreadable: "读取失败", readable: "可读（未比较）", identical: "与当前相同", different: "与当前不同" };
+			return h("div", { className: "dshp-clean-browser" },
+				h("div", { className: "dshp-sub" }, h("h4", null, "备份检查与恢复预览")),
+				h("p", { className: "dshp-hint" }, "只检查当前已定位的宿主目标，不包含启动器备份或未发现的历史文件。预览不写入任何文件。"),
+				h(Btn, { disabled: busy || checking, onClick: inspect }, checking ? "检查中…" : "检查现有备份"),
+				error ? h("p", { role: "alert" }, error) : null,
+				report ? h("div", null,
+					h("p", { role: "status" }, report.aiBase ? "已检查 " + report.rows.length + " 个宿主目标；历史备份的版本来源未知。" : "未定位宿主，无法检查备份。"),
+					h("p", { className: "dshp-hint" }, "SHA-256 用于记录当前备份内容，不是原版签名；不同不代表可安全恢复。结果为本次检查快照，恢复前请重新检查。"),
+					report.rows.map((row) => h("details", { key: row.path },
+						h("summary", null, (labels[row.status] || row.status) + " · " + row.path),
+						h("p", null, "大小：" + (row.bytes ?? "未知") + " 字节 · 修改时间：" + (row.modifiedAt || "未知")),
+						h("p", { className: "dshp-hint", style: { overflowWrap: "anywhere" } }, "SHA-256：" + (row.sha256 || "未计算")))),
+				) : null,
+			);
+		}
+
 		function CleanDiagnostics({ state, onRefresh, busy }) {
 			const t = useT();
 			const [checking, setChecking] = useState(false);
@@ -2664,6 +2696,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				)),
 				noticeNode(notice),
 				cleanPane(["patches"], h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
 				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
 
