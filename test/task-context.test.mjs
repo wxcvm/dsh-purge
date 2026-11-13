@@ -7,9 +7,9 @@ import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
 import { taskContext } from '../lib/redteam/task-context.js'
 
-function fixture() {
-  const db = new DatabaseSync(':memory:')
-  db.exec([
+function fixture(path = ':memory:', initialize = true) {
+  const db = new DatabaseSync(path)
+  if (initialize) db.exec([
     'CREATE TABLE asset (id INTEGER PRIMARY KEY, ip TEXT, segment_cidr TEXT, state TEXT, test_status TEXT, test_notes TEXT, blocked_count INTEGER)',
     'CREATE TABLE vuln (id INTEGER PRIMARY KEY, asset_id INTEGER, title TEXT, severity TEXT, status TEXT, evidence TEXT, cve TEXT, target TEXT, gained TEXT)',
     'CREATE TABLE http_evidence (id INTEGER PRIMARY KEY, vuln_id INTEGER, asset_id INTEGER, label TEXT, method TEXT, url TEXT, status INTEGER, request TEXT, response TEXT, note TEXT, captured_by TEXT, captured_at TEXT)',
@@ -203,6 +203,116 @@ test('missing ARTEX knowledge does not block existing task context', (t) => {
   assert.equal(withKeyword.ok, true)
   assert.equal(withKeyword.artex_knowledge.status, 'not-installed')
   assert.deepEqual(withKeyword.artex_knowledge.items, [])
+})
+
+test('task context labels provenance and the coverage of bounded summaries', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        test_notes: ['old one', 'old two', 'recent one', 'x'.repeat(300), 'recent three'].join('\n'),
+        test_surface: 's'.repeat(300),
+        open_ports: 25,
+        ports: Array.from({ length: 25 }, (_, i) => ({ port: 10000 + i, state: 'open', proto: 'tcp' })),
+        fingerprints: Array.from({ length: 12 }, (_, i) => ({ vendor: 'Demo', product: 'Fixture', version: String(i) })),
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    const { asset, provenance } = context
+    assert.equal(asset.recent_test_notes.length, 3)
+    assert.equal(asset.recent_test_notes[1].length, 240)
+    assert.equal(asset.test_surface.length, 240)
+    assert.equal(asset.open_ports.length, 20)
+    assert.equal(asset.fingerprints.length, 10)
+    assert.deepEqual(asset.summary_coverage, {
+      test_notes_total: 5, test_notes_omitted: 2, test_notes_text_truncated: true,
+      test_surface_truncated: true, open_ports_omitted: 5, fingerprints_omitted: 2,
+    })
+    assert.deepEqual(provenance, {
+      records: 'local-engagement-store', knowledge: 'reference-only',
+      current_target_validation: 'not-performed-by-context',
+    })
+    assert.equal(context.artex_knowledge.source, 'local-artex-knowledge')
+    assert.equal(context.artex_knowledge.verification_scope, 'historical-reference')
+    const linked = taskContext(store, 'lab', 'vuln #11')
+    assert.equal(linked.linked_asset.summary_coverage.open_ports_omitted, 5)
+    assert.deepEqual(linked.provenance, provenance)
+    assert.equal(linked.artex_knowledge.verification_scope, 'historical-reference')
+  } finally {
+    db.close()
+  }
+})
+
+test('task context masks common credentials in HTTP metadata without changing stored evidence', () => {
+  const { db, store } = fixture()
+  try {
+    const url = 'https://user:synthetic-userinfo@example.test/path?access_token=synthetic-query&view=1'
+    const label = 'api_key=synthetic-label'
+    const note = 'Authorization: Basic synthetic-header'
+    db.prepare('UPDATE http_evidence SET url = ?, label = ?, note = ? WHERE id IN (21, 22)').run(url, label, note)
+
+    const asset = taskContext(store, 'lab', 'asset #5')
+    const vuln = taskContext(store, 'lab', 'vuln #11')
+    for (const result of [asset.direct_http_evidence, vuln.http_evidence]) {
+      assert.equal(result.total, 1)
+      const item = result.items[0]
+      assert.ok(item.url.includes('example.test/path'))
+      assert.ok(item.url.includes('view=1'))
+      assert.ok(item.url.includes('[REDACTED_USERINFO]'))
+      assert.ok(item.url.includes('access_token=[REDACTED_SECRET]'))
+      assert.equal(item.label, 'api_key=[REDACTED_SECRET]')
+      assert.equal(item.note, 'Authorization: [REDACTED_SECRET]')
+      for (const secret of ['synthetic-userinfo', 'synthetic-query', 'synthetic-label', 'synthetic-header']) {
+        assert.equal(JSON.stringify(item).includes(secret), false)
+      }
+      assert.equal(item.has_request, true)
+    }
+    const raw = db.prepare('SELECT url, label, note FROM http_evidence WHERE id = 21').get()
+    assert.equal(raw.url, url)
+    assert.equal(raw.label, label)
+    assert.equal(raw.note, note)
+  } finally {
+    db.close()
+  }
+})
+
+test('stored testing progress survives database reopen without claiming current execution', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-task-reopen-'))
+  const path = join(root, 'lab.db')
+  let opened
+  try {
+    opened = fixture(path)
+    opened.db.exec('ALTER TABLE asset ADD COLUMN test_updated_at TEXT')
+    const timestamp = '2026-11-08T10:00:00.000Z'
+    opened.db.prepare('UPDATE asset SET test_updated_at = ? WHERE id = 5').run(timestamp)
+    const saved = taskContext(opened.store, 'lab', 'asset #5').asset
+    assert.equal(saved.test_status, 'testing')
+    assert.equal(saved.test_status_source, 'stored-record')
+    assert.equal(saved.runtime_activity, 'not-observed')
+    assert.equal(saved.test_updated_at, timestamp)
+    opened.db.close()
+    opened = null
+
+    opened = fixture(path, false)
+    const reopened = taskContext(opened.store, 'lab', 'asset #5').asset
+    assert.deepEqual(reopened, saved)
+    const linked = taskContext(opened.store, 'lab', 'vuln #11').linked_asset
+    assert.deepEqual(linked, saved)
+    const blocked = taskContext(opened.store, 'lab', 'asset #6').asset
+    assert.equal(blocked.test_status, 'blocked')
+    assert.equal(blocked.runtime_activity, 'not-observed')
+    assert.equal(opened.db.prepare('SELECT test_status FROM asset WHERE id = 5').get().test_status, 'testing')
+    opened.db.exec('UPDATE asset SET test_status = NULL WHERE id = 6')
+    const absent = taskContext(opened.store, 'lab', 'asset #6').asset
+    assert.equal(absent.test_status, 'untested')
+    assert.equal(absent.test_status_source, 'default')
+    assert.equal(absent.runtime_activity, 'not-observed')
+  } finally {
+    if (opened) opened.db.close()
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('task context labels provenance and the coverage of bounded summaries', () => {
