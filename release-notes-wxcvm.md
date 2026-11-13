@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.7-beta.6
+
+## 中文
+
+- #205：统一知识检索区分 ARTEX 未安装、空库与读取故障；单个来源异常不影响其他知识源。
+- #206–#208：异常子智能体记录不误报空闲；区分数据库已保存进度与实时执行状态，概览和测试记录页显示最后记录时间并移除误导性运行指示。通过数据库重新打开的回归测试，尚未实现自动任务恢复。
+- #209：报告和任务摘要常见凭据脱敏，标记摘要省略项及历史知识引用来源；保留个人知识与原始证据。脱敏是尽力处理，不代表完整匿名化。
+- #200：个人知识凭据检查与版本审计、代理/DNS 静态配置检查、会话观测证据范围、本地服务配置和日志诊断、Windows 工具包装脚本与 Npcap 诊断。静态检查不证明实际网络路径、服务健康或可达性。
+- 集成代码提交 c365a45 的 [Maintenance compatibility](https://github.com/wxcvm/dsh-purge/actions/runs/43374931922) 与 [Pending specifications](https://github.com/wxcvm/dsh-purge/actions/runs/43374931947) 已通过。本版元数据提交仍需完整 CI 与 Release 归档检查。
+- 私有测试候选：正式 master .6、旧标签不变；真实 Windows Desktop/Web 安装更新、重启、界面渲染、LM Studio 中文召回和性能尚待实机验收。通过 [私有更新指南](docs/PRIVATE_UPDATE.zh-CN.md) 使用授权取得的包。
+
+## English
+
+- #205: distinguish missing, empty and unreadable ARTEX sources in federated knowledge search; preserve results from other sources.
+- #206–#208: count malformed child records as unknown, not free capacity. Distinguish stored progress from live host activity in task context and UI; add SQLite reopen coverage and last-recorded time. Automatic task resume is not implemented.
+- #209: mask common credentials in report and task summaries, indicate omitted summary content and historical-reference provenance while retaining raw evidence and personal knowledge. Best-effort masking is not comprehensive anonymization.
+- #200: personal knowledge credential review and history audit; static proxy/DNS configuration checks; session observation scope; local service configuration/log diagnostics; Windows wrapper and Npcap diagnostics. Static checks do not establish network reachability or runtime health.
+- Integrated code c365a45 passed both CI workflows. This release metadata revision still requires full CI and archive verification. Stable master .6 and prior tags are unchanged.
+- Private beta candidate: real Windows Desktop/Web installation, update/restart, UI rendering, LM Studio retrieval and performance acceptance remain unverified. See [private update guide](docs/PRIVATE_UPDATE.zh-CN.md).
+
 # 1.1.92-wxcvm.7-beta.5
 
 ## 中文
