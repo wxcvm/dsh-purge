@@ -248,3 +248,15 @@ test('HTTP evidence query returns paged summaries and exact ID detail, preservin
   }
 })
 
+
+test('task progress UI labels stored records without claiming live execution', async () => {
+  const { readFileSync } = await import('node:fs')
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8')
+    assert.match(source, /数据库已保存进度 · 不代表实时执行/)
+    assert.match(source, /已保存的测试进度；未核实宿主实时执行状态/)
+    assert.match(source, /记录为测试中 · asset #/)
+    assert.match(source, /最后记录：/)
+    assert.doesNotMatch(source, /agent 正在打这些资产/)
+  }
+})
