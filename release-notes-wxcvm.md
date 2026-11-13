@@ -1,3 +1,21 @@
+# 1.1.92-wxcvm.7-beta.8
+
+## 中文
+
+- 整合 #217—#225：任务级进展、持久尝试、执行器观察、依赖与局部路线、失败知识引用、原子记录回执及跨进程验证。没有自动重放未知操作。
+- 默认适配 Harness 0.2.2-rc.3；受控真实模型多阶段/原生会话接续已跑通，增强链路调用与 Token 更多，不宣称整体自主能力或性能提升。
+- 修复清洗台检测更新未使用本机代理/Git 凭据的问题；令牌仅在内存使用，仅发送本 fork 的 HTTPS GitHub API，不写入 profile、日志或客户端。
+- 同一检测结果显示原插件/官方 Harness 的只读上游观察；不可访问为未知，不自动改源或覆盖二开。
+- 本机部署按用户要求不备份、不回滚、不重新应用宿主补丁。完整在线归档更新/迁移与长期任务效果仍单独验收；检测成功不替代下载/安装成功。
+
+## English
+
+- Integrate persistent task progress, attempts, executor observations, dependencies, failure references and atomic record receipts without replaying unknown work.
+- Target Harness rc.3; controlled native-session continuation passes, with higher candidate tool/token usage and no established overall autonomy or performance gain.
+- Fix in-app update checks using the current proxy and noninteractive Git credentials; no credentials are persisted or exposed to the renderer.
+- Show read-only upstream observations, preserving unavailable as unknown. No automatic upstream replacement.
+- This local integration uses no backup/rollback or host patch reapplication; archive installation and long-running effectiveness remain separate acceptance scopes.
+
 # 1.1.92-wxcvm.7-beta.7
 
 ## 中文

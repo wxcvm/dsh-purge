@@ -58,3 +58,12 @@ node scripts/migrate-private-profile.mjs desktop <完整SHA> --host-stopped --pn
 - 不会自动公开仓库、发布资产或提升 Beta。应先使用授权取得的新构建安装，再验证内置更新。
 
 令牌过期、权限不足或网络中断时检查访问权限及进程环境。GitHub 对无权读取的私有仓库可能返回 404；不应据此认为仓库或测试版不存在。
+
+
+## beta.8：界面检测与本机 Git 凭据
+
+检测更新现在优先使用进程的 DSH_PURGE_GITHUB_TOKEN；没有显式令牌时，可通过本机已配置的 Git credential helper 非交互读取该仓库的访问材料，仅短时保存在内存。不调用 credential approve/store，不把令牌写入环境、profile、日志或前端。
+
+网络优先使用 DSH_PURGE_UPDATE_PROXY / HTTPS_PROXY / ALL_PROXY；Windows 未指定时读取已启用的系统 HTTPS 代理。不会修改系统代理或 Node 全局网络设置。可用 DSH_PURGE_UPDATE_PROXY=direct 显式直连。诊断只返回代理是否启用及凭据来源，不返回代理认证内容或令牌。
+
+清洗台原有“检测更新”请求同时返回只读上游观察。私有 fork 的更新渠道仍为 wxcvm/dsh-purge，原项目/Harness 检查不会自动覆盖二开。beta.8 的本机整合按用户要求不备份、不回滚，未使用上文旧迁移脚本；旧脚本的历史行为说明保留，不代表本次执行过它们。

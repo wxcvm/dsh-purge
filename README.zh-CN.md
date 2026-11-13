@@ -7,7 +7,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.7（测试版）</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.8（测试版）</strong></p>
 
 > 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版整合持久化任务记录、本机运行观察与导入对账、知识检索内存优化、上下文隐私、结构化错误诊断和 SQLite 概览优化。真实宿主实机验收仍待完成；不提供自动任务重放。详见[知识中心使用指南](docs/KNOWLEDGE_CENTER.zh-CN.md)。
 
@@ -201,7 +201,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\update-desktop-fork.ps1 -DshH
 
 运行前请完整退出 DSH Desktop（包括托盘进程）。如果实际 DSH_HOME 不是默认目录，请传入真实路径。脚本只操作所选 profile；安装失败时恢复 profile 配置和锁文件并尝试恢复依赖，不自动应用宿主补丁、不重启应用。运行后可增加 `-CheckOnly` 只读验证**安装版本、UI 文件、profile bundles 和 Cordis insert 入口**；检查失败时会提示执行 `node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs`。检查通过仅说明文件与配置到位，仍需重启宿主确认 UI 已加载。
 
-**从旧版自更新后插件消失或无法加载：** 旧更新器可能漏拷贝 `scripts`，仅显示新版版本号不能证明安装完整。请从 GitHub 下载目标提交的完整源码包，解压后在其中运行上述独立升级脚本（不要使用已损坏插件目录里的旧脚本）。没有发布标签的 beta 可明确指定目标提交的完整 40 位 SHA，并用 `-Version` 指定对应版本，例如 `-Commit <完整提交SHA> -Version 1.1.92-wxcvm.7-beta.7`。脚本使用固定提交的完整包，不经过旧版内置复制清单；安装成功后再运行同样参数加 `-CheckOnly`，完全退出并重开宿主。不要删除原 profile、会话或配置。
+**从旧版自更新后插件消失或无法加载：** 旧更新器可能漏拷贝 `scripts`，仅显示新版版本号不能证明安装完整。请从 GitHub 下载目标提交的完整源码包，解压后在其中运行上述独立升级脚本（不要使用已损坏插件目录里的旧脚本）。没有发布标签的 beta 可明确指定目标提交的完整 40 位 SHA，并用 `-Version` 指定对应版本，例如 `-Commit <完整提交SHA> -Version 1.1.92-wxcvm.7-beta.8`。脚本使用固定提交的完整包，不经过旧版内置复制清单；安装成功后再运行同样参数加 `-CheckOnly`，完全退出并重开宿主。不要删除原 profile、会话或配置。
 
 **本维护分支请从 `wxcvm/dsh-purge` 安装。** 原作者仓库仅供追溯来源及历史版本，不能代替本分支的新 UI、归档和诊断修复。更新前先确认 DSH 实际使用的 profile；独立 Git 工作区拉取新提交，不等于桌面插件已经更新。
 

@@ -7,7 +7,7 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.7 (beta)</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.8 (beta)</strong></p>
 
 > Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate integrates durable run records, local activity and import reconciliation, bounded knowledge retrieval, context privacy, structured diagnostics and SQLite overview optimization. Full on-device validation remains pending; automatic task replay is not implemented. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
 

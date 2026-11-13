@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "85e017aa11a5f7fc";
+		const CLIENT_BUILD_ID = "089b0162c331fa5d";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -240,6 +240,10 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"uninstall.done.desktop": "已卸载并还原，正在重启桌面应用…",
 			"uninstall.fail": "卸载失败: {error}",
 			"btn.checkUpdate": "检测更新",
+			"update.upstreams": "上游检查（只读，不自动覆盖二开）",
+			"update.upstreamUnknown": "不可访问，更新状态未知",
+			"update.upstreamCurrent": "无更高发布",
+			"update.upstreamNew": "发现新版",
 			"btn.checkUpdate.busy": "检测中…",
 			"btn.doUpdate": "更新",
 			"btn.doUpdate.busy": "更新中…",
@@ -599,6 +603,10 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"uninstall.done.desktop": "Uninstalled and restored. Restarting the desktop app…",
 			"uninstall.fail": "Uninstall failed: {error}",
 			"btn.checkUpdate": "Check update",
+			"update.upstreams": "Upstream checks (read-only)",
+			"update.upstreamUnknown": "Unavailable; update state unknown",
+			"update.upstreamCurrent": "No newer release",
+			"update.upstreamNew": "Newer release",
 			"btn.checkUpdate.busy": "Checking…",
 			"btn.doUpdate": "Update",
 			"btn.doUpdate.busy": "Updating…",
@@ -2883,6 +2891,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						renderEdition("beta"),
 					),
 					noticeNode(updateNotice),
+					updateInfo?.upstreams ? h("div", { className: "dshp-upstream-status", "data-testid": "purge-upstream-status" },
+						h("b", null, t("update.upstreams")),
+						...updateInfo.upstreams.sources.map(row => h("div", { key: row.id },
+							row.repository + " · " + (row.status !== "observed" ? t("update.upstreamUnknown") + (row.httpStatus ? " (" + row.httpStatus + ")" : "")
+								: row.latestRelease ? row.latestRelease.tag + " · " + (row.releaseUpdateAvailable === null ? "—" : t(row.releaseUpdateAvailable ? "update.upstreamNew" : "update.upstreamCurrent"))
+									: String(row.head || "").slice(0, 7)))) ) : null,
 					((updateProgress && (updateProgress.active || !receiptCoversProgress)) || (updatePending && updateJob?.kind !== "check")) ? h(UpdateProgressPanel, {
 						progress: updateProgress, pending: updatePending, unavailable: progressUnavailable,
 						clock: progressClock,
