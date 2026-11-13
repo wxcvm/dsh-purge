@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:http'
-import { knowledgeRequest } from '../lib/redteam/knowledge-center.js'
+import { knowledgeRequest, openKnowledgeDb } from '../lib/redteam/knowledge-center.js'
 import { semanticKnowledgeRequest } from '../lib/redteam/knowledge-semantic.js'
 
 test('semantic index persists chunks, ranks paraphrases and invalidates on edit/delete', async t => {
@@ -73,4 +73,27 @@ test('actual loopback HTTP embedding adapter uses the configured model and Nomic
   assert.equal(seen[0].model,'text-embedding-nomic-embed-text-v1.5')
   assert.match(seen[0].input[0],/^search_document: /)
   assert.match(seen[1].input[0],/^search_query: /)
+})
+
+test('streamed ranking preserves ties, best chunks, coverage and corrupt-index diagnostics', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-semantic-stream-'))
+  t.after(() => rmSync(root,{recursive:true,force:true}))
+  const ids = []
+  const opts = { env:{}, embed: async xs => xs.map(x => x.includes('special') ? [1,0] : [0,1]) }
+  const run = (op,args={}) => semanticKnowledgeRequest(root,{op,...args},opts)
+  for (let i=0;i<13;i++) {
+    const d = knowledgeRequest(root,{op:'knowledgeSave',title:'note '+i,body:i===12?'ordinary '.repeat(160)+'special':'ordinary'}).item
+    ids.push(d.id)
+    await run('knowledgeSemanticIndex',{id:d.id})
+  }
+  const result = await run('knowledgeSemanticSearch',{query:'special'})
+  assert.equal(result.indexed,13)
+  assert.equal(result.returned,10)
+  assert.equal(result.hasMore,true)
+  assert.deepEqual(result.items.map(x=>x.id),[ids[12],...ids.slice(0,9)].map(String))
+  assert.equal(result.items[0].score,1)
+  const db = openKnowledgeDb(root)
+  try { db.prepare("UPDATE semantic_chunks SET vector='[null,1]' WHERE document_id=?").run(ids[0]) }
+  finally { db.close() }
+  await assert.rejects(run('knowledgeSemanticSearch',{query:'special'}),/索引数据损坏.*文档 #/)
 })
