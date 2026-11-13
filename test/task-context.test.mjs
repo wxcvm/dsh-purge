@@ -244,3 +244,36 @@ test('task context labels provenance and the coverage of bounded summaries', () 
     db.close()
   }
 })
+
+test('task context masks common credentials in HTTP metadata without changing stored evidence', () => {
+  const { db, store } = fixture()
+  try {
+    const url = 'https://user:synthetic-userinfo@example.test/path?access_token=synthetic-query&view=1'
+    const label = 'api_key=synthetic-label'
+    const note = 'Authorization: Basic synthetic-header'
+    db.prepare('UPDATE http_evidence SET url = ?, label = ?, note = ? WHERE id IN (21, 22)').run(url, label, note)
+
+    const asset = taskContext(store, 'lab', 'asset #5')
+    const vuln = taskContext(store, 'lab', 'vuln #11')
+    for (const result of [asset.direct_http_evidence, vuln.http_evidence]) {
+      assert.equal(result.total, 1)
+      const item = result.items[0]
+      assert.ok(item.url.includes('example.test/path'))
+      assert.ok(item.url.includes('view=1'))
+      assert.ok(item.url.includes('[REDACTED_USERINFO]'))
+      assert.ok(item.url.includes('access_token=[REDACTED_SECRET]'))
+      assert.equal(item.label, 'api_key=[REDACTED_SECRET]')
+      assert.equal(item.note, 'Authorization: [REDACTED_SECRET]')
+      for (const secret of ['synthetic-userinfo', 'synthetic-query', 'synthetic-label', 'synthetic-header']) {
+        assert.equal(JSON.stringify(item).includes(secret), false)
+      }
+      assert.equal(item.has_request, true)
+    }
+    const raw = db.prepare('SELECT url, label, note FROM http_evidence WHERE id = 21').get()
+    assert.equal(raw.url, url)
+    assert.equal(raw.label, label)
+    assert.equal(raw.note, note)
+  } finally {
+    db.close()
+  }
+})
