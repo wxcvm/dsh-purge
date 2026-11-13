@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "744cb9c77679c3ab";
+		const CLIENT_BUILD_ID = "2903e015bd9aa939";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10348,6 +10348,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
     function KnowledgeCenterTab() {
       const [view, setView] = React.useState('personal')
+      const [history, setHistory] = React.useState([])
+      const [revision, setRevision] = React.useState(null)
+      const [notice, setNotice] = React.useState('')
       const empty = () => ({ title: '', body: '', category: '', tags: '', source: '', favorite: false })
       const [query, setQuery] = React.useState('')
       const [category, setCategory] = React.useState('')
@@ -10378,17 +10381,70 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!r || !r.ok) throw Error(r?.error || '操作失败')
         return r
       }
+      const loadHistory = async id => { setHistory((await request({ op: 'knowledgeHistory', id })).items); setRevision(null) }
       const open = (id) => run(async () => {
         const r = await request({ op: 'knowledgeGet', id })
         setDraft({ ...r.item, favorite: !!r.item.favorite })
+        await loadHistory(id)
       })
+      const newNote = (experience = false) => {
+        setHistory([]); setRevision(null)
+        setDraft(experience ? { ...empty(), category: '任务经验', body: '## 背景与任务引用\n\n## 已核实的结论\n\n## 证据与来源\n\n## 修复或排错经验\n\n## 尚待确认的问题\n' } : empty())
+      }
+      const importFiles = files => run(async () => {
+        let count = 0
+        const failures = []
+        const add = async row => {
+          const payload = { op: 'knowledgeImport', documents: [row] }
+          if (new Blob([JSON.stringify(payload)]).size > 8 * 1024 * 1024) throw Error('文档及历史超出单次请求 8 MiB，请拆分后导入')
+          const r = await request(payload)
+          count += r.imported
+        }
+        for (const file of files) {
+          try {
+            const content = await file.text()
+            if (/\.json$/i.test(file.name)) {
+              const backup = JSON.parse(content)
+              if (backup.format !== 'purge-knowledge-v1' || !Array.isArray(backup.documents) || !Array.isArray(backup.history)) throw Error('不是 Purge 知识备份')
+              for (const row of backup.documents) {
+                try { await add({ ...row, history: backup.history.filter(h => h.document_id === row.id) }) }
+                catch (e) { failures.push(String(row.title || file.name) + '：' + e.message) }
+              }
+            } else if (/\.(md|txt)$/i.test(file.name)) {
+              await add({ title: file.name.replace(/\.(md|txt)$/i, ''), body: content, category: '导入文档', source: file.name })
+            } else throw Error('仅支持 Markdown、TXT 或 Purge JSON 备份')
+          } catch (e) { failures.push(file.name + '：' + e.message) }
+        }
+        setNotice('已导入 ' + count + ' 条' + (failures.length ? '；失败 ' + failures.length + ' 项' : ''))
+        if (failures.length) setError(failures.join('\n'))
+        setQuery(''); setCategory(''); setFavorites(false); setOffset(0)
+        await refresh()
+      })
+      const exportBackup = () => run(async () => {
+        const r = await request({ op: 'knowledgeExport' })
+        const url = URL.createObjectURL(new Blob([JSON.stringify(r.backup, null, 2)], { type: 'application/json' }))
+        const link = document.createElement('a')
+        link.href = url; link.download = 'purge-knowledge-' + new Date().toISOString().slice(0,10) + '.json'
+        document.body.appendChild(link); link.click(); link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        setNotice('已生成知识备份下载')
+      })
+      const restore = () => {
+        if (!revision || !window.confirm('恢复这个历史版本？当前内容会保留为新的历史记录。')) return
+        run(async () => {
+          const r = await request({ op: 'knowledgeRestore', id: draft.id, revision_id: revision.revision_id })
+          setDraft({ ...r.item, favorite: !!r.item.favorite })
+          await loadHistory(draft.id); await refresh()
+        })
+      }
       const save = () => run(async () => {
         const r = await request({ ...draft, op: 'knowledgeSave' })
         setDraft({ ...r.item, favorite: !!r.item.favorite })
+        await loadHistory(r.item.id)
         await refresh()
       })
       const remove = () => {
-        if (!draft?.id || !window.confirm('删除这条个人知识？')) return
+        if (!draft?.id || !window.confirm('删除这条个人知识及其历史版本？请先导出备份。')) return
         run(async () => { await request({ op: 'knowledgeDelete', id: draft.id }); setDraft(null); setOffset(0); await refresh() })
       }
       const field = (key, label) => h('label', { style: { display: 'grid', gap: 4 } }, label,
@@ -10406,7 +10462,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('select', { className: 'rt-input', value: category, onChange: e => { setCategory(e.target.value); setOffset(0) } },
               h('option', { value: '' }, '全部分类'), result.categories.map(c => h('option', { key: c, value: c }, c))),
             h('label', null, h('input', { type: 'checkbox', checked: favorites, onChange: e => { setFavorites(e.target.checked); setOffset(0) } }), ' 仅收藏'),
-            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: () => setDraft(empty()) }, '新建笔记')),
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: () => newNote() }, '新建笔记'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => newNote(true) }, '收录任务经验'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: exportBackup }, '导出备份'),
+            h('label', { style: { display: 'grid', gap: 4 } }, '导入文件 / 备份',
+              h('input', { type: 'file', multiple: true, accept: '.md,.txt,.json', disabled: busy, onChange: e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) importFiles(files) } }))),
+          notice ? h('p', { role: 'status' }, notice) : null,
           error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
           h('p', null, '共 ' + result.total + ' 条'),
           result.items.length ? result.items.map(item => h('div', { key: item.id, style: { display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0' } },
@@ -10424,7 +10485,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { style: { display: 'flex', gap: 8 } },
             h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft.title.trim(), onClick: save }, '保存'),
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => setDraft(null) }, '关闭'),
-            draft.id ? h('button', { className: 'rt-btn', disabled: busy, onClick: remove }, '删除') : null)) : null)
+            draft.id ? h('button', { className: 'rt-btn', disabled: busy, onClick: remove }, '删除') : null),
+          draft.id ? h('div', null, h('h4', null, '历史版本（' + history.length + '）'),
+            history.map(old => h('button', { key: old.revision_id, className: 'rt-btn', disabled: busy, onClick: () => run(async () => setRevision((await request({ op: 'knowledgeHistoryGet', id: draft.id, revision_id: old.revision_id })).item)) }, old.title + ' · ' + old.saved_at)),
+            revision ? h('div', null, h('h4', null, revision.title), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflow: 'auto' } }, revision.body),
+              h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: restore }, '恢复该版本'),
+              h('button', { className: 'rt-btn', onClick: () => setRevision(null) }, '关闭历史')) : null) : null) : null)
     }
 
     function IntelTab(props) {
