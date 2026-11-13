@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "mode": "read-only",
+  "ok": true,
+  "sources": [
+    {
+      "id": "original-plugin",
+      "repository": "mmparko/dsh-purge",
+      "required": true,
+      "status": "observed",
+      "branch": "master",
+      "head": "033e6bd1e0f101352b39075ecd0d758ffef26b76",
+      "url": "https://github.com/mmparko/dsh-purge",
+      "observedAt": "2026-11-13T13:51:25.926Z",
+      "headIncludedInLocalHistory": true,
+      "unincorporatedHead": false
+    },
+    {
+      "id": "previous-reference",
+      "repository": "YuJunZhiXue/dsh-purge",
+      "required": false,
+      "status": "unavailable",
+      "httpStatus": 404,
+      "code": "UPSTREAM_UNAVAILABLE",
+      "updateAvailable": null,
+      "note": "Unavailable is unknown, never up-to-date. No installation or source switch performed."
+    },
+    {
+      "id": "official-host",
+      "repository": "deepseek-ai/deepseek-harness",
+      "required": true,
+      "releasePrefix": "dsh-v",
+      "status": "observed",
+      "branch": "master",
+      "head": "39163dd30f703a79079e2d2446545cff3c453738",
+      "url": "https://github.com/deepseek-ai/deepseek-harness",
+      "observedAt": "2026-11-13T13:51:28.824Z",
+      "latestRelease": {
+        "tag": "dsh-v0.2.2-rc.3",
+        "version": "0.2.2-rc.3",
+        "prerelease": true
+      },
+      "releaseUpdateAvailable": false,
+      "localHostVersion": "0.2.2-rc.3",
+      "note": "Release comparison includes prereleases; branch head is a separate observation, not a claim that unreleased code is installed."
+    }
+  ],
+  "autoInstall": false,
+  "sourceSwitch": false,
+  "localPluginVersion": "1.1.92-wxcvm.7-beta.7"
+}

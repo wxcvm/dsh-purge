@@ -37,11 +37,11 @@ export function parseOptions(argv) {
   return options
 }
 
-export function summarizeRun(result, root, elapsedMs) {
+export function summarizeRun(result, root, elapsedMs, { traceOffset = 0 } = {}) {
   const events = (result.stdout || '').split('\n').filter(Boolean).map(line => { try { return JSON.parse(line) } catch { return null } }).filter(Boolean)
   const calls = events.filter(row => row.type === 'tool_call')
   const trace = fs.existsSync(join(root, 'data', 'calls.jsonl'))
-    ? fs.readFileSync(join(root, 'data', 'calls.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : []
+    ? fs.readFileSync(join(root, 'data', 'calls.jsonl'), 'utf8').trim().split('\n').filter(Boolean).slice(traceOffset).map(JSON.parse) : []
   const catalog = fs.existsSync(join(root, 'data', 'catalog.json')) ? JSON.parse(fs.readFileSync(join(root, 'data', 'catalog.json'), 'utf8')) : []
   const ready = fs.existsSync(join(root, 'data', 'ready.json')) ? JSON.parse(fs.readFileSync(join(root, 'data', 'ready.json'), 'utf8')) : null
   const valid = !!ready && ready.knowledgeScope === 'synthetic-only' && catalog.length > 0

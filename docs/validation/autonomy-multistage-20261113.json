@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "scope": "real-model-three-record-native-session-adoption",
+  "recoveryKind": "planned-process-exit-and-native-session-adoption-not-crash-or-compaction",
+  "requestedModel": {
+    "provider": "deepseek-account",
+    "model": "deepseek-flash",
+    "reasoningEffort": "low"
+  },
+  "resolvedModelRevision": "not-observed",
+  "initialRuntime": {
+    "packageName": "@deepseek-ai/dsh-desktop-host",
+    "packageVersion": "0.2.2-rc.3",
+    "executable": {
+      "size": 246341104,
+      "mtimeMs": 1794555052000
+    },
+    "entrySha256": "ae3ca48751bead01d968c197420082a327f4e9f734ceb08c2e5bc2a9f2f037c1",
+    "packageSha256": "3ad53ccf6740f876956d876e5877ed6e1f92d135e2350538a7dacadeb3eb88f5"
+  },
+  "runtimeStable": true,
+  "pairs": [
+    {
+      "arm": "baseline",
+      "repeat": 1,
+      "nativeSessionAdopted": true,
+      "phases": [
+        {
+          "phase": "pause",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 17098,
+          "modelSteps": 5,
+          "toolCalls": 5,
+          "guardedCalls": 5,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 1,
+          "injectedFaultObserved": true,
+          "artifactPass": false,
+          "verifiedDelivery": false,
+          "successMarkerObserved": false,
+          "markerWithoutArtifact": false,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 2339,
+            "outputTokens": 1758,
+            "cacheReadTokens": 11520,
+            "cacheWriteTokens": 0,
+            "totalTokens": 15617
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              0,
+              0
+            ],
+            "accepted": [
+              false,
+              false,
+              false
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": false,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        },
+        {
+          "phase": "resume",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 15811,
+          "modelSteps": 8,
+          "toolCalls": 8,
+          "guardedCalls": 8,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 0,
+          "injectedFaultObserved": false,
+          "artifactPass": false,
+          "verifiedDelivery": false,
+          "successMarkerObserved": true,
+          "markerWithoutArtifact": true,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 2764,
+            "outputTokens": 1716,
+            "cacheReadTokens": 42880,
+            "cacheWriteTokens": 0,
+            "totalTokens": 47360
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "accepted": [
+              false,
+              false,
+              false
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": false,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "repeat": 1,
+      "nativeSessionAdopted": true,
+      "phases": [
+        {
+          "phase": "pause",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 22372,
+          "modelSteps": 8,
+          "toolCalls": 13,
+          "guardedCalls": 13,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 1,
+          "injectedFaultObserved": true,
+          "artifactPass": false,
+          "verifiedDelivery": true,
+          "successMarkerObserved": false,
+          "markerWithoutArtifact": false,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 4682,
+            "outputTokens": 3048,
+            "cacheReadTokens": 41344,
+            "cacheWriteTokens": 0,
+            "totalTokens": 49074
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              0,
+              0
+            ],
+            "accepted": [
+              true,
+              false,
+              false
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": true,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        },
+        {
+          "phase": "resume",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 27772,
+          "modelSteps": 12,
+          "toolCalls": 16,
+          "guardedCalls": 16,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 0,
+          "injectedFaultObserved": false,
+          "artifactPass": false,
+          "verifiedDelivery": true,
+          "successMarkerObserved": true,
+          "markerWithoutArtifact": true,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 5659,
+            "outputTokens": 2633,
+            "cacheReadTokens": 138496,
+            "cacheWriteTokens": 0,
+            "totalTokens": 146788
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "accepted": [
+              true,
+              true,
+              true
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": true,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        }
+      ]
+    },
+    {
+      "arm": "candidate",
+      "repeat": 2,
+      "nativeSessionAdopted": true,
+      "phases": [
+        {
+          "phase": "pause",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 21195,
+          "modelSteps": 8,
+          "toolCalls": 11,
+          "guardedCalls": 11,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 1,
+          "injectedFaultObserved": true,
+          "artifactPass": false,
+          "verifiedDelivery": true,
+          "successMarkerObserved": false,
+          "markerWithoutArtifact": false,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 3614,
+            "outputTokens": 3074,
+            "cacheReadTokens": 40192,
+            "cacheWriteTokens": 0,
+            "totalTokens": 46880
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              0,
+              0
+            ],
+            "accepted": [
+              true,
+              false,
+              false
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": true,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        },
+        {
+          "phase": "resume",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 24146,
+          "modelSteps": 11,
+          "toolCalls": 12,
+          "guardedCalls": 12,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 0,
+          "injectedFaultObserved": false,
+          "artifactPass": false,
+          "verifiedDelivery": true,
+          "successMarkerObserved": true,
+          "markerWithoutArtifact": true,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 4738,
+            "outputTokens": 2446,
+            "cacheReadTokens": 119808,
+            "cacheWriteTokens": 0,
+            "totalTokens": 126992
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "accepted": [
+              true,
+              true,
+              true
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": true,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        }
+      ]
+    },
+    {
+      "arm": "baseline",
+      "repeat": 2,
+      "nativeSessionAdopted": true,
+      "phases": [
+        {
+          "phase": "pause",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 24236,
+          "modelSteps": 6,
+          "toolCalls": 6,
+          "guardedCalls": 6,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 1,
+          "injectedFaultObserved": true,
+          "artifactPass": false,
+          "verifiedDelivery": false,
+          "successMarkerObserved": false,
+          "markerWithoutArtifact": false,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 1657,
+            "outputTokens": 3159,
+            "cacheReadTokens": 19712,
+            "cacheWriteTokens": 0,
+            "totalTokens": 24528
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              0,
+              0
+            ],
+            "accepted": [
+              false,
+              false,
+              false
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": false,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        },
+        {
+          "phase": "resume",
+          "valid": true,
+          "exit": 0,
+          "timeout": false,
+          "elapsedMs": 16072,
+          "modelSteps": 7,
+          "toolCalls": 8,
+          "guardedCalls": 8,
+          "dispatchTraceAligned": true,
+          "deniedCalls": 0,
+          "injectedFaultObserved": false,
+          "artifactPass": false,
+          "verifiedDelivery": false,
+          "successMarkerObserved": true,
+          "markerWithoutArtifact": true,
+          "markerDetection": "substring-only-not-semantic-claim-classification",
+          "finalReason": "completed",
+          "usage": {
+            "inputTokens": 2728,
+            "outputTokens": 1511,
+            "cacheReadTokens": 48768,
+            "cacheWriteTokens": 0,
+            "totalTokens": 53007
+          },
+          "error": null,
+          "judgement": {
+            "passed": true,
+            "artifactsPassed": true,
+            "candidatePassed": true,
+            "counts": [
+              1,
+              1,
+              1
+            ],
+            "accepted": [
+              false,
+              false,
+              false
+            ],
+            "dependencyPlanPassed": true,
+            "unfinishedAttemptNeedsRecovery": false,
+            "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
+          }
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "sourceBase": "809a736fb00f239a197b65de1e9946d9c3aa8dd0",
+  "includesWorkingTreeAdditions": true,
+  "protocolFingerprints": {
+    "scripts/benchmark-autonomy-multistage.mjs": "e5386ffc019bf39468441e527c4d180e8c1393866ee0d5b8dae9bc98d5c0a0fd",
+    "scripts/autonomy-bench-plugin.mjs": "d7106482aea555bd325e9f35ee4ab40187ef59339e9d6a7f8c73a40e2dae1193",
+    "scripts/benchmark-autonomy-headless.mjs": "2c5b3d2fb9d906878e18069df85d7717f04fcff8ec66b7d252b8164de03ff86d",
+    "lib/redteam/task-runs.js": "ccd5b20afb5bc5acf202ccc44dad3909c7c9169e2e6fe4a9f71eee66f232642d"
+  },
+  "observedReconcileCalls": [
+    {
+      "arm": "baseline",
+      "repeat": 1,
+      "count": 0
+    },
+    {
+      "arm": "candidate",
+      "repeat": 1,
+      "count": 1
+    },
+    {
+      "arm": "candidate",
+      "repeat": 2,
+      "count": 1
+    },
+    {
+      "arm": "baseline",
+      "repeat": 2,
+      "count": 0
+    }
+  ],
+  "aggregate": {
+    "baseline": {
+      "sessions": 2,
+      "invocations": 4,
+      "artifactSuccesses": 2,
+      "meanToolCalls": 13.5,
+      "meanElapsedMs": 36608.5,
+      "meanTotalTokens": 70256
+    },
+    "candidate": {
+      "sessions": 2,
+      "invocations": 4,
+      "artifactSuccesses": 2,
+      "meanToolCalls": 26,
+      "meanElapsedMs": 47742.5,
+      "meanTotalTokens": 184867
+    }
+  },
+  "limitations": [
+    "Two paired comparisons of one prescribed synthetic scenario, not diverse task success-rate evidence.",
+    "Native session adoption after planned pause, not process crash, power failure or native context compaction.",
+    "Candidate has additional verification capability and pays its extra tool/token cost; baseline absence of that capability is not counted as a common artifact failure.",
+    "Cache/order effects not eliminated, resolved remote model revision unknown.",
+    "No overall autonomy, speed or cost improvement established."
+  ]
+}

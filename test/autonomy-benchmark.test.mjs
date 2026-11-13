@@ -107,3 +107,16 @@ test('benchmark gate rejects missing, invalid or unaccepted candidate runs, not 
   assert.equal(benchmarkPassed({ runtimeStable: false, runs: [baseline, candidate] }, 2), false)
   assert.equal(benchmarkPassed({ runtimeStable: true, runs: [baseline] }, 2), false)
 })
+
+test('native resumed phases count only their own guard trace interval', t => {
+  const { root, data } = fixture(t)
+  writeFileSync(join(data, 'calls.jsonl'), [
+    { name: 'redteam_asset_get', denied: null },
+    { name: 'redteam_http_evidence_add', denied: null },
+  ].map(row => JSON.stringify(row)).join('\n') + '\n')
+  const result = output([{ type: 'tool_call', tool: 'redteam_http_evidence_add' }])
+  assert.equal(summarizeRun(result, root, 1).dispatchTraceAligned, false)
+  const resumed = summarizeRun(result, root, 1, { traceOffset: 1 })
+  assert.equal(resumed.dispatchTraceAligned, true)
+  assert.equal(resumed.guardedCalls, 1)
+})

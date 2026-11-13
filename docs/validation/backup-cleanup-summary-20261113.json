@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-13",
+  "scope": "identified Harness/Purge host patch and profile backups only",
+  "removedEntries": 90,
+  "removedFiles": 150,
+  "removedReparseLinks": 1,
+  "bytes": 3820512,
+  "activeHashesUnchanged": true,
+  "backupCopiesCreated": 0,
+  "rollbackPerformed": false,
+  "fullLocalRecord": ".git/local-backup-cleanup-20261113.json",
+  "excluded": [
+    "active configuration and credentials",
+    "sessions and task records",
+    "other projects",
+    "source code and Git history"
+  ]
+}
