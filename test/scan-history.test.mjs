@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listScanHistory, inspectScanArtifact, recordScanImport, previewScanArtifact } from '../lib/redteam/scan-history.js'
+import { listScanHistory, inspectScanArtifact, recordScanImport, previewScanArtifact, writeScanManifest } from '../lib/redteam/scan-history.js'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'redteam-scan-history-'))
@@ -292,4 +292,35 @@ test('scan history exposes only real manifest execution lineage; legacy records 
   const legacy = history.items.find((item) => item.run_id === TWO)
   assert.equal(legacy.execution, null, 'legacy manifests must not be upgraded to invented execution proof')
   assert.equal(legacy.environment_id, null)
+})
+
+test('unfinalized preparation and completed execution without ingestion stay visible without guessing runtime activity', async (t) => {
+  const { store, write, root } = fixture(t)
+  write('alpha', ONE, 'nmap', 'executed', '<nmaprun/>')
+  const dir = join(root, 'alpha', 'scan-output')
+  const path = join(dir, TWO + '.json')
+  const prepared = { runId: TWO, kind: 'httpx', target: 'https://example.test',
+    status: 'unfinalized', preparedAt: '2026-11-09T02:00:00Z', finishedAt: null }
+  writeScanManifest(path, prepared)
+  const view = listScanHistory(store, 'alpha', { attention: true, limit: 1 })
+  assert.equal(view.total, 2)
+  assert.equal(view.summary.attention, 2)
+  assert.equal(view.summary.failures, 0)
+  assert.equal(view.items.length, 1)
+  const item = view.items[0]
+  assert.equal(item.status, 'unfinalized')
+  assert.equal(item.started_at, null)
+  assert.equal(item.finished_at, null)
+  assert.equal(item.bytes, null)
+  assert.equal(item.execution, null)
+  assert.equal(item.output_file, null)
+  assert.deepEqual(item.timeline.map(x => x.phase), ['prepared'])
+  assert.equal(view.feedback.pending_review, 2)
+  assert.equal(view.feedback.recommendation.status, 'unfinalized')
+  assert.equal((await inspectScanArtifact(store, 'alpha', TWO)).status, 'unfinalized')
+  assert.equal(listScanHistory(store, 'alpha', { attention: true, offset: 1, limit: 1 }).items[0].status, 'executed')
+  assert.equal(recordScanImport(store, 'alpha', join(dir, TWO + '.jsonl'),
+    { ok: true, dry_run: false, kind: 'httpx', assets: 1 }).reason, 'unfinalized')
+  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), prepared)
+  assert.equal(listScanHistory(store, 'beta').total, 0)
 })

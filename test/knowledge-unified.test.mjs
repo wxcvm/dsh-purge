@@ -70,3 +70,24 @@ test('unified search distinguishes missing, empty and unavailable ARTEX without 
     }
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('federated search reads the skill catalog once and reports bounded result coverage', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-unified-coverage-'))
+  try {
+    let reads = 0
+    const options = { sources: ['personal', 'redteam', 'aboutsecurity', 'artex'],
+      skills: () => { reads++; return Array.from({ length: 25 }, (_, i) => ({
+        source: 'redteam', key: 'redteam:' + i, title: 'reference ' + i,
+      })).concat([{ source: 'aboutsecurity', key: 'aboutsecurity:a', title: 'reference A' }]) },
+      artexStatus: () => ({ available: true }),
+      artexSearch: () => ({ items: [{ id: 1, title: 'reference' }], degraded: true }),
+    }
+    for (let i = 0; i < 23; i++) knowledgeRequest(root, { op: 'knowledgeSave', title: 'reference ' + i, body: 'body' })
+    const result = unifiedKnowledgeRequest(root, { op: 'knowledgeUnifiedSearch', query: 'reference' }, options)
+    assert.equal(reads, 1)
+    assert.deepEqual(result.groups.map(g => [g.total, g.returned, g.hasMore]), [
+      [23, 20, true], [25, 20, true], [1, 1, false], [null, 1, null],
+    ])
+    assert.equal(result.groups[0].items.some(x => Object.hasOwn(x, 'body')), false)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})

@@ -223,6 +223,9 @@ test('task context adds compact personal knowledge references without exposing t
   const result = taskContext(store, 'lab', 'asset #5')
   assert.equal(result.personal_knowledge.status, 'available')
   assert.equal(result.personal_knowledge.items.length, 1)
+  assert.equal(result.personal_knowledge.total, 1)
+  assert.equal(result.personal_knowledge.returned, 1)
+  assert.equal(result.personal_knowledge.hasMore, false)
   assert.deepEqual(result.personal_knowledge.items[0].reference, { source: 'personal', id: String(item.id) })
   assert.equal(JSON.stringify(result).includes('PRIVATE_DOCUMENT_BODY'), false)
   db.exec("UPDATE vuln SET cve = 'CVE-2025-1234' WHERE id = 11")
@@ -339,4 +342,24 @@ test('task context masks common credentials in HTTP metadata without changing st
   } finally {
     db.close()
   }
+})
+
+test('task context reports omitted personal references without exposing their document bodies', (t) => {
+  const { db, store } = fixture()
+  const root = mkdtempSync(join(tmpdir(), 'purge-personal-coverage-'))
+  t.after(() => { db.close(); rmSync(root, { recursive: true, force: true }) })
+  store.root = root
+  const original = store.getAsset.bind(store)
+  store.getAsset = (engagement, id) => {
+    const row = original(engagement, id)
+    return row && { ...row, fingerprints: [{ product: 'Demo' }] }
+  }
+  for (let i = 0; i < 5; i++) knowledgeRequest(root, { op: 'knowledgeSave', title: 'Demo reference ' + i, body: 'PRIVATE_FIXTURE_BODY' })
+  const context = taskContext(store, 'lab', 'asset #5')
+  assert.equal(context.personal_knowledge.total, 5)
+  assert.equal(context.personal_knowledge.returned, 3)
+  assert.equal(context.personal_knowledge.hasMore, true)
+  assert.equal(context.personal_knowledge.verification_scope, 'historical-reference')
+  assert.equal(context.personal_knowledge.items.length, 3)
+  assert.equal(JSON.stringify(context.personal_knowledge).includes('PRIVATE_FIXTURE_BODY'), false)
 })

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scanCommand, runDiscoveryScan, executeScanAndIngest } from '../lib/redteam/scan-runner.js'
@@ -156,4 +156,31 @@ test('optional reverse DNS suppression only changes Nmap when enabled', () => {
     ['-sT', '-sV', '--open', '-oX', '-', '-n', '192.0.2.10'])
   assert.deepEqual(scanCommand('httpx', 'https://192.0.2.10', { noReverseDns: true }).args,
     ['-u', 'https://192.0.2.10', '-json', '-silent'])
+})
+
+test('preparation is saved before the existing runner and replaced by the real final record', async (t) => {
+  const root = temp(t), file = join(root, 'nmap.exe'), dir = join(root, 'runs')
+  writeFileSync(file, 'fixture')
+  const result = await runDiscoveryScan({ kind: 'nmap', target: '192.0.2.1', outputDir: dir }, {
+    root, config: { platform: 'windows', tools: { nmap: file }, toolkitDir: root, binDirs: [] },
+    env: { PATH: '' },
+    execFileFn: (_bin, _args, _opt, done) => {
+      const files = readdirSync(dir)
+      assert.equal(files.length, 1)
+      const prepared = JSON.parse(readFileSync(join(dir, files[0]), 'utf8'))
+      assert.equal(prepared.status, 'unfinalized')
+      assert.ok(prepared.preparedAt)
+      assert.equal(prepared.finishedAt, null)
+      assert.equal(Object.hasOwn(prepared, 'execution'), false)
+      assert.equal(Object.hasOwn(prepared, 'startedAt'), false)
+      assert.equal(existsSync(join(dir, prepared.runId + '.xml')), false)
+      done(null, '<nmaprun/>', '')
+    },
+  })
+  const final = JSON.parse(readFileSync(result.manifestFile, 'utf8'))
+  assert.equal(final.status, 'executed')
+  assert.equal(final.execution.attempted, true)
+  assert.ok(final.preparedAt)
+  assert.ok(final.finishedAt)
+  assert.equal(readdirSync(dir).some(name => name.endsWith('.tmp')), false)
 })

@@ -42,3 +42,20 @@ test('knowledge page and authorized bridge are wired into generated client', () 
     assert.ok(ui.slice(route, ui.indexOf('sendJson(res, 200, knowledgeRequest', route)).includes("'" + op + "'"), op)
   }
 })
+
+test('internal knowledge list limits preserve totals, ranking and the default UI page', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-knowledge-page-'))
+  try {
+    for (let i = 0; i < 55; i++) knowledgeRequest(root, { op: 'knowledgeSave', title: 'reference ' + i, body: 'body', category: 'docs', favorite: i === 0 })
+    const request = { op: 'knowledgeList', query: 'reference' }
+    const full = knowledgeRequest(root, request)
+    const small = knowledgeRequest(root, request, { listLimit: 3, includeCategories: false })
+    assert.equal(full.total, 55)
+    assert.equal(full.items.length, 50)
+    assert.deepEqual(full.categories, ['docs'])
+    assert.equal(small.total, 55)
+    assert.deepEqual(small.items, full.items.slice(0, 3))
+    assert.deepEqual(small.categories, [])
+    assert.deepEqual(knowledgeRequest(root, { ...request, offset: 3 }, { listLimit: 3 }).items, full.items.slice(3, 6))
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
