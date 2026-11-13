@@ -181,18 +181,23 @@ test('registered tools enforce attempt handoff and same-root ownership end to en
   const { apply } = await import('../lib/redteam/tools.js')
   apply({ redteam: store, tools: { register: tool => tools.set(tool.name, tool) }, on: () => () => {},
     effect: fn => { const dispose = fn(); t.after(() => dispose?.()) } })
-  const call = async (name, args, session = 'root') => JSON.parse(await tools.get(name).execute(
-    { engagement, ...args }, { agent: { session: { id: session } } }))
+  const agents = new Map()
+  const call = async (name, args, session = 'root') => {
+    if (!agents.has(session)) agents.set(session, { status: 'running', session: { id: session,
+      ...(session === 'child' ? { header: { parentSession: 'root' } } : {}) } })
+    return JSON.parse(await tools.get(name).execute({ engagement, ...args }, { agent: agents.get(session) }))
+  }
   const card = (await call('redteam_next_action', {})).focus
   const started = await call('redteam_task_run', { action: 'start', task_key: card.task_key })
   assert.equal(started.ok, true)
   const id = started.attempt.id
   const resumed = await call('redteam_next_action', {})
   assert.equal(resumed.focus.task_run.attempt.id, id)
-  assert.equal(resumed.focus.task_run.runtime_activity, 'not-observed')
+  assert.equal(resumed.focus.task_run.runtime_activity, 'session-running')
   assert.match(resumed.focus.first_tool, /redteam_task_run/)
   const args = { attempt_id: id, asset_id: 1, request: 'request', response: 'response' }
   assert.equal((await call('redteam_http_evidence_add', args, 'other-root')).ok, false)
+  assert.equal((await call('redteam_http_evidence_add', args, 'child')).ok, false, 'a sibling executor under the same root cannot write to a live-bound attempt')
   assert.equal((await call('redteam_http_evidence_add', args)).ok, true)
   const previous = { task_key: card.task_key, before: card.before, outcome: 'done' }
   const held = await call('redteam_next_action', { previous_task: JSON.stringify(previous) })

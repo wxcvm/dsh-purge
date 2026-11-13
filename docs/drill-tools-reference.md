@@ -56,12 +56,13 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 持久保存任务与尝试，当前唯一验收条件为 `http-evidence-recorded`：本次尝试经归属写入的每条证据仍存在、目标关联一致、请求与响应均非空，且内容与交付时的指纹一致。这里只验收记录交付，不认定流量真实、漏洞有效或计分成功。
 
 - `action=start`、`task_key=focus.task_key`：为资产/漏洞任务创建或复用尝试，同任务不会自动产生第二个活动尝试。
-- `action=status`、`task_key` 或 `attempt_id`：只读任务、尝试及当前证据核对结果。所有持久状态都带 `runtime_activity=not-observed`，重启后先核对实际宿主活动，不自动恢复执行。
+- `action=status`、`task_key` 或 `attempt_id`：只读任务、尝试及当前证据核对结果。`runtime_activity` 区分 `session-running`、`session-idle` 与 `not-observed`，只说明绑定执行会话，不代表任务动作已执行。运行绑定丢失、正常结束但交付未知、执行器卸载时 `recovery_required=true`。
+- `action=reconcile`、`attempt_id`：核对上次操作的实际结果后，在同一执行会话显式重绑；不重发命令、不新建尝试、不自动验收。恢复时若发现此前漏收的用户停止事件，原尝试变为 cancelled，不重启。
 - `redteam_http_evidence_add(attempt_id=...)`：在原写入工具中原子保存报文和尝试关联；拒绝别的根会话、别的目标、空报文和已提交尝试。省略此参数保持旧行为，旧证据不能事后冒充本次交付。
 - `action=submit/verify/cancel`、`attempt_id`：分别冻结交付、执行记录完整性验收、停止尝试状态推进。cancel 不会取消已在宿主执行的工具，停止实际操作仍使用宿主停止功能。
 - 验收不满足时变为 `failed`；`action=retry`、`task_key` 仅能为 failed/cancelled 尝试显式建立新尝试，不重用旧证据关联。历史尝试保留且不可覆盖当前状态。
 
-写操作要求宿主根会话身份；同根的父子会话共享所属关系。`progress_check` 可传 `attempt_id`，`next_action.previous_task` 也支持该字段；对已有持久任务，即使未传尝试 ID，也会核对当前尝试，不允许通过省略参数回退为全局计数验收。任务卡展示已有尝试并先引导读取状态。尚未登记的任务继续使用旧对账行为。
+写操作要求宿主根会话身份。新尝试在执行它的会话中 start/retry；绑定后，证据写入和 submit/verify 还要求同一个执行实例，不允许同根的其它子会话代写。运行绑定丢失后这些写操作等待 reconcile，cancel 仍可停止记录推进。用户原生停止使对应执行会话的活动尝试 cancelled，不影响其它执行会话；宿主正常 idle 不会被当作任务完成。`progress_check` 可传 `attempt_id`，`next_action.previous_task` 也支持该字段；对已有持久任务，即使未传尝试 ID，也会核对当前尝试，不允许通过省略参数回退为全局计数验收。任务卡展示已有尝试并先引导读取状态。尚未登记的任务继续使用旧对账行为。
 
 ### `redteam_agent_slot`
 【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑（可用 REDTEAM_MAX_AGENTS 配置）。action=status 看还剩几个名额与谁在跑；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
