@@ -2,7 +2,7 @@
   <img src="docs/banner.svg" alt="dsh-purge" width="720">
 </p>
 
-> **私有测试候选：** 下文匿名 codeload/pnpm 安装命令属于公开仓库时期的历史示例，当前不可直接使用。请优先阅读[私有更新与迁移说明](docs/PRIVATE_UPDATE.zh-CN.md)。真实 Desktop/Web 更新仍待验收。
+> **私有测试候选：** 下文匿名 codeload/pnpm 安装命令属于公开仓库时期的历史示例，当前不可直接使用。请优先阅读[私有更新与迁移说明](docs/PRIVATE_UPDATE.zh-CN.md)。beta.8 已实测桌面内置检测更新；完整在线安装和 Web 更新仍需单独验收。
 
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>

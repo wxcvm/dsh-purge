@@ -67,3 +67,5 @@ node scripts/migrate-private-profile.mjs desktop <完整SHA> --host-stopped --pn
 网络优先使用 DSH_PURGE_UPDATE_PROXY / HTTPS_PROXY / ALL_PROXY；Windows 未指定时读取已启用的系统 HTTPS 代理。不会修改系统代理或 Node 全局网络设置。可用 DSH_PURGE_UPDATE_PROXY=direct 显式直连。诊断只返回代理是否启用及凭据来源，不返回代理认证内容或令牌。
 
 清洗台原有“检测更新”请求同时返回只读上游观察。私有 fork 的更新渠道仍为 wxcvm/dsh-purge，原项目/Harness 检查不会自动覆盖二开。beta.8 的本机整合按用户要求不备份、不回滚，未使用上文旧迁移脚本；旧脚本的历史行为说明保留，不代表本次执行过它们。
+
+公开上游优先使用无凭据 Git refs 避免匿名 API 限流，界面明确标注为标签观察，不核验发布资产。本机 beta.8 已实际操作内置检测，范围见 [最终整合验收](FINAL_INTEGRATION.zh-CN.md)。
