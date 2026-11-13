@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "eab227c5a93fe466";
+		const CLIENT_BUILD_ID = "081f20ab1a4f101c";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8093,6 +8093,71 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         limitations: ['aggregate counts only', 'no actual route or connectivity test', 'no public IP, actual DNS or WebRTC test'] }
     }
 
+    function summarizeServiceLog(text, modifiedAt) {
+      const lines = String(text || '').split(/\r?\n/).filter(line => line.trim())
+      let errors=0, warnings=0, first=null, last=null
+      for (const line of lines) {
+        if (/\b(?:error|fatal|panic|critical)\b/i.test(line)) errors++
+        else if (/\b(?:warn|warning)\b/i.test(line)) warnings++
+        const stamp = line.match(/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/)?.[0]
+        if (stamp) { if (!first) first=stamp; last=stamp }
+      }
+      return { lines:lines.length, errors,warnings,first,last,modifiedAt:Number.isFinite(modifiedAt) ? new Date(modifiedAt).toISOString() : null, runtime:'not_tested' }
+    }
+
+    function ServiceEvidenceCard() {
+      const [expected,setExpected] = React.useState(null)
+      const [observed,setObserved] = React.useState(null)
+      const [format,setFormat] = React.useState('yaml')
+      const [result,setResult] = React.useState(null)
+      const [log,setLog] = React.useState(null)
+      const [busy,setBusy] = React.useState(false)
+      const [error,setError] = React.useState('')
+      const run = async fn => {
+        setBusy(true);setError('')
+        try {await fn()} catch(e){setError(String(e.message || e))} finally{setBusy(false)}
+      }
+      const pick = setter => e => {setter(e.target.files?.[0] || null);setResult(null)}
+      const compare = () => run(async()=>{
+        setResult(null)
+        if(expected.size+observed.size>4*1024*1024) throw Error('两份配置合计超过 4 MiB，请选用精简脱敏副本')
+        const r=await api({op:'serviceConfigReview',format,expected:await expected.text(),observed:await observed.text()})
+        if(!r || !r.ok) throw Error(r?.error || '无法比较配置')
+        setResult(r)
+      })
+      const readLog = file => run(async()=>{
+        setLog(null)
+        if(file.size>8*1024*1024) throw Error('日志超过 8 MiB，请选取一段日志副本')
+        setLog(summarizeServiceLog(await file.text(),file.lastModified))
+      })
+      return h('div',{className:'rt-card',style:{display:'grid',gap:8}},
+        h('h4',null,'服务证据与配置核对'),
+        h('p',null,'文件与日志只是观测证据，不代表服务正在运行、配置已加载或端到端功能健康。不会启动、重启或修改服务。'),
+        h('h4',null,'配置漂移'),
+        h('p',null,'选择预期配置和实际取得的配置副本。JSON/YAML 按字段比较；TOML 等可用文本比较。配置交给当前 DSH 宿主解析，远程连接时为远端宿主，请选脱敏文件。'),
+        h('label',null,'预期配置 ',h('input',{type:'file',disabled:busy,onChange:pick(setExpected)})),
+        h('label',null,'实际配置 ',h('input',{type:'file',disabled:busy,onChange:pick(setObserved)})),
+        h('select',{className:'rt-input',value:format,disabled:busy,onChange:e=>{setFormat(e.target.value);setResult(null)}},
+          h('option',{value:'yaml'},'YAML'),h('option',{value:'json'},'JSON'),h('option',{value:'text'},'文本（TOML / 其他）')),
+        h('button',{className:'rt-btn rt-btn-primary',disabled:busy||!expected||!observed,onClick:compare},'比较配置'),
+        result ? h('div',null,
+          h('p',null,result.equal?'两份配置在所选比较模式下一致':'发现配置差异'),
+          h('p',null,'新增 '+result.counts.added+' · 删除 '+result.counts.removed+' · 变化 '+result.counts.changed),
+          (result.paths || []).map((p,i)=>h('div',{key:i,style:{overflowWrap:'anywhere'}},({added:'新增',removed:'删除',changed:'变化'}[p.kind])+' '+(p.path||'/'))),
+          result.omitted ? h('p',null,'另有 '+result.omitted+' 项差异未展开') : null,
+          h('p',{className:'rt-foot'},result.note)) : null,
+        h('h4',null,'服务日志摘要'),
+        h('p',null,'日志在浏览器本地读取，按行统计常见英文错误/警告关键词，原文不传给宿主；不等于真实故障次数。'),
+        h('input',{type:'file',accept:'.log,.txt',disabled:busy,onChange:e=>{const f=e.target.files?.[0];e.target.value='';if(f)readLog(f)}}),
+        log ? h('div',null,
+          h('p',null,'非空行 '+log.lines+' · 疑似错误行 '+log.errors+' · 疑似警告行 '+log.warnings),
+          h('p',null,'文件修改时间：'+(log.modifiedAt||'未知')),
+          h('p',null,'文本首末时间标记：'+(log.first||'未知')+' → '+(log.last||'未知')),
+          h('p',{className:'rt-foot'},'运行状态：未检测。文件存在、没有错误关键词或有近期日志均不能证明服务健康。')) : null,
+        busy ? h('p',null,'读取中…') : null,
+        error ? h('div',{className:'rt-err',role:'alert'},error) : null)
+    }
+
     function ProxyProfileAuditCard() {
       const [result, setResult] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -9762,6 +9827,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             + ' IPv6 URL 格式为 http://[IPv6]:端口，不能把 user@host 直接用于 HTTP。'
             + ' 详见「操作指南 → 多环境作用与 VPS 配置」。')),
           adminRouteCard(),
+          h(ServiceEvidenceCard),
           h('div', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
