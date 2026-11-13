@@ -204,3 +204,43 @@ test('missing ARTEX knowledge does not block existing task context', (t) => {
   assert.equal(withKeyword.artex_knowledge.status, 'not-installed')
   assert.deepEqual(withKeyword.artex_knowledge.items, [])
 })
+
+test('task context labels provenance and the coverage of bounded summaries', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        test_notes: ['old one', 'old two', 'recent one', 'x'.repeat(300), 'recent three'].join('\n'),
+        test_surface: 's'.repeat(300),
+        open_ports: 25,
+        ports: Array.from({ length: 25 }, (_, i) => ({ port: 10000 + i, state: 'open', proto: 'tcp' })),
+        fingerprints: Array.from({ length: 12 }, (_, i) => ({ vendor: 'Demo', product: 'Fixture', version: String(i) })),
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    const { asset, provenance } = context
+    assert.equal(asset.recent_test_notes.length, 3)
+    assert.equal(asset.recent_test_notes[1].length, 240)
+    assert.equal(asset.test_surface.length, 240)
+    assert.equal(asset.open_ports.length, 20)
+    assert.equal(asset.fingerprints.length, 10)
+    assert.deepEqual(asset.summary_coverage, {
+      test_notes_total: 5, test_notes_omitted: 2, test_notes_text_truncated: true,
+      test_surface_truncated: true, open_ports_omitted: 5, fingerprints_omitted: 2,
+    })
+    assert.deepEqual(provenance, {
+      records: 'local-engagement-store', knowledge: 'reference-only',
+      current_target_validation: 'not-performed-by-context',
+    })
+    assert.equal(context.artex_knowledge.source, 'local-artex-knowledge')
+    assert.equal(context.artex_knowledge.verification_scope, 'historical-reference')
+    const linked = taskContext(store, 'lab', 'vuln #11')
+    assert.equal(linked.linked_asset.summary_coverage.open_ports_omitted, 5)
+    assert.deepEqual(linked.provenance, provenance)
+    assert.equal(linked.artex_knowledge.verification_scope, 'historical-reference')
+  } finally {
+    db.close()
+  }
+})
