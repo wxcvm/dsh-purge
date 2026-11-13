@@ -8,9 +8,9 @@ import { RedteamStore } from '../lib/redteam/store-core.js'
 import { taskContext } from '../lib/redteam/task-context.js'
 import { knowledgeRequest } from '../lib/redteam/knowledge-center.js'
 
-function fixture() {
-  const db = new DatabaseSync(':memory:')
-  db.exec([
+function fixture(path = ':memory:', initialize = true) {
+  const db = new DatabaseSync(path)
+  if (initialize) db.exec([
     'CREATE TABLE asset (id INTEGER PRIMARY KEY, ip TEXT, segment_cidr TEXT, state TEXT, test_status TEXT, test_notes TEXT, blocked_count INTEGER)',
     'CREATE TABLE vuln (id INTEGER PRIMARY KEY, asset_id INTEGER, title TEXT, severity TEXT, status TEXT, evidence TEXT, cve TEXT, target TEXT, gained TEXT)',
     'CREATE TABLE http_evidence (id INTEGER PRIMARY KEY, vuln_id INTEGER, asset_id INTEGER, label TEXT, method TEXT, url TEXT, status INTEGER, request TEXT, response TEXT, note TEXT, captured_by TEXT, captured_at TEXT)',
@@ -229,4 +229,41 @@ test('task context adds compact personal knowledge references without exposing t
   const cve = knowledgeRequest(root, { op: 'knowledgeSave', title: 'CVE-2025-1234 notes', body: 'reference' }).item
   const vuln = taskContext(store, 'lab', 'vuln #11')
   assert.equal(vuln.personal_knowledge.items[0].reference.id, String(cve.id))
+})
+
+test('stored testing progress survives database reopen without claiming current execution', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-task-reopen-'))
+  const path = join(root, 'lab.db')
+  let opened
+  try {
+    opened = fixture(path)
+    opened.db.exec('ALTER TABLE asset ADD COLUMN test_updated_at TEXT')
+    const timestamp = '2026-11-08T10:00:00.000Z'
+    opened.db.prepare('UPDATE asset SET test_updated_at = ? WHERE id = 5').run(timestamp)
+    const saved = taskContext(opened.store, 'lab', 'asset #5').asset
+    assert.equal(saved.test_status, 'testing')
+    assert.equal(saved.test_status_source, 'stored-record')
+    assert.equal(saved.runtime_activity, 'not-observed')
+    assert.equal(saved.test_updated_at, timestamp)
+    opened.db.close()
+    opened = null
+
+    opened = fixture(path, false)
+    const reopened = taskContext(opened.store, 'lab', 'asset #5').asset
+    assert.deepEqual(reopened, saved)
+    const linked = taskContext(opened.store, 'lab', 'vuln #11').linked_asset
+    assert.deepEqual(linked, saved)
+    const blocked = taskContext(opened.store, 'lab', 'asset #6').asset
+    assert.equal(blocked.test_status, 'blocked')
+    assert.equal(blocked.runtime_activity, 'not-observed')
+    assert.equal(opened.db.prepare('SELECT test_status FROM asset WHERE id = 5').get().test_status, 'testing')
+    opened.db.exec('UPDATE asset SET test_status = NULL WHERE id = 6')
+    const absent = taskContext(opened.store, 'lab', 'asset #6').asset
+    assert.equal(absent.test_status, 'untested')
+    assert.equal(absent.test_status_source, 'default')
+    assert.equal(absent.runtime_activity, 'not-observed')
+  } finally {
+    if (opened) opened.db.close()
+    rmSync(root, { recursive: true, force: true })
+  }
 })
