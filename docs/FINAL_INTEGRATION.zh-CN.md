@@ -4,7 +4,7 @@
 
 ## 实际问题及修复
 
-桌面使用 profile 的 link 安装，实际插件位于 `C:\Users\Kerna\.dsh\plugins\dsh-purge`，开始验收时仍为 beta.4。实际清洗台显示 GitHub 私有仓库网络/凭据读取失败；命令行上游脚本成功不能证明界面可用。
+桌面使用 profile 的 link 安装，实际插件位于 `%USERPROFILE%\.dsh\plugins\dsh-purge`，开始验收时仍为 beta.4。实际清洗台显示 GitHub 私有仓库网络/凭据读取失败；命令行上游脚本成功不能证明界面可用。
 
 更新后端现在使用当前显式/系统代理，并在未提供进程令牌时非交互读取本机 Git credential helper。访问材料只在内存中短时使用，Authorization 仍严格限制为本 fork 的 HTTPS GitHub API；不写 profile、凭据文件、日志或前端。
 
@@ -24,7 +24,7 @@
 
 ## 部署和发布方式
 
-- 累计整合 #217—#225，加 #226 的检测修复，版本 beta.8。仅推进私有 fork 的 beta 测试通道和对应标签，正式 master 不动。
+- 累计整合 #217—#225，加 #226 的检测修复，版本 beta.8。仅推进私有 fork 的 beta 测试通道，正式 master 不动。2026-11-14 远端复核：beta.8 代码已在 beta；最新可查 Release 为 beta.5，beta.8 对应远端标签和安装资产尚未发布验证。需从 beta 手动运行 Release workflow。
 - 原生应用菜单正常退出，未强杀；使用 Git 固定提交的规范字节直接写入插件代码。没有覆盖当前 profile、认证文件、会话/任务数据或不相关 README/许可证定制。
 - 原 link 路径保留，依赖声明无需变化，不运行旧安装、备份、回滚或宿主补丁重写流程。
 - 将实际安装的 Git 身份切至独立的 `codex/desktop-beta8` 分支，未 reset/checkout 覆盖用户工作树。旧 master 引用及原有远端配置保留。

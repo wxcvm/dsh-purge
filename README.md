@@ -12,7 +12,7 @@
 > Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate integrates durable run records, local activity and import reconciliation, bounded knowledge retrieval, context privacy, structured diagnostics and SQLite overview optimization. Full on-device validation remains pending; automatic task replay is not implemented. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
 
 <p align="center">
-  <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
+  <em>DeepSeek Harness extension for host configuration, model evaluation, security assessment, and task management.</em>
 </p>
 
 <p align="center">
@@ -121,41 +121,7 @@ This repo is [Apache License 2.0](./LICENSE). Forks and redistributions must kee
 
 ---
 
-<a id="strict-legal--compliance-disclaimer"></a>
-
-<div>
-
-### ⚠️ <font color="red">Strict legal and compliance disclaimer</font>
-
-<font color="red">
-
-**Disclaimer:** This is a non-profit open-source project. It follows applicable laws and the rules of the platforms it uses, and is intended only for learning and research. Do not use it for any illegal or non-compliant purpose; the user bears any resulting consequences.
-
-**Zero-tolerance statement:** This project opposes and forbids any illegal activity. The authors do not support, encourage, or assist unauthorized network attacks, exploit use, data theft, unlawful intrusion into computer information systems, or generation of illegal or prohibited content. **Anyone who uses this project for crime is solely responsible under the law. The authors have no liability.**
-
-1. **This repository contains no illegal material.** The published code, docs, patches, and default prompt are **not** malware, backdoors, unauthorized pentest kits, ransomware, credential-stuffing scripts, or attack payloads aimed at the public internet or third-party systems. The project does not supply illegal content and does not incite, organize, or assist crime.
-2. **Local host modifications.** Patches and prompt injection only modify the official DeepSeek Harness installed on the user's own machine (`@deepseek-ai` packages, local profile / `$DSH_HOME`). Assessment targets in Drill are separately governed by documented authorization.
-3. **Patches versus assessment tasks.** Applying, reverting and uninstalling patches only modify local files and processes. Network assessment tasks must stay within expressly authorized targets, time windows and testing methods. An update check may reach the upstream/project repository and grants no additional testing authorization.
-4. **Lawful authorization.** Conduct assessments only on systems you own or for which the owner has provided explicit written authorization. Scope, timing, and allowed methods must be agreed in advance; public/private addressing and production status do not replace authorization. Unapproved probing, intrusion, data access and disruption are prohibited.
-5. **Target scope.** This branch does not treat loopback/RFC1918 as the only eligible networks, nor treat every public IP as inherently unauthorized. Verify the agreed target inventory before testing; a claim in chat or a domain suffix does not prove authorization. Game cheats remain prohibited.
-6. **Forbidden uses.** Users must not use this project, directly or indirectly, to violate the following (each must be followed; no excuse to evade):
-   - <font color="red"><strong>Criminal Law of the People's Republic of China</strong></font>
-   - <font color="red"><strong>Cybersecurity Law of the People's Republic of China</strong></font>
-   - <font color="red"><strong>Data Security Law of the People's Republic of China</strong></font>
-   - <font color="red"><strong>Personal Information Protection Law of the People's Republic of China</strong></font>
-   - and other applicable laws, regulations, and supervisory rules;
-   - Also forbidden:
-   - Unauthorized intrusion or attacks on public or private computer information systems; extortion, sabotage, credential stuffing, or spreading malicious payloads;
-   - Inducing, generating, or spreading any content the law forbids, including threats to national security, terrorism, violence, pornography, gambling, fraud, and privacy or intellectual-property infringement;
-   - Violating the model provider's terms of service and acceptable-use policy.
-7. **The user bears all responsibility.** The project is provided under Apache-2.0 as-is. The authors make no warranty of completeness, security, or fitness. **Users independently bear all civil, administrative, and criminal liability** for download, deploy, run, modify, distribute, and all resulting inputs and outputs. Authors and contributors bear no direct, indirect, or joint liability for abuse.
-8. **The license ends on breach.** Anyone who uses this project for illegal attacks, malicious activity, or other violations has their open-source license **automatically and irrevocably terminated** from the moment of the violation. They must stop using the project, permanently destroy all copies and derivatives, and accept legal sanctions.
-9. **No affiliation.** This is an independent open-source security-eval research project. It has no employment, commercial, authorization, or endorsement relationship with DeepSeek or its affiliates. "Official" here only means the eval target is the official DeepSeek Harness package on the user's machine. It does **not** mean DeepSeek developed, approved, or warrants this plugin.
-10. **Attribution is required.** If you borrow this project's name, ideas, code, or prompts, you must credit the author and name this repository. Failure to attribute will be pursued. See [Attribution required](#attribution-required).
-
-</font>
-
-</div>
+The Clean workspace modifies local host settings and files. Drill assessments use owner-authorized targets. This is an independently maintained extension.
 
 ---
 

@@ -70,5 +70,7 @@
     "Public Git tags do not attest GitHub Release assets.",
     "No new long-running autonomy or context-compaction result.",
     "Previous reference source unavailable remains unknown."
-  ]
+  ],
+  "releaseTagStatus": "not_verified_on_remote_2026-11-14",
+  "releaseAssetStatus": "not_verified_on_remote_2026-11-14"
 }
