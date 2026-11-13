@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6a7014c8f8865855";
+		const CLIENT_BUILD_ID = "b7c97da2bab40e22";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10239,7 +10239,63 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
+    function UnifiedKnowledgeTab() {
+      const labels = { all: '全部来源', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+      const [query, setQuery] = React.useState('')
+      const [source, setSource] = React.useState('all')
+      const [groups, setGroups] = React.useState([])
+      const [detail, setDetail] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [searched, setSearched] = React.useState(false)
+      const seq = React.useRef(0)
+      React.useEffect(() => () => { seq.current++ }, [])
+      const run = async (req, accept) => {
+        const id = ++seq.current
+        setBusy(true); setError('')
+        try {
+          const r = await api(req)
+          if (id !== seq.current) return
+          if (!r || !r.ok) throw Error(r?.error || '读取失败')
+          accept(r)
+        } catch (e) { if (id === seq.current) setError(String(e.message || e)) }
+        finally { if (id === seq.current) setBusy(false) }
+      }
+      const search = (selected = source) => {
+        setDetail(null); setGroups([]); setSearched(false)
+        if (!query.trim()) return
+        run({ op: 'knowledgeUnifiedSearch', query: query.trim(), source: selected }, r => { setGroups(r.groups); setSearched(true) })
+      }
+      const open = (group, item) => {
+        setDetail(null)
+        run({ op: 'knowledgeUnifiedGet', source: group.source, id: item.id }, r => setDetail(r.item))
+      }
+      return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
+        h('h4', null, '全库检索'),
+        h('p', null, '按来源查询本地知识，每个来源最多展示 20 条；外部资料只读。'),
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+          h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
+          h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); search(e.target.value) } },
+            Object.entries(labels).map(([key, label]) => h('option', { key, value: key }, label))),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !query.trim(), onClick: () => search() }, busy ? '读取中…' : '搜索')),
+        error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
+        !searched && !busy ? h('div', { className: 'rt-empty' }, '输入关键词开始检索') : null,
+        groups.map(group => h('div', { key: group.source, style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
+          h('h4', null, labels[group.source] + (group.available ? ' · ' + (group.total == null ? '展示 ' + group.items.length : group.total + ' 条') : ' · 不可用')),
+          group.error || group.note ? h('p', { className: 'rt-ops-subtle' }, group.error || group.note) : null,
+          group.available && !group.items.length ? h('p', null, '无匹配结果') : null,
+          group.items.map(item => h('div', { key: item.id, style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '6px 0' } },
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(group, item) }, item.title),
+            h('span', { className: 'rt-ops-subtle' }, [item.category, item.description].filter(Boolean).join(' · ')))))),
+        detail ? h('div', { style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
+          h('h4', null, detail.title),
+          h('p', null, '来源：' + labels[detail.origin] + (detail.truncated ? ' · 原文显示已截断' : '')),
+          h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情'),
+          h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文')) : null)
+    }
+
     function KnowledgeCenterTab() {
+      const [view, setView] = React.useState('personal')
       const empty = () => ({ title: '', body: '', category: '', tags: '', source: '', favorite: false })
       const [query, setQuery] = React.useState('')
       const [category, setCategory] = React.useState('')
@@ -10286,7 +10342,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const field = (key, label) => h('label', { style: { display: 'grid', gap: 4 } }, label,
         h('input', { className: 'rt-input', value: draft[key] || '', disabled: busy, onChange: e => change(key, e.target.value) }))
       return h('div', { className: 'rt-pane' },
-        h('div', { className: 'rt-card' },
+        h('div', { className: 'rt-card', style: { display: 'flex', gap: 8 } },
+          h('button', { className: 'rt-btn' + (view === 'personal' ? ' rt-btn-primary' : ''), onClick: () => setView('personal') }, '个人资料'),
+          h('button', { className: 'rt-btn' + (view === 'unified' ? ' rt-btn-primary' : ''), onClick: () => setView('unified') }, '全库检索')),
+        view === 'unified' ? h(UnifiedKnowledgeTab) : h('div', { className: 'rt-card' },
           h('h4', null, '知识库 · 个人资料'),
           h('p', null, '本地保存技术笔记、文档和来源，不依赖 ARTEX 或当前靶标。'),
           h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
@@ -10303,7 +10362,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { style: { display: 'flex', gap: 8 } },
             h('button', { className: 'rt-btn', disabled: offset === 0, onClick: () => setOffset(Math.max(0, offset - 50)) }, '上一页'),
             h('button', { className: 'rt-btn', disabled: offset + 50 >= result.total, onClick: () => setOffset(offset + 50) }, '下一页'))),
-        draft ? h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
+        view === 'personal' && draft ? h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
           h('h4', null, draft.id ? '编辑知识' : '新建知识'),
           field('title', '标题'), field('category', '分类'), field('tags', '标签（逗号分隔）'), field('source', '来源 / 链接'),
           h('label', null, h('input', { type: 'checkbox', checked: !!draft.favorite, disabled: busy, onChange: e => change('favorite', e.target.checked) }), ' 收藏'),
