@@ -75,7 +75,7 @@ jobs:
             done
           fi
           if [ "$GITHUB_REPOSITORY" = "wxcvm/dsh-purge" ] && [ "$GITHUB_REF" = "refs/heads/beta" ]; then
-            for file in lib/update-payload.js scripts/recover-update.mjs scripts/vps-admin-check.mjs scripts/ensure-profile-bundle.mjs docs/UPDATE_RECOVERY.zh-CN.md; do
+            for file in lib/update-payload.js scripts/recover-update.mjs scripts/vps-admin-check.mjs scripts/ensure-profile-bundle.mjs docs/UPDATE_RECOVERY.zh-CN.md lib/redteam/knowledge-center.js lib/redteam/knowledge-unified.js lib/redteam/knowledge-semantic.js docs/KNOWLEDGE_CENTER.zh-CN.md; do
               unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
             done
           fi

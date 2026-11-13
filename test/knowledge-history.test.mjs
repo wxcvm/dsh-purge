@@ -44,3 +44,18 @@ test('backup roundtrip preserves documents and history but never overwrites curr
   assert.throws(()=>call('knowledgeImport',{documents:[{title:'valid',body:'text'},{title:'',body:'bad'}]}),/无效/)
   assert.equal(call('knowledgeList').total,2)
 })
+
+
+test('deleted personal document IDs are never reused by newly created or imported documents', t => {
+  const root=mkdtempSync(join(tmpdir(),'purge-knowledge-ids-'))
+  t.after(()=>rmSync(root,{recursive:true,force:true}))
+  const call=(op,args={})=>knowledgeRequest(root,{op,...args})
+  const a=call('knowledgeSave',{title:'old',body:'old'}).item
+  call('knowledgeDelete',{id:a.id})
+  const b=call('knowledgeSave',{title:'new',body:'new'}).item
+  assert.ok(b.id>a.id)
+  call('knowledgeDelete',{id:b.id})
+  const c=call('knowledgeImport',{documents:[{title:'copy',body:'copy'}]}).ids[0]
+  assert.ok(c>b.id)
+  assert.throws(()=>call('knowledgeGet',{id:a.id}),/不存在/)
+})
