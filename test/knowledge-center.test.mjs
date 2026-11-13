@@ -35,5 +35,10 @@ test('knowledge page and authorized bridge are wired into generated client', () 
     assert.ok(text.includes("['knowledge-center', '知识库']"))
     assert.ok(text.includes("else if (st.tab === 'knowledge-center') body = h(KnowledgeCenterTab)"))
   }
-  assert.ok(ui.indexOf('const bridgeAuth = authorizeBridgeRequest(req)') < ui.indexOf("['knowledgeList', 'knowledgeGet', 'knowledgeSave', 'knowledgeDelete']"))
+  const auth = ui.indexOf('const bridgeAuth = authorizeBridgeRequest(req)')
+  const route = ui.indexOf("['knowledgeList', 'knowledgeGet', 'knowledgeSave', 'knowledgeDelete',")
+  assert.ok(auth >= 0 && route > auth)
+  for (const op of ['knowledgeHistory', 'knowledgeHistoryGet', 'knowledgeRestore', 'knowledgeExport', 'knowledgeImport']) {
+    assert.ok(ui.slice(route, ui.indexOf('sendJson(res, 200, knowledgeRequest', route)).includes("'" + op + "'"), op)
+  }
 })
