@@ -12,6 +12,7 @@ test('credential review flags configuration fields and credential URLs without r
   assert.equal(r.flagged,true)
   assert.deepEqual(new Set(r.findings.map(x=>x.kind)),new Set(['private-key','password','token-or-secret','identifier','credential-url']))
   for (const v of ['TEST_KEY_NOT_REAL','test-pass','test-token','test-id','00000000']) assert.ok(!JSON.stringify(r).includes(v))
+  assert.equal(inspectKnowledgeCredentials({body:'privateKey: \${REALITY_PRIV}\ntoken: \${TOKEN}'}).flagged,false)
   assert.equal(inspectKnowledgeCredentials({body:'privateKey: "\${REALITY_PRIV}"\npassword: CHANGE_ME\npublic-key: public-value\nsecret: ""'}).flagged,false)
 })
 

@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e0ee261eba1b2fcb";
+		const CLIENT_BUILD_ID = "c20ae34d0c17061f";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8109,7 +8109,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       return h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
         h('h4', null, '代理入口安全检查'),
-        h('p', null, '选择本机 Clash / Mihomo YAML 配置，检查 LAN 监听、入口鉴权及管理控制器。仅本机解析，不保存配置、不显示凭据、不探测端口。'),
+        h('p', null, '选择 Clash / Mihomo YAML 配置，检查 LAN 监听、入口鉴权及管理控制器。配置提交到当前 DSH 宿主解析（远程连接时为远端宿主），不保存、不显示凭据、不探测端口。建议仅选择已脱敏配置。'),
         h('input', { type: 'file', accept: '.yaml,.yml', disabled: busy, onChange: e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) inspect(file) } }),
         busy ? h('p', null, '检查中…') : null,
         error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
