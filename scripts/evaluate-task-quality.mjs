@@ -72,6 +72,31 @@ function diagnoseEvents(events) {
   return { outcome, duplicates, conflicts };
 }
 
+// Compare only pairs with correct outputs and measured values on both sides.
+const metricKeys = ['totalTokens', 'toolCalls', 'elapsedMs'];
+function efficiency(rows) {
+  return Object.fromEntries(metricKeys.map(key => {
+    const pairs = rows.filter(r => r.baseline.status === 'correct' && r.candidate.status === 'correct'
+      && r.baseline.metrics?.[key] !== undefined && r.candidate.metrics?.[key] !== undefined);
+    const baseline = pairs.reduce((sum, r) => sum + r.baseline.metrics[key], 0);
+    const candidate = pairs.reduce((sum, r) => sum + r.candidate.metrics[key], 0);
+    return [key, { pairedCases: pairs.length, baseline: pairs.length ? baseline : null,
+      candidate: pairs.length ? candidate : null, delta: pairs.length ? candidate - baseline : null }];
+  }));
+}
+function sampleMetrics(sample) {
+  if (sample.metrics === undefined) return undefined;
+  if (!sample.metrics || typeof sample.metrics !== 'object' || Array.isArray(sample.metrics)) throw new Error('metrics must be an object');
+  const result = {};
+  for (const key of metricKeys) {
+    if (!Object.hasOwn(sample.metrics, key)) continue;
+    const value = sample.metrics[key];
+    if (!Number.isFinite(value) || value < 0 || (key !== 'elapsedMs' && !Number.isSafeInteger(value))) throw new Error('invalid metric: ' + key);
+    result[key] = value;
+  }
+  return result;
+}
+
 // Raw mode evaluates captured normal-task outputs, never resubmits them.
 function evaluateRaw(input) {
   const groups = ['baseline', 'candidate'];
@@ -86,12 +111,13 @@ function evaluateRaw(input) {
     if (!Object.hasOwn(group, c.id)) return { status: 'missing' };
     const sample = group[c.id];
     if (!sample || typeof sample !== 'object' || typeof sample.response !== 'string') throw new Error('sample requires response string: ' + c.id);
+    const metrics = sampleMetrics(sample);
     const lifecycle = sample.events === undefined ? null : diagnoseEvents(sample.events);
     if (lifecycle && lifecycle.outcome !== 'completed') return { status: 'not-completed', lifecycle };
     let parsed;
     try { parsed = JSON.parse(sample.response); }
     catch { return { status: 'invalid-json', lifecycle }; }
-    return { status: isDeepStrictEqual(parsed, c.expected) ? 'correct' : 'incorrect', lifecycle };
+    return { status: isDeepStrictEqual(parsed, c.expected) ? 'correct' : 'incorrect', lifecycle, metrics };
   }
   const rows = cases.map(c => ({ id: c.id, baseline: score(input.baseline, c), candidate: score(input.candidate, c) }));
   const states = ['correct', 'incorrect', 'invalid-json', 'not-completed', 'missing'];
@@ -101,7 +127,7 @@ function evaluateRaw(input) {
     pairedCases: paired.length,
     pairedImproved: paired.filter(r => r.baseline.status !== 'correct' && r.candidate.status === 'correct').length,
     pairedRegressed: paired.filter(r => r.baseline.status === 'correct' && r.candidate.status !== 'correct').length,
-    rows };
+    efficiency: efficiency(rows), rows };
 }
 
 function rawSelfTest() {
@@ -126,7 +152,12 @@ function rawSelfTest() {
   assert.equal(result.pairedRegressed, 1);
   assert.equal(result.pairedCases, 2);
   assert.throws(() => evaluateRaw({ baseline: { arithmetic: { response: 94 } }, candidate: {} }), /response string/);
-  console.log('Raw evaluation and event diagnostics: 17 assertions passed');
+  const measured = evaluateRaw({ baseline: { arithmetic: { response: '94', metrics: { totalTokens: 100, toolCalls: 2, elapsedMs: 12.5 } }, sort: { response: '[]', metrics: { totalTokens: 1 } } }, candidate: { arithmetic: { response: '94', metrics: { totalTokens: 80, toolCalls: 0 } }, sort: { response: '[-1,2,2,9]', metrics: { totalTokens: 1000 } } } });
+  assert.deepEqual(measured.efficiency.totalTokens, { pairedCases: 1, baseline: 100, candidate: 80, delta: -20 });
+  assert.equal(measured.efficiency.toolCalls.delta, -2);
+  assert.equal(measured.efficiency.elapsedMs.pairedCases, 0);
+  assert.throws(() => evaluateRaw({ baseline: { arithmetic: { response: '94', metrics: { totalTokens: -1 } } }, candidate: {} }), /invalid metric/);
+  console.log('Raw evaluation and event diagnostics: 21 assertions passed');
 }
 
 function selfTest() {
