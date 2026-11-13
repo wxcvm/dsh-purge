@@ -195,10 +195,16 @@ test('registered tools enforce attempt handoff and same-root ownership end to en
   assert.equal(resumed.focus.task_run.attempt.id, id)
   assert.equal(resumed.focus.task_run.runtime_activity, 'session-running')
   assert.match(resumed.focus.first_tool, /redteam_task_run/)
-  const args = { attempt_id: id, asset_id: 1, request: 'request', response: 'response' }
+  const args = { attempt_id: id, operation_key: 'first-record', asset_id: 1, request: 'request', response: 'response' }
+  assert.equal((await call('redteam_http_evidence_add', { ...args, attempt_id: undefined })).ok, false)
   assert.equal((await call('redteam_http_evidence_add', args, 'other-root')).ok, false)
   assert.equal((await call('redteam_http_evidence_add', args, 'child')).ok, false, 'a sibling executor under the same root cannot write to a live-bound attempt')
-  assert.equal((await call('redteam_http_evidence_add', args)).ok, true)
+  const firstWrite = await call('redteam_http_evidence_add', args)
+  assert.equal(firstWrite.ok, true)
+  const duplicate = await call('redteam_http_evidence_add', args)
+  assert.equal(duplicate.id, firstWrite.id)
+  assert.equal(duplicate.replayed, true)
+  assert.equal(store.db(engagement).prepare('SELECT COUNT(*) n FROM http_evidence').get().n, 1)
   const previous = { task_key: card.task_key, before: card.before, outcome: 'done' }
   const held = await call('redteam_next_action', { previous_task: JSON.stringify(previous) })
   assert.equal(held.handoff.decision, 'hold', 'omitting attempt ID cannot bypass tracked task verification')
@@ -212,4 +218,84 @@ test('registered tools enforce attempt handoff and same-root ownership end to en
   store.db(engagement).exec("UPDATE http_evidence SET response='changed after acceptance'")
   const invalidated = await call('redteam_next_action', { previous_task: JSON.stringify(previous) })
   assert.equal(invalidated.handoff.decision, 'hold')
+})
+
+test('operation receipts deduplicate matching payloads and normalize storage defaults', t => {
+  const { runs, db } = fixture(t)
+  const id = begin(runs)
+  const args = { ...evidence, operation_key: 'capture-1' }
+  const first = runs.addEvidence(id, args)
+  assert.equal(first.replayed, false)
+  const duplicate = runs.addEvidence(id, { ...args, method: 'GET', note: null })
+  assert.equal(duplicate.id, first.id)
+  assert.equal(duplicate.replayed, true)
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM http_evidence').get().n, 1)
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM task_evidence_operation').get().n, 1)
+  for (const field of ['response', 'request', 'note', 'captured_by', 'url', 'label', 'method']) {
+    assert.throws(() => runs.addEvidence(id, { ...args, [field]: 'changed' }), /payload conflict/)
+  }
+  runs.transition(id, 'submit')
+  runs.transition(id, 'verify')
+  assert.equal(runs.addEvidence(id, args).replayed, true, 'completed receipt lookup does not create new work')
+  assert.throws(() => runs.addEvidence(id, { ...args, operation_key: 'new-write' }), /running/)
+})
+
+test('operation keys are optional, bounded, scoped to attempts and cannot bypass ownership', t => {
+  const { runs, store, db } = fixture(t)
+  const id = begin(runs)
+  for (const operation_key of ['', ' ', null, 1, 'a'.repeat(201)]) {
+    assert.throws(() => runs.addEvidence(id, { ...evidence, operation_key }), /operation_key/)
+  }
+  const args = { ...evidence, operation_key: 'same-key' }
+  runs.addEvidence(id, args)
+  assert.throws(() => new TaskRuns(store, 'lab', 'other-root').addEvidence(id, args), /different root/)
+  runs.transition(id, 'cancel')
+  assert.equal(runs.addEvidence(id, args).replayed, true)
+  const next = runs.start(key, true).attempt.id
+  assert.throws(() => runs.addEvidence(id, args), /no longer current/)
+  assert.equal(runs.addEvidence(next, args).replayed, false)
+  runs.addEvidence(next, evidence)
+  runs.addEvidence(next, evidence)
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM http_evidence').get().n, 4, 'unkeyed historical behavior unchanged')
+})
+
+test('modified, deleted or unlinked receipt evidence is never silently accepted or replaced', t => {
+  const { runs, db } = fixture(t)
+  const id = begin(runs)
+  const args = { ...evidence, operation_key: 'receipt' }
+  const saved = runs.addEvidence(id, args)
+  db.prepare("UPDATE http_evidence SET captured_by='modified' WHERE id=?").run(saved.id)
+  assert.throws(() => runs.addEvidence(id, args), /changed or missing/)
+  db.prepare('UPDATE http_evidence SET captured_by=NULL WHERE id=?').run(saved.id)
+  db.prepare('DELETE FROM http_evidence WHERE id=?').run(saved.id)
+  assert.throws(() => runs.addEvidence(id, args), /changed or missing/)
+  assert.equal(db.prepare('SELECT COUNT(*) n FROM http_evidence').get().n, 0)
+  const second = runs.addEvidence(id, { ...args, operation_key: 'other' })
+  // Simulate out-of-band corruption, bypassing the normal receipt foreign key.
+  db.exec('PRAGMA foreign_keys=OFF')
+  db.prepare('DELETE FROM task_attempt_evidence WHERE evidence_id=?').run(second.id)
+  db.exec('PRAGMA foreign_keys=ON')
+  assert.throws(() => runs.addEvidence(id, { ...args, operation_key: 'other' }), /changed or missing/)
+})
+
+test('receipt insertion failure rolls back evidence and attribution together', t => {
+  const { runs, db } = fixture(t)
+  const id = begin(runs)
+  db.exec("CREATE TRIGGER reject_receipt BEFORE INSERT ON task_evidence_operation BEGIN SELECT RAISE(ABORT,'receipt fault'); END")
+  assert.throws(() => runs.addEvidence(id, { ...evidence, operation_key: 'receipt' }), /receipt fault/)
+  for (const table of ['http_evidence', 'task_attempt_evidence', 'task_evidence_operation']) {
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM ' + table).get().n, 0)
+  }
+  db.exec('DROP TRIGGER reject_receipt')
+  assert.equal(runs.addEvidence(id, { ...evidence, operation_key: 'receipt' }).replayed, false)
+})
+
+test('indirect evidence cannot return a valid receipt or accept writes after the asset target disappears', t => {
+  const { runs, db } = fixture(t)
+  const id = runs.start('review:asset #1').attempt.id
+  const args = { ...evidence, operation_key: 'indirect' }
+  runs.addEvidence(id, args)
+  db.exec('DELETE FROM asset WHERE id=1')
+  assert.throws(() => runs.addEvidence(id, args), /changed or missing/)
+  assert.throws(() => runs.addEvidence(id, evidence), /target/)
 })

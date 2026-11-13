@@ -59,6 +59,8 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `action=status`、`task_key` 或 `attempt_id`：只读任务、尝试及当前证据核对结果。`runtime_activity` 区分 `session-running`、`session-idle` 与 `not-observed`，只说明绑定执行会话，不代表任务动作已执行。运行绑定丢失、正常结束但交付未知、执行器卸载时 `recovery_required=true`。
 - `action=reconcile`、`attempt_id`：核对上次操作的实际结果后，在同一执行会话显式重绑；不重发命令、不新建尝试、不自动验收。恢复时若发现此前漏收的用户停止事件，原尝试变为 cancelled，不重启。
 - `redteam_http_evidence_add(attempt_id=...)`：在原写入工具中原子保存报文和尝试关联；拒绝别的根会话、别的目标、空报文和已提交尝试。省略此参数保持旧行为，旧证据不能事后冒充本次交付。
+- 可同时提供 `operation_key`（1..200 字符），在第一次写入前确定并保留该稳定键。同尝试、同键、同内容重复调用返回原证据 ID 和 `replayed=true`，不新增记录；同键改内容报冲突。证据、归属、回执在同一事务提交。操作键仅在该尝试内有效，不能去重没有键的旧写入或另一个尝试。
+- 运行绑定丢失或尝试已提交/终止时，匹配回执仍可只读返回，但要求原根会话、当前尝试且证据完整未变；这不会清除 `recovery_required`、重绑执行器或证明任务成功。没有匹配回执的新写入仍遵循 running 与 reconcile 约束。证据已删改时拒绝回执，不自动补写。这里仅保障本地记录去重，不保证外部 HTTP 请求或其它工具副作用只执行一次。
 - `action=submit/verify/cancel`、`attempt_id`：分别冻结交付、执行记录完整性验收、停止尝试状态推进。cancel 不会取消已在宿主执行的工具，停止实际操作仍使用宿主停止功能。
 - 验收不满足时变为 `failed`；`action=retry`、`task_key` 仅能为 failed/cancelled 尝试显式建立新尝试，不重用旧证据关联。历史尝试保留且不可覆盖当前状态。
 
