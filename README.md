@@ -7,9 +7,9 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.6 (beta)</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.7 (beta)</strong></p>
 
-> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate builds on beta.5's local knowledge center with clearer stored task progress, privacy-aware summaries, reliable knowledge-source status and local configuration diagnostics. Full on-device validation is still pending. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
+> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate adds durable run records, knowledge-result coverage, SQLite overview statistics and paginated history construction. Full on-device validation is still pending. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -67,7 +67,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.6**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.7**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
@@ -412,7 +412,7 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.7-beta.6` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
+Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require an authorized beta.7 package (candidate; tag not yet published) and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
 
 The first time you open Drill, read the notice, wait for the countdown, scroll to the end and check three boxes. Clean does not need this step. Drill is for your own systems or targets with explicit written authorization, including authorized public-facing assets.
 
