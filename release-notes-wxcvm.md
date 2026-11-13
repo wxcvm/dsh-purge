@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.7-beta.7
+
+## 中文
+
+- #211：执行准备记录持久化、原子更新运行清单、未终结状态和未登记导入结果提示；ARTEX 表结构检查、五来源检索覆盖、SQLite 概览分类与历史分页优化。
+- #214：本地语义向量逐块读取、保持原有排名与分值，明确损坏索引；任务摘要常见凭据脱敏、知识源故障隔离、结构化异常分类；区分文件完整性、执行记录和导入状态。
+- #215：按精确运行清单路径观察当前进程中的等待结果及导入阶段，完成或异常后清理；按已记录的 scan_run_id 在同一项目数据库内核对导入记录，不猜测关联。
+- 未终结记录、未观察到活动或文件核验通过均不证明任务成功或中断；没有自动重放、自动重新执行或跨进程恢复。脱敏是尽力处理，不代表完全匿名化。
+- 合并前代码通过 #211、#214、#215 各自的维护兼容性及规格检查；本联合发布候选仍需自身完整 CI 和现有 Release 归档检查。真实 Windows Desktop/Web 安装更新、重启、图形界面、LM Studio 中文召回、长任务与性能验收尚未完成。
+- 私有 Beta，正式 master .6 和旧标签保持不变。请参阅 [私有更新说明](docs/PRIVATE_UPDATE.zh-CN.md)、[知识中心](docs/KNOWLEDGE_CENTER.zh-CN.md)及[作战台使用说明](docs/drill-console-usage.md)。
+
+## English
+
+- #211: durable preparation and finalization records, unfinalized/unfinished-import diagnostics, ARTEX schema and knowledge coverage, SQLite overview aggregation and paginated history.
+- #214: streamed local semantic vectors with unchanged ranking, corrupt-index diagnostics, best-effort credential masking, isolated reference-source errors, structured tool failures and distinct file/execution/import results.
+- #215: exact manifest-path current-process activity observations with cleanup; recorded scan_run_id reconciliation within the same project database, without guessing associations.
+- Unknown activity or a verified file does not prove completion or interruption. No automatic replay, repeat execution or cross-process task recovery. Masking is not comprehensive anonymization.
+- Each integrated runtime PR passed compatibility and specification CI. This combined release candidate still requires its own CI and existing archive checks. Actual Windows Desktop/Web updates, restarts, rendering, LM Studio Chinese retrieval, long-task and device performance acceptance remain pending.
+- Private Beta; stable master .6 and previous tags unchanged. See the private update, knowledge center and console guides.
+
 # 1.1.92-wxcvm.7-beta.6
 
 ## 中文

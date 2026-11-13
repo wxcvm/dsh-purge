@@ -9,7 +9,7 @@
 
 <p align="center"><strong>Version 1.1.92-wxcvm.7-beta.7 (beta)</strong></p>
 
-> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate adds durable run records, knowledge-result coverage, SQLite overview statistics and paginated history construction. Full on-device validation is still pending. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
+> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate integrates durable run records, local activity and import reconciliation, bounded knowledge retrieval, context privacy, structured diagnostics and SQLite overview optimization. Full on-device validation remains pending; automatic task replay is not implemented. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>

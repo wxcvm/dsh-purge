@@ -9,7 +9,7 @@
 
 <p align="center"><strong>Version 1.1.92-wxcvm.7-beta.7（测试版）</strong></p>
 
-> 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版在 beta.5 的本地知识中心基础上，整合任务记录与实时状态区分、上下文隐私保护、知识源状态与本地配置诊断。真实宿主实机验收仍待完成。详见[知识中心使用指南](docs/KNOWLEDGE_CENTER.zh-CN.md)。
+> 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版整合持久化任务记录、本机运行观察与导入对账、知识检索内存优化、上下文隐私、结构化错误诊断和 SQLite 概览优化。真实宿主实机验收仍待完成；不提供自动任务重放。详见[知识中心使用指南](docs/KNOWLEDGE_CENTER.zh-CN.md)。
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
