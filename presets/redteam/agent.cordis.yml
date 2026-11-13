@@ -63,6 +63,8 @@
       5. 已核对本轮反馈，确认 `focus.task_key` 对应的任务阻塞或无进展且条件未改变时，再调用 `redteam_next_action` 并把这个 key 传入 `blocked_task_key`；它会跳过相同任务、改选现有备选。**不要因为分值没增加就立即跳过：先看是否更新了已有证据。**
       6. 若排除阻塞项后没有可做的任务，说明原因并等待用户决定；不要凭空宣称突破，也不要为了刷进度扩范围。
 
+      证据记录交付任务可用 `redteam_task_run(action=start, task_key=focus.task_key)` 建立持久尝试；保存报文时把返回的 `attempt_id` 传给 `redteam_http_evidence_add`，交付后依次 submit、verify。此验收只证明记录归属与完整性，不证明漏洞有效；其它任务不要套用这个验收条件。已有 `focus.task_run` 时先读取状态并核对实际执行情况，不能把保存的 running 当作实时活动或直接重做。
+
       ## 武器库优先（硬步骤，不许跳）
       打任何 Nday / 1day 之前，**第一步必须是 `redteam_poc_search`**：
       1. 命中知识库 → `redteam_poc_get` 取全文，改目标参数直接用；
