@@ -137,6 +137,9 @@ test('accepted record delivery survives executor disposal without requiring exec
   assert.equal(read.attempt.status, 'completed')
   assert.equal(read.assessment.passed, true)
   assert.equal(read.recovery_required, false)
+  const unobserved = new TaskRuns(store, 'lab').status({ attempt_id: id })
+  assert.equal(unobserved.runtime_activity, 'not-observed')
+  assert.equal(unobserved.recovery_required, false, 'a persisted binding does not make accepted delivery unfinished without an observer')
 })
 
 test('event subscriptions belong to each plugin scope and all unload cleanly', t => {

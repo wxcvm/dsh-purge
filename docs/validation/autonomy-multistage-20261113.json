@@ -208,7 +208,7 @@
               true
             ],
             "dependencyPlanPassed": true,
-            "unfinishedAttemptNeedsRecovery": true,
+            "unfinishedAttemptNeedsRecovery": false,
             "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
           }
         }
@@ -305,7 +305,7 @@
               true
             ],
             "dependencyPlanPassed": true,
-            "unfinishedAttemptNeedsRecovery": true,
+            "unfinishedAttemptNeedsRecovery": false,
             "scope": "local-record-integrity-and-plan-not-vulnerability-truth"
           }
         }
@@ -464,5 +464,27 @@
     "Candidate has additional verification capability and pays its extra tool/token cost; baseline absence of that capability is not counted as a common artifact failure.",
     "Cache/order effects not eliminated, resolved remote model revision unknown.",
     "No overall autonomy, speed or cost improvement established."
-  ]
+  ],
+  "postRunJudgeCorrection": {
+    "reason": "No-observer TaskRuns status must require reconciliation only for active attempts, not accepted terminal delivery. Rechecked final persisted databases after fixing that fallback; model timings, usage, calls and raw local report unchanged.",
+    "corrections": [
+      {
+        "arm": "candidate",
+        "repeat": 1,
+        "phase": "resume",
+        "field": "judgement.unfinishedAttemptNeedsRecovery",
+        "captured": true,
+        "rechecked": false
+      },
+      {
+        "arm": "candidate",
+        "repeat": 2,
+        "phase": "resume",
+        "field": "judgement.unfinishedAttemptNeedsRecovery",
+        "captured": true,
+        "rechecked": false
+      }
+    ],
+    "fixedTaskRunsSha256": "6771fd0f7d83c741a8a93871c3b3d2a5ad6c880e918cbf154ed8ad00d3f60d17"
+  }
 }
