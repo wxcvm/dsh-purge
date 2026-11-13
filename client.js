@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "61aad409689a8fbe";
+		const CLIENT_BUILD_ID = "4b1f86111d80f244";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8093,6 +8093,103 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         limitations: ['aggregate counts only', 'no actual route or connectivity test', 'no public IP, actual DNS or WebRTC test'] }
     }
 
+    function summarizeServiceLog(text, modifiedAt) {
+      const lines = String(text || '').split(/\r?\n/).filter(line => line.trim())
+      let errors=0, warnings=0, first=null, last=null
+      for (const line of lines) {
+        if (/\b(?:error|fatal|panic|critical)\b/i.test(line)) errors++
+        else if (/\b(?:warn|warning)\b/i.test(line)) warnings++
+        const stamp = line.match(/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/)?.[0]
+        if (stamp) { if (!first) first=stamp; last=stamp }
+      }
+      return { lines:lines.length, errors,warnings,first,last,modifiedAt:Number.isFinite(modifiedAt) ? new Date(modifiedAt).toISOString() : null, runtime:'not_tested' }
+    }
+
+    function ServiceEvidenceCard() {
+      const [expected,setExpected] = React.useState(null)
+      const [observed,setObserved] = React.useState(null)
+      const [format,setFormat] = React.useState('yaml')
+      const [result,setResult] = React.useState(null)
+      const [log,setLog] = React.useState(null)
+      const [busy,setBusy] = React.useState(false)
+      const [error,setError] = React.useState('')
+      const run = async fn => {
+        setBusy(true);setError('')
+        try {await fn()} catch(e){setError(String(e.message || e))} finally{setBusy(false)}
+      }
+      const pick = setter => e => {setter(e.target.files?.[0] || null);setResult(null)}
+      const compare = () => run(async()=>{
+        setResult(null)
+        if(expected.size+observed.size>4*1024*1024) throw Error('两份配置合计超过 4 MiB，请选用精简脱敏副本')
+        const r=await api({op:'serviceConfigReview',format,expected:await expected.text(),observed:await observed.text()})
+        if(!r || !r.ok) throw Error(r?.error || '无法比较配置')
+        setResult(r)
+      })
+      const readLog = file => run(async()=>{
+        setLog(null)
+        if(file.size>8*1024*1024) throw Error('日志超过 8 MiB，请选取一段日志副本')
+        setLog(summarizeServiceLog(await file.text(),file.lastModified))
+      })
+      return h('div',{className:'rt-card',style:{display:'grid',gap:8}},
+        h('h4',null,'服务证据与配置核对'),
+        h('p',null,'文件与日志只是观测证据，不代表服务正在运行、配置已加载或端到端功能健康。不会启动、重启或修改服务。'),
+        h('h4',null,'配置漂移'),
+        h('p',null,'选择预期配置和实际取得的配置副本。JSON/YAML 按字段比较；TOML 等可用文本比较。配置交给当前 DSH 宿主解析，远程连接时为远端宿主，请选脱敏文件。'),
+        h('label',null,'预期配置 ',h('input',{type:'file',disabled:busy,onChange:pick(setExpected)})),
+        h('label',null,'实际配置 ',h('input',{type:'file',disabled:busy,onChange:pick(setObserved)})),
+        h('select',{className:'rt-input',value:format,disabled:busy,onChange:e=>{setFormat(e.target.value);setResult(null)}},
+          h('option',{value:'yaml'},'YAML'),h('option',{value:'json'},'JSON'),h('option',{value:'text'},'文本（TOML / 其他）')),
+        h('button',{className:'rt-btn rt-btn-primary',disabled:busy||!expected||!observed,onClick:compare},'比较配置'),
+        result ? h('div',null,
+          h('p',null,result.equal?'两份配置在所选比较模式下一致':'发现配置差异'),
+          h('p',null,'新增 '+result.counts.added+' · 删除 '+result.counts.removed+' · 变化 '+result.counts.changed),
+          (result.paths || []).map((p,i)=>h('div',{key:i,style:{overflowWrap:'anywhere'}},({added:'新增',removed:'删除',changed:'变化'}[p.kind])+' '+(p.path||'/'))),
+          result.omitted ? h('p',null,'另有 '+result.omitted+' 项差异未展开') : null,
+          h('p',{className:'rt-foot'},result.note)) : null,
+        h('h4',null,'服务日志摘要'),
+        h('p',null,'日志在浏览器本地读取，按行统计常见英文错误/警告关键词，原文不传给宿主；不等于真实故障次数。'),
+        h('input',{type:'file',accept:'.log,.txt',disabled:busy,onChange:e=>{const f=e.target.files?.[0];e.target.value='';if(f)readLog(f)}}),
+        log ? h('div',null,
+          h('p',null,'非空行 '+log.lines+' · 疑似错误行 '+log.errors+' · 疑似警告行 '+log.warnings),
+          h('p',null,'文件修改时间：'+(log.modifiedAt||'未知')),
+          h('p',null,'文本首末时间标记：'+(log.first||'未知')+' → '+(log.last||'未知')),
+          h('p',{className:'rt-foot'},'运行状态：未检测。文件存在、没有错误关键词或有近期日志均不能证明服务健康。')) : null,
+        busy ? h('p',null,'读取中…') : null,
+        error ? h('div',{className:'rt-err',role:'alert'},error) : null)
+    }
+
+    function ProxyProfileAuditCard() {
+      const [result, setResult] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const inspect = async file => {
+        setBusy(true); setResult(null); setError('')
+        try {
+          if (file.size > 1024 * 1024) throw Error('配置文件超过 1 MiB，请选择精简配置')
+          const r = await api({ op: 'proxyProfileAudit', text: await file.text() })
+          if (!r || !r.ok) throw Error('无法解析所选代理配置')
+          setResult(r)
+        } catch (e) { setError(String(e.message || e)) }
+        finally { setBusy(false) }
+      }
+      return h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
+        h('h4', null, '代理入口安全检查'),
+        h('p', null, '选择 Clash / Mihomo YAML 配置，检查 LAN 监听、入口鉴权、管理控制器与 DNS 配置。配置提交到当前 DSH 宿主解析（远程连接时为远端宿主），不保存、不显示凭据、不探测端口。建议仅选择已脱敏配置。'),
+        h('input', { type: 'file', accept: '.yaml,.yml', disabled: busy, onChange: e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) inspect(file) } }),
+        busy ? h('p', null, '检查中…') : null,
+        error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
+        result ? h('div', null,
+          h('p', null, result.findings.length ? '发现 ' + result.findings.length + ' 项配置风险' : '未发现本检查覆盖的配置风险'),
+          result.findings.map(item => h('div', { key: item.id, style: { marginTop: 6 } },
+            h('b', null, item.level === 'high' ? '高风险：' : '注意：'), item.message)),
+          result.dns ? h('div', { style: { marginTop: 10 } },
+            h('h4', null, 'DNS 配置摘要'),
+            h('p', null, 'DNS：' + ({enabled:'已启用',disabled:'已禁用',unspecified:'未明确'}[result.dns.state]) + ' · 模式：' + (result.dns.mode === 'unspecified' ? '未明确' : result.dns.mode) + ' · 规则设置：' + ({enabled:'已启用',disabled:'已禁用',unspecified:'未明确'}[result.dns.respectRules])),
+            (result.dns.groups || []).map(g => h('div', { key: g.name }, g.name + '：明文 ' + g.plaintext + ' · 加密 ' + g.encrypted + ' · 未知 ' + g.unknown)),
+            h('p', { className: 'rt-foot' }, '仅配置分类；实际解析结果、DNS 连接路径及 Fake-IP 映射均未测试。')) : null,
+          h('p', { className: 'rt-ops-subtle' }, result.note)) : null)
+    }
+
     function NetworkPrivacyCard() {
       const [snapshot, setSnapshot] = React.useState(null)
       const [baseline, setBaseline] = React.useState(null)
@@ -8285,6 +8382,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
           h(NetworkPrivacyCard),
+          h(ProxyProfileAuditCard),
           h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
             h('h4', null, 'Windows 存储权限诊断'),
             h('div', { style: { fontSize: 12 } },
@@ -9347,7 +9445,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           !adminRouteSaved ? h('span', { className: 'rt-foot' }, '请先保存') : null),
         visibleAdminProbe ? h('div', { className: visibleAdminProbe.ok ? 'rt-foot' : 'rt-err', style: { marginTop: 8, overflowWrap: 'anywhere' } },
           (visibleAdminProbe.target ? '检测路径：' + [...(visibleAdminProbe.jumps || []), visibleAdminProbe.target].join(' → ') + '；' : '')
-          + (visibleAdminProbe.ok ? 'SSH 管理连接成功' : '检测失败：' + (visibleAdminProbe.error || '未知错误'))
+          + (visibleAdminProbe.ok ? 'SSH 管理命令执行成功（仅该次管理连接）' : '检测失败：' + (visibleAdminProbe.error || '未知错误'))
           + (Number.isFinite(visibleAdminProbe.durationMs) ? ' · ' + visibleAdminProbe.durationMs + ' ms' : '')
           + (visibleAdminProbe.checkedAt ? ' · ' + new Date(visibleAdminProbe.checkedAt).toLocaleString() : '')) : null,
         h('p', { className: 'rt-foot' }, '一键检测需要本机回环管理接口、访问令牌及宿主显式启用。不可用时使用上方终端命令；成功仅代表检测当时的 SSH 路径可用。'))
@@ -9734,6 +9832,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             + ' IPv6 URL 格式为 http://[IPv6]:端口，不能把 user@host 直接用于 HTTP。'
             + ' 详见「操作指南 → 多环境作用与 VPS 配置」。')),
           adminRouteCard(),
+          h(ServiceEvidenceCard),
           h('div', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
@@ -9865,7 +9964,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                       ? h('div', { style: { fontSize: 11.5, marginTop: 3 } },
                           health.status === 'runnable' ? '版本命令成功：' + (health.version || '未输出版本')
                           : health.status === 'path-only' ? '路径存在，尚不能验证执行'
-                          : '版本验证未通过：' + (health.error || health.status || '未知'))
+                          : '版本验证未通过：' + (health.error || health.status || '未知'),
+                          (health.warnings || []).map(w => h('div', { key: w.code, className: 'rt-foot' }, w.message)))
                       : t.path && !t.canProbe
                         ? h('div', { style: { fontSize: 11, opacity: 0.8, marginTop: 3 } },
                             '该工具尚无可靠的版本探测参数；仅确认了路径')
@@ -10295,6 +10395,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文')) : null)
     }
 
+    function knowledgeCredentialMessage(result) {
+      if (!result?.flagged) return ''
+      const names = { 'private-key': '私钥', 'identifier': 'UUID / shortId', 'password': '口令', 'token-or-secret': 'Token / Secret', 'credential-url': '含凭据的连接链接' }
+      return '检测到疑似敏感资料：' + result.findings.map(f => (names[f.kind] || f.kind) + ' × ' + f.count).join('、') + '。请优先用占位符替换真实凭据；检查不保证发现所有秘密。'
+    }
+
     function SemanticKnowledgeTab() {
       const [state, setState] = React.useState(null)
       const [query, setQuery] = React.useState('')
@@ -10316,7 +10422,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       React.useEffect(() => { run(refresh) }, [])
       const index = ids => run(async () => {
         setItems([]); setSearched(false); setDetail(null)
-        for (const id of ids) setState(await request({ op: 'knowledgeSemanticIndex', id }))
+        for (const id of ids) {
+          const warning = knowledgeCredentialMessage(await request({ op: 'knowledgeInspectStored', id }))
+          if (warning && !window.confirm(warning + '\n语义索引会把文档正文发送给本机嵌入服务。仍然建立索引？')) continue
+          setState(await request({ op: 'knowledgeSemanticIndex', id }))
+        }
       })
       const search = () => run(async () => {
         setDetail(null); setItems([]); setSearched(false)
@@ -10352,6 +10462,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [history, setHistory] = React.useState([])
       const [revision, setRevision] = React.useState(null)
       const [notice, setNotice] = React.useState('')
+      const [credentialAudit, setCredentialAudit] = React.useState(null)
       const empty = () => ({ title: '', body: '', category: '', tags: '', source: '', favorite: false })
       const [query, setQuery] = React.useState('')
       const [category, setCategory] = React.useState('')
@@ -10382,6 +10493,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!r || !r.ok) throw Error(r?.error || '操作失败')
         return r
       }
+      const confirmCredentials = async (row, action) => {
+        const warning = knowledgeCredentialMessage(await request({ op: 'knowledgeInspect', document: row }))
+        return !warning || window.confirm(warning + '\n个人知识与历史、备份和 Agent 引用可能包含原始内容。仍然' + action + '？')
+      }
+      const auditCredentials = () => run(async () => setCredentialAudit(await request({ op: 'knowledgeCredentialAudit' })))
       const loadHistory = async id => { setHistory((await request({ op: 'knowledgeHistory', id })).items); setRevision(null) }
       const open = (id) => run(async () => {
         const r = await request({ op: 'knowledgeGet', id })
@@ -10398,8 +10514,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         const add = async row => {
           const payload = { op: 'knowledgeImport', documents: [row] }
           if (new Blob([JSON.stringify(payload)]).size > 8 * 1024 * 1024) throw Error('文档及历史超出单次请求 8 MiB，请拆分后导入')
+          if (!await confirmCredentials(row, '导入')) { failures.push('已取消一份疑似含凭据的文档'); return }
           const r = await request(payload)
           count += r.imported
+          setCredentialAudit(null)
         }
         for (const file of files) {
           try {
@@ -10422,6 +10540,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         await refresh()
       })
       const exportBackup = () => run(async () => {
+        const audit = await request({ op: 'knowledgeCredentialAudit' })
+        setCredentialAudit(audit)
+        if ((audit.flagged_documents || audit.flagged_revisions) && !window.confirm('备份包含疑似敏感文档或历史版本，导出的是明文。仍然下载？')) return
         const r = await request({ op: 'knowledgeExport' })
         const url = URL.createObjectURL(new Blob([JSON.stringify(r.backup, null, 2)], { type: 'application/json' }))
         const link = document.createElement('a')
@@ -10433,20 +10554,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const restore = () => {
         if (!revision || !window.confirm('恢复这个历史版本？当前内容会保留为新的历史记录。')) return
         run(async () => {
+          if (!await confirmCredentials(revision, '恢复')) return
           const r = await request({ op: 'knowledgeRestore', id: draft.id, revision_id: revision.revision_id })
+          setCredentialAudit(null)
           setDraft({ ...r.item, favorite: !!r.item.favorite })
           await loadHistory(draft.id); await refresh()
         })
       }
       const save = () => run(async () => {
+        if (!await confirmCredentials(draft, '保存')) return
         const r = await request({ ...draft, op: 'knowledgeSave' })
+        setCredentialAudit(null)
         setDraft({ ...r.item, favorite: !!r.item.favorite })
         await loadHistory(r.item.id)
         await refresh()
       })
       const remove = () => {
         if (!draft?.id || !window.confirm('删除这条个人知识及其历史版本？请先导出备份。')) return
-        run(async () => { await request({ op: 'knowledgeDelete', id: draft.id }); setDraft(null); setOffset(0); await refresh() })
+        run(async () => { await request({ op: 'knowledgeDelete', id: draft.id }); setCredentialAudit(null); setDraft(null); setOffset(0); await refresh() })
       }
       const field = (key, label) => h('label', { style: { display: 'grid', gap: 4 } }, label,
         h('input', { className: 'rt-input', value: draft[key] || '', disabled: busy, onChange: e => change(key, e.target.value) }))
@@ -10466,8 +10591,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: () => newNote() }, '新建笔记'),
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => newNote(true) }, '收录任务经验'),
             h('button', { className: 'rt-btn', disabled: busy, onClick: exportBackup }, '导出备份'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: auditCredentials }, '检查敏感资料'),
             h('label', { style: { display: 'grid', gap: 4 } }, '导入文件 / 备份',
               h('input', { type: 'file', multiple: true, accept: '.md,.txt,.json', disabled: busy, onChange: e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) importFiles(files) } }))),
+          credentialAudit ? h('div', { className: 'rt-card', role: 'status' },
+            h('p', null, '本地检查：' + credentialAudit.flagged_documents + ' 份疑似敏感文档 / ' + credentialAudit.documents + ' 份；' + credentialAudit.flagged_revisions + ' 个疑似敏感历史版本。'),
+            h('p', null, '仅显示条目编号，不显示匹配值；未发现不代表无凭据。'),
+            [...new Set([...credentialAudit.document_ids, ...credentialAudit.history_document_ids])].map(id => h('button', { key: id, className: 'rt-btn', disabled: busy, onClick: () => open(id) }, '检查文档 #' + id))) : null,
           notice ? h('p', { role: 'status' }, notice) : null,
           error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
           h('p', null, '共 ' + result.total + ' 条'),
@@ -11124,9 +11254,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         api({ op: 'probeSessions', engagement: eng, timeoutMs: 6000 }).then((r) => {
           setBusy(false)
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '检测失败' }); load(); return }
-          const on = (r.webshells || []).filter((x) => x.status === 'online').length
-          const act = (r.tunnels || []).filter((x) => x.status === 'active').length
-          setMsg({ ok: '检测完成：WebShell 在线 ' + on + '/' + (r.webshells || []).length + '，隧道可用 ' + act + '/' + (r.tunnels || []).length })
+          const on = (r.webshells || []).filter(x => x.observation?.kind === 'http_response').length
+          const act = (r.tunnels || []).filter(x => x.observation?.kind === 'tcp_connected').length
+          setMsg({ ok: '检测完成：收到 HTTP 响应 ' + on + '/' + (r.webshells || []).length + '，TCP 监听连接成功 ' + act + '/' + (r.tunnels || []).length + '；应用协议、后端服务与 UDP 未验证' })
           load()
         }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
       }
@@ -11159,7 +11289,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const totals = (data && data.totals) || {}
       const shells = (data && data.webshells) || []
       const tunnels = (data && data.tunnels) || []
-      const statusDot = (s) => h('span', { className: s === 'online' || s === 'active' ? 'rt-dot-on' : (s === 'unknown' || !s ? 'rt-dot-unk' : 'rt-dot-off') })
+      const statusDot = (s) => h('span', { className: s === 'online' || s === 'active' ? 'rt-dot-unk' : (s === 'unknown' || !s ? 'rt-dot-unk' : 'rt-dot-off') })
+      const observationLabel = (row) => ({ manual: '人工记录（未实测）', unverified: '尚无检测证据', tcp_connected: 'TCP 连接成功（仅监听）', http_response: '收到 HTTP 响应（未验证应用）', recorded: '历史检测记录（证据有限）' }[row.observation?.kind] || '证据范围未知')
       /* 卡片里统一用「标签 + 值」两列，长文本自动换行 —— 比一行点分隔好扫读 */
       const fact = (label, value) => h('div', { className: 'rt-sess-fact' }, h('b', null, label), h('span', null, value))
       /* 会话能否连接看实际检测状态；shell 类型和通道类型都不是强制可用性门槛。 */
@@ -11183,6 +11314,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }, '标记失效')),
         h('div', { className: 'rt-sess-facts' },
           fact('类型', w.shell_type || '未登记类型（请用连通检测确认状态）'),
+          fact('检测证据', observationLabel(w)),
           w.pass_key ? fact('连接口令', h('span', { className: 'rt-mono' }, w.pass_key)) : null,
           w.asset_ip ? fact('所在资产', w.asset_ip) : null,
           w.privilege ? fact('权限', w.privilege) : null,
@@ -11215,9 +11347,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             }, copied === 'sock' + t.id ? '已复制' : '复制地址'),
             t.status === 'active'
               ? h('button', { className: 'rt-btn', style: { padding: '0 6px', fontSize: 11 }, onClick: () => markTunnel(t, 'down') }, '标记失效')
-              : h('button', { className: 'rt-btn', style: { padding: '0 6px', fontSize: 11 }, onClick: () => markTunnel(t, 'active') }, '标记可用')),
+              : h('button', { className: 'rt-btn', style: { padding: '0 6px', fontSize: 11 }, onClick: () => markTunnel(t, 'active') }, '人工标记')),
           h('div', { className: 'rt-sess-facts' },
             fact('目标侧入口', t.entry || '未登记'),
+            fact('检测证据', observationLabel(t)),
             fact('边界证据', t.legit === true
               ? h('span', { className: 'rt-tag rt-tag-live' }, t.entry_kind_label || t.entry_kind || '已标记目标侧')
               : (t.legit === false
@@ -11248,8 +11381,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return h('div', { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
           h('span', { style: { fontWeight: 600 } }, '会话与入口'),
-          h('span', { className: 'rt-tag' }, 'WebShell ' + (totals.webshellsOnline || 0) + '/' + (totals.webshells || 0) + ' 在线'),
-          h('span', { className: 'rt-tag' }, '隧道 ' + (totals.tunnelsActive || 0) + '/' + (totals.tunnels || 0) + ' 可用'),
+          h('span', { className: 'rt-tag' }, 'WebShell ' + (totals.webshellHttpObserved || 0) + '/' + (totals.webshells || 0) + ' HTTP 响应记录'),
+          h('span', { className: 'rt-tag' }, '隧道 ' + (totals.tunnelsTcpObserved || 0) + '/' + (totals.tunnels || 0) + ' TCP 连接记录'),
           h('span', { className: 'rt-tag' }, '凭据 ' + (totals.credentials || 0)),
           h('span', { className: 'rt-tag' }, '访问会话 ' + (totals.access || 0)),
           h('div', { className: 'rt-spacer' }),
@@ -11265,19 +11398,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   '拿到 WebShell 用 redteam_webshell_add；建好隧道用 redteam_tunnel_add（suo5 / socks5 / ssh -R）；之后智能体用 redteam_sessions 就能看到。'))
             : null,
           h('div', { className: 'rt-kb-sub', style: { padding: '6px 12px' } },
-            '通道“可用”取决于连通状态；边界证据单独记录，不以 WebShell 品牌或代理工具类型判定。'),
+            '这里只显示历史观测：TCP 握手不证明后端正常，HTTP 响应不证明应用功能；UDP、出口及端到端服务均未验证。人工标记不算检测通过。'),
           h(Section, {
             key: 'webshells', tone: 'queue', title: 'WebShell',
-            count: (totals.webshellsOnline || 0) + '/' + (totals.webshells || 0) + ' 在线',
-            sub: '已上线的可控入口',
+            count: (totals.webshellHttpObserved || 0) + '/' + (totals.webshells || 0) + ' HTTP 响应记录',
+            sub: '历史记录及 HTTP 响应，不代表应用已验证',
             open: sessCollapse.isOpen('shells', true), onToggle: sessCollapse.toggle('shells', true),
           }, shells.length
             ? h('div', { className: 'rt-sess-grid', style: { padding: 0 } }, shellCards)
             : h('div', { className: 'rt-atest-meta' }, '暂无（拿到 WebShell 后用 redteam_webshell_add 登记）')),
           h(Section, {
             key: 'tunnels', tone: 'test', title: '内网隧道',
-            count: (totals.tunnelsActive || 0) + '/' + (totals.tunnels || 0) + ' 可用',
-            sub: '可直接给扫描器当代理用',
+            count: (totals.tunnelsTcpObserved || 0) + '/' + (totals.tunnels || 0) + ' TCP 连接记录',
+            sub: '历史记录及 TCP 监听连接，不代表后端或应用可用',
             open: sessCollapse.isOpen('tunnels', true), onToggle: sessCollapse.toggle('tunnels', true),
           }, tunnels.length
             ? h('div', { className: 'rt-sess-grid', style: { padding: 0 } }, tunnelCards)

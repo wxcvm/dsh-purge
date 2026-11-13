@@ -83,6 +83,7 @@ export async function checkAdminRoute(target, jumps = [], runner = execFile) {
         target,
         jumps: [...jumps],
         durationMs: Date.now() - start,
+        evidence: { scope: 'ssh_management', command: 'true', status: error ? 'failed' : 'verified', application: 'not_tested', udp: 'not_tested', egress: 'not_tested' },
         error: error ? (error.killed ? 'timeout' : 'ssh-failed') : null,
       })
     })

@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { listEnvironments, getEnvironment } from '../lib/redteam/environment-registry.js'
 import { inventoryLocalCapabilities, probeLocalCapability, diagnoseLocalEnvironment } from '../lib/redteam/capability-service.js'
 import { envAdaptStatus, savePlatformConfig } from '../lib/redteam/platform-config.js'
+import { probeInstalledTool } from '../lib/redteam/tool-health.js'
 import { dispatch } from '../lib/redteam/store-core.js'
 
 const workspace = (t) => {
@@ -101,4 +102,32 @@ test('legacy chat setup gate stays compatible and is separate from tool capabili
   })
   assert.equal(diagnostic.summary.capabilityVerified, 0)
   assert.equal(diagnostic.summary.executed, 0)
+})
+
+test('Nmap version success keeps a separate driver warning without claiming scan capability', async t => {
+  const root = workspace(t), executable = fixture(join(root,'nmap.exe'))
+  const result = await probeInstalledTool('nmap', {
+    root, config:config(root,{nmap:executable}), env:{PATH:''},
+    execFileFn:(_file,_args,opts,done)=>{
+      assert.equal(opts.shell,false)
+      done(null,'Nmap version fixture\n','WARNING: Could not import all necessary Npcap functions')
+    },
+  })
+  assert.equal(result.status,'runnable')
+  assert.equal(result.warnings[0].code,'npcap-warning')
+  assert.ok(!JSON.stringify(result.warnings).includes('Could not import'))
+})
+
+
+test('Windows wrapper path reports a specific diagnostic without invoking a shell', async t => {
+  const root = workspace(t), executable = fixture(join(root,'nmap-rt.ps1'))
+  let invoked = false
+  const result = await probeInstalledTool('nmap', {
+    root, platform:'win32', config:config(root,{nmap:executable}), env:{PATH:''},
+    execFileFn:()=>{invoked=true;throw Error('unexpected script invocation')},
+  })
+  assert.equal(invoked,false)
+  assert.equal(result.status,'failed')
+  assert.equal(result.diagnostic,'windows-wrapper')
+  assert.match(result.error,/包装脚本/)
 })

@@ -37,7 +37,7 @@ test('running a local scanner preserves raw output and verifiable metadata', asy
       assert.equal(path, executable)
       assert.equal(cfg.shell, false)
       assert.equal(cfg.timeout, 180000)
-      assert.equal(args.at(-1), '192.0.2.1')
+      assert.deepEqual(args, ['-sT', '-sV', '--open', '-oX', '-', '-p', '80,443', '192.0.2.1'])
       done(null, '<nmaprun><host></host></nmaprun>', '')
     },
   })
