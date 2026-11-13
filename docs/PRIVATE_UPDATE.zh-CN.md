@@ -2,6 +2,22 @@
 
 本说明适用于包含私有更新授权修复的构建；旧 .6 与旧 Beta 安装不会仅因配置环境变量而获得此功能。
 
+## 首次安装或从旧版升级（Windows）
+
+旧版脚本默认匿名下载，私有仓库不能直接使用。登录 GitHub 后取得本仓库授权的 Release ZIP（或对应版本的源码归档），完整解压；从解压目录执行下面的命令。先完全退出目标 Harness，包括托盘或 Web 后端。
+
+```powershell
+$cache = Join-Path $env:USERPROFILE 'dsh-purge-packages'
+New-Item -ItemType Directory -Path $cache -Force | Out-Null
+npm pack --ignore-scripts --pack-destination $cache
+$version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+$archive = Join-Path $cache "dsh-purge-$version.tgz"
+powershell -ExecutionPolicy Bypass -File scripts/update-desktop-fork.ps1 -Profile desktop -LocalPackage $archive
+powershell -ExecutionPolicy Bypass -File scripts/update-desktop-fork.ps1 -Profile desktop -CheckOnly
+```
+
+Web profile 改为 `-Profile web`；若定位不唯一，用 `-DshHome` 指向实际目录。保留本地 tgz（profile 可能仍引用它）。本地包在修改 profile 前核对名称、版本，不会重新匿名下载插件；其他依赖仍可能需要联网。若 CheckOnly 提示缺少 bundles/insert，按提示执行 ensure-profile-bundle.mjs 后再次检查。最后重启宿主并核对实际运行版本，再设置下节的令牌启用内置更新。首次真实安装尚需实机验收。
+
 ## 配置
 
 1. 在 GitHub 创建仅限 `wxcvm/dsh-purge` 的细粒度访问令牌，Repository permissions → Contents: Read-only（Metadata 默认只读），设定适当有效期。
