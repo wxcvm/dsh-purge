@@ -9,7 +9,7 @@
 
 <p align="center"><strong>Version 1.1.92-wxcvm.7-beta.4（测试版）</strong></p>
 
-> 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版是已验收 .6 联合成果的新升级身份，不重复宣称新增功能。
+> 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版在 beta.3 基础上整合私有更新、重启核验及工作区稳定性修复。
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>

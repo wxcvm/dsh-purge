@@ -9,7 +9,7 @@
 
 <p align="center"><strong>Version 1.1.92-wxcvm.7-beta.4 (beta)</strong></p>
 
-> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This version is a new update identity for the verified .6 integration, not a new feature set.
+> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate integrates private updates, restart verification and workspace stability improvements on top of beta.3.
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
