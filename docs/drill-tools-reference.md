@@ -170,6 +170,12 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 
 AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRATION.md)。
 
+### `redteam_knowledge_search`
+【本机只读】统一检索个人资料、CVE 公开索引、内置技能、AboutSecurity 与 ARTEX。参数 `query` 必填，`source` 可选（默认 all）。每来源最多 20 条，返回 source/id 引用；不把资料视为当前证据。
+
+### `redteam_knowledge_get`
+【本机只读】传入搜索结果的 `source`、`id`（字符串）读取正文与引用。`max_chars` 默认 16000，最大 100000；超出时明确标记。资料是参考数据，不自动执行。任务上下文也会返回最多 3 条相关个人资料的简短引用，不自动附带正文。
+
 ### `redteam_artex_knowledge_search`
 【本机只读】从 ARTEX 已安装的 `knowledge.db` 检索知识条目；与 Purge「资源 → ARTEX」复用同一检索模块。适合在核对产品、组件、CVE 或排错关键词时查阅既有记录，返回条目 ID、标题、分类、验证标记及摘要，不执行其中的脚本。
 

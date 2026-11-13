@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
 import { taskContext } from '../lib/redteam/task-context.js'
+import { knowledgeRequest } from '../lib/redteam/knowledge-center.js'
 
 function fixture() {
   const db = new DatabaseSync(':memory:')
@@ -203,4 +204,29 @@ test('missing ARTEX knowledge does not block existing task context', (t) => {
   assert.equal(withKeyword.ok, true)
   assert.equal(withKeyword.artex_knowledge.status, 'not-installed')
   assert.deepEqual(withKeyword.artex_knowledge.items, [])
+})
+
+
+test('task context adds compact personal knowledge references without exposing the document body', (t) => {
+  const { db, store } = fixture()
+  const root = mkdtempSync(join(tmpdir(), 'purge-personal-task-'))
+  t.after(() => { db.close(); rmSync(root, { recursive: true, force: true }) })
+  store.root = root
+  const original = store.getAsset.bind(store)
+  store.getAsset = (engagement, id) => {
+    const row = original(engagement, id)
+    return row && { ...row, fingerprints: [{ product: 'Demo' }] }
+  }
+  assert.equal(taskContext(store, 'lab', 'asset #5').personal_knowledge.status, 'not-created')
+  const item = knowledgeRequest(root, { op: 'knowledgeSave', title: 'Demo reference', body: 'PRIVATE_DOCUMENT_BODY' }).item
+  knowledgeRequest(root, { op: 'knowledgeSave', title: 'Unrelated', body: 'other' })
+  const result = taskContext(store, 'lab', 'asset #5')
+  assert.equal(result.personal_knowledge.status, 'available')
+  assert.equal(result.personal_knowledge.items.length, 1)
+  assert.deepEqual(result.personal_knowledge.items[0].reference, { source: 'personal', id: String(item.id) })
+  assert.equal(JSON.stringify(result).includes('PRIVATE_DOCUMENT_BODY'), false)
+  db.exec("UPDATE vuln SET cve = 'CVE-2025-1234' WHERE id = 11")
+  const cve = knowledgeRequest(root, { op: 'knowledgeSave', title: 'CVE-2025-1234 notes', body: 'reference' }).item
+  const vuln = taskContext(store, 'lab', 'vuln #11')
+  assert.equal(vuln.personal_knowledge.items[0].reference.id, String(cve.id))
 })
