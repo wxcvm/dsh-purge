@@ -70,6 +70,19 @@ test('missing and failed sources remain explicit while usable references survive
   assert.equal(existsSync(join(root, 'knowledge', 'personal.db')), false)
 })
 
+test('trusted fixture providers isolate automatic failure lookup from global user knowledge', t => {
+  const { store, planner, id, key } = fixture(t)
+  let reads = 0
+  store.failureKnowledgeOptions = {
+    skills: () => { reads++; return [{ source: 'redteam', key: 'redteam:fixture', title: 'ETIMEDOUT fixture' }] },
+    artexStatus: () => ({ available: false, state: 'missing' }),
+  }
+  planner.fail(id, 'transient', 'ETIMEDOUT')
+  const result = failureKnowledge(store, 'lab', key)
+  assert.equal(result.items[0].reference.id, 'redteam:fixture')
+  assert.equal(reads, 1)
+})
+
 test('ranking deduplicates sources, excludes unavailable rows and masks credential-like titles', () => {
   const group = { source: 'personal', available: true, items: [{ id: '1', title: 'Authorization: Bearer FAKE_SECRET_VALUE' }] }
   const result = rankFailureReferences([
