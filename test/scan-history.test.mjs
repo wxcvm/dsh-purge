@@ -324,3 +324,26 @@ test('unfinalized preparation and completed execution without ingestion stay vis
   assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), prepared)
   assert.equal(listScanHistory(store, 'beta').total, 0)
 })
+
+test('file integrity and execution/import status remain independent in exact run inspection', async t => {
+  const { store, write, root } = fixture(t)
+  write('alpha', ONE, 'nmap', 'executed', '<nmaprun/>')
+  write('alpha', TWO, 'httpx', 'failed', 'partial')
+  const dir = join(root, 'alpha', 'scan-output')
+  for (const [id, status] of [[ONE,'executed'],[TWO,'failed']]) {
+    const path = join(dir,id+'.json')
+    const m = JSON.parse(readFileSync(path,'utf8'))
+    delete m.ingestion
+    writeFileSync(path,JSON.stringify(m))
+    const result = await inspectScanArtifact(store,'alpha',id)
+    assert.equal(result.status,'verified')
+    assert.equal(result.record_status,status)
+    assert.equal(result.ingestion_status,'not-recorded')
+  }
+  rmSync(join(dir,ONE+'.xml'))
+  mkdirSync(join(dir,ONE+'.xml'))
+  const nonfile = await inspectScanArtifact(store,'alpha',ONE)
+  assert.equal(nonfile.status,'not-regular-file')
+  assert.equal(nonfile.record_status,'executed')
+  assert.equal(nonfile.ok,false)
+})

@@ -363,3 +363,21 @@ test('task context reports omitted personal references without exposing their do
   assert.equal(context.personal_knowledge.items.length, 3)
   assert.equal(JSON.stringify(context.personal_knowledge).includes('PRIVATE_FIXTURE_BODY'), false)
 })
+
+test('context masks credentials before clipping stored notes and vulnerability summaries', () => {
+  const { db, store } = fixture()
+  try {
+    const secret = 'PRIVATE_FIXTURE_SECRET'
+    db.prepare('UPDATE asset SET test_notes=?, test_surface=? WHERE id=5').run('password="'+secret+' '+ 'x'.repeat(300)+'"', 'Authorization: Bearer '+secret)
+    db.prepare('UPDATE vuln SET title=?, evidence=?, gained=?, target=? WHERE id=11').run(
+      'note token='+secret, 'x'.repeat(200)+' password="'+secret+' '+ 'x'.repeat(300)+'"', 'token='+secret, 'https://user:'+secret+'@example.test')
+    const a = taskContext(store,'lab','asset #5')
+    const v = taskContext(store,'lab','vuln #11')
+    assert.equal(JSON.stringify(a).includes(secret),false)
+    assert.equal(JSON.stringify(v).includes(secret),false)
+    assert.match(v.vulnerability.evidence_summary,/REDACTED_SECRET/)
+    assert.equal(a.asset.recent_test_notes[0].length<=240,true)
+    assert.equal(db.prepare('SELECT evidence FROM vuln WHERE id=11').get().evidence.includes(secret),true)
+    assert.equal(a.knowledge_coverage.cve.status,'available')
+  } finally { db.close() }
+})
