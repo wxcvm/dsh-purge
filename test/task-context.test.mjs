@@ -368,6 +368,7 @@ test('context masks credentials before clipping stored notes and vulnerability s
   const { db, store } = fixture()
   try {
     const secret = 'PRIVATE_FIXTURE_SECRET'
+    db.exec('ALTER TABLE asset ADD COLUMN test_surface TEXT')
     db.prepare('UPDATE asset SET test_notes=?, test_surface=? WHERE id=5').run('password="'+secret+' '+ 'x'.repeat(300)+'"', 'Authorization: Bearer '+secret)
     db.prepare('UPDATE vuln SET title=?, evidence=?, gained=?, target=? WHERE id=11').run(
       'note token='+secret, 'x'.repeat(200)+' password="'+secret+' '+ 'x'.repeat(300)+'"', 'token='+secret, 'https://user:'+secret+'@example.test')
