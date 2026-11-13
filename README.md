@@ -20,7 +20,7 @@
   <a href="https://github.com/YuJunZhiXue/dsh-purge/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat" alt="Apache-2.0"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="awesome · DSH plugin"></a>
   <a href="https://deepseek.stream/plugins/dsh-purge"><img src="https://img.shields.io/badge/Hub-dsh--purge-1a73e8" alt="DeepSeek Harness Hub"></a>
-  <a href="https://www.deepseek.com/harness/"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.1%20%2F%200.2.1--rc.5%20%2F%20rc.2-blue" alt="DSH"></a>
+  <a href="https://www.deepseek.com/harness/"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.3-blue" alt="DSH"></a>
   <br>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=fff" alt="Node.js">
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000" alt="JavaScript">
@@ -67,7 +67,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.7**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained beta build is **1.1.92-wxcvm.7-beta.8**. Its package metadata targets **DSH 0.2.2-rc.3** and declares additional targets 0.2.2-rc.2, 0.2.2-rc.1, 0.2.1-rc.5 and 0.2.1-rc.2. Declared targets and integration checks are not proof of on-device desktop UI or runtime behavior. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
@@ -378,7 +378,7 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require an authorized beta.7 package (candidate; tag not yet published) and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
+Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require an authorized beta.8 package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
 
 The first time you open Drill, read the notice, wait for the countdown, scroll to the end and check three boxes. Clean does not need this step. Drill is for your own systems or targets with explicit written authorization, including authorized public-facing assets.
 
