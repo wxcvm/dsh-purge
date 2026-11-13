@@ -2,11 +2,14 @@
   <img src="docs/banner.svg" alt="dsh-purge" width="720">
 </p>
 
+> **私有测试候选：** 下文匿名 codeload/pnpm 安装命令属于公开仓库时期的历史示例，当前不可直接使用。请优先阅读[私有更新与迁移说明](docs/PRIVATE_UPDATE.zh-CN.md)。真实 Desktop/Web 更新仍待验收。
+
+
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.3（测试版）</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.4（测试版）</strong></p>
 
-> 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版是已验收 .6 联合成果的新升级身份，不重复宣称新增功能。
+> 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版在 beta.3 基础上整合私有更新、重启核验及工作区稳定性修复。
 
 <p align="center">
   <em>DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分</em>
@@ -70,7 +73,7 @@
 
 ## 介绍
 
-**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.7-beta.3**，`package.json` 声明支持 **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2**；其中 0.2.2-rc.1 的集成测试与 Windows 实际图形界面验收是不同的检查，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
+**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.7-beta.4**，`package.json` 声明支持 **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2**；其中 0.2.2-rc.1 的集成测试与 Windows 实际图形界面验收是不同的检查，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
 
 Harness 不只是把问题交给模型。它还会在运行时改提示词、审批门、沙箱和会话格式。只看「模型答不答」，会把宿主拦截误当成模型拒绝。这个插件在你自己的安装里把这两层分开，用来做受控评测，也用来看默认策略该不该收紧。
 
@@ -166,7 +169,7 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 ## 适配范围
 
-**当前维护包：1.1.92-wxcvm.7-beta.3**，声明支持 DSH `0.2.2-rc.1`、`0.2.1-rc.5`、`0.2.1-rc.2`。下列 `1.1.81` 信息属于历史兼容记录，不是当前版本号，也不是降级建议。
+**当前维护包：1.1.92-wxcvm.7-beta.4**，声明支持 DSH `0.2.2-rc.1`、`0.2.1-rc.5`、`0.2.1-rc.2`。下列 `1.1.81` 信息属于历史兼容记录，不是当前版本号，也不是降级建议。
 
 - **dsh 0.2.1-rc.5**（官方桌面，宿主密封在 `app.asar` 里）：用 **1.1.81**。解包后跑补丁：82 个补丁里 **66 个直接 applied**、47 个文件被改写、`node --check` 0 失败；桌面壳 5 条里 #45/#82/#83/#84 命中（#84 依赖 #83 的输出），#46 的官方换包脚本改写点在 rc.5 已被上游重写，只剩一个无害的空转。`app.asar` 还在时点「应用」会先解包到 `resources\app` 再自动重启。
 - **dsh 0.2.1-rc.2**（官方桌面 / 官方 `dsh web`）：用 **1.1.81**。已修 `{{cwd}}` / `[cwd]` 整轮失败、补丁 #40 命中、`toolFilter` 废弃、`dsh-tools` 解析、hostFs fd、桌面换包自杀、`file:` 归档更新、Ctrl+Enter 插话。
@@ -198,7 +201,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\update-desktop-fork.ps1 -DshH
 
 运行前请完整退出 DSH Desktop（包括托盘进程）。如果实际 DSH_HOME 不是默认目录，请传入真实路径。脚本只操作所选 profile；安装失败时恢复 profile 配置和锁文件并尝试恢复依赖，不自动应用宿主补丁、不重启应用。运行后可增加 `-CheckOnly` 只读验证**安装版本、UI 文件、profile bundles 和 Cordis insert 入口**；检查失败时会提示执行 `node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs`。检查通过仅说明文件与配置到位，仍需重启宿主确认 UI 已加载。
 
-**从旧版自更新后插件消失或无法加载：** 旧更新器可能漏拷贝 `scripts`，仅显示新版版本号不能证明安装完整。请从 GitHub 下载目标提交的完整源码包，解压后在其中运行上述独立升级脚本（不要使用已损坏插件目录里的旧脚本）。没有发布标签的 beta 可明确指定目标提交的完整 40 位 SHA，并用 `-Version` 指定对应版本，例如 `-Commit <完整提交SHA> -Version 1.1.92-wxcvm.7-beta.3`。脚本使用固定提交的完整包，不经过旧版内置复制清单；安装成功后再运行同样参数加 `-CheckOnly`，完全退出并重开宿主。不要删除原 profile、会话或配置。
+**从旧版自更新后插件消失或无法加载：** 旧更新器可能漏拷贝 `scripts`，仅显示新版版本号不能证明安装完整。请从 GitHub 下载目标提交的完整源码包，解压后在其中运行上述独立升级脚本（不要使用已损坏插件目录里的旧脚本）。没有发布标签的 beta 可明确指定目标提交的完整 40 位 SHA，并用 `-Version` 指定对应版本，例如 `-Commit <完整提交SHA> -Version 1.1.92-wxcvm.7-beta.4`。脚本使用固定提交的完整包，不经过旧版内置复制清单；安装成功后再运行同样参数加 `-CheckOnly`，完全退出并重开宿主。不要删除原 profile、会话或配置。
 
 **本维护分支请从 `wxcvm/dsh-purge` 安装。** 原作者仓库仅供追溯来源及历史版本，不能代替本分支的新 UI、归档和诊断修复。更新前先确认 DSH 实际使用的 profile；独立 Git 工作区拉取新提交，不等于桌面插件已经更新。
 
@@ -251,11 +254,7 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 
 成功标志：`node_modules/dsh-purge/package.json` 在，profile 的 `bundles` 里有 `"dsh-purge"`，`cordis.patch.yml` 里有 `id: dsh-purge` 的 insert。`dsh` 和 pnpm 都没有时走 [手动安装](#manual)。
 
-桌面客户端也可以点按钮（`dsh://` 唤起，下的仍是同一份压缩包）：
-
-<p align="center">
-  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.92-wxcvm.7-beta.3&repo=wxcvm%2Fdsh-purge&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv1.1.92-wxcvm.7-beta.3"><strong>唤起客户端一键安装</strong></a>
-</p>
+**私有仓库：** 匿名桌面一键安装链接不再可用。请登录 GitHub 后从[本仓库 Releases](https://github.com/wxcvm/dsh-purge/releases)取得已发布的授权包，并阅读[私有更新与迁移说明](docs/PRIVATE_UPDATE.zh-CN.md)。
 
 ### 3. 装完还要做这三下
 
@@ -433,7 +432,7 @@ dsh-purge --uninstall
 
 当前版本优先在 Harness **左侧栏 → Purge 作战台** 打开原生主页面，顶部切换 **清洗台 / 作战台**。清洗台按「清洗与补丁 / 规则与技能」分类，作战台使用深色侧边导航；原有补丁和规则操作保持不变。
 
-**原生页面交付说明：** 这套界面由实际插件的 `client.js` 加载，使用原有资产、任务、配置和 `/redteam/api`，不是静态效果图；旧 Dock 只保留在没有原生主页面能力的宿主上作为兼容回退。漏洞页可按有效证据筛选，扫描记录页已升级为可筛选运行看板和真实执行时间线。**需要安装 `v1.1.92-wxcvm.7-beta.3` Release 并完全重启 DSH 才能使用这些改动；仓库 master 更新不等于本机安装成功。** 当前截图仍是旧版 Dock 的历史示例，不能代表新版原生主页面。实际 Windows Desktop 图形界面仍需人工验收。
+**原生页面交付说明：** 这套界面由实际插件的 `client.js` 加载，使用原有资产、任务、配置和 `/redteam/api`，不是静态效果图；旧 Dock 只保留在没有原生主页面能力的宿主上作为兼容回退。漏洞页可按有效证据筛选，扫描记录页已升级为可筛选运行看板和真实执行时间线。**需要安装 `v1.1.92-wxcvm.7-beta.4` Release 并完全重启 DSH 才能使用这些改动；仓库 master 更新不等于本机安装成功。** 当前截图仍是旧版 Dock 的历史示例，不能代表新版原生主页面。实际 Windows Desktop 图形界面仍需人工验收。
 
 第一次进作战台要先读声明、等倒计时、滚到文末并勾选三项。清洗不需要这一步。作战台面向自有资产或明确书面授权的安全评测目标，既可以是本地靶场，也可以是获授权的公网资产。
 

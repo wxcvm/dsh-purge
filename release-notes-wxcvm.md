@@ -1,3 +1,20 @@
+# 1.1.92-wxcvm.7-beta.4
+
+## 中文
+
+- 联合 #180、#181、#182、#183：私有仓库授权查询、下载与本地安装包缓存，独立 profile 迁移、更新恢复记录及重启核验。
+- 工作区默认铺满、Windows 标题栏点击区域修复；布局和样式源码化，统一生成客户端，构建标识 541d525c8dfcf246。
+- 更新中心显示实际下载速度、下载剩余时间、文件覆盖进度及失败阶段；清洗台诊断区分磁盘、后端、前端与宿主版本。
+- 联合运行时代码的 Windows/Ubuntu 新旧宿主兼容 CI 已通过。此版本元数据提交仍需 CI；真实 Windows Desktop/Web 授权更新、profile 迁移及界面验收尚未完成。
+- 私有仓库请使用授权取得的发布包与私有更新说明；不再提供匿名一键安装入口。Stable 不变，尚未发布。
+
+## English
+
+- Integrate private repository authorization, archive caching, offline profile migration, update recovery and restart verification (#180–#183).
+- Stabilize the full workspace and Windows caption hit testing; extract shell and CSS sources and regenerate the client (541d525c8dfcf246).
+- Report actual update stages, download speed/ETA and disk/backend/renderer identities.
+- Combined runtime CI passed on Windows and Ubuntu. This version metadata candidate still needs CI; real Desktop/Web private updates and profile migration remain unverified. No release or stable promotion.
+
 # 1.1.92-wxcvm.7-beta.3
 
 ## 中文

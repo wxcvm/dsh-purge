@@ -5,9 +5,9 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react = require("react");
 		const h = react.createElement;
-		const { useState, useEffect, useCallback, useRef, Component } = react;
+		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "db56be9fd394fec6";
+		const CLIENT_BUILD_ID = "541d525c8dfcf246";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1484,6 +1484,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				"宿主路径: " + (state.ai_base || "未定位"),
 				"宿主磁盘包: " + (state.host_identity?.package ? state.host_identity.package.name + "@" + state.host_identity.package.version : "未知"),
 				"宿主目录类型: " + (state.host_identity?.location || "未知"),
+				"宿主声明目标: " + (state.host_compatibility?.targets?.join(", ") || "未知"),
+				"宿主目标匹配: " + (state.host_compatibility?.status || "unknown"),
+				"前端运行构建: " + CLIENT_BUILD_ID,
+				"前端磁盘构建: " + (state.plugin_renderer_disk_build_id || "未知"),
 				"DSH_HOME: " + (state.dsh_home || "未知"),
 				"补丁: " + (state.ai_base ? tally.applied + "/" + tally.total
 					+ " 已应用; " + tally.pending + " 待应用; "
@@ -1648,6 +1652,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
 			const identity = state?.plugin_identity;
 			const hostIdentity = state?.host_identity;
+			const compatibility = state?.host_compatibility;
+			const diskBuild = state?.plugin_renderer_disk_build_id || "";
 			const loaded = identity?.loaded || "";
 			const disk = identity?.disk || "";
 			const mismatch = Boolean(loaded && disk && loaded !== disk);
@@ -1666,6 +1672,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
 				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
 				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
+				compatibility?.status === "declared" ? h("p", { className: "dshp-hint" }, "宿主磁盘版本在当前插件声明的适配范围内（不代表实机功能已验收）。") : null,
+				compatibility?.status === "not_listed" ? h("p", { role: "status" }, "当前宿主磁盘版本未列入插件声明目标：" + compatibility.version + "。这不是不兼容结论，请先核对新版宿主的实际行为。") : null,
+				h("p", { className: "dshp-hint" }, "前端运行构建：" + CLIENT_BUILD_ID + " · 磁盘构建：" + (diskBuild || "未知")),
+				diskBuild && diskBuild !== CLIENT_BUILD_ID ? h("p", { role: "alert" }, "前端构建不一致：当前页面尚未加载磁盘上的客户端版本。请完整退出宿主后重新打开。") : null,
 				h("p", { className: "dshp-hint" }, "后端模块加载时版本：" + (loaded || "未知") + " · 当前目录磁盘版本：" + (disk || "未知")),
 				h("p", { className: "dshp-hint", role: "status" }, mismatch
 					? "版本不一致：文件已变化，建议完整退出并重启 Harness 后重新检测。"
@@ -2087,6 +2097,92 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return node;
 		}
 
+		// The progress endpoint is authoritative; no simulated overall percentage.
+		const UPDATE_STAGE_LABELS = {
+			checking_versions: "查询版本列表", resolving_target: "确认目标提交",
+			preparing_files: "准备更新文件", caching_install_archive: "准备本地安装包",
+			git_fetch: "获取 Git 版本并切换", downloading: "下载版本包",
+			extracting: "解压版本包", copying: "覆盖插件文件",
+			profile: "更新安装配置", refreshing_versions: "核对版本信息",
+			reapplying: "运行安装后维护", awaiting_restart: "文件已更新，等待重启核验",
+			done: "更新任务完成", failed: "更新失败",
+		};
+		function updateStageLabel(stage) { return UPDATE_STAGE_LABELS[stage] || "正在连接更新服务…"; }
+		function UpdateProgressPanel({ progress: p, pending, unavailable, clock }) {
+			const download = p?.stage === "downloading" || p?.stage === "caching_install_archive";
+			const elapsed = Number.isFinite(p?.elapsedMs) ? p.elapsedMs : p?.startedAt ? (p.finishedAt || clock) - p.startedAt : null;
+			const rate = Number.isFinite(p?.bytesPerSecond) && p.bytesPerSecond >= 0 ? p.bytesPerSecond : null;
+			const received = Math.max(0, Number(p?.received) || 0);
+			const total = Number(p?.total) > 0 ? Number(p.total) : null;
+			const copyTotal = Number(p?.copyTotal) > 0 ? Number(p.copyTotal) : null;
+			const copyCount = Math.max(0, Number(p?.copied) || 0);
+			const fresh = !unavailable && p?.active;
+			const mb = n => (n / 1048576).toFixed(2) + " MB";
+			return h("div", { className: "dshp-notice", role: "status", "aria-live": "polite",
+				style: { display: "grid", gap: 8, marginTop: 8, overflowWrap: "anywhere" } },
+				h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
+					h("b", null, "版本更新进度"),
+					h("span", { className: "dshp-pill" }, p?.stage === "failed" ? "失败" : p?.stage === "awaiting_restart" ? "待核验" : p?.active || pending ? "进行中" : "已结束")),
+				h("b", null, updateStageLabel(p?.stage)),
+				p?.ref ? h("span", null, "目标：" + (p.targetVersion ? p.targetVersion + " · " : "") + p.ref + (p.targetSha ? " · " + p.targetSha.slice(0, 7) : "")) : null,
+				elapsed != null ? h("span", null, "已耗时 " + Math.max(0, Math.floor(elapsed / 1000)) + " 秒" +
+					(p?.active && Number.isFinite(p.stageElapsedMs) ? " · 当前阶段 " + Math.floor(p.stageElapsedMs / 1000) + " 秒" : "")) : null,
+				download ? h("div", { style: { display: "grid", gap: 6 } },
+					h("span", null, "已下载 " + mb(received) + (total ? " / " + mb(total) : " · 总大小未知")),
+					h("progress", { "aria-label": "当前下载进度", value: total ? Math.min(received, total) : undefined, max: total || 1, style: { width: "100%" } }),
+					fresh ? h("span", null, p.downloadStalled ? "正在等待下载数据…" : rate === null ? "正在测量下载速度…" : "当前速度 " + mb(rate) + "/s" + (total ? " · " + Math.min(100, Math.floor(received / total * 100)) + "%" : "")) : null,
+					fresh && !p.downloadStalled && Number.isFinite(p.etaSeconds) && p.etaSeconds > 0 ? h("span", null, "下载约剩 " + p.etaSeconds + " 秒（仅下载估算）") : null) : null,
+				p?.stage === "copying" ? h("div", { style: { display: "grid", gap: 6 } },
+					h("span", null, "文件组 " + copyCount + "/" + (copyTotal || "—") + (p.group ? " · " + p.group : "")),
+					copyTotal ? h("progress", { "aria-label": "当前文件覆盖进度", value: Math.min(copyCount, copyTotal), max: copyTotal, style: { width: "100%" } }) : null) : null,
+				unavailable && (pending || p?.active) ? h("span", null, "状态连接暂时中断，显示上次收到的进度；请勿重复切换。") : null,
+				p?.profileMigrationPending ? h("span", null, "本地安装包已准备，仍需退出宿主后完成 profile 安装来源迁移。") : null,
+				p?.stage === "awaiting_restart" ? h("span", null, "本次文件更新已结束；重启后还需核对实际运行版本。") : null,
+				p?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (p.failedStage ? updateStageLabel(p.failedStage) + "：" : "") + p.error) : null);
+		}
+
+		function UpdateRecoveryPanel({ receipt: r, unavailable }) {
+			if (!r) return null;
+			const profile = r.profileVerification;
+			const rendererMatch = r.rendererDiskBuildId && r.clientDiskMatch === true
+				? r.rendererDiskBuildId === CLIENT_BUILD_ID : null;
+			const runtimeVerified = r.verification === "backend_verified" && rendererMatch === true;
+			const label = r.phase === "failed" ? "上次更新失败" : r.verification === "interrupted" ? "上次更新中断"
+				: runtimeVerified ? "当前宿主运行版本已核验" : "上次更新待核验";
+			const row = (name, value) => h("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
+				h("span", null, name), h("b", null, value));
+			const tri = value => value === true ? "匹配" : value === false ? "不匹配" : "未知";
+			const profileLabels = { verified: "安装来源与关键文件已核验", migration_required: "需要迁移安装来源",
+				mismatch: "安装版本或文件不匹配", unknown: "尚未核验" };
+			return h("div", { className: "dshp-notice", role: "status", style: { display: "grid", gap: 8, marginTop: 8, overflowWrap: "anywhere" } },
+				h("b", null, "上次更新记录 · " + label),
+				h("span", null, "目标：" + (r.after?.version || r.profileInstall?.version || r.ref || "未知") +
+					(r.targetSha ? " · " + r.targetSha.slice(0, 12) : "")),
+				r.finishedAt ? h("span", { className: "dshp-hint" }, "结束：" + r.finishedAt) : null,
+				row("磁盘关键文件", r.runtimeMissing ? "缺少运行文件" : tri(r.diskMatch)),
+				row("后端运行版本", r.processRestarted === false ? "待重启" : r.processRestarted === true ? tri(r.backendBootMatch) : "重启未确认"),
+				r.restartCheck && r.restartCheck !== "not_applicable" ? row("重启请求", ({
+					process_restarted: "已确认新进程", dispatch_failed: "启动请求失败", manual_required: "需要手动重启",
+					unconfirmed: "90 秒内未确认", waiting: "已发出，等待新进程", not_requested: "尚未确认请求",
+				})[r.restartCheck] || "未知") : null,
+				r.restartCheck === "dispatch_failed" ? h("span", { role: "alert" }, "文件已更新，但重启请求失败：" + (r.restartRequest?.error || "未知错误") + "。请完全退出宿主后重新打开，无需重复下载。") : null,
+				r.restartCheck === "unconfirmed" ? h("span", { role: "alert" }, "尚未确认后端进程更换。请检查托盘或 Web 新窗口，不要把重新连接当成更新完成。") : null,
+				r.verification === "backend_verified" && rendererMatch === false ? h("span", { role: "alert" }, "后端已加载目标文件，但当前前端构建仍旧。Desktop 请完整退出后重新打开；Web 请使用重启后新打开的页面。") : null,
+				row("实际前端构建", tri(rendererMatch)),
+				row("Profile 安装来源", profile?.status === "verified" ? "已核验" : profile?.status === "pending" ? "仍需处理" : "没有迁移记录"),
+				...(profile?.rows || []).map(item => h("div", { key: item.profile, className: "dshp-hint" },
+					item.profile + " · " + (profileLabels[item.status] || "尚未核验") +
+					(item.cachePresent === false ? " · 本地安装包缺失" : ""))),
+				r.phase === "failed" ? h("span", { role: "alert" }, "失败阶段：" + (r.failedPhase || r.phase) + " · " + (r.error || "未知错误")) : null,
+				r.verification === "interrupted" ? h("span", { role: "alert" }, "后台已重启，但上次写入未确认完成。请先检查更新恢复记录，不要直接重复覆盖。") : null,
+				profile?.rows?.some(item => item.status === "migration_required") ? h("div", null,
+					h("span", null, "请完全退出对应 Harness 后，使用私有安装迁移命令。"),
+					r.targetSha ? h("p", { className: "dshp-hint", style: { overflowWrap: "anywhere" } },
+						"目标完整 SHA：" + r.targetSha) : null) : null,
+				unavailable ? h("span", { className: "dshp-hint" }, "状态连接暂不可用，以上为上次读取的结果。") : null,
+				h("span", { className: "dshp-hint" }, "仅核验记录中的四个关键文件和当前宿主，不代表其他宿主已重启。"));
+		}
+
 		function PurgifySection({ section } = {}) {
 			const t = useT();
 			const tRef = useRef(t);
@@ -2100,22 +2196,35 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [patchBusy, setPatchBusy] = useState(false);
 			const [updatePending, setUpdateBusy] = useState(false);
 			const [updateProgress, setUpdateProgress] = useState(null);
+			const [recoveredReceipt, setRecoveredReceipt] = useState(undefined);
 			const [progressUnavailable, setProgressUnavailable] = useState(false);
 			const [progressClock, setProgressClock] = useState(Date.now());
+			const restartWatchUntil = useRef(0);
 			const updateBusy = updatePending || Boolean(updateProgress?.active);
+			const lastReceipt = recoveredReceipt === undefined ? state?.update_receipt : recoveredReceipt;
+			const receiptCoversProgress = lastReceipt && updateProgress && Date.parse(lastReceipt.startedAt) >= updateProgress.startedAt;
 			useEffect(() => {
-				let stopped = false, timer;
+				let stopped = false, timer, failures = 0;
 				const poll = async () => {
 					try {
 						const data = await apiJson("/dsh-purge/update-progress");
 						if (stopped) return;
 						setUpdateProgress(data?.progress || null);
+						if (!data?.progress?.active && Object.prototype.hasOwnProperty.call(data || {}, "receipt")) setRecoveredReceipt(data.receipt);
 						setProgressUnavailable(false);
-						if (updatePending || data?.progress?.active) timer = setTimeout(poll, 1500);
+						failures = 0;
+						const receipt = data?.receipt;
+						if (receipt?.restartCheck === "waiting") {
+							const at = Date.parse(receipt.restartRequest?.at);
+							if (Number.isFinite(at)) restartWatchUntil.current = at + 90000;
+						} else if (receipt) {
+							restartWatchUntil.current = 0;
+						}
+						if (updatePending || data?.progress?.active || Date.now() < restartWatchUntil.current) timer = setTimeout(poll, 1500);
 					} catch {
 						if (stopped) return;
 						setProgressUnavailable(true);
-						if (updatePending || updateProgress?.active) timer = setTimeout(poll, 2500);
+						if (updatePending || updateProgress?.active || Date.now() < restartWatchUntil.current || ++failures <= 3) timer = setTimeout(poll, 2500);
 					}
 				};
 				poll();
@@ -2172,7 +2281,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const updateErrorText = (tr, e) => {
 				const msg = String((e && e.message) || e || "");
 				if (msg === "timeout" || /aborted|abort|超时/i.test(msg)) return tr("update.timeout");
-				if (/\b404\b/.test(msg) || /non-json/.test(msg)) return tr("update.needRestart");
+				// A GitHub 404 is not a missing local API route.
+				if (/无法读取 GitHub 仓库/.test(msg)) return msg;
+				if (/^http 404\b/i.test(msg) || /non-json/.test(msg)) return tr("update.needRestart");
 				return tr("update.fail", { error: msg });
 			};
 
@@ -2219,6 +2330,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				const tr = tRef.current;
 				setUpdateNotice({ kind: "ok", text: kind === "switched" || kind === "channel" ? tr("update.switching") : tr("update.applying") });
 				setUpdateProgress(null);
+				restartWatchUntil.current = 0;
 				setProgressClock(Date.now());
 				return apiJson("/dsh-purge/update", {
 					method: "POST",
@@ -2228,6 +2340,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					.then((d) => {
 						if (!d || (d.ok === false && d.error)) throw new Error((d && d.error) || "update failed");
 						applyUpdateInfo(d, tr, kind);
+						if (d.restartRequest?.status === "failed") {
+							setUpdateNotice({ kind: "error", text: "文件已更新，重启请求失败：" + (d.restartRequest.error || "未知错误") + "。请完全退出宿主后重新打开，无需重复更新。" });
+							return d;
+						}
 						if (d.needsFullQuit) {
 							suppressRestartAsk.current = false;
 							setAskRestart(true);
@@ -2235,7 +2351,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							return d;
 						}
 						if (d.restartAfter) {
-							setUpdateNotice({ kind: "ok", text: tr("update.restarting") });
+							restartWatchUntil.current = Date.now() + 90000;
+							setUpdateNotice({ kind: "ok", text: "重启请求已发出，等待新进程与运行版本核验。" });
 							return d;
 						}
 						if (d.applied && d.reloadClient !== false) {
@@ -2303,6 +2420,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					throw new Error((status && status.error) || "宿主状态暂不可用");
 				}
 				setState(status);
+				if (Object.prototype.hasOwnProperty.call(status, "update_receipt")) setRecoveredReceipt(status.update_receipt);
 				return status;
 			}, []);
 
@@ -2765,19 +2883,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						renderEdition("beta"),
 					),
 					noticeNode(updateNotice),
-					(updateProgress || (updatePending && updateJob?.kind !== "check")) ? h("div", { className: "dshp-notice", role: "status", style: { display: "grid", gap: 6, marginTop: 8 } },
-						h("b", null, "版本切换进度 / Update progress"),
-						h("span", null, ({ checking_versions: "查询版本列表", resolving_target: "确认目标提交", preparing_files: "准备更新文件", git_fetch: "获取 Git 版本并切换", downloading: "下载版本包", extracting: "解压版本包", copying: "覆盖插件文件", profile: "更新安装配置", refreshing_versions: "核对版本信息", reapplying: "运行安装后维护", awaiting_restart: "文件已更新，等待重启核验", done: "更新任务完成", failed: "更新失败" })[updateProgress?.stage] || "正在连接更新服务…"),
-						updateProgress?.ref ? h("span", null, "目标：" + updateProgress.ref + (updateProgress.targetSha ? " · " + updateProgress.targetSha.slice(0, 7) : "")) : null,
-						updateProgress?.startedAt ? h("span", null, "已耗时 " + Math.max(0, Math.floor(((updateProgress.finishedAt || progressClock) - updateProgress.startedAt) / 1000)) + " 秒") : null,
-						updateProgress?.stage === "downloading" ? h("span", null, "已下载 " + ((updateProgress.received || 0) / 1048576).toFixed(2) + " MB" + (updateProgress.total ? " / " + (updateProgress.total / 1048576).toFixed(2) + " MB" : " · 总大小未知")) : null,
-						updateProgress?.stage === "downloading" && updateProgress.total ? h("progress", { value: updateProgress.received || 0, max: updateProgress.total, style: { width: "100%" } }) : null,
-						updateProgress?.stage === "downloading" && updateProgress.total > updateProgress.received && updateProgress.received > 0 && progressClock - updateProgress.downloadStartedAt >= 2000 ? h("span", null, "按当前平均速度，下载约剩 " + Math.ceil((progressClock - updateProgress.downloadStartedAt) / 1000 * (updateProgress.total - updateProgress.received) / updateProgress.received) + " 秒（仅下载估算）") : null,
-						updateProgress?.stage === "copying" ? h("span", null, "文件组 " + (updateProgress.copied || 0) + "/" + (updateProgress.copyTotal || 0) + (updateProgress.group ? " · " + updateProgress.group : "")) : null,
-						progressUnavailable && updateBusy ? h("span", null, "暂未收到后台状态，请勿重复切换；正在重试读取。") : null,
-						updateProgress?.active ? h("span", null, "完成时间取决于网络和本机操作，暂不可准确估计。") : null,
-						updateProgress?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (updateProgress.failedStage ? "[" + updateProgress.failedStage + "] " : "") + updateProgress.error) : null,
-					) : null,
+					((updateProgress && (updateProgress.active || !receiptCoversProgress)) || (updatePending && updateJob?.kind !== "check")) ? h(UpdateProgressPanel, {
+						progress: updateProgress, pending: updatePending, unavailable: progressUnavailable,
+						clock: progressClock,
+					}) : null,
+					!updateBusy && lastReceipt ? h(UpdateRecoveryPanel, { receipt: lastReceipt, unavailable: progressUnavailable }) : null,
 				)),
 				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" },
@@ -12364,6 +12474,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		}
 
 
+/* __DSH_PURGE_WORKSPACE_BEGIN__ */
 		// Use the same native main-panel slots as Armory: navigation stays in the DSH shell.
 		const PURGE_PANEL_ID = "dsh-purge-workspace";
 		let purgeWorkspaceCtx = null;
@@ -12372,20 +12483,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			purgeWorkspaceBus.page = page === "clean" ? "clean" : "drill";
 			for (const fn of purgeWorkspaceBus.listeners) fn(purgeWorkspaceBus.page);
 		}
+		function selectPurgeHostPanel(panel) {
+			try {
+				const ctx = purgeWorkspaceCtx;
+				const layout = ctx && typeof ctx.get === "function" ? ctx.get("layout") : ctx && ctx.layout;
+				if (!layout || typeof layout.selectPanel !== "function") return false;
+				layout.selectPanel(panel);
+				return true;
+			} catch (error) {
+				console.warn("[dsh-purge] host panel selection failed:", error);
+				return false;
+			}
+		}
 		function showPurgeWorkspace(page) {
 			selectPurgeWorkspacePage(page);
 			setDock({ open: false, authOpen: false });
-			const ctx = purgeWorkspaceCtx;
-			const layout = ctx && typeof ctx.get === "function" ? ctx.get("layout") : ctx && ctx.layout;
-			try {
-				if (!layout || typeof layout.selectPanel !== "function") throw new Error("main panel unavailable");
-				layout.selectPanel(PURGE_PANEL_ID);
-			} catch {
+			if (!selectPurgeHostPanel(PURGE_PANEL_ID)) {
 				// Only older hosts without the main-panel slot need the existing Dock.
 				setDock({ open: true, maximized: true, tab: purgeWorkspaceBus.page });
 			}
 		}
-		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;top:0!important;left:0!important;\n  right:0!important;bottom:0!important;z-index:10040!important;\n  width:100vw!important;height:100vh!important;height:100dvh!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"]{\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  height:calc(100dvh - var(--dsh-windows-titlebar-height,40px))!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n";
+		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;\n  max-width:none!important;max-height:none!important;margin:0!important;box-sizing:border-box;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;z-index:10040!important;\n  /* Use the actual containing viewport, not competing vw/vh dimensions. */\n  width:auto!important;height:auto!important;box-sizing:border-box!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"],\nhtml[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,\nhtml[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role=\"button\"]){\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  /* Keep bottom:0 from inset; the browser computes the remaining height. */\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* Windows workspaces start below the native caption row, so reserving\n   caption-button width again would unnecessarily shrink the navigation. */\nhtml[data-windows-titlebar] .dshp-workspace[data-default-full=\"1\"] .dshp-workspace-nav,\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n\n/* A failed page must not hide the workspace navigation or block recovery. */\n.dshp-workspace-recovery{margin:auto;max-width:420px;padding:24px;box-sizing:border-box;color:#e5eefb;text-align:center}\n.dshp-workspace-recovery h2{font-size:18px;margin:0 0 10px}\n.dshp-workspace-recovery p{font-size:13px;line-height:1.6;color:#a2b5cf;margin:0 0 18px}\n.dshp-workspace-recovery button{appearance:none;border:1px solid #365477;border-radius:8px;padding:9px 16px;background:#213a58;color:#eaf4ff;font:inherit;cursor:pointer}\n.dshp-workspace-recovery button:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n";
 		// Both the native main slot and the old Dock use the same runtime stylesheet.
 		// The main slot must not rely on the overlay slot being mounted first.
 		function ensurePurgeWorkspaceStyles() {
@@ -12406,33 +12524,83 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				drillTag.textContent = __dshPurgeDrill.CSS;
 			}
 		}
+		// Keep navigation alive when an individual workspace page fails to render.
+		// A page switch or an explicit retry remounts only the failed content.
+		class PurgeWorkspaceBoundary extends Component {
+			constructor(props) {
+				super(props);
+				this.state = { failed: false };
+			}
+			static getDerivedStateFromError() { return { failed: true }; }
+			componentDidCatch(error) {
+				console.error("[dsh-purge] workspace page render failed:", error);
+			}
+			render() {
+				if (!this.state.failed) return this.props.children;
+				return h("div", { className: "dshp-workspace-recovery", role: "alert" },
+					h("h2", null, "此页面暂时无法加载"),
+					h("p", null, "工作区导航仍然可用。你可以重试当前页面，或切换到其他页面。"),
+					h("button", { type: "button", onClick: () => this.setState({ failed: false }) }, "重试此页面"));
+			}
+		}
+		function PurgeWorkspaceContent({ page, t }) {
+			return page === "clean" ? h(SettingsRoot, { t, workspace: true }) : h(__dshPurgeDrill.Panel, { embedded: true });
+		}
+		// Keep the native Windows caption palette aligned with the active workspace.
+		// Capture the host's latest values, so leaving Purge restores its own theme.
+		function installPurgeCaptionPalette(doc, Observer) {
+			const body = doc.body;
+			const root = doc.documentElement;
+			if (!body || !root) return;
+			const style = body.style;
+			const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
+			const previous = new Map();
+			const restore = () => {
+				for (const [name, saved] of previous) {
+					// A host change not yet observed belongs to the host, not Purge.
+					if (style.getPropertyValue(name).trim() !== saved.color || style.getPropertyPriority(name)) continue;
+					if (saved.value) style.setProperty(name, saved.value, saved.priority);
+					else style.removeProperty(name);
+				}
+				previous.clear();
+			};
+			const sync = () => {
+				if (!root.hasAttribute("data-windows-titlebar")) {
+					restore();
+					return;
+				}
+				for (const [name, color] of palette) {
+					const value = style.getPropertyValue(name);
+					if (value.trim() === color) continue;
+					previous.set(name, { color, value, priority: style.getPropertyPriority(name) });
+					style.setProperty(name, color);
+				}
+			};
+			// Only the two native caption inputs are changed; unrelated body
+			// style mutations do not cause a write or a repaint loop.
+			const observer = new Observer(sync);
+			observer.observe(root, { attributes: true, attributeFilter: ["data-windows-titlebar"] });
+			observer.observe(body, { attributes: true, attributeFilter: ["style"] });
+			sync();
+			return () => {
+				observer.disconnect();
+				restore();
+			};
+		}
 		function PurgeWorkspacePage() {
 			const t = useT();
-			useEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
+			useLayoutEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
 			const [page, setPage] = useState(purgeWorkspaceBus.page);
 			const [workspaceVisible, setWorkspaceVisible] = useState(true);
-			// Desktop's Windows preload observes body.style and re-colors Electron's
-			// native caption overlay from these two palette tokens.
-			useEffect(() => {
-				if (!workspaceVisible || !document.body || !document.documentElement.hasAttribute("data-windows-titlebar")) return;
-				const style = document.body.style;
-				const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
-				const previous = palette.map(([name, color]) => ({
-					name, color, value: style.getPropertyValue(name), priority: style.getPropertyPriority(name),
-				}));
-				for (const { name, color } of previous) style.setProperty(name, color);
-				return () => {
-					for (const { name, color, value, priority } of previous) {
-						// Don't overwrite a newer host theme written while Purge was open.
-						if (style.getPropertyValue(name).trim() !== color) continue;
-						if (value) style.setProperty(name, value, priority);
-						else style.removeProperty(name);
-					}
-				};
+			// Install before paint, and also follow a late native caption mount.
+			useLayoutEffect(() => {
+				if (!workspaceVisible) return;
+				return installPurgeCaptionPalette(document, MutationObserver);
 			}, [workspaceVisible]);
 			const workspaceRef = useRef(null);
 			const [immersive, setImmersive] = useState(false);
 			const [fullscreenError, setFullscreenError] = useState("");
+			const [navigationError, setNavigationError] = useState("");
 			useEffect(() => {
 				const onChange = () => {
 					setImmersive(document.fullscreenElement === workspaceRef.current);
@@ -12464,7 +12632,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				}
 			};
 			useEffect(() => {
-				const fn = (next) => { setPage(next); setWorkspaceVisible(true); };
+				const fn = (next) => { setPage(next); setWorkspaceVisible(true); setNavigationError(""); };
 				purgeWorkspaceBus.listeners.add(fn);
 				return () => purgeWorkspaceBus.listeners.delete(fn);
 			}, []);
@@ -12475,10 +12643,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}, [page]);
 			const open = (next) => selectPurgeWorkspacePage(next);
 			const back = () => {
+				// Leave the browser's fullscreen top layer before returning to the host.
+				if (document.fullscreenElement === workspaceRef.current && typeof document.exitFullscreen === "function") {
+					try {
+						const result = document.exitFullscreen();
+						if (result && typeof result.catch === "function") result.catch(() => {});
+					} catch { /* The host may already have exited fullscreen. */ }
+				}
+				// Do not blank the workspace if the host refuses the navigation.
+				if (!selectPurgeHostPanel(null)) {
+					setNavigationError("暂时无法返回会话，请重试。");
+					return;
+				}
+				setNavigationError("");
 				setWorkspaceVisible(false);
-				const ctx = purgeWorkspaceCtx;
-				const layout = ctx && typeof ctx.get === "function" ? ctx.get("layout") : ctx && ctx.layout;
-				if (layout && typeof layout.selectPanel === "function") layout.selectPanel(null);
 			};
 			if (!workspaceVisible) return null;
 			const panel = h("section", {
@@ -12501,10 +12679,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					h("button", { type: "button", className: "dshp-workspace-fullscreen",
 						"aria-pressed": immersive ? "true" : "false", title: "可选系统级全屏，Purge 默认已铺满 Harness 窗口",
 						onClick: toggleImmersive }, immersive ? "退出系统全屏" : "系统全屏"),
-					fullscreenError ? h("span", { className: "dshp-workspace-fullscreen-error",
-						role: "status" }, fullscreenError) : null),
+					fullscreenError || navigationError ? h("span", { className: "dshp-workspace-fullscreen-error",
+						role: "status" }, navigationError || fullscreenError) : null),
 				h("div", { className: "dshp-dock-body" },
-					page === "clean" ? h(SettingsRoot, { t, workspace: true }) : h(__dshPurgeDrill.Panel, { embedded: true })));
+					h(PurgeWorkspaceBoundary, { key: page }, h(PurgeWorkspaceContent, { page, t }))));
 			// Portal escapes the Harness main-panel layout and its sidebar/clipping container.
 			// Keep the same React state and host API; no separate browser window.
 			try {
@@ -12523,7 +12701,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				h("path", { d: "M12 2 20 6v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z" }),
 				h("path", { d: "m8.5 12 2.5 2.5 4.5-5" }));
 		}
-
+/* __DSH_PURGE_WORKSPACE_END__ */
 		function requestDrill(kind) {
 			const pending = kind || "tab";
 			const openEnv = () => {

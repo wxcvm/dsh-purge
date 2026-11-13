@@ -43,6 +43,9 @@ jobs:
           key: npm-compat-${{ runner.os }}-node24-${{ matrix.group }}-${{ hashFiles('scripts/prepare-host-fixture.mjs', 'package.json') }}
           restore-keys: |
             npm-compat-${{ runner.os }}-node24-${{ matrix.group }}-
+      - name: Install declared plugin dependencies for full regression suite
+        if: matrix.group == 'current'
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false
       - name: Check generated bundle and syntax once per OS
         if: matrix.group == 'current'
         run: |

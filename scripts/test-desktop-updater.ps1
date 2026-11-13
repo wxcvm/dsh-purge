@@ -113,7 +113,34 @@ exit /b 7
   if ((Get-Content -LiteralPath $runtimeScript -Raw) -ne 'runtime fixture') {
     throw 'Rollback failed to restore the runtime script'
   }
-  Write-Host 'PASS: read-only verification, partial payload rejection and failed-install full plugin/profile rollback'
+  # A local authorized tarball must be passed to pnpm without a remote URL.
+  $packageRoot = Join-Path $fixture 'local-source'
+  New-Item -ItemType Directory -Path (Join-Path $packageRoot 'package') -Force | Out-Null
+  $localManifest = Join-Path $packageRoot 'package\package.json'
+  Set-Content -LiteralPath $localManifest -Value ('{"name":"dsh-purge","version":"' + $version + '"}') -NoNewline
+  $localArchive = Join-Path $fixture 'local package.tgz'
+  & tar.exe -czf $localArchive -C $packageRoot package
+  if ($LASTEXITCODE -ne 0) { throw 'Could not create local archive fixture' }
+  $env:DSH_TEST_SOURCE = 'file:' + $localArchive.Replace('\','/')
+  $mockLocal = @'
+@echo off
+if /I "%~1"=="add" (
+  if not "%~2"=="%DSH_TEST_SOURCE%" exit /b 8
+  exit /b 0
+)
+exit /b 7
+'@
+  Set-Content -LiteralPath (Join-Path $bin 'pnpm.cmd') -Value $mockLocal -Encoding Ascii
+  & $script -DshHome $fixture -LocalPackage $localArchive
+  if (-not $?) { throw 'Local package install path failed' }
+  $rejected = $false
+  try { & $script -DshHome $fixture -LocalPackage $localArchive -Version '0.0.0' } catch {
+    $rejected = $_.Exception.Message -like '*Local package validation failed*'
+  }
+  if (-not $rejected) { throw 'Local package accepted wrong version' }
+  if ((Get-Content -LiteralPath (Join-Path $profile 'package.json') -Raw) -ne $manifest) { throw 'Local preflight changed profile' }
+  Remove-Item Env:DSH_TEST_SOURCE -ErrorAction SilentlyContinue
+    Write-Host 'PASS: read-only verification, partial payload rejection and failed-install full plugin/profile rollback'
   # Clear the expected non-zero native exit from our fake pnpm; otherwise the
   # GitHub pwsh wrapper treats a successful test as a failed job.
   $global:LASTEXITCODE = 0

@@ -10,8 +10,9 @@ const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 test('Purge uses the native main panel and matching global sidebar entry', () => {
   assert.match(client, /name: "main", key: PURGE_PANEL_ID/)
   assert.match(client, /name: "sidebar.panellist", id: PURGE_PANEL_ID/)
-  assert.match(client, /layout\.selectPanel\(PURGE_PANEL_ID\)/)
-  assert.match(client, /layout\.selectPanel\(null\)/)
+  assert.match(client, /selectPurgeHostPanel\(PURGE_PANEL_ID\)/)
+  assert.match(client, /selectPurgeHostPanel\(null\)/)
+  assert.match(client, /layout\.selectPanel\(panel\)/)
 })
 
 test('the main page reuses real clean and redteam components instead of a mockup', () => {
@@ -71,7 +72,7 @@ test('closed legacy Dock does not mount duplicate forms or run hidden API effect
 
 test('native main workspace loads both styles without depending on shell overlay', () => {
   assert.match(client, /function ensurePurgeWorkspaceStyles\(\)/)
-  assert.match(client, /function PurgeWorkspacePage\(\) \{\s*const t = useT\(\);\s*useEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/)
+  assert.match(client, /function PurgeWorkspacePage\(\) \{\s*const t = useT\(\);\s*useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/)
   assert.match(client, /document\.querySelector\('style\[data-dsh-purge-drill="1"\]'\)/)
   assert.match(client, /function PurgeDock\(\)/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)

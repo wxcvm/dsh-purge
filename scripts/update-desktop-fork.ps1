@@ -6,6 +6,7 @@ param(
   # 默认取本仓库 package.json 的版本，避免每次发版都要改脚本（-Version 可显式覆盖）
   [string]$Version = '',
   [string]$Commit = '',
+  [string]$LocalPackage = '',
   [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -22,6 +23,19 @@ $source = "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v$versio
 if ($Commit) {
   if ($Commit -notmatch '^[0-9a-fA-F]{40}$') { throw "Commit must be a full 40-character Git SHA" }
   $source = "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/$Commit"
+}
+
+# An authorized local npm tarball avoids a second anonymous GitHub download.
+if ($LocalPackage) {
+  if ($Commit) { throw '-LocalPackage and -Commit are mutually exclusive; a local package is verified by name and version, not remote commit.' }
+  $archive = (Get-Item -LiteralPath $LocalPackage).FullName
+  if (-not (Test-Path -LiteralPath $archive -PathType Leaf) -or $archive -notmatch '\.tgz$') {
+    throw 'LocalPackage must be an existing .tgz package.'
+  }
+  $validator = Join-Path $repoRoot 'lib\private-install-cache.js'
+  & node --input-type=module -e "import {readFileSync} from 'node:fs'; import {pathToFileURL} from 'node:url'; const {inspectPrivateInstallArchive}=await import(pathToFileURL(process.argv[1]).href); inspectPrivateInstallArchive(readFileSync(process.argv[2]),process.argv[3]);" $validator $archive $version
+  if ($LASTEXITCODE -ne 0) { throw 'Local package validation failed; profile was not modified.' }
+  $source = 'file:' + $archive.Replace('\','/')
 }
 
 if (-not $DshHome) {
@@ -91,7 +105,7 @@ if ($CheckOnly) {
   return
 }
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-  throw 'pnpm was not found. Install pnpm or use dsh plugin add with the pinned tag URL.'
+  throw 'pnpm was not found. Install pnpm before upgrading this profile.'
 }
 
 # Preserve files that pnpm and postinstall may change in this profile.
