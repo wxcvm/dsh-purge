@@ -117,3 +117,17 @@ test('Nmap version success keeps a separate driver warning without claiming scan
   assert.equal(result.warnings[0].code,'npcap-warning')
   assert.ok(!JSON.stringify(result.warnings).includes('Could not import'))
 })
+
+
+test('Windows wrapper path reports a specific diagnostic without invoking a shell', async t => {
+  const root = workspace(t), executable = fixture(join(root,'nmap-rt.ps1'))
+  let invoked = false
+  const result = await probeInstalledTool('nmap', {
+    root, platform:'win32', config:config(root,{nmap:executable}), env:{PATH:''},
+    execFileFn:()=>{invoked=true;throw Error('unexpected script invocation')},
+  })
+  assert.equal(invoked,false)
+  assert.equal(result.status,'failed')
+  assert.equal(result.diagnostic,'windows-wrapper')
+  assert.match(result.error,/包装脚本/)
+})
