@@ -8,6 +8,11 @@
 - 同一检测结果显示原插件/官方 Harness 的只读上游观察；不可访问为未知，不自动改源或覆盖二开。
 - 本机部署按用户要求不备份、不回滚、不重新应用宿主补丁。完整在线归档更新/迁移与长期任务效果仍单独验收；检测成功不替代下载/安装成功。
 
+- #227–#228：修正 Desktop 宿主版本识别，区分宿主、插件及运行版本，补充只读升级验收。
+- #229–#230：增加合成任务离线质量评估与配对效率统计；仅比较双方正确且有测量值的样本，不代表真实模型提升。
+- #231–#232：只读事实刷新可跳过重复知识检索，默认完整检索不变；真实 Token、耗时与内存收益尚待测量。
+- 最终验收：真实 LM Studio 中文检索、长会话内存、界面响应及完整 Desktop/Web 在线安装更新仍待验证。私有 Beta，master 不提升。
+
 ## English
 
 - Integrate persistent task progress, attempts, executor observations, dependencies, failure references and atomic record receipts without replaying unknown work.
@@ -15,6 +20,11 @@
 - Fix in-app update checks using the current proxy and noninteractive Git credentials; no credentials are persisted or exposed to the renderer.
 - Show read-only upstream observations, preserving unavailable as unknown. No automatic upstream replacement.
 - This local integration uses no backup/rollback or host patch reapplication; archive installation and long-running effectiveness remain separate acceptance scopes.
+
+- #227–#228: distinguish Desktop host, plugin and runtime identities; document read-only upgrade acceptance.
+- #229–#230: offline synthetic quality evaluation and paired efficiency statistics for jointly correct samples with measurements; no claim of model improvement.
+- #231–#232: optional facts-only refresh avoids repeated knowledge retrieval; default full retrieval remains unchanged. Actual token, latency and memory gains remain unmeasured.
+- Pending acceptance: real LM Studio Chinese retrieval, long-session memory, UI responsiveness and complete Desktop/Web online installation/update. Private beta only; no master promotion.
 
 # 1.1.92-wxcvm.7-beta.7
 
