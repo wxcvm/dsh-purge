@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { checkUpstreams, githubUpstreamRequest } from '../lib/upstream-status.js'
+import { publicUpstreamRefs, updateProxy } from '../lib/update-network.js'
+import { proxyUrlOf } from '../lib/redteam/proxy-network.js'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 export async function main(argv) {
@@ -24,6 +26,7 @@ export async function main(argv) {
     localHostVersion = pkg.version
   }
   const result = await checkUpstreams({ request: githubUpstreamRequest(proxy), localHostVersion,
+    observePublic: source => publicUpstreamRefs(source, { proxyUrl: proxyUrlOf(proxy) || updateProxy() }),
     containsCommit: sha => {
       const r = spawnSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: root, windowsHide: true, timeout: 5000, stdio: 'ignore' })
       return r.status === 0 ? true : r.status === 1 ? false : null

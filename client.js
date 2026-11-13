@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "089b0162c331fa5d";
+		const CLIENT_BUILD_ID = "e244b70f408d0a7e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2896,7 +2896,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						...updateInfo.upstreams.sources.map(row => h("div", { key: row.id },
 							row.repository + " · " + (row.status !== "observed" ? t("update.upstreamUnknown") + (row.httpStatus ? " (" + row.httpStatus + ")" : "")
 								: row.latestRelease ? row.latestRelease.tag + " · " + (row.releaseUpdateAvailable === null ? "—" : t(row.releaseUpdateAvailable ? "update.upstreamNew" : "update.upstreamCurrent"))
-									: String(row.head || "").slice(0, 7)))) ) : null,
+									: row.latestTag ? row.latestTag.tag + " · " + (row.tagUpdateAvailable === null ? "—" : row.tagUpdateAvailable ? t("update.upstreamNew") : "未发现更高标签") + "（标签观察，未核验发布资产）"
+										: String(row.head || "").slice(0, 7)))) ) : null,
 					((updateProgress && (updateProgress.active || !receiptCoversProgress)) || (updatePending && updateJob?.kind !== "check")) ? h(UpdateProgressPanel, {
 						progress: updateProgress, pending: updatePending, unavailable: progressUnavailable,
 						clock: progressClock,

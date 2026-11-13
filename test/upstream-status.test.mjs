@@ -43,3 +43,16 @@ test('errors and missing baselines never become false up-to-date results or leak
 test('upstream transport rejects non-GitHub targets before making requests', async () => {
   await assert.rejects(githubUpstreamRequest()('https://example.invalid/'), /unexpected upstream/)
 })
+
+test('public Git observations avoid API quotas and distinguish tags from published releases', async () => {
+  const r = await checkUpstreams({ localHostVersion: '0.2.2-rc.3', containsCommit: () => true,
+    observePublic: async () => ({ head: sha, branch: 'master', tags: ['dsh-v0.2.2-rc.2', 'dsh-v0.2.2-rc.3'] }),
+    request: async () => { const e = new Error('rate limited'); e.status = 403; throw e },
+  })
+  assert.equal(r.ok, true)
+  assert.equal(r.sources[2].transport, 'public-git-refs')
+  assert.equal(r.sources[2].latestTag.version, '0.2.2-rc.3')
+  assert.equal(r.sources[2].latestRelease, undefined)
+  assert.equal(r.sources[2].tagUpdateAvailable, false)
+  assert.equal(r.sources[1].status, 'unavailable')
+})

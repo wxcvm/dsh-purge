@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { gitHubCredential, parseUpdateProxy, updateProxy } from '../lib/update-network.js'
+import { gitHubCredential, parseUpdateProxy, updateProxy, publicUpstreamRefs } from '../lib/update-network.js'
 import { readFileSync } from 'node:fs'
 
 test('Git credential reuse is noninteractive, scoped, memory-only and keeps tokens out of diagnostics', () => {
@@ -36,4 +36,18 @@ test('updater UI consumes real check results, including unavailable upstreams, w
   assert.match(client, /purge-upstream-status/)
   assert.match(client, /updateInfo\.upstreams\.sources\.map/)
   assert.match(client, /update\.upstreamUnknown/)
+})
+
+test('public upstream refs disable credentials and keep proxy values out of command arguments', () => {
+  const result = publicUpstreamRefs({ repository: 'deepseek-ai/deepseek-harness', releasePrefix: 'dsh-v' }, {
+    proxyUrl: 'http://127.0.0.1:7890/', run: (_command, args, options) => {
+      assert.ok(args.includes('ls-remote'))
+      assert.ok(!args.some(v => v.includes('7890')))
+      assert.equal(options.env.GIT_CONFIG_KEY_0, 'credential.helper')
+      assert.equal(options.env.GIT_CONFIG_VALUE_0, '')
+      assert.equal(options.env.DSH_PURGE_GITHUB_TOKEN, undefined)
+      return 'a'.repeat(40) + '\trefs/heads/master\n' + 'b'.repeat(40) + '\trefs/tags/dsh-v0.2.2-rc.3\n'
+    },
+  })
+  assert.deepEqual(result.tags, ['dsh-v0.2.2-rc.3'])
 })
