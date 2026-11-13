@@ -382,3 +382,22 @@ test('context masks credentials before clipping stored notes and vulnerability s
     assert.equal(a.knowledge_coverage.cve.status,'available')
   } finally { db.close() }
 })
+
+
+test('facts-only refresh retains records and evidence without knowledge hints', () => {
+  const { db, store } = fixture()
+  try {
+    for (const target of ['asset #5', 'vuln #11']) {
+      const full = taskContext(store, 'lab', target)
+      const facts = taskContext(store, 'lab', target, { includeKnowledge: false })
+      assert.equal(facts.knowledge_status, 'not-requested')
+      for (const key of ['knowledge_candidates', 'personal_knowledge', 'artex_knowledge', 'related_skills']) {
+        assert.equal(Object.hasOwn(facts, key), false)
+      }
+      for (const key of ['asset', 'related_vulns', 'direct_http_evidence', 'vulnerability', 'linked_asset', 'http_evidence']) {
+        assert.deepEqual(facts[key], full[key])
+      }
+      assert.ok(JSON.stringify(facts).length < JSON.stringify(full).length)
+    }
+  } finally { db.close() }
+})
