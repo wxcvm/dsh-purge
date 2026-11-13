@@ -74,6 +74,16 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 条件指纹只覆盖已记录的目标及依赖，**不证明真实环境恢复**；输入变化仅提示复核后决定是否重试。next_action 在候选窗口之前排除等待依赖或复核的任务，全部等待键参与筛选；`waiting_plans` 最多返回 30 条摘要，`waiting_plans_total` 返回总数。明确分类失败可暂时切换其它任务，未知执行结果仍保持核查，不被悄悄跳过。
 
+失败驱动知识引用（第五批）：
+
+- `fail` 的成功结果自动附 `failure_knowledge`；`action=knowledge`、`task_key` 可再次读取。再次选中的已登记任务，以及使用完整任务键的 `redteam_task_context`，也会附加最近一次已记录失败的引用。
+- 从失败类别、白名单错误码和识别到的产品名生成最多 3 个字面查询，不把完整失败原因、目标地址、URL 或凭据当作查询。复用个人资料、红队技能、AboutSecurity、ARTEX 的本地检索，不调用模型、外部搜索或语义索引，不自动创建缺失的个人知识库。
+- 合并重复 source/id，按查询命中权重返回最多 3 个标题/分类引用。5/3/1 为错误码/失败类别/产品的初始启发式权重，不是成功概率。`coverage` 区分来源缺失、不可用和已知/未知覆盖量，不把有限摘要当作完整资料。
+- 返回 `verification_scope=historical-reference`，不返回文档正文、不自动加载技能、不执行文档中的内容。需按 source/id 调 `redteam_knowledge_get` 阅读，人工/模型再判断版本与适用条件。引用不能代替当前任务证据。
+- `action=knowledge_feedback`、原始失败的 `attempt_id`、`reference_source`、`reference_id`、`feedback`：记录 adopted/helpful/not-helpful/inconclusive。要求原根会话身份且引用仍在该失败的当前检索结果中；同一引用重复反馈更新一条记录。仅表示自报用途，不固定文档正文版本、不修改资料 verified、不完成任务或放开重试。
+
+开发对照：运行 `node scripts/evaluate-failure-retrieval.mjs`，输出 8 个固定合成夹具的“仅产品查询 vs 失败驱动查询”Recall@3。它验证查询选择与排序机制，不是 DeepSeek、真实 Agent 成功率、性能或成本基准；脚本不调用模型。
+
 ### `redteam_agent_slot`
 【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑（可用 REDTEAM_MAX_AGENTS 配置）。action=status 看还剩几个名额与谁在跑；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
 

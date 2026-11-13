@@ -8,6 +8,7 @@ import { TaskPlanner } from '../lib/redteam/task-planner.js'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { knowledgeRequest } from '../lib/redteam/knowledge-center.js'
 
 const a = 'record:asset #1', b = 'record:asset #2', c = 'record:asset #3'
 function fixture(t) {
@@ -170,8 +171,19 @@ test('registered tools skip dependency windows, unblock on acceptance and locall
   const next = (await call('redteam_next_action')).focus
   assert.equal(next.target, 'asset #1')
   const started = await call('redteam_task_run', { action: 'start', task_key: keyOf(1) })
+  const reference = knowledgeRequest(store.root, { op: 'knowledgeSave', title: '适用条件 method 复核', body: 'UNTRUSTED_REFERENCE_BODY' }).item
   const failed = await call('redteam_task_run', { action: 'fail', attempt_id: started.attempt.id, failure_kind: 'method', reason: 'recorded method unsuitable' })
   assert.equal(failed.attempt.status, 'failed')
+  assert.ok(failed.failure_knowledge.items.some(row => row.reference.source === 'personal' && row.reference.id === String(reference.id)))
+  assert.ok(!JSON.stringify(failed.failure_knowledge).includes('UNTRUSTED_REFERENCE_BODY'))
+  const hints = await call('redteam_task_run', { action: 'knowledge', task_key: keyOf(1) })
+  assert.equal(hints.failure_knowledge.failure.attempt_id, started.attempt.id)
+  const feedback = await call('redteam_task_run', { action: 'knowledge_feedback', attempt_id: started.attempt.id,
+    reference_source: 'personal', reference_id: String(reference.id), feedback: 'adopted' })
+  assert.equal(feedback.verification_scope, 'self-reported-usefulness')
+  assert.equal((await call('redteam_task_run', { action: 'plan', task_key: keyOf(1) })).plan.retry_allowed, false)
+  const context = await call('redteam_task_context', { target: keyOf(1) })
+  assert.equal(context.failure_knowledge.failure.attempt_id, started.attempt.id)
   const switched = await call('redteam_next_action', { previous_task: JSON.stringify({ task_key: next.task_key, before: next.before, outcome: 'done' }) })
   assert.equal(switched.handoff.decision, 'skip')
   assert.equal(switched.focus.target, 'asset #2')
