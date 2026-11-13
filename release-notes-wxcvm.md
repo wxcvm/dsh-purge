@@ -1,3 +1,24 @@
+# 1.1.92-wxcvm.7-beta.5
+
+## 中文
+
+- 新增作战台「资源 → 知识库」：独立个人文档、分类、标签、收藏、中文关键词搜索，不依赖靶标。
+- 五来源统一检索：个人文档、CVE 索引、内置技能、AboutSecurity、ARTEX；外部库只读，缺失来源独立提示。
+- Agent 增加知识检索/原文读取与来源引用，任务上下文提供简短个人资料引用。
+- 可选 LM Studio 本地嵌入语义检索：分段、SQLite 持久化、相似度与片段，编辑/删除自动失效；仅个人文档，无云端回退。
+- Markdown/TXT 批量导入、JSON 备份恢复为副本、文档历史预览/恢复、人工任务经验模板；新文档 ID 不复用。
+- 五阶段联合功能 CI 已通过 Windows/Ubuntu 新旧宿主矩阵；本发版提交仍须通过完整 CI。真实 Windows Desktop/Web 私有安装、页面和 LM Studio 中文召回仍待实机验收。Stable .6 不变。
+- [知识中心指南](docs/KNOWLEDGE_CENTER.zh-CN.md) · [私有安装指南](docs/PRIVATE_UPDATE.zh-CN.md)
+
+## English
+
+- Add a standalone personal knowledge center with documents, categories, tags, favorites and Chinese keyword search.
+- Federate personal documents, public CVE metadata, bundled skills, AboutSecurity and ARTEX; keep external sources read-only.
+- Add agent search/read references and compact personal-document references in task context.
+- Optional local LM Studio embeddings, persistent SQLite chunk vectors and similarity retrieval; document changes invalidate vectors. No cloud fallback.
+- Batch Markdown/TXT import, JSON backup/restore as new copies, revision history/restore and a manual experience template. New document IDs are not reused.
+- Combined feature CI passed on Windows and Ubuntu current/legacy hosts; release revision CI and real Desktop/Web installation, UI and LM Studio retrieval acceptance remain separate. Stable .6 unchanged.
+
 # 1.1.92-wxcvm.7-beta.4
 
 ## 中文

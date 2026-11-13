@@ -7,9 +7,9 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.4 (beta)</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.5 (beta)</strong></p>
 
-> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate integrates private updates, restart verification and workspace stability improvements on top of beta.3.
+> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate adds the local knowledge center on top of beta.4, including personal documents, federated search, agent references, optional local semantic retrieval and backup/history. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -67,7 +67,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.4**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.5**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
@@ -412,7 +412,7 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.7-beta.4` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
+Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.7-beta.5` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
 
 The first time you open Drill, read the notice, wait for the countdown, scroll to the end and check three boxes. Clean does not need this step. Drill is for your own systems or targets with explicit written authorization, including authorized public-facing assets.
 
@@ -440,7 +440,7 @@ Drill is not categorically restricted to local/private subnets. Record the autho
 |---|---|
 | dsh-purge | native Harness sidebar/main workspace, with older-host Dock fallback |
 | Clean | patches, prompt, rule sets |
-| Drill | assets and environment after authorization. This build does not ship skills or the knowledge base. The tab says Unauthorized until then |
+| Drill | assets and environment after authorization. The beta includes a local personal knowledge center and bundled skill/CVE indexes; ARTEX and AboutSecurity remain optional. The tab says Unauthorized until then |
 | Patches | grouped status, Apply, Restore, or Uninstall |
 | Prompt | edit `prompt-inject.md` as the session override |
 | Authorized scope | Owned or explicitly authorized public, private and local systems; network address is not proof of authorization |
@@ -450,7 +450,7 @@ Drill is not categorically restricted to local/private subnets. Record the autho
 
 ## Layout
 
-`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, and `client.js` contains the native main workspace and legacy Dock fallback. This build does not ship `skills/` or the knowledge base.
+`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, and `client.js` contains the native main workspace and legacy Dock fallback. The beta ships bundled skills and CVE indexes, and creates the personal knowledge database locally.
 
 Runtime files live under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `redteam/`. If `DSH_HOME` is unset, the launcher-adjacent `.dsh` wins over `~/.dsh`. Web and the desktop app each use their own home.
 

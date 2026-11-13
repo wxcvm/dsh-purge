@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "541d525c8dfcf246";
+		const CLIENT_BUILD_ID = "2903e015bd9aa939";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4504,6 +4504,7 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
       chain: ['M5 5h5v5H5z', 'M14 14h5v5h-5z', 'M10 7h4a3 3 0 0 1 3 3v4', 'M7 10v7h7'],
       scores: ['M8 3h8v8a4 4 0 0 1-8 0z', 'M8 5H4v3a4 4 0 0 0 4 4', 'M16 5h4v3a4 4 0 0 1-4 4', 'M12 15v4', 'M8 21h8'],
       sessions: ['M3 5h18v14H3z', 'M7 10l3 2-3 2', 'M12 15h5'],
+      'knowledge-center': ['M4 4h7v16H4z', 'M13 4h7v16h-7z', 'M6 8h3', 'M15 8h3'],
       intel: ['M12 2v4', 'M12 18v4', 'M2 12h4', 'M18 12h4', 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8', 'M12 12l6-6'],
       'local-search': ['M11 3a8 8 0 1 0 0 16a8 8 0 1 0 0-16', 'M17 17l4 4', 'M8 11h6', 'M11 8v6'],
       artex: ['M12 2l9 5-9 5-9-5z', 'M3 12l9 5 9-5', 'M3 17l9 5 9-5'],
@@ -10238,6 +10239,260 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
+    function UnifiedKnowledgeTab() {
+      const labels = { all: '全部来源', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+      const [query, setQuery] = React.useState('')
+      const [source, setSource] = React.useState('all')
+      const [groups, setGroups] = React.useState([])
+      const [detail, setDetail] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [searched, setSearched] = React.useState(false)
+      const seq = React.useRef(0)
+      React.useEffect(() => () => { seq.current++ }, [])
+      const run = async (req, accept) => {
+        const id = ++seq.current
+        setBusy(true); setError('')
+        try {
+          const r = await api(req)
+          if (id !== seq.current) return
+          if (!r || !r.ok) throw Error(r?.error || '读取失败')
+          accept(r)
+        } catch (e) { if (id === seq.current) setError(String(e.message || e)) }
+        finally { if (id === seq.current) setBusy(false) }
+      }
+      const search = (selected = source) => {
+        setDetail(null); setGroups([]); setSearched(false)
+        if (!query.trim()) return
+        run({ op: 'knowledgeUnifiedSearch', query: query.trim(), source: selected }, r => { setGroups(r.groups); setSearched(true) })
+      }
+      const open = (group, item) => {
+        setDetail(null)
+        run({ op: 'knowledgeUnifiedGet', source: group.source, id: item.id }, r => setDetail(r.item))
+      }
+      return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
+        h('h4', null, '全库检索'),
+        h('p', null, '按来源查询本地知识，每个来源最多展示 20 条；外部资料只读。'),
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+          h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
+          h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); search(e.target.value) } },
+            Object.entries(labels).map(([key, label]) => h('option', { key, value: key }, label))),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !query.trim(), onClick: () => search() }, busy ? '读取中…' : '搜索')),
+        error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
+        !searched && !busy ? h('div', { className: 'rt-empty' }, '输入关键词开始检索') : null,
+        groups.map(group => h('div', { key: group.source, style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
+          h('h4', null, labels[group.source] + (group.available ? ' · ' + (group.total == null ? '展示 ' + group.items.length : group.total + ' 条') : ' · 不可用')),
+          group.error || group.note ? h('p', { className: 'rt-ops-subtle' }, group.error || group.note) : null,
+          group.available && !group.items.length ? h('p', null, '无匹配结果') : null,
+          group.items.map(item => h('div', { key: item.id, style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '6px 0' } },
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(group, item) }, item.title),
+            h('span', { className: 'rt-ops-subtle' }, [item.category, item.description].filter(Boolean).join(' · ')))))),
+        detail ? h('div', { style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
+          h('h4', null, detail.title),
+          h('p', null, '来源：' + labels[detail.origin] + (detail.truncated ? ' · 原文显示已截断' : '')),
+          h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情'),
+          h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文')) : null)
+    }
+
+    function SemanticKnowledgeTab() {
+      const [state, setState] = React.useState(null)
+      const [query, setQuery] = React.useState('')
+      const [items, setItems] = React.useState([])
+      const [detail, setDetail] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [searched, setSearched] = React.useState(false)
+      const request = async req => {
+        const r = await api(req)
+        if (!r || !r.ok) throw Error(r?.error || '语义检索失败')
+        return r
+      }
+      const run = async fn => {
+        setBusy(true); setError('')
+        try { await fn() } catch (e) { setError(String(e.message || e)) } finally { setBusy(false) }
+      }
+      const refresh = async () => setState(await request({ op: 'knowledgeSemanticStatus' }))
+      React.useEffect(() => { run(refresh) }, [])
+      const index = ids => run(async () => {
+        setItems([]); setSearched(false); setDetail(null)
+        for (const id of ids) setState(await request({ op: 'knowledgeSemanticIndex', id }))
+      })
+      const search = () => run(async () => {
+        setDetail(null); setItems([]); setSearched(false)
+        const r = await request({ op: 'knowledgeSemanticSearch', query })
+        setItems(r.items); setSearched(true)
+      })
+      return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
+        h('h4', null, '本地语义检索'),
+        h('p', null, '启动本机 LM Studio 的 Local Server 并加载嵌入模型。仅在手动索引和语义搜索时调用本地接口。'),
+        state ? h('div', null,
+          h('p', null, '模型：' + state.model + ' · ' + state.endpoint),
+          h('p', null, '已索引 ' + state.indexed + ' / ' + state.total + ' 份文档'),
+          h('button', { className: 'rt-btn', disabled: busy, onClick: () => run(refresh) }, '刷新状态'),
+          state.pending.length ? h('div', null,
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: () => index(state.pending.map(x => x.id)) }, '索引本批未索引文档'),
+            state.pending.map(item => h('div', { key: item.id, style: { display: 'flex', gap: 8, marginTop: 4 } },
+              h('span', null, item.title), h('button', { className: 'rt-btn', disabled: busy, onClick: () => index([item.id]) }, '建立索引')))) : null) : null,
+        h('div', { style: { display: 'flex', gap: 8 } },
+          h('input', { className: 'rt-input', value: query, disabled: busy, placeholder: '用自然语言描述想找的资料', onChange: e => setQuery(e.target.value) }),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !query.trim(), onClick: search }, busy ? '处理中…' : '语义搜索')),
+        error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
+        searched && !items.length ? h('div', { className: 'rt-empty' }, '暂无已索引的结果') : null,
+        items.map(item => h('div', { key: item.id, style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
+          h('button', { className: 'rt-btn', disabled: busy, onClick: () => run(async () => setDetail((await request({ op: 'knowledgeGet', id: item.id })).item)) }, item.title),
+          h('span', { className: 'rt-ops-subtle' }, ' · 相似度 ' + item.score.toFixed(3)),
+          h('p', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, item.snippet))),
+        detail ? h('div', null, h('h4', null, detail.title), h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭正文'),
+          h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body)) : null)
+    }
+
+    function KnowledgeCenterTab() {
+      const [view, setView] = React.useState('personal')
+      const [history, setHistory] = React.useState([])
+      const [revision, setRevision] = React.useState(null)
+      const [notice, setNotice] = React.useState('')
+      const empty = () => ({ title: '', body: '', category: '', tags: '', source: '', favorite: false })
+      const [query, setQuery] = React.useState('')
+      const [category, setCategory] = React.useState('')
+      const [favorites, setFavorites] = React.useState(false)
+      const [offset, setOffset] = React.useState(0)
+      const [result, setResult] = React.useState({ items: [], total: 0, categories: [] })
+      const [draft, setDraft] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const seq = React.useRef(0)
+      const refresh = async () => {
+        const id = ++seq.current
+        try {
+          const r = await api({ op: 'knowledgeList', query, category, favorite: favorites, offset })
+          if (id !== seq.current) return
+          if (!r || !r.ok) throw Error(r?.error || '读取失败')
+          setResult(r)
+        } catch (e) { if (id === seq.current) setError(String(e.message || e)) }
+      }
+      React.useEffect(() => { refresh(); return () => { seq.current++ } }, [query, category, favorites, offset])
+      const change = (key, value) => setDraft(d => ({ ...d, [key]: value }))
+      const run = async (fn) => {
+        setBusy(true); setError('')
+        try { await fn() } catch (e) { setError(String(e.message || e)) } finally { setBusy(false) }
+      }
+      const request = async (req) => {
+        const r = await api(req)
+        if (!r || !r.ok) throw Error(r?.error || '操作失败')
+        return r
+      }
+      const loadHistory = async id => { setHistory((await request({ op: 'knowledgeHistory', id })).items); setRevision(null) }
+      const open = (id) => run(async () => {
+        const r = await request({ op: 'knowledgeGet', id })
+        setDraft({ ...r.item, favorite: !!r.item.favorite })
+        await loadHistory(id)
+      })
+      const newNote = (experience = false) => {
+        setHistory([]); setRevision(null)
+        setDraft(experience ? { ...empty(), category: '任务经验', body: '## 背景与任务引用\n\n## 已核实的结论\n\n## 证据与来源\n\n## 修复或排错经验\n\n## 尚待确认的问题\n' } : empty())
+      }
+      const importFiles = files => run(async () => {
+        let count = 0
+        const failures = []
+        const add = async row => {
+          const payload = { op: 'knowledgeImport', documents: [row] }
+          if (new Blob([JSON.stringify(payload)]).size > 8 * 1024 * 1024) throw Error('文档及历史超出单次请求 8 MiB，请拆分后导入')
+          const r = await request(payload)
+          count += r.imported
+        }
+        for (const file of files) {
+          try {
+            const content = await file.text()
+            if (/\.json$/i.test(file.name)) {
+              const backup = JSON.parse(content)
+              if (backup.format !== 'purge-knowledge-v1' || !Array.isArray(backup.documents) || !Array.isArray(backup.history)) throw Error('不是 Purge 知识备份')
+              for (const row of backup.documents) {
+                try { await add({ ...row, history: backup.history.filter(h => h.document_id === row.id) }) }
+                catch (e) { failures.push(String(row.title || file.name) + '：' + e.message) }
+              }
+            } else if (/\.(md|txt)$/i.test(file.name)) {
+              await add({ title: file.name.replace(/\.(md|txt)$/i, ''), body: content, category: '导入文档', source: file.name })
+            } else throw Error('仅支持 Markdown、TXT 或 Purge JSON 备份')
+          } catch (e) { failures.push(file.name + '：' + e.message) }
+        }
+        setNotice('已导入 ' + count + ' 条' + (failures.length ? '；失败 ' + failures.length + ' 项' : ''))
+        if (failures.length) setError(failures.join('\n'))
+        setQuery(''); setCategory(''); setFavorites(false); setOffset(0)
+        await refresh()
+      })
+      const exportBackup = () => run(async () => {
+        const r = await request({ op: 'knowledgeExport' })
+        const url = URL.createObjectURL(new Blob([JSON.stringify(r.backup, null, 2)], { type: 'application/json' }))
+        const link = document.createElement('a')
+        link.href = url; link.download = 'purge-knowledge-' + new Date().toISOString().slice(0,10) + '.json'
+        document.body.appendChild(link); link.click(); link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        setNotice('已生成知识备份下载')
+      })
+      const restore = () => {
+        if (!revision || !window.confirm('恢复这个历史版本？当前内容会保留为新的历史记录。')) return
+        run(async () => {
+          const r = await request({ op: 'knowledgeRestore', id: draft.id, revision_id: revision.revision_id })
+          setDraft({ ...r.item, favorite: !!r.item.favorite })
+          await loadHistory(draft.id); await refresh()
+        })
+      }
+      const save = () => run(async () => {
+        const r = await request({ ...draft, op: 'knowledgeSave' })
+        setDraft({ ...r.item, favorite: !!r.item.favorite })
+        await loadHistory(r.item.id)
+        await refresh()
+      })
+      const remove = () => {
+        if (!draft?.id || !window.confirm('删除这条个人知识及其历史版本？请先导出备份。')) return
+        run(async () => { await request({ op: 'knowledgeDelete', id: draft.id }); setDraft(null); setOffset(0); await refresh() })
+      }
+      const field = (key, label) => h('label', { style: { display: 'grid', gap: 4 } }, label,
+        h('input', { className: 'rt-input', value: draft[key] || '', disabled: busy, onChange: e => change(key, e.target.value) }))
+      return h('div', { className: 'rt-pane' },
+        h('div', { className: 'rt-card', style: { display: 'flex', gap: 8 } },
+          h('button', { className: 'rt-btn' + (view === 'personal' ? ' rt-btn-primary' : ''), onClick: () => setView('personal') }, '个人资料'),
+          h('button', { className: 'rt-btn' + (view === 'unified' ? ' rt-btn-primary' : ''), onClick: () => setView('unified') }, '全库检索'),
+          h('button', { className: 'rt-btn' + (view === 'semantic' ? ' rt-btn-primary' : ''), onClick: () => setView('semantic') }, '语义检索')),
+        view === 'semantic' ? h(SemanticKnowledgeTab) : view === 'unified' ? h(UnifiedKnowledgeTab) : h('div', { className: 'rt-card' },
+          h('h4', null, '知识库 · 个人资料'),
+          h('p', null, '本地保存技术笔记、文档和来源，不依赖 ARTEX 或当前靶标。'),
+          h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            h('input', { className: 'rt-input', placeholder: '搜索标题、正文、标签、来源', value: query, onChange: e => { setQuery(e.target.value); setOffset(0) } }),
+            h('select', { className: 'rt-input', value: category, onChange: e => { setCategory(e.target.value); setOffset(0) } },
+              h('option', { value: '' }, '全部分类'), result.categories.map(c => h('option', { key: c, value: c }, c))),
+            h('label', null, h('input', { type: 'checkbox', checked: favorites, onChange: e => { setFavorites(e.target.checked); setOffset(0) } }), ' 仅收藏'),
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: () => newNote() }, '新建笔记'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => newNote(true) }, '收录任务经验'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: exportBackup }, '导出备份'),
+            h('label', { style: { display: 'grid', gap: 4 } }, '导入文件 / 备份',
+              h('input', { type: 'file', multiple: true, accept: '.md,.txt,.json', disabled: busy, onChange: e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) importFiles(files) } }))),
+          notice ? h('p', { role: 'status' }, notice) : null,
+          error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
+          h('p', null, '共 ' + result.total + ' 条'),
+          result.items.length ? result.items.map(item => h('div', { key: item.id, style: { display: 'flex', gap: 8, alignItems: 'center', margin: '6px 0' } },
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(item.id) }, (item.favorite ? '★ ' : '') + item.title),
+            h('span', { className: 'rt-ops-subtle' }, [item.category, item.tags].filter(Boolean).join(' · ')))) : h('div', { className: 'rt-empty' }, '暂无知识条目'),
+          h('div', { style: { display: 'flex', gap: 8 } },
+            h('button', { className: 'rt-btn', disabled: offset === 0, onClick: () => setOffset(Math.max(0, offset - 50)) }, '上一页'),
+            h('button', { className: 'rt-btn', disabled: offset + 50 >= result.total, onClick: () => setOffset(offset + 50) }, '下一页'))),
+        view === 'personal' && draft ? h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
+          h('h4', null, draft.id ? '编辑知识' : '新建知识'),
+          field('title', '标题'), field('category', '分类'), field('tags', '标签（逗号分隔）'), field('source', '来源 / 链接'),
+          h('label', null, h('input', { type: 'checkbox', checked: !!draft.favorite, disabled: busy, onChange: e => change('favorite', e.target.checked) }), ' 收藏'),
+          h('label', { style: { display: 'grid', gap: 4 } }, '正文（支持 Markdown 原文）',
+            h('textarea', { className: 'rt-input', rows: 16, value: draft.body, disabled: busy, onChange: e => change('body', e.target.value), style: { width: '100%', boxSizing: 'border-box' } })),
+          h('div', { style: { display: 'flex', gap: 8 } },
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft.title.trim(), onClick: save }, '保存'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => setDraft(null) }, '关闭'),
+            draft.id ? h('button', { className: 'rt-btn', disabled: busy, onClick: remove }, '删除') : null),
+          draft.id ? h('div', null, h('h4', null, '历史版本（' + history.length + '）'),
+            history.map(old => h('button', { key: old.revision_id, className: 'rt-btn', disabled: busy, onClick: () => run(async () => setRevision((await request({ op: 'knowledgeHistoryGet', id: draft.id, revision_id: old.revision_id })).item)) }, old.title + ' · ' + old.saved_at)),
+            revision ? h('div', null, h('h4', null, revision.title), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflow: 'auto' } }, revision.body),
+              h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: restore }, '恢复该版本'),
+              h('button', { className: 'rt-btn', onClick: () => setRevision(null) }, '关闭历史')) : null) : null) : null)
+    }
+
     function IntelTab(props) {
       const eng = props.engagement
       const [sub, setSub] = React.useState('kb')
@@ -12151,7 +12406,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['overview', '概览'], ['assets', '资产'], ['scan-history', '扫描记录'], ['findings', '漏洞'],
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
-        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['local-search', '测绘中心'], ['artex', 'ARTEX']] },
+        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '知识库'], ['local-search', '测绘中心'], ['artex', 'ARTEX']] },
         { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
@@ -12192,6 +12447,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       let body
       if (err) body = h('div', { className: 'rt-err' }, err)
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
+      else if (st.tab === 'knowledge-center') body = h(KnowledgeCenterTab)
       else if (st.tab === 'env' || st.tab === 'knowledge') body = h(EnvTab, { refreshKey: refreshKey })
       else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey })
        else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
