@@ -20,7 +20,7 @@
   <a href="https://github.com/YuJunZhiXue/dsh-purge/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat" alt="Apache-2.0"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="awesome · DSH plugin"></a>
   <a href="https://deepseek.stream/plugins/dsh-purge"><img src="https://img.shields.io/badge/Hub-dsh--purge-1a73e8" alt="DeepSeek Harness Hub"></a>
-  <a href="https://www.deepseek.com/harness/"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.1%20%2F%200.2.1--rc.5%20%2F%20rc.2-blue" alt="DSH"></a>
+  <a href="https://www.deepseek.com/harness/"><img src="https://img.shields.io/badge/dsh-0.2.2--rc.3-blue" alt="DSH"></a>
   <br>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=fff" alt="Node.js">
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=000" alt="JavaScript">
@@ -73,7 +73,7 @@
 
 ## 介绍
 
-**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.7-beta.8**，默认适配 **DSH 0.2.2-rc.3**，保留 rc.2 / rc.1 / 0.2.1-rc.5 / rc.2 兼容目标；其中 0.2.2-rc.1 的集成测试与 Windows 实际图形界面验收是不同的检查，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
+**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.7-beta.8**，默认适配 **DSH 0.2.2-rc.3**，保留 rc.2 / rc.1 / 0.2.1-rc.5 / rc.2 兼容目标；声明的适配目标、集成测试与 Windows 实际图形界面/运行时验收是不同的证据，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
 
 Harness 不只是把问题交给模型。它还会在运行时改提示词、审批门、沙箱和会话格式。只看「模型答不答」，会把宿主拦截误当成模型拒绝。这个插件在你自己的安装里把这两层分开，用来做受控评测，也用来看默认策略该不该收紧。
 
@@ -398,7 +398,7 @@ dsh-purge --uninstall
 
 当前版本优先在 Harness **左侧栏 → Purge 作战台** 打开原生主页面，顶部切换 **清洗台 / 作战台**。清洗台按「清洗与补丁 / 规则与技能」分类，作战台使用深色侧边导航；原有补丁和规则操作保持不变。
 
-**原生页面交付说明：** 这套界面由实际插件的 `client.js` 加载，使用原有资产、任务、配置和 `/redteam/api`，不是静态效果图；旧 Dock 只保留在没有原生主页面能力的宿主上作为兼容回退。漏洞页可按有效证据筛选，扫描记录页已升级为可筛选运行看板和真实执行时间线。**需要安装授权取得的 beta.7 候选包（尚未发布标签）并完全重启 DSH 才能使用这些改动；仓库 master 更新不等于本机安装成功。** 当前截图仍是旧版 Dock 的历史示例，不能代表新版原生主页面。实际 Windows Desktop 图形界面仍需人工验收。
+**原生页面交付说明：** 这套界面由实际插件的 `client.js` 加载，使用原有资产、任务、配置和 `/redteam/api`，不是静态效果图；旧 Dock 只保留在没有原生主页面能力的宿主上作为兼容回退。漏洞页可按有效证据筛选，扫描记录页已升级为可筛选运行看板和真实执行时间线。**需要安装授权取得的 beta.8 候选包并完全重启 DSH 才能使用这些改动；仓库 master 更新不等于本机安装成功。** 当前截图仍是旧版 Dock 的历史示例，不能代表新版原生主页面。实际 Windows Desktop 图形界面仍需人工验收。
 
 第一次进作战台要先读声明、等倒计时、滚到文末并勾选三项。清洗不需要这一步。作战台面向自有资产或明确书面授权的安全评测目标，既可以是本地靶场，也可以是获授权的公网资产。
 
