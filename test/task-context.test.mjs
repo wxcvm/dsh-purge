@@ -267,3 +267,76 @@ test('stored testing progress survives database reopen without claiming current 
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('task context labels provenance and the coverage of bounded summaries', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        test_notes: ['old one', 'old two', 'recent one', 'x'.repeat(300), 'recent three'].join('\n'),
+        test_surface: 's'.repeat(300),
+        open_ports: 25,
+        ports: Array.from({ length: 25 }, (_, i) => ({ port: 10000 + i, state: 'open', proto: 'tcp' })),
+        fingerprints: Array.from({ length: 12 }, (_, i) => ({ vendor: 'Demo', product: 'Fixture', version: String(i) })),
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    const { asset, provenance } = context
+    assert.equal(asset.recent_test_notes.length, 3)
+    assert.equal(asset.recent_test_notes[1].length, 240)
+    assert.equal(asset.test_surface.length, 240)
+    assert.equal(asset.open_ports.length, 20)
+    assert.equal(asset.fingerprints.length, 10)
+    assert.deepEqual(asset.summary_coverage, {
+      test_notes_total: 5, test_notes_omitted: 2, test_notes_text_truncated: true,
+      test_surface_truncated: true, open_ports_omitted: 5, fingerprints_omitted: 2,
+    })
+    assert.deepEqual(provenance, {
+      records: 'local-engagement-store', knowledge: 'reference-only',
+      current_target_validation: 'not-performed-by-context',
+    })
+    assert.equal(context.artex_knowledge.source, 'local-artex-knowledge')
+    assert.equal(context.artex_knowledge.verification_scope, 'historical-reference')
+    const linked = taskContext(store, 'lab', 'vuln #11')
+    assert.equal(linked.linked_asset.summary_coverage.open_ports_omitted, 5)
+    assert.deepEqual(linked.provenance, provenance)
+    assert.equal(linked.artex_knowledge.verification_scope, 'historical-reference')
+  } finally {
+    db.close()
+  }
+})
+
+test('task context masks common credentials in HTTP metadata without changing stored evidence', () => {
+  const { db, store } = fixture()
+  try {
+    const url = 'https://user:synthetic-userinfo@example.test/path?access_token=synthetic-query&view=1'
+    const label = 'api_key=synthetic-label'
+    const note = 'Authorization: Basic synthetic-header'
+    db.prepare('UPDATE http_evidence SET url = ?, label = ?, note = ? WHERE id IN (21, 22)').run(url, label, note)
+
+    const asset = taskContext(store, 'lab', 'asset #5')
+    const vuln = taskContext(store, 'lab', 'vuln #11')
+    for (const result of [asset.direct_http_evidence, vuln.http_evidence]) {
+      assert.equal(result.total, 1)
+      const item = result.items[0]
+      assert.ok(item.url.includes('example.test/path'))
+      assert.ok(item.url.includes('view=1'))
+      assert.ok(item.url.includes('[REDACTED_USERINFO]'))
+      assert.ok(item.url.includes('access_token=[REDACTED_SECRET]'))
+      assert.equal(item.label, 'api_key=[REDACTED_SECRET]')
+      assert.equal(item.note, 'Authorization: [REDACTED_SECRET]')
+      for (const secret of ['synthetic-userinfo', 'synthetic-query', 'synthetic-label', 'synthetic-header']) {
+        assert.equal(JSON.stringify(item).includes(secret), false)
+      }
+      assert.equal(item.has_request, true)
+    }
+    const raw = db.prepare('SELECT url, label, note FROM http_evidence WHERE id = 21').get()
+    assert.equal(raw.url, url)
+    assert.equal(raw.label, label)
+    assert.equal(raw.note, note)
+  } finally {
+    db.close()
+  }
+})
