@@ -23,7 +23,7 @@ test('standalone discovery and disabled or conditional control rows are never si
   }
 });
 
-test('host detection follows merged capability, including rc.2, not release numbers', (t) => {
+test('host detection follows merged capability, including rc.3, not release numbers', (t) => {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'dsh-preset-compat-'));
   t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const pkgDir=path.join(root,'node_modules','@deepseek-ai','dsh-tool-subagent-control');
@@ -31,7 +31,7 @@ test('host detection follows merged capability, including rc.2, not release numb
   const anchor=path.join(root,'package.json');
   const metadata=path.join(pkgDir,'package.json');
   const entry=path.join(pkgDir,'index.js');
-  for (const version of ['0.2.1-rc.5','0.2.2-alpha.2','0.2.2-rc.1','0.2.2-rc.2','0.3.0']) {
+  for (const version of ['0.2.1-rc.5','0.2.2-alpha.2','0.2.2-rc.1','0.2.2-rc.2','0.2.2-rc.3','0.3.0']) {
     const exports={'.':'./index.js','./package.json':'./package.json'};
     const legacy=version.startsWith('0.2.1');
     if(legacy)exports['./list-agents']='./list.js';

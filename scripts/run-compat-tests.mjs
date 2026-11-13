@@ -3,11 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { HOSTS, FULL_HOST } from './host-fixture-policy.mjs';
+export { HOSTS, FULL_HOST };
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-export const HOSTS = ['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2'];
-export const FULL_HOST = '0.2.2-rc.1';
-
 export function selectCompatibilityTests(repoRoot, host) {
   if (!HOSTS.includes(host)) throw new Error('Unknown official fixture version: ' + host);
   const files = [

@@ -10,6 +10,8 @@
 
 官方注册器链路已在 `0.2.2-rc.1` 与 `0.2.2-rc.2` 各通过一次；默认 npm test 会显式跳过未配置官方 fixture 的测试。CI 的兼容性脚本会自动把此测试纳入版本矩阵，不能把跳过当作成功。
 
+第八批版本更正：用户本机当前为 `0.2.2-rc.3`，rc.3 fixture 与已安装包的注册/重载测试已补齐，默认全套版本也已切换。历史短样本的入口、清单哈希和 EXE 元数据与本次核实的 rc.3 一致，但旧报告没有明文版本字段；补充追溯见 `AUTONOMY_ROLLOUT.zh-CN.md`，不重写原始测量或冒充新模型运行。后续报告 schemaVersion=2，显式保存宿主包版本。
+
 ## 真实模型对照协议
 
 - 路由：现有 codex-review；请求 provider 为 deepseek-account，model 为 deepseek-flash，reasoningEffort 为 low。服务端解析后的具体模型修订不可见，不声称固定了模型权重。

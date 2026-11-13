@@ -25,7 +25,7 @@ jobs:
           - group: legacy
             hosts: '0.2.1-rc.2 0.2.1-rc.3 0.2.1-rc.4'
           - group: current
-            hosts: '0.2.1-rc.5 0.2.2-rc.1 0.2.2-rc.2'
+            hosts: '0.2.1-rc.5 0.2.2-rc.1 0.2.2-rc.2 0.2.2-rc.3'
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

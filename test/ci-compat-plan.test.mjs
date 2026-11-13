@@ -9,8 +9,14 @@ import { HOSTS, FULL_HOST, selectCompatibilityTests } from '../scripts/run-compa
 const root = fileURLToPath(new URL('../', import.meta.url));
 test('grouped compatibility covers every official fixture and all existing test files on the full host', () => {
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/compatibility.yml'), 'utf8');
-  assert.equal(HOSTS.length, 6);
-  assert.equal(new Set(HOSTS).size, 6);
+  assert.equal(HOSTS.length, 7);
+  assert.equal(new Set(HOSTS).size, 7);
+  assert.equal(FULL_HOST, '0.2.2-rc.3');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  assert.equal(manifest.dshTarget, FULL_HOST);
+  assert.ok(manifest.dshTargets.includes(FULL_HOST));
+  const workflowHosts = [...workflow.matchAll(/hosts: '([^']+)'/g)].flatMap(match => match[1].split(' '));
+  assert.deepEqual(workflowHosts, HOSTS);
   for (const host of HOSTS) {
     assert.ok(workflow.includes(host), host);
     const tests = selectCompatibilityTests(root, host);

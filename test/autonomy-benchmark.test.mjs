@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { parseOptions, summarizeRun, benchmarkPassed } from '../scripts/benchmark-autonomy-headless.mjs'
+import { parseOptions, summarizeRun, benchmarkPassed, snapshotHostRuntime } from '../scripts/benchmark-autonomy-headless.mjs'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'purge-bench-judge-'))
@@ -21,6 +21,32 @@ function fixture(t) {
   return { root, data, dbPath }
 }
 const output = events => ({ status: 0, stdout: events.map(row => JSON.stringify(row)).join('\n') })
+
+test('runtime snapshots record the actual package version and detect upgrades without exposing metadata bodies', t => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-runtime-version-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  mkdirSync(join(root, 'lib'))
+  const cli = join(root, 'lib', 'cli.js'), manifest = join(root, 'package.json')
+  writeFileSync(cli, 'export const fixture = true\n')
+  const metadata = { name: '@deepseek-ai/dsh-desktop-host', version: '0.2.2-rc.2', privateMetadata: 'PRIVATE_METADATA' }
+  writeFileSync(manifest, JSON.stringify(metadata))
+  const options = { exe: process.execPath, cli }
+  const old = snapshotHostRuntime(options)
+  assert.equal(old.packageVersion, '0.2.2-rc.2')
+  writeFileSync(manifest, JSON.stringify({ ...metadata, version: '0.2.2-rc.3' }))
+  const current = snapshotHostRuntime(options)
+  assert.equal(current.packageVersion, '0.2.2-rc.3')
+  assert.notDeepEqual(current, old)
+  assert.ok(!JSON.stringify(current).includes('PRIVATE_'))
+  writeFileSync(cli, 'export const fixture = false\n')
+  assert.notEqual(snapshotHostRuntime(options).entrySha256, current.entrySha256)
+  for (const invalid of [{ ...metadata, version: 'PRIVATE_VERSION' }, { ...metadata, name: 'unrelated-package' }]) {
+    writeFileSync(manifest, JSON.stringify(invalid))
+    assert.equal(snapshotHostRuntime(options), null)
+  }
+  rmSync(manifest)
+  assert.equal(snapshotHostRuntime(options), null)
+})
 
 test('benchmark is opt-in and validates paths, repeat budgets and profile names without starting a model', () => {
   assert.throws(() => parseOptions([]), /existing absolute path/)

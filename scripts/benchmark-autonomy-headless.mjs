@@ -8,6 +8,20 @@ import { DatabaseSync } from 'node:sqlite'
 import { parseDocument } from 'yaml'
 
 const repo = fileURLToPath(new URL('../', import.meta.url))
+export function snapshotHostRuntime({ exe, cli }) {
+  try {
+    const stat = fs.statSync(exe)
+    const metadata = fs.readFileSync(join(dirname(cli), '..', 'package.json'))
+    const pkg = JSON.parse(metadata.toString('utf8'))
+    if (pkg.name !== '@deepseek-ai/dsh-desktop-host'
+      || typeof pkg.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(pkg.version)) return null
+    return { packageName: pkg.name, packageVersion: pkg.version,
+      executable: { size: stat.size, mtimeMs: stat.mtimeMs },
+      entrySha256: createHash('sha256').update(fs.readFileSync(cli)).digest('hex'),
+      packageSha256: createHash('sha256').update(metadata).digest('hex') }
+  } catch { return null }
+}
+
 export function parseOptions(argv) {
   const options = { profile: 'codex-review', timeout: 90000, repeats: 1 }
   for (let i = 0; i < argv.length; i += 2) {
@@ -73,20 +87,13 @@ export function benchmark(options) {
   const label = value => typeof value === 'string' && /^[\w./:-]{1,100}$/.test(value) ? value : 'unknown'
   const adapter = join(out, 'entry.mjs')
   const support = join(dirname(options.exe), 'resources', 'runtime')
-  const runtimeSnapshot = () => {
-    try {
-      const stat = fs.statSync(options.exe)
-      return { executable: { size: stat.size, mtimeMs: stat.mtimeMs },
-        entrySha256: createHash('sha256').update(fs.readFileSync(options.cli)).digest('hex'),
-        packageSha256: createHash('sha256').update(fs.readFileSync(join(dirname(options.cli), '..', 'package.json'))).digest('hex') }
-    } catch { return null }
-  }
+  const runtimeSnapshot = () => snapshotHostRuntime(options)
   const initialRuntime = runtimeSnapshot()
   if (!initialRuntime) throw new Error('runtime unavailable; no model task launched')
   fs.writeFileSync(adapter, `import {runDesktopCli} from ${JSON.stringify(pathToFileURL(options.cli).href)};\nawait runDesktopCli(${JSON.stringify(support)});\n`, { flag: 'wx' })
-  const report = { schemaVersion: 1, scope: 'real-model-synthetic-record-microbenchmark',
+  const report = { schemaVersion: 2, scope: 'real-model-synthetic-record-microbenchmark',
     profile: options.profile, requestedModel: { provider: label(selection.provider), model: label(selection.model), reasoningEffort: label(selection.reasoningEffort) },
-    resolvedModelRevision: 'not-observed', runtimeFingerprintScope: 'entry-package-hashes-and-executable-metadata',
+    resolvedModelRevision: 'not-observed', runtimeFingerprintScope: 'package-version-entry-package-hashes-and-executable-metadata',
     initialRuntime, runtimeStable: true, runs: [],
     note: 'Same requested model route, synthetic data and injected transient failure. Baseline offers original record tools; candidate additionally offers persistent attempts. One case is not statistical evidence of overall autonomy improvement. Production profile configuration and installation are not changed; the host may persist its normal headless session records.' }
   pairs: for (let repeat = 0; repeat < options.repeats; repeat++) for (const arm of (repeat % 2 ? ['candidate', 'baseline'] : ['baseline', 'candidate'])) {

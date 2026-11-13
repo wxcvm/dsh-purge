@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "scope": "rc3-public-api-compatibility-not-desktop-e2e",
+  "date": "2026-11-13",
+  "sourceBase": "d0b487d39194f8401e50bb1e75ec41812939dd0e",
+  "includesWorkingTreeAdditions": true,
+  "node": "v24.20.0",
+  "installed": {
+    "fileVersion": "0.2.2-rc.3",
+    "productVersion": "0.2.2.0",
+    "packageName": "@deepseek-ai/dsh-desktop-host",
+    "packageVersion": "0.2.2-rc.3",
+    "executable": {
+      "size": 246341104,
+      "mtimeMs": 1794555052000
+    },
+    "entrySha256": "ae3ca48751bead01d968c197420082a327f4e9f734ceb08c2e5bc2a9f2f037c1",
+    "packageSha256": "3ad53ccf6740f876956d876e5877ed6e1f92d135e2350538a7dacadeb3eb88f5"
+  },
+  "runtimeStableDuringValidation": true,
+  "historicalShortSampleIdentity": {
+    "report": "autonomy-record-microbenchmark-20261113.json",
+    "matches": {
+      "entrySha256": true,
+      "packageSha256": true,
+      "executableMetadata": true
+    },
+    "attribution": "post-hoc match of entry/package hashes and executable metadata to the now-verified rc.3 installation; not all transitive dependencies or remote model revision"
+  },
+  "checks": {
+    "installedPublicApi": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0
+    },
+    "officialRc3Full": {
+      "tests": 744,
+      "pass": 741,
+      "fail": 1,
+      "skipped": 2
+    },
+    "retainedRc1Contracts": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0
+    },
+    "retainedRc2Contracts": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "knownLocalFailure": {
+    "test": "test/storage-audit.test.mjs:74",
+    "observed": "partial",
+    "expected": "complete",
+    "status": "previously-reproduced-on-baseline-not-counted-as-pass"
+  },
+  "newModelRequests": 0,
+  "productionModified": false,
+  "limitations": [
+    "Registry tests use temporary Context, synthetic Agents and data; no native desktop button or production session validated.",
+    "Hashes do not attest complete installed application integrity.",
+    "No new performance, autonomy-success or long-running model evidence."
+  ]
+}
