@@ -29,6 +29,8 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
       '# Example Company',
       'Authorization: Bearer synthetic-credential',
       'Cookie: session=synthetic-cookie',
+      '{"Authorization": "Basic synthetic-basic", "Cookie": "sid=synthetic-json-cookie", "Proxy-Authorization": "Basic synthetic-proxy"}',
+      '{"Set-Cookie": "session=synthetic-set-cookie; Path=/"}',
       'password=synthetic-password',
       'api_key: synthetic-api-key',
       'password: "synthetic secret with spaces"',
@@ -50,7 +52,7 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   const safe = writeReportBundle({ root, engagement, outDir: output, report, shareable: true })
   const markdown = fs.readFileSync(safe.reportFile, 'utf8')
   for (const secret of ['synthetic-credential', 'synthetic-cookie', 'synthetic-password',
-    'synthetic-api-key', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
+    'synthetic-api-key', 'synthetic-basic', 'synthetic-json-cookie', 'synthetic-proxy', 'synthetic-set-cookie', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
     'synthetic secret with spaces', 'in-url-password', 'standalone-secret', 'operator:']) {
     assert.ok(!markdown.includes(secret), 'shareable markdown must not contain ' + secret)
   }
