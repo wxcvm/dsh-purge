@@ -47,3 +47,26 @@ test('ARTEX uses the existing adapter, keeps unknown totals and opens by source 
     assert.equal(unifiedKnowledgeRequest(root, { op: 'knowledgeUnifiedGet', source: 'artex', id: '7' }, opts).item.body, 'text')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('unified search distinguishes missing, empty and unavailable ARTEX without searching unusable sources', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-unified-status-'))
+  try {
+    const doc = knowledgeRequest(root, { op: 'knowledgeSave', title: 'Reference notes', body: 'local text' }).item
+    for (const [status, expected] of [
+      [{ ok: true, available: false, state: 'missing', note: '未找到 knowledge.db' }, { available: false, total: null, note: '未找到 knowledge.db' }],
+      [{ ok: true, available: true, state: 'empty', count: 0 }, { available: true, total: 0, note: 'ARTEX 知识库为空' }],
+      [{ ok: false, available: false, state: 'unavailable', error: '无法读取知识库' }, { available: false, total: null, error: '无法读取知识库' }],
+    ]) {
+      const opts = { sources: ['personal', 'artex'], artexStatus: () => status,
+        artexSearch: () => { throw Error('unexpected query') } }
+      const result = unifiedKnowledgeRequest(root, { op: 'knowledgeUnifiedSearch', query: 'reference' }, opts)
+      assert.equal(result.groups[0].items[0].id, String(doc.id))
+      const group = result.groups[1]
+      assert.equal(group.available, expected.available)
+      assert.equal(group.total, expected.total)
+      assert.deepEqual(group.items, [])
+      assert.equal(group.error, expected.error)
+      if (expected.note) assert.equal(group.note, expected.note)
+    }
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
