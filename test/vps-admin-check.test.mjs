@@ -46,6 +46,7 @@ test('successful probe returns selected route', async () => {
   const result = await checkAdminRoute('lab', ['entry'], (_exe, _args, _opts, done) => done(null))
   assert.equal(result.ok, true)
   assert.equal(result.error, null)
+  assert.deepEqual(result.evidence, { scope: 'ssh_management', command: 'true', status: 'verified', application: 'not_tested', udp: 'not_tested', egress: 'not_tested' })
 })
 
 test('saved mode reads only validated management preferences, preserving hop order', () => {
