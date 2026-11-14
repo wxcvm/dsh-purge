@@ -14,6 +14,7 @@ function fixture() {
   const hook = installContinueRetry(ctx, { config: { autoContinue: true } });
   return {
     hook,
+    ctx,
     listeners,
     status(agent, status) {
       agent.status = status;
@@ -94,4 +95,38 @@ test("dispose cancels delayed work and prevents in-flight error middleware from 
   await wait(350);
   assert.equal(agent.sent.length, 0);
   assert.equal(f.listeners.size, 0);
+});
+
+test("remount releases the old runtime without disturbing the new runtime or another context", async () => {
+  const first = fixture();
+  const second = fixture();
+  let replacement;
+  try {
+    const oldAgent = agentOf("same", [interrupted(1, 1)]);
+    const otherAgent = agentOf("same", [interrupted(1, 1)]);
+    const staleHandler = first.listeners.get("agent/status");
+    first.status(oldAgent, "idle");
+    second.status(otherAgent, "idle");
+
+    replacement = installContinueRetry(first.ctx, { config: { autoContinue: false } });
+    const replacementHandler = first.listeners.get("agent/status");
+    assert.notEqual(replacementHandler, staleHandler);
+    assert.equal(first.listeners.size, 2);
+
+    // The old scope's cleanup may arrive after the new runtime is installed.
+    first.hook.dispose();
+    assert.equal(first.listeners.get("agent/status"), replacementHandler);
+    staleHandler({ agent: oldAgent, status: "idle" });
+    first.status(oldAgent, "idle");
+    await wait(350);
+    assert.equal(oldAgent.sent.length, 0);
+    assert.equal(otherAgent.sent.length, 1);
+    assert.equal(second.listeners.size, 2);
+  } finally {
+    replacement?.dispose();
+    first.hook.dispose();
+    second.hook.dispose();
+  }
+  assert.equal(first.listeners.size, 0);
+  assert.equal(second.listeners.size, 0);
 });
