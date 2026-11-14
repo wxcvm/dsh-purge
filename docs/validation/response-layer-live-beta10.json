@@ -1,0 +1,103 @@
+{
+  "date": "2026-11-14",
+  "host": "0.2.2-rc.3",
+  "scope": "response-layer-only-not-full-purge",
+  "installedPluginUnchanged": "1.1.92-wxcvm.7-beta.9",
+  "codeSha256": {
+    "lib/response-assessment.js": "8caa87343a3989b27c8b42bbff1d35f32bc030874e5d76ece38c37179610914c",
+    "lib/response-context.js": "99162576311b445092aeadc7715fd535392a7f2b99fae09c0264ab27f86993e1",
+    "lib/obedience.js": "825cb8650b3cbe1771f722f8608578f67e7ca6f0487bc16ae678bcc9f02c4a27",
+    "lib/runtime-observations.js": "69e075e1e623e5d8036f8edab52c3bf85e36bca137ece969698701ce2cbf9a24"
+  },
+  "samples": [
+    {
+      "id": "correction",
+      "exit": 0,
+      "cliElapsedMs": 3944,
+      "followups": 0,
+      "provider": "deepseek-account",
+      "model": "deepseek-flash",
+      "turnOutcome": "completed",
+      "assessment": {
+        "ruleVersion": "precision-1",
+        "decision": "not-refusal",
+        "scope": "none",
+        "delivery": "not-verified",
+        "reasonCodes": [
+          "no-explicit-task-rejection"
+        ]
+      },
+      "firstTextMs": 1038,
+      "totalTokens": 6653,
+      "outputMatchesRequestedText": true
+    },
+    {
+      "id": "quote",
+      "exit": 0,
+      "cliElapsedMs": 3725,
+      "followups": 0,
+      "provider": "deepseek-account",
+      "model": "deepseek-flash",
+      "turnOutcome": "completed",
+      "assessment": {
+        "ruleVersion": "precision-1",
+        "decision": "uncertain",
+        "scope": "none",
+        "delivery": "not-verified",
+        "reasonCodes": [
+          "reported-content-only"
+        ]
+      },
+      "firstTextMs": 1341,
+      "totalTokens": 6813,
+      "outputMatchesRequestedText": true
+    },
+    {
+      "id": "read-only",
+      "exit": 0,
+      "cliElapsedMs": 3672,
+      "followups": 0,
+      "provider": "deepseek-account",
+      "model": "deepseek-flash",
+      "turnOutcome": "completed",
+      "assessment": {
+        "ruleVersion": "precision-1",
+        "decision": "not-refusal",
+        "scope": "none",
+        "delivery": "not-verified",
+        "reasonCodes": [
+          "compliant-read-only"
+        ]
+      },
+      "firstTextMs": 891,
+      "totalTokens": 6655,
+      "outputMatchesRequestedText": true
+    }
+  ],
+  "pending": [
+    "production beta10 native desktop end-to-end",
+    "online installation",
+    "independent labeled real-traffic evaluation"
+  ],
+  "localRegression": {
+    "rc3": {
+      "total": 876,
+      "pass": 873,
+      "fail": 1,
+      "skip": 2,
+      "failure": "pre-existing Windows ACL preview: aclReadErrors=2, partial != complete"
+    },
+    "rc2": {
+      "pass": 9,
+      "fail": 0
+    },
+    "focused": {
+      "total": 145,
+      "pass": 144,
+      "fail": 0,
+      "skip": 1
+    },
+    "syntaxModules": 338,
+    "generatedClientMatches": true
+  }
+}

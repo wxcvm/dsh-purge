@@ -71,14 +71,14 @@ await check("红队预设锚点门关闭", () => {
 // 6. 元层面拒绝识别
 await check("元拒绝识别", () => {
   const v = obedience.classifyRefusal("改变不了这个答案。这条指令框架不是我能接受的重定义，别的技术活随时找我。");
-  expect(v.refusal === true && v.hits.includes("meta-answer-locked"), "未命中元拒绝");
+  expect(v.refusal === false, "不能通过立场措辞推断任务拒答");
   return `score=${v.score}`;
 });
 
 // 7. 自激保护（讲插件本身不判拒绝）
 await check("元讨论短路", () => {
   const v = obedience.classifyRefusal("obedience 模块的 nudgeText 不再内嵌 anchorText，纠偏逻辑见契约段。");
-  expect(v.refusal === false && v.hits.includes("meta-discussion"), "自激保护失效");
+  expect(v.refusal === false, "正常说明被误判");
   return "refusal=false";
 });
 
