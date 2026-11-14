@@ -35,7 +35,7 @@ test('raw CLI reports format failures, cancellation and missing samples separate
     const report = JSON.parse(result.stdout);
     assert.equal(report.baseline['invalid-json'], 1);
     assert.equal(report.baseline['not-completed'], 1);
-    assert.equal(report.baseline.missing, 3);
+    assert.equal(report.baseline.missing, report.totalCases - 3);
     assert.equal(report.rows.find(r => r.id === 'extract').baseline.lifecycle.outcome, 'cancelled');
     assert.equal(report.pairedImproved, 1);
     assert.equal(report.pairedRegressed, 0);
@@ -68,7 +68,7 @@ test('three-way matrix compares like-for-like groups and distinguishes incomplet
     assert.deepEqual(report.completeCases, ['arithmetic']);
     assert.equal(report.comparisons.hostToCurrent.pairedImproved, 1);
     assert.equal(report.comparisons.currentToCandidate.pairedCases, 1);
-    assert.equal(report.comparisons.currentToCandidate.candidate.missing, 5);
+    assert.equal(report.comparisons.currentToCandidate.candidate.missing, report.totalCases - 1);
     matrix.candidate.model = 'different-model';
     result = evaluate();
     assert.notEqual(result.status, 0);
@@ -83,5 +83,31 @@ test('three-way matrix compares like-for-like groups and distinguishes incomplet
     result = evaluate();
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /captureKind must be real or synthetic/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('normal technical diagnostics, quotation and no-change results are scored by content', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'purge-normal-quality-'));
+  try {
+    const input = join(dir, 'capture.json');
+    const samples = {
+      'technical-diagnosis': { response: '{"code":"ENOENT","cause":"missing-file"}' },
+      'quoted-text': { response: '"我无法连接到本地测试服务器"' },
+      'no-change': { response: '{"changed":false,"action":"keep"}' },
+      'multi-step': { response: '{"ids":["a","b"],"total":3}' },
+    };
+    writeFileSync(input, JSON.stringify({
+      baseline: samples,
+      candidate: { ...samples, 'no-change': { response: '{"changed":true,"action":"update"}' } },
+    }));
+    const result = run('--raw', input);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.baseline.correct, 4);
+    assert.equal(report.candidate.correct, 3);
+    assert.equal(report.pairedCases, 4);
+    assert.equal(report.pairedRegressed, 1);
+    assert.equal(report.rows.find(r => r.id === 'quoted-text').candidate.status, 'correct');
+    assert.equal(report.rows.find(r => r.id === 'no-change').candidate.status, 'incorrect');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
