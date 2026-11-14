@@ -130,6 +130,50 @@ function evaluateRaw(input) {
     efficiency: efficiency(rows), rows };
 }
 
+
+// All comparisons reuse the same normal-task scorer. Metadata is declared by
+// the collector, not independently verified by this offline tool.
+function evaluateMatrix(input) {
+  if (!['real', 'synthetic'].includes(input?.captureKind)) {
+    throw new Error('captureKind must be real or synthetic');
+  }
+  const names = ['host', 'current', 'candidate'];
+  const groups = names.map(name => {
+    const group = input[name];
+    if (!group || typeof group !== 'object' || Array.isArray(group)) throw new Error('missing group: ' + name);
+    for (const key of ['model', 'hostVersion', 'environment', 'variant']) {
+      if (typeof group[key] !== 'string' || !group[key].trim()) throw new Error(name + ' requires ' + key);
+    }
+    if (!group.settings || typeof group.settings !== 'object' || Array.isArray(group.settings)) {
+      throw new Error(name + ' requires settings object');
+    }
+    return group;
+  });
+  for (const group of groups.slice(1)) {
+    for (const key of ['model', 'hostVersion', 'environment', 'settings']) {
+      if (!isDeepStrictEqual(group[key], groups[0][key])) throw new Error('comparison mismatch: ' + key);
+    }
+  }
+  const comparisons = {
+    hostToCurrent: evaluateRaw({ baseline: groups[0].samples, candidate: groups[1].samples }),
+    currentToCandidate: evaluateRaw({ baseline: groups[1].samples, candidate: groups[2].samples }),
+    hostToCandidate: evaluateRaw({ baseline: groups[0].samples, candidate: groups[2].samples }),
+  };
+  const completeCases = cases.filter(c => groups.every(g => Object.hasOwn(g.samples, c.id))).map(c => c.id);
+  return {
+    captureKind: input.captureKind,
+    provenance: 'collector-declared',
+    model: groups[0].model,
+    hostVersion: groups[0].hostVersion,
+    environment: groups[0].environment,
+    settings: groups[0].settings,
+    variants: Object.fromEntries(names.map((name, i) => [name, groups[i].variant])),
+    totalCases: cases.length,
+    completeCases,
+    comparisons,
+  };
+}
+
 function rawSelfTest() {
   const end = (seq, reason) => ({ seq, type: 'turn/end', data: { reason } });
   const user = { seq: 1, type: 'user/message', data: { source: { kind: 'human' } } };
@@ -180,9 +224,10 @@ try {
   const arg = process.argv[2];
   if (arg === '--cases') console.log(JSON.stringify(cases.map(({ id, prompt }) => ({ id, prompt })), null, 2));
   else if (arg === '--self-test') { selfTest(); rawSelfTest(); }
+  else if (arg === '--matrix' && process.argv.length === 4) console.log(JSON.stringify(evaluateMatrix(JSON.parse(readFileSync(process.argv[3], 'utf8'))), null, 2));
   else if (arg === '--raw' && process.argv.length === 4) console.log(JSON.stringify(evaluateRaw(JSON.parse(readFileSync(process.argv[3], 'utf8'))), null, 2));
   else if (arg && process.argv.length === 3) console.log(JSON.stringify(evaluate(JSON.parse(readFileSync(arg, 'utf8'))), null, 2));
-  else throw new Error('Usage: node scripts/evaluate-task-quality.mjs --cases | --self-test | results.json | --raw capture.json');
+  else throw new Error('Usage: node scripts/evaluate-task-quality.mjs --cases | --self-test | results.json | --raw capture.json | --matrix matrix.json');
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
