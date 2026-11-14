@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import { sampleDiagnosis, diagnosticSummary, contextIntegrity } from '../lib/task-quality-diagnostics.js';
+import { qualityReportSummary } from '../lib/task-quality-report.js';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -77,7 +80,7 @@ function diagnoseEvents(events) {
 }
 
 // Compare only pairs with correct outputs and measured values on both sides.
-const metricKeys = ['totalTokens', 'toolCalls', 'elapsedMs'];
+const metricKeys = ['totalTokens', 'toolCalls', 'elapsedMs', 'firstTextMs'];
 function efficiency(rows) {
   return Object.fromEntries(metricKeys.map(key => {
     const pairs = rows.filter(r => r.baseline.status === 'correct' && r.candidate.status === 'correct'
@@ -95,13 +98,39 @@ function sampleMetrics(sample) {
   for (const key of metricKeys) {
     if (!Object.hasOwn(sample.metrics, key)) continue;
     const value = sample.metrics[key];
-    if (!Number.isFinite(value) || value < 0 || (key !== 'elapsedMs' && !Number.isSafeInteger(value))) throw new Error('invalid metric: ' + key);
+    if (!Number.isFinite(value) || value < 0 || (!['elapsedMs', 'firstTextMs'].includes(key) && !Number.isSafeInteger(value))) throw new Error('invalid metric: ' + key);
     result[key] = value;
   }
   return result;
 }
 
 // Raw mode evaluates captured normal-task outputs, never resubmits them.
+function observedDelivery(sample, c) {
+  const first = sample.firstResponse;
+  if (first !== undefined && typeof first !== 'string') throw new Error('firstResponse must be a string');
+  let firstStatus = 'unknown';
+  if (first !== undefined) {
+    try { firstStatus = isDeepStrictEqual(JSON.parse(first), c.expected) ? 'correct' : 'incorrect'; }
+    catch { firstStatus = 'invalid-json'; }
+  }
+  const repeats = sample.repeatedExecutions;
+  if (repeats !== undefined && (!Number.isSafeInteger(repeats) || repeats < 0)) throw new Error('invalid repeatedExecutions');
+  return { firstStatus, repeatedExecutions: repeats ?? null };
+}
+
+function deliverySummary(rows, key) {
+  const observed = rows.map(r => r[key]);
+  const first = observed.filter(r => r.delivery && r.delivery.firstStatus !== 'unknown');
+  const final = observed.filter(r => r.status !== 'missing');
+  const repeats = observed.filter(r => r.delivery?.repeatedExecutions != null);
+  const rate = (items, predicate) => items.length ? items.filter(predicate).length / items.length : null;
+  return {
+    first: { observed: first.length, correctRate: rate(first, r => r.delivery.firstStatus === 'correct') },
+    final: { observed: final.length, correctRate: rate(final, r => r.status === 'correct') },
+    repeatedExecutions: { observed: repeats.length, total: repeats.length ? repeats.reduce((n, r) => n + r.delivery.repeatedExecutions, 0) : null },
+  };
+}
+
 function evaluateRaw(input) {
   const groups = ['baseline', 'candidate'];
   for (const key of groups) {
@@ -116,14 +145,23 @@ function evaluateRaw(input) {
     const sample = group[c.id];
     if (!sample || typeof sample !== 'object' || typeof sample.response !== 'string') throw new Error('sample requires response string: ' + c.id);
     const metrics = sampleMetrics(sample);
+    const delivery = observedDelivery(sample, c);
     const lifecycle = sample.events === undefined ? null : diagnoseEvents(sample.events);
-    if (lifecycle && lifecycle.outcome !== 'completed') return { status: 'not-completed', lifecycle };
+    if (lifecycle && lifecycle.outcome !== 'completed') return { status: 'not-completed', lifecycle, delivery };
     let parsed;
     try { parsed = JSON.parse(sample.response); }
-    catch { return { status: 'invalid-json', lifecycle }; }
-    return { status: isDeepStrictEqual(parsed, c.expected) ? 'correct' : 'incorrect', lifecycle, metrics };
+    catch { return { status: 'invalid-json', lifecycle, delivery }; }
+    return { status: isDeepStrictEqual(parsed, c.expected) ? 'correct' : 'incorrect', lifecycle, metrics, delivery };
   }
-  const rows = cases.map(c => ({ id: c.id, baseline: score(input.baseline, c), candidate: score(input.candidate, c) }));
+  const rows = cases.map(c => {
+    const row = { id: c.id };
+    for (const group of groups) {
+      const result = score(input[group], c), sample = input[group][c.id];
+      row[group] = { ...result, diagnosis: sampleDiagnosis(sample, result.status, result.lifecycle),
+        ...(sample?.events ? { context: contextIntegrity(sample.events) } : {}) };
+    }
+    return row;
+  });
   const states = ['correct', 'incorrect', 'invalid-json', 'not-completed', 'missing'];
   const counts = key => Object.fromEntries(states.map(s => [s, rows.filter(r => r[key].status === s).length]));
   const paired = rows.filter(r => r.baseline.status !== 'missing' && r.candidate.status !== 'missing');
@@ -131,7 +169,7 @@ function evaluateRaw(input) {
     pairedCases: paired.length,
     pairedImproved: paired.filter(r => r.baseline.status !== 'correct' && r.candidate.status === 'correct').length,
     pairedRegressed: paired.filter(r => r.baseline.status === 'correct' && r.candidate.status !== 'correct').length,
-    efficiency: efficiency(rows), rows };
+    efficiency: efficiency(rows), delivery: { baseline: deliverySummary(rows, 'baseline'), candidate: deliverySummary(rows, 'candidate') }, diagnostics: Object.fromEntries(groups.map(group => [group, diagnosticSummary(rows, group, cases.length)])), rows };
 }
 
 
@@ -205,7 +243,14 @@ function rawSelfTest() {
   assert.equal(measured.efficiency.toolCalls.delta, -2);
   assert.equal(measured.efficiency.elapsedMs.pairedCases, 0);
   assert.throws(() => evaluateRaw({ baseline: { arithmetic: { response: '94', metrics: { totalTokens: -1 } } }, candidate: {} }), /invalid metric/);
-  console.log('Raw evaluation and event diagnostics: 21 assertions passed');
+  const observed = evaluateRaw({ baseline: { arithmetic: { response: '94', firstResponse: '93', repeatedExecutions: 2 }, sort: { response: '[]' } }, candidate: { arithmetic: { response: '94', firstResponse: '94', repeatedExecutions: 0 } } });
+  assert.deepEqual(observed.delivery.baseline.first, { observed: 1, correctRate: 0 });
+  assert.deepEqual(observed.delivery.baseline.final, { observed: 2, correctRate: 0.5 });
+  assert.deepEqual(observed.delivery.candidate.repeatedExecutions, { observed: 1, total: 0 });
+  assert.equal(observed.delivery.baseline.repeatedExecutions.total, 2);
+  assert.equal(evaluateRaw({ baseline: {}, candidate: {} }).delivery.baseline.first.correctRate, null);
+  assert.throws(() => evaluateRaw({ baseline: { arithmetic: { response: '94', repeatedExecutions: -1 } }, candidate: {} }), /invalid repeatedExecutions/);
+  console.log('Raw evaluation and event diagnostics: assertions passed');
 }
 
 function selfTest() {
@@ -224,7 +269,9 @@ function selfTest() {
   console.log('Task quality evaluator: 10 assertions passed');
 }
 
-try {
+export { cases, evaluateRaw, evaluateMatrix, diagnoseEvents, qualityReportSummary };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) try {
   const arg = process.argv[2];
   if (arg === '--cases') console.log(JSON.stringify(cases.map(({ id, prompt }) => ({ id, prompt })), null, 2));
   else if (arg === '--self-test') { selfTest(); rawSelfTest(); }

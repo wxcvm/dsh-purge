@@ -111,3 +111,24 @@ test('normal technical diagnostics, quotation and no-change results are scored b
     assert.equal(report.rows.find(r => r.id === 'no-change').candidate.status, 'incorrect');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('observed delivery metrics preserve unknown coverage and separate repeated executions from duplicate events', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'purge-observed-'));
+  try {
+    const input = join(dir, 'capture.json');
+    const end = { seq: 2, type: 'turn/end', data: { reason: { kind: 'completed' } } };
+    writeFileSync(input, JSON.stringify({
+      baseline: { arithmetic: { response: '94', firstResponse: '93', repeatedExecutions: 0, events: [end, end] } },
+      candidate: { arithmetic: { response: '94' } },
+    }));
+    const result = run('--raw', input);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.deepEqual(report.delivery.baseline.first, { observed: 1, correctRate: 0 });
+    assert.deepEqual(report.delivery.baseline.final, { observed: 1, correctRate: 1 });
+    assert.deepEqual(report.delivery.baseline.repeatedExecutions, { observed: 1, total: 0 });
+    assert.deepEqual(report.delivery.candidate.first, { observed: 0, correctRate: null });
+    assert.deepEqual(report.delivery.candidate.repeatedExecutions, { observed: 0, total: null });
+    assert.equal(report.rows.find(r => r.id === 'arithmetic').baseline.lifecycle.duplicates, 1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

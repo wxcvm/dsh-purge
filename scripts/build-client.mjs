@@ -89,6 +89,15 @@ const workspaceBeginAt = generated.indexOf(WORKSPACE_BEGIN);
 const workspaceEndAt = generated.indexOf(WORKSPACE_END);
 if (workspaceBeginAt < 0 || workspaceEndAt < workspaceBeginAt) throw new Error("workspace markers missing or out of order");
 generated = generated.slice(0, workspaceBeginAt) + workspaceFragment + generated.slice(workspaceEndAt + WORKSPACE_END.length);
+// Shared quality report projection and native runtime panel have one source each.
+const runtimeBegin = "/* __DSH_PURGE_RUNTIME_BEGIN__ */";
+const runtimeEnd = "/* __DSH_PURGE_RUNTIME_END__ */";
+const runtimeBody = readFileSync(join(root, "lib", "task-quality-report.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "runtime-panel.js"), "utf8");
+const runtimeAt = generated.indexOf(runtimeBegin), runtimeEndAt = generated.indexOf(runtimeEnd);
+if (runtimeAt < 0 || runtimeEndAt < runtimeAt) throw new Error("runtime panel markers missing");
+generated = generated.slice(0, runtimeAt) + runtimeBegin + "\n" + runtimeBody.replace(/\r\n/g, "\n")
+  + runtimeEnd + generated.slice(runtimeEndAt + runtimeEnd.length);
 // Normalize line endings so a Windows checkout does not change the build identity.
 // FNV-1a is an identity for stale UI detection, not a security signature.
 const buildMarker = /const CLIENT_BUILD_ID = "[^"]*";/;

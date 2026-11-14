@@ -1,6 +1,6 @@
 {
   "name": "dsh-purge",
-  "version": "1.1.92-wxcvm.7-beta.8",
+  "version": "1.1.92-wxcvm.7-beta.9",
   "description": "DeepSeek Harness extension for host configuration, model evaluation, security assessment, and task management.",
   "type": "module",
   "main": "lib/index.js",
@@ -86,8 +86,8 @@
     },
     "install": {
       "preferred": "tarball",
-      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.7-beta.8",
-      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.7-beta.8",
+      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.7-beta.9",
+      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.7-beta.9",
       "git": "https://github.com/wxcvm/dsh-purge.git"
     }
   },

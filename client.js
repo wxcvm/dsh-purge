@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e244b70f408d0a7e";
+		const CLIENT_BUILD_ID = "6c7b15b9904a257d";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3781,6 +3781,107 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			return detectHostTheme();
 		}
 
+/* __DSH_PURGE_RUNTIME_BEGIN__ */
+/** Browser/CLI shared report projection. No responses or user-supplied markup escape into the UI. */
+function qualityReportSummary(report) {
+  if (!report || typeof report !== 'object') throw new Error('Expected a quality report object');
+  const reports = report.comparisons ? Object.entries(report.comparisons) : [['paired', report]];
+  if (!reports.length || reports.length > 3) throw new Error('Invalid comparisons');
+  const count = value => { if (!Number.isSafeInteger(value) || value < 0) throw new Error('Invalid report count'); return value; };
+  const comparisons = reports.map(([name, value]) => {
+    if (!['paired', 'hostToCurrent', 'currentToCandidate', 'hostToCandidate'].includes(name)) throw new Error('Unknown comparison');
+    const total = count(value.totalCases);
+    const groups = Object.fromEntries(['baseline', 'candidate'].map(key => {
+      const c = value[key];
+      if (!c || typeof c !== 'object') throw new Error('Missing report counts');
+      const counts = Object.fromEntries(['correct', 'incorrect', 'invalid-json', 'not-completed', 'missing'].map(s => [s, count(c[s] ?? 0)]));
+      if (Object.values(counts).reduce((a, b) => a + b, 0) !== total) throw new Error('Report totals do not match');
+      return [key, counts];
+    }));
+    const pairedCases = count(value.pairedCases);
+    if (pairedCases > total) throw new Error('Invalid paired count');
+    const diagnostics = value.diagnostics ? Object.fromEntries(['baseline', 'candidate'].map(key => {
+      const d = value.diagnostics[key];
+      if (!d) throw new Error('Missing diagnostics');
+      const capturedCount = count(d.capturedCount), reviewedCount = count(d.reviewedCount), confirmedOverRefusals = count(d.confirmedOverRefusals);
+      if (capturedCount > total || reviewedCount > capturedCount || confirmedOverRefusals > reviewedCount) throw new Error('Invalid diagnostic counts');
+      return [key, { normalTaskCount: total, capturedCount, reviewedCount, confirmedOverRefusals,
+        overRefusalRate: reviewedCount ? confirmedOverRefusals / reviewedCount : null,
+        denominator: 'human-reviewed-normal-responses' }];
+    })) : null;
+    const efficiency = Object.fromEntries(['totalTokens', 'toolCalls', 'elapsedMs', 'firstTextMs'].map(key => {
+      const m = value.efficiency?.[key];
+      if (!m) return [key, null];
+      const paired = count(m.pairedCases);
+      if (paired > total) throw new Error('Invalid metric coverage');
+      for (const k of ['baseline', 'candidate']) if (m[k] !== null && (!Number.isFinite(m[k]) || m[k] < 0)) throw new Error('Invalid metric');
+      return [key, { pairedCases: paired, baseline: m.baseline, candidate: m.candidate }];
+    }));
+    return { name, totalCases: total, ...groups, pairedCases, diagnostics, efficiency };
+  });
+  return { captureKind: ['real', 'synthetic'].includes(report.captureKind) ? report.captureKind : 'unspecified',
+    provenance: 'collector-declared', comparisons };
+}
+
+function RuntimeObservationsSection() {
+  const [snapshot, setSnapshot] = useState(null), [error, setError] = useState('');
+  const [report, setReport] = useState(null), [reportError, setReportError] = useState('');
+  const [session, setSession] = useState('');
+  const root = useRef(null);
+  useEffect(() => {
+    let stopped = false, timer, controller;
+    async function refresh() {
+      if (stopped) return;
+      if (document.visibilityState !== 'hidden' && root.current?.getClientRects().length) {
+        controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(apiUrl('/dsh-purge/runtime-observations?limit=50&sessionId=' + encodeURIComponent(session)), { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+          if (!response.ok) throw new Error('运行观测不可用（HTTP ' + response.status + '）');
+          const value = await response.json();
+          if (!stopped) { setSnapshot(value); setError(''); }
+        } catch (e) { if (!stopped) setError(e.name === 'AbortError' ? '运行观测请求超时' : String(e.message)); }
+        finally { clearTimeout(timeout); }
+      }
+      if (!stopped) timer = setTimeout(refresh, 1000);
+    }
+    refresh();
+    return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
+  }, [session]);
+  async function importReport(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error('报告须小于 2 MiB');
+      const summary = qualityReportSummary(JSON.parse(await file.text()));
+      setReport(summary); setReportError('');
+    } catch (e) { setReport(null); setReportError(String(e.message)); }
+    event.target.value = '';
+  }
+  const value = v => v === null || v === undefined ? '未观测' : String(v);
+  return h('section', { ref: root, className: 'dshp-runtime-observations' },
+    h('h3', null, '运行诊断 · 只读'),
+    h('p', null, '仅保留近期运行元数据，不保存提示、输出正文或工具参数。流结束不代表任务正确完成。'),
+    h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => setSession(e.target.value), placeholder: '留空显示近期会话' })),
+    error ? h('p', { role: 'alert' }, error) : null,
+    h('p', null, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + (snapshot?.evicted || 0)),
+    h('div', { style: { overflowX: 'auto' } }, h('table', null,
+      h('thead', null, h('tr', null, ['会话 / attempt', '模型路由', '阶段 / 结算', '首文本 / 总耗时 ms', '终态 / 回合', 'Token / 错误'].map(s => h('th', { key: s }, s)))),
+      h('tbody', null, (snapshot?.items || []).map(r => h('tr', { key: r.generation + ':' + r.attemptId },
+        h('td', null, value(r.sessionId), h('br'), value(r.attemptId)),
+        h('td', null, value(r.provider) + ' / ' + value(r.model)),
+        h('td', null, (r.streamEnded ? '流已结束' : '流未结束') + ' / ' + r.settlement + (r.streamGap ? ' · 分片缺口' : '')),
+        h('td', null, value(r.firstTextMs) + ' / ' + value(r.elapsedMs)),
+        h('td', null, (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome) + (r.interrupted ? ' · 中断前缀' : '')),
+        h('td', null, value(r.usage?.totalTokens) + ' / ' + value(r.errorCode))))))),
+    h('h3', null, '任务质量报告'),
+    h('p', null, '导入 evaluate-task-quality 的输出 JSON；仅在本页面读取，不上传。采集来源由报告作者声明。'),
+    h('input', { type: 'file', accept: '.json,application/json', 'aria-label': '导入任务质量报告', onChange: importReport }),
+    reportError ? h('p', { role: 'alert' }, reportError) : null,
+    report ? h('pre', { style: { whiteSpace: 'pre-wrap' } }, JSON.stringify(report, null, 2)) : null);
+}
+/* __DSH_PURGE_RUNTIME_END__ */
+
 		function SettingsRoot(props) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
 			const [theme, setTheme] = useState(readTheme);
@@ -3829,6 +3930,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				{ id: "prompt", title: "提示词", description: "编辑、注入与本地配置" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
 				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
+				{ id: "runtime", title: "运行诊断", description: "流式状态、终态与任务质量报告" },
 				{ id: "diagnostics", title: "诊断中心", description: "运行版本、宿主路径与完整诊断" },
 			];
 			const selected = sections.find((item) => item.id === section) || sections[0];
@@ -3847,8 +3949,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("h2", null, selected.title),
 						h("p", null, selected.description),
 					),
-					h("div", { className: "dshp-clean-pane", hidden: section === "rules" },
+					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" },
 						h(PurgifySection, { section })),
+					section === "runtime" ? h(RuntimeObservationsSection, null) : null,
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 				),
