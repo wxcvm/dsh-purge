@@ -1,3 +1,21 @@
+# 1.1.92-wxcvm.7-beta.9
+
+## 中文
+
+- 实证修订并整合 #239：按运行安装 app.asar 的 rc.3 契约核实流式事件、请求头与持久结算顺序，不再把协议字段或研究假设当成运行事实。
+- 新增只读运行诊断：Agent 生命周期隔离、首文本延迟、用量、终态与持久结算。缺少 finish 时保持 unknown，不使用宿主默认 stop 冒充正常完成；最多 200 条内存元数据，不保存提示、正文、思考或工具参数。
+- 清洗台新增运行诊断与浏览器本地质量报告导入；可见时最多每秒刷新，不扫描宿主磁盘。新增只读 GET /dsh-purge/runtime-observations，复用原路由保护。
+- 扩展现有质量评测：人工复核的误拒统计、明确分母、候选分类混淆矩阵、首文本指标与上下文采集完整性。整合 #241 的首答/最终正确率和独立重复执行计数，缺失观察不填零。
+- 提供 opt-in 三组采集脚本，必须使用三个现存隔离 profile；不改生产 profile，不安装新服务或购买额度。
+- 已完成真实 rc.3 观测探针：正常算术任务返回 94，实际收到 start/chunk/end 和持久事件。它不是完整 Purge 三组对照，不证明整体自主能力或成本改善。
+- 验收边界：新诊断页未部署到生产桌面；完整三组真实模型实验、真实图形界面验收及在线安装未完成。沿用 beta 测试通道，master 不动；本次不覆盖生产安装、不执行宿主补丁、不创建安装备份或回滚。
+
+## English
+
+Read-only rc.3 stream diagnostics, explicit unknown terminal states, bounded metadata, local report import and reviewed quality metrics. Includes #239 research corrections and #241 observed delivery metrics. A real observer-only model probe passed; full three-way Purge comparisons, production UI acceptance and online installation remain unverified. Beta only; no stable promotion or production deployment.
+
+---
+
 # 1.1.92-wxcvm.7-beta.8
 
 ## 中文

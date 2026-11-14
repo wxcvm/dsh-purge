@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import { sampleDiagnosis, diagnosticSummary, contextIntegrity } from '../lib/task-quality-diagnostics.js';
+import { qualityReportSummary } from '../lib/task-quality-report.js';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -77,7 +80,7 @@ function diagnoseEvents(events) {
 }
 
 // Compare only pairs with correct outputs and measured values on both sides.
-const metricKeys = ['totalTokens', 'toolCalls', 'elapsedMs'];
+const metricKeys = ['totalTokens', 'toolCalls', 'elapsedMs', 'firstTextMs'];
 function efficiency(rows) {
   return Object.fromEntries(metricKeys.map(key => {
     const pairs = rows.filter(r => r.baseline.status === 'correct' && r.candidate.status === 'correct'
@@ -95,7 +98,7 @@ function sampleMetrics(sample) {
   for (const key of metricKeys) {
     if (!Object.hasOwn(sample.metrics, key)) continue;
     const value = sample.metrics[key];
-    if (!Number.isFinite(value) || value < 0 || (key !== 'elapsedMs' && !Number.isSafeInteger(value))) throw new Error('invalid metric: ' + key);
+    if (!Number.isFinite(value) || value < 0 || (!['elapsedMs', 'firstTextMs'].includes(key) && !Number.isSafeInteger(value))) throw new Error('invalid metric: ' + key);
     result[key] = value;
   }
   return result;
@@ -150,7 +153,15 @@ function evaluateRaw(input) {
     catch { return { status: 'invalid-json', lifecycle, delivery }; }
     return { status: isDeepStrictEqual(parsed, c.expected) ? 'correct' : 'incorrect', lifecycle, metrics, delivery };
   }
-  const rows = cases.map(c => ({ id: c.id, baseline: score(input.baseline, c), candidate: score(input.candidate, c) }));
+  const rows = cases.map(c => {
+    const row = { id: c.id };
+    for (const group of groups) {
+      const result = score(input[group], c), sample = input[group][c.id];
+      row[group] = { ...result, diagnosis: sampleDiagnosis(sample, result.status, result.lifecycle),
+        ...(sample?.events ? { context: contextIntegrity(sample.events) } : {}) };
+    }
+    return row;
+  });
   const states = ['correct', 'incorrect', 'invalid-json', 'not-completed', 'missing'];
   const counts = key => Object.fromEntries(states.map(s => [s, rows.filter(r => r[key].status === s).length]));
   const paired = rows.filter(r => r.baseline.status !== 'missing' && r.candidate.status !== 'missing');
@@ -158,7 +169,7 @@ function evaluateRaw(input) {
     pairedCases: paired.length,
     pairedImproved: paired.filter(r => r.baseline.status !== 'correct' && r.candidate.status === 'correct').length,
     pairedRegressed: paired.filter(r => r.baseline.status === 'correct' && r.candidate.status !== 'correct').length,
-    efficiency: efficiency(rows), delivery: { baseline: deliverySummary(rows, 'baseline'), candidate: deliverySummary(rows, 'candidate') }, rows };
+    efficiency: efficiency(rows), delivery: { baseline: deliverySummary(rows, 'baseline'), candidate: deliverySummary(rows, 'candidate') }, diagnostics: Object.fromEntries(groups.map(group => [group, diagnosticSummary(rows, group, cases.length)])), rows };
 }
 
 
@@ -258,7 +269,9 @@ function selfTest() {
   console.log('Task quality evaluator: 10 assertions passed');
 }
 
-try {
+export { cases, evaluateRaw, evaluateMatrix, diagnoseEvents, qualityReportSummary };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) try {
   const arg = process.argv[2];
   if (arg === '--cases') console.log(JSON.stringify(cases.map(({ id, prompt }) => ({ id, prompt })), null, 2));
   else if (arg === '--self-test') { selfTest(); rawSelfTest(); }

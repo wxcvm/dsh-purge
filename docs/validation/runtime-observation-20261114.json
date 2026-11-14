@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-14",
+  "host": "0.2.2-rc.3",
+  "codeBaseline": "e148ec1",
+  "scope": "runtime-observer-only-not-full-purge-comparison",
+  "frames": {
+    "start": 1,
+    "chunk": 27,
+    "end": 1
+  },
+  "sequence": [
+    "request/header",
+    "request/context",
+    "stream/start",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "stream/chunk",
+    "assistant/message",
+    "stream/end",
+    "turn/end"
+  ],
+  "modelRoute": "deepseek-account/deepseek-flash",
+  "firstTextMs": 845,
+  "elapsedMs": 848,
+  "finishObserved": true,
+  "finish": "stop",
+  "providerReason": null,
+  "turnOutcome": "completed",
+  "usage": {
+    "inputTokens": 6630,
+    "outputTokens": 22,
+    "totalTokens": 6652,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "reasoningTokens": null
+  },
+  "answer": "94",
+  "cliElapsedMs": 5808,
+  "localRegression": {
+    "total": 788,
+    "pass": 785,
+    "fail": 1,
+    "skip": 2,
+    "failure": "existing local Windows packaged ACL preview read errors (partial != complete)",
+    "capture": "earlier in-progress snapshot; see finalLocalRegression"
+  },
+  "pending": [
+    "full three-profile real Purge comparison",
+    "production runtime page GUI acceptance",
+    "online installation"
+  ],
+  "productionInstallChanged": false,
+  "stableChanged": false,
+  "finalLocalRegression": {
+    "codeHead": "de8d1130651b64da70aac3363fe1f2ec76fcb14e",
+    "total": 790,
+    "pass": 787,
+    "fail": 1,
+    "skip": 2,
+    "rc2Contracts": {
+      "pass": 9,
+      "fail": 0
+    },
+    "syntaxModules": 331,
+    "generatedClientMatches": true,
+    "failure": "existing local Windows packaged ACL preview read errors (partial != complete)"
+  }
+}
