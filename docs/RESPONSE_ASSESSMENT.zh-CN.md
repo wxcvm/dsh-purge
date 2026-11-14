@@ -50,3 +50,5 @@ node scripts/run-compat-tests.mjs 0.2.2-rc.3
 新增界面列和本地报告投影已做渲染逻辑测试；因不覆盖生产安装，beta.10 原生桌面端到端展示、在线安装和长期实际流量仍未验收。真实安装状态应独立核对，不能用源码测试代替。
 
 本机最终回归：rc.3 共 876 项，873 通过、2 跳过，1 项是 beta.9 已存在的 Windows ACL 预览读取失败（`aclReadErrors=2`）；未计为通过。rc.2 宿主契约 9/9 通过。专项 145 项，144 通过、1 项因未提供独立宿主 fixture 跳过；全量 rc.3 已覆盖对应 fixture。发布还须 exact-head Linux/Windows 兼容 CI 通过。
+
+非门禁 Pending specifications 实际测试仍失败：`test-pending/workflow-coordination.mjs` 引用尚未导出的 `liveRunningChildren`，运行在模块加载阶段停止。该规格文件与 `lib/redteam/tools.js` 相对 beta.9 的 Git blob 完全相同，属于已有待实现规格；workflow 因 continue-on-error 显示成功，不代表规格测试通过。本次不扩展该无关作战能力。
