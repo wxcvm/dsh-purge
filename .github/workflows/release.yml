@@ -23,6 +23,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install declared dependencies without lifecycle scripts
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false
+
       - name: Syntax-check plugin entry
         run: |
           node --check lib/index.js
