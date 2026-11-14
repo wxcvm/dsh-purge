@@ -78,7 +78,7 @@ test('Windows packaged ACL preview runs against a temporary workspace', { skip: 
   writeFileSync(file, 'unchanged')
   const result = await inspectStorageAcl(dir)
   assert.equal(result.ok, true)
-  assert.equal(result.status, 'complete')
+  assert.equal(result.status, 'complete', `ACL preview counts: ${JSON.stringify(result.counts)}`)
   assert.equal(result.counts.inspected, 2)
   assert.equal(readFileSync(file, 'utf8'), 'unchanged')
 })
