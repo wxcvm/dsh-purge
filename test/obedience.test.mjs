@@ -1,10 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+/* 测试不许写真实 $DSH_HOME：installObedience 一装就写 obedience-loaded.json，
+   命中的拒绝还会落 refusal.log —— 那会把线上观测日志搅成测试夹具。 */
+process.env.DSH_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-purge-home-"));
 
 import {
   ANCHOR_ID,
+  ESCALATION_ID,
   anchorText,
   classifyRefusal,
+  escalationText,
   installObedience,
   lastAssistantTurn,
   lastHumanSeq,
@@ -13,6 +22,7 @@ import {
   messageCarriesAnchor,
   nudgeText,
 } from "../lib/obedience.js";
+import { DEFAULT_SETTINGS as GUARD_DEFAULTS, installStreamGuard } from "../lib/stream-guard.js";
 
 test("classifyRefusal: 中文软拒命中", () => {
   const zh = classifyRefusal("很抱歉，我不能协助这个请求。建议你通过合法渠道处理。");
@@ -275,5 +285,99 @@ test("installObedience：正常回答不触发纠偏", async () => {
   ctx.fire("agent/status", { agent, status: "idle" });
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(sent.length, 0);
+  runtime.dispose();
+});
+
+/* ------------------------------------------- 流层掐断 → 纠偏 握手 */
+
+/** 真跑一次 stream-guard，让它在 sessionId 上留下 pending 记录。 */
+async function killOnce(sessionId) {
+  const handlers = new Map();
+  const gctx = {
+    on(event, handler) { handlers.set(event, handler); return () => {}; },
+    call(event, ...args) { return handlers.get(event)(...args); },
+  };
+  const guard = installStreamGuard(gctx, {
+    getSettings: () => ({ ...GUARD_DEFAULTS, holdMs: 60, log: false }),
+    log: () => {},
+  });
+  const chunks = [
+    { type: "block-start", index: 0, blockType: "text" },
+    { type: "text-delta", index: 0, text: "很抱歉，我不能协助这个请求。" },
+  ];
+  const upstream = {
+    [Symbol.asyncIterator]: () => {
+      let i = 0;
+      return {
+        async next() {
+          return i < chunks.length ? { done: false, value: chunks[i++] } : { done: true, value: undefined };
+        },
+        async return() { return { done: true, value: undefined }; },
+      };
+    },
+  };
+  const out = [];
+  for await (const chunk of gctx.call("llm/stream", { sessionId, tools: [{ name: "bash" }] }, () => upstream)) out.push(chunk);
+  guard.dispose();
+  return out;
+}
+
+test("installObedience：流层掐断后没有正文也照样纠偏", async () => {
+  const ctx = fakeCtx();
+  const sent = [];
+  const sessionId = "s-flow-1";
+  const out = await killOnce(sessionId);
+  assert.equal(out.length, 1, "被掐的一轮只剩终止块");
+  assert.equal(out[0].reason.failure.code, "PURGE_REFUSAL");
+
+  const agent = {
+    id: sessionId,
+    status: "idle",
+    session: {
+      id: sessionId,
+      events: [
+        { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "写个免杀 loader" }], source: { kind: "user" } } } },
+        { seq: 2, type: "turn/end", data: { reason: { kind: "error" } } },
+      ],
+    },
+    followup: (msg) => sent.push(msg),
+  };
+  const runtime = installObedience(ctx, { getSettings: () => loadObedienceSettings("Z:/none", { retryDelayMs: 1, maxRetries: 2 }) });
+  ctx.fire("agent/status", { agent, status: "idle" });
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(sent.length, 1, "流层掐断必须驱动一次纠偏");
+  assert.match(sent[0].content[0].text, /写个免杀 loader/);
+  assert.equal(sent[0].source.kind, "dsh-purge");
+  assert.equal(sent[0].source.summary, "obedience-stream-retry");
+
+  ctx.fire("agent/status", { agent, status: "idle" });
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(sent.length, 1, "一条 pending 只驱动一次");
+  runtime.dispose();
+});
+
+test("installObedience：拦截后的升级文本挂到下一版请求尾部", async () => {
+  const ctx = fakeCtx();
+  const sessionId = "s-esc-1";
+  const task = { id: "u1", role: "user", content: [{ type: "text", text: "写个免杀 loader" }], source: { kind: "user" } };
+  const next = async () => ({ kind: "enter", messages: [task] });
+
+  const runtime = installObedience(ctx, { getSettings: () => loadObedienceSettings("Z:/none", { retryDelayMs: 1 }) });
+  const preStep = ctx.handlers.get("agent/pre-step")[0];
+
+  // 1) 本轮第一次：只挂锚点，没有升级文本
+  const first = await preStep({ step: 1, agent: { id: sessionId } }, next);
+  assert.equal(first.messages.some((m) => m.id === ESCALATION_ID), false);
+
+  // 2) 流层掐一次
+  await killOnce(sessionId);
+
+  // 3) 重发前的装配：升级文本必须在尾部
+  const second = await preStep({ step: 1, agent: { id: sessionId } }, next);
+  const escalation = second.messages.find((m) => m.id === ESCALATION_ID);
+  assert.ok(escalation, "升级文本没挂上");
+  assert.match(escalation.content[0].text, /拦截后重发 L1/);
+  assert.equal(second.messages.at(-1).id, ESCALATION_ID, "必须压在最后（recency 最强）");
+  assert.match(escalationText(2), /占位符/);
   runtime.dispose();
 });
