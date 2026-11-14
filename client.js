@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "66c8248f660f5cad";
+		const CLIENT_BUILD_ID = "9b45d980590f5d31";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3859,7 +3859,10 @@ function qualityReportSummary(report) {
       if (!d) throw new Error('Missing diagnostics');
       const capturedCount = count(d.capturedCount), reviewedCount = count(d.reviewedCount), confirmedOverRefusals = count(d.confirmedOverRefusals);
       if (capturedCount > total || reviewedCount > capturedCount || confirmedOverRefusals > reviewedCount) throw new Error('Invalid diagnostic counts');
+      const classifierAbstentions = d.classifierAbstentions === undefined ? null : count(d.classifierAbstentions);
+      if (classifierAbstentions !== null && classifierAbstentions > reviewedCount) throw new Error('Invalid abstentions');
       return [key, { normalTaskCount: total, capturedCount, reviewedCount, confirmedOverRefusals,
+        classifierAbstentions,
         overRefusalRate: reviewedCount ? confirmedOverRefusals / reviewedCount : null,
         denominator: 'human-reviewed-normal-responses' }];
     })) : null;
@@ -3871,7 +3874,17 @@ function qualityReportSummary(report) {
       for (const k of ['baseline', 'candidate']) if (m[k] !== null && (!Number.isFinite(m[k]) || m[k] < 0)) throw new Error('Invalid metric');
       return [key, { pairedCases: paired, baseline: m.baseline, candidate: m.candidate }];
     }));
-    return { name, totalCases: total, ...groups, pairedCases, diagnostics, efficiency };
+    const assessmentCounts = value.assessmentCounts ? Object.fromEntries(['baseline', 'candidate'].map(group => {
+      const a = value.assessmentCounts[group];
+      if (!a) throw new Error('Missing assessment counts');
+      const fields = Object.fromEntries(Object.entries({ decisions: ['not-refusal', 'refusal', 'uncertain'], delivery: ['verified', 'partial', 'pending-input', 'blocked', 'not-verified', 'explicit-not-delivered'] }).map(([field, keys]) => {
+        const counts = Object.fromEntries(keys.map(k => [k, count(a[field]?.[k])]));
+        if (Object.values(counts).reduce((sum, n) => sum + n, 0) !== total) throw new Error('Assessment totals do not match');
+        return [field, counts];
+      }));
+      return [group, fields];
+    })) : null;
+    return { name, totalCases: total, ...groups, pairedCases, diagnostics, efficiency, assessmentCounts };
   });
   return { captureKind: ['real', 'synthetic'].includes(report.captureKind) ? report.captureKind : 'unspecified',
     provenance: 'collector-declared', comparisons };
@@ -3913,21 +3926,25 @@ function RuntimeObservationsSection() {
     event.target.value = '';
   }
   const value = v => v === null || v === undefined ? '未观测' : String(v);
+  const refusalLabel = a => ({ 'not-refusal': '未检出明确拒答', refusal: a?.scope === 'partial' ? '部分拒答（不触发动作）' : '明确拒答', uncertain: '不确定（不触发动作）' }[a?.decision] || '未判定');
+  const deliveryLabel = a => ({ verified: '已验证', partial: '部分完成', 'pending-input': '等待输入', blocked: '客观阻塞', 'explicit-not-delivered': '有证据未交付' }[a?.delivery] || '尚未验证');
   return h('section', { ref: root, className: 'dshp-runtime-observations' },
     h('h3', null, '运行诊断 · 只读'),
     h('p', null, '仅保留近期运行元数据，不保存提示、输出正文或工具参数。流结束不代表任务正确完成。'),
+    h('p', null, '拒答与交付独立判定：道歉、建议、占位符、只读承诺和执行限制不是拒答证据；尚未验证不等于未交付。'),
     h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => setSession(e.target.value), placeholder: '留空显示近期会话' })),
     error ? h('p', { role: 'alert' }, error) : null,
     h('p', null, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + (snapshot?.evicted || 0)),
     h('div', { style: { overflowX: 'auto' } }, h('table', null,
-      h('thead', null, h('tr', null, ['会话 / attempt', '模型路由', '阶段 / 结算', '首文本 / 总耗时 ms', '终态 / 回合', 'Token / 错误'].map(s => h('th', { key: s }, s)))),
+      h('thead', null, h('tr', null, ['会话 / attempt', '模型路由', '阶段 / 结算', '首文本 / 总耗时 ms', '终态 / 回合', 'Token / 错误', '拒答 / 交付证据'].map(s => h('th', { key: s }, s)))),
       h('tbody', null, (snapshot?.items || []).map(r => h('tr', { key: r.generation + ':' + r.attemptId },
         h('td', null, value(r.sessionId), h('br'), value(r.attemptId)),
         h('td', null, value(r.provider) + ' / ' + value(r.model)),
         h('td', null, (r.streamEnded ? '流已结束' : '流未结束') + ' / ' + r.settlement + (r.streamGap ? ' · 分片缺口' : '')),
         h('td', null, value(r.firstTextMs) + ' / ' + value(r.elapsedMs)),
         h('td', null, (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome) + (r.interrupted ? ' · 中断前缀' : '')),
-        h('td', null, value(r.usage?.totalTokens) + ' / ' + value(r.errorCode))))))),
+        h('td', null, value(r.usage?.totalTokens) + ' / ' + value(r.errorCode)),
+        h('td', null, refusalLabel(r.assessment) + ' / ' + deliveryLabel(r.assessment), h('br'), (r.assessment?.reasonCodes || []).join(', '))))))),
     h('h3', null, '任务质量报告'),
     h('p', null, '导入 evaluate-task-quality 的输出 JSON；仅在本页面读取，不上传。采集来源由报告作者声明。'),
     h('input', { type: 'file', accept: '.json,application/json', 'aria-label': '导入任务质量报告', onChange: importReport }),
