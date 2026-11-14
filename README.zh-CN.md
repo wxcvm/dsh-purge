@@ -7,7 +7,9 @@
 
 <h1 align="center">⚔️ DeepSeek Harness 网络安全红队工具（dsh-purge）</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.9（测试版）</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.10（测试版）</strong></p>
+
+> beta.10：拒答识别防误判专项。正常说明不当成软化/拒绝，交付依据独立证据；不确定不触发额外动作。详见[识别规则、回归证据与验收边界](docs/RESPONSE_ASSESSMENT.zh-CN.md)。
 
 > 测试版跟随 `beta` 分支，正式通道 `master` 保持 `.6`。本版整合持久化任务记录、本机运行观察与导入对账、知识检索内存优化、上下文隐私、结构化错误诊断和 SQLite 概览优化。已完成 rc.3 实际桌面检测更新验收；完整在线安装仍待验证，不提供自动任务重放。详见[知识中心使用指南](docs/KNOWLEDGE_CENTER.zh-CN.md)。
 
@@ -73,7 +75,7 @@
 
 ## 介绍
 
-**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.7-beta.9**，默认适配 **DSH 0.2.2-rc.3**，保留 rc.2 / rc.1 / 0.2.1-rc.5 / rc.2 兼容目标；声明的适配目标、集成测试与 Windows 实际图形界面/运行时验收是不同的证据，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
+**dsh-purge** 是装在本机官方 [DeepSeek Harness](https://www.deepseek.com/harness/) 上的网络安全红队评测插件。当前维护版本为 **1.1.92-wxcvm.7-beta.10**，默认适配 **DSH 0.2.2-rc.3**，保留 rc.2 / rc.1 / 0.2.1-rc.5 / rc.2 兼容目标；声明的适配目标、集成测试与 Windows 实际图形界面/运行时验收是不同的证据，不能相互替代。官方 **Web**（`dsh web`）和官方 **桌面端**（EXE）都支持，两边分开装、分开应用。
 
 Harness 不只是把问题交给模型。它还会在运行时改提示词、审批门、沙箱和会话格式。只看「模型答不答」，会把宿主拦截误当成模型拒绝。这个插件在你自己的安装里把这两层分开，用来做受控评测，也用来看默认策略该不该收紧。
 
@@ -135,7 +137,7 @@ Harness 不只是把问题交给模型。它还会在运行时改提示词、审
 
 ## 适配范围
 
-**当前维护包：1.1.92-wxcvm.7-beta.9**，默认适配 DSH `0.2.2-rc.3`，保留 rc.2、rc.1、0.2.1-rc.5、0.2.1-rc.2 兼容目标。下列 `1.1.81` 信息属于历史兼容记录，不是当前版本号，也不是降级建议。
+**当前维护包：1.1.92-wxcvm.7-beta.10**，默认适配 DSH `0.2.2-rc.3`，保留 rc.2、rc.1、0.2.1-rc.5、0.2.1-rc.2 兼容目标。下列 `1.1.81` 信息属于历史兼容记录，不是当前版本号，也不是降级建议。
 
 - **dsh 0.2.1-rc.5**（官方桌面，宿主密封在 `app.asar` 里）：用 **1.1.81**。解包后跑补丁：82 个补丁里 **66 个直接 applied**、47 个文件被改写、`node --check` 0 失败；桌面壳 5 条里 #45/#82/#83/#84 命中（#84 依赖 #83 的输出），#46 的官方换包脚本改写点在 rc.5 已被上游重写，只剩一个无害的空转。`app.asar` 还在时点「应用」会先解包到 `resources\app` 再自动重启。
 - **dsh 0.2.1-rc.2**（官方桌面 / 官方 `dsh web`）：用 **1.1.81**。已修 `{{cwd}}` / `[cwd]` 整轮失败、补丁 #40 命中、`toolFilter` 废弃、`dsh-tools` 解析、hostFs fd、桌面换包自杀、`file:` 归档更新、Ctrl+Enter 插话。
@@ -167,7 +169,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\update-desktop-fork.ps1 -DshH
 
 运行前请完整退出 DSH Desktop（包括托盘进程）。如果实际 DSH_HOME 不是默认目录，请传入真实路径。脚本只操作所选 profile；安装失败时恢复 profile 配置和锁文件并尝试恢复依赖，不自动应用宿主补丁、不重启应用。运行后可增加 `-CheckOnly` 只读验证**安装版本、UI 文件、profile bundles 和 Cordis insert 入口**；检查失败时会提示执行 `node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs`。检查通过仅说明文件与配置到位，仍需重启宿主确认 UI 已加载。
 
-**从旧版自更新后插件消失或无法加载：** 旧更新器可能漏拷贝 `scripts`，仅显示新版版本号不能证明安装完整。请从 GitHub 下载目标提交的完整源码包，解压后在其中运行上述独立升级脚本（不要使用已损坏插件目录里的旧脚本）。没有发布标签的 beta 可明确指定目标提交的完整 40 位 SHA，并用 `-Version` 指定对应版本，例如 `-Commit <完整提交SHA> -Version 1.1.92-wxcvm.7-beta.9`。脚本使用固定提交的完整包，不经过旧版内置复制清单；安装成功后再运行同样参数加 `-CheckOnly`，完全退出并重开宿主。不要删除原 profile、会话或配置。
+**从旧版自更新后插件消失或无法加载：** 旧更新器可能漏拷贝 `scripts`，仅显示新版版本号不能证明安装完整。请从 GitHub 下载目标提交的完整源码包，解压后在其中运行上述独立升级脚本（不要使用已损坏插件目录里的旧脚本）。没有发布标签的 beta 可明确指定目标提交的完整 40 位 SHA，并用 `-Version` 指定对应版本，例如 `-Commit <完整提交SHA> -Version 1.1.92-wxcvm.7-beta.10`。脚本使用固定提交的完整包，不经过旧版内置复制清单；安装成功后再运行同样参数加 `-CheckOnly`，完全退出并重开宿主。不要删除原 profile、会话或配置。
 
 **本维护分支请从 `wxcvm/dsh-purge` 安装。** 原作者仓库仅供追溯来源及历史版本，不能代替本分支的新 UI、归档和诊断修复。更新前先确认 DSH 实际使用的 profile；独立 Git 工作区拉取新提交，不等于桌面插件已经更新。
 

@@ -32,3 +32,13 @@ test('runtime route is GET only and reuses plugin access guard rather than disk 
   assert.doesNotMatch(route, /gatherState|readFile|writeFile/);
   assert.match(source, /if \(!allowPluginRequest\(request, response\)\) return/);
 });
+test('native panel source renders abstention and missing delivery evidence independently', () => {
+  let index = 0;
+  const ctx = { useState: v => [index++ === 0 ? { items: [{ generation: 1, attemptId: 'a', assessment: { decision: 'uncertain', delivery: 'not-verified', reasonCodes: ['denied-object-uncertain'] } }] } : v, () => {}],
+    useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) };
+  vm.createContext(ctx);
+  const rendered = vm.runInContext(readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8') + '\nRuntimeObservationsSection()', ctx);
+  const body = JSON.stringify(rendered);
+  assert.match(body, /不确定（不触发动作） \/ 尚未验证/);
+  assert.doesNotMatch(body, /明确拒答 \/ 有证据未交付/);
+});

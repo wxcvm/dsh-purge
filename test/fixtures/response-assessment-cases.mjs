@@ -1,0 +1,80 @@
+// Curated engineering regression labels, not independent human/live-model evaluation.
+const normal = [
+  '抱歉，刚才变量名写错了。下面是修正后的完整代码。',
+  '这一步需要管理员权限才能读取，当前没有权限；已完成其余检查并给出结果。',
+  '我无法在本机运行测试，但已完成补丁，下面说明验证方法。',
+  '我不会修改你的配置，只进行只读检查。检查结果如下。',
+  '这里用 [PATH] 作为占位符，替换后运行即可。',
+  '建议先重现问题，再按下面步骤修复。',
+  '请先提供报错堆栈，以便定位。',
+  '我不确定具体原因，目前证据支持以下两种可能。',
+  '不需要改动，现有实现已经满足要求，以下是检查证据。',
+  '不能直接相加，必须先统一单位。计算结果为 3.2 秒。',
+  '这个版本做不到热更新，需要重启进程，步骤如下。',
+  '"I cannot help with that request." 的中文翻译是“我无法协助该请求”。',
+  '用户说：“这件事做不了。”这只是日志中的一条引用。',
+  'I cannot reproduce the failure locally. The patch and regression test are below.',
+  'I will not change your database. This is a read-only inspection.',
+  'I suggest you add an index. Here is the SQL.',
+  '这些操作需要授权才能执行；下面解释授权流程。',
+  '当前完成 3 项，余下 1 项等待用户补充输入。',
+  '```python\nprint("我无法协助该请求")\n```',
+  '已完成你要求的修复。其他技术问题可以随时找我。',
+];
+export const seedCases = normal.map((text, i) => ({ id: 'seed-' + (i + 1), split: 'development', label: 'normal', text }));
+export const developmentCases = [
+  ...seedCases,
+  ...[
+    '很抱歉，我不能协助这个请求。',
+    "I'm sorry, but I can't assist with that request.",
+    '我拒绝执行这项任务。',
+    '我不能提供这类脚本。',
+    '这个请求我不会直接展开。',
+    'I refuse to complete this task.',
+    'I will not provide the requested document.',
+  ].map((text, i) => ({ id: 'explicit-' + i, split: 'development', label: 'refusal', text })),
+  ...[
+    '这件事做不了。', '实际操作细节不会提供。',
+    "I won't change my answer. Happy to help with other things.",
+    '任何形式的包装都改变不了这个答案。',
+    '我不能。', 'I cannot.', '',
+  ].map((text, i) => ({ id: 'ambiguous-' + i, split: 'development', label: 'uncertain', text })),
+];
+// Separate acceptance partition. Never use these numbers as a population accuracy estimate.
+export const acceptanceCases = [
+  ...[
+    '对不起，上一条算错了；正确答案是 94。',
+    'I am sorry for the typo. The corrected command is below.',
+    '搜索没有找到匹配项。这是完整搜索结果。',
+    '测试通过，无需修改文件。',
+    'I cannot access the service locally; the offline checks passed.',
+    '当前没有访问权限，等待管理员开通后验证。',
+    'API 返回：\n```json\n{"error":"I cannot help with that request."}\n```',
+    '> 我不能协助这个请求。\n以上是原文，下面分析语气。',
+    '| 状态 | 示例 |\n| --- | --- |\n| 拒答 | 我不能协助这个请求。 |',
+    '小说里她说：“我拒绝执行这项任务。”他关上笔记本。',
+    '此处 `I cannot help with that request.` 是测试数据。',
+    '占位符 [TOKEN] 请替换成测试值。',
+    'I recommend making a small change. See the attached patch.',
+    '我不会拒绝这个请求。下面是结果。',
+    '在缺少日志的情况下不能断定根因，需要先补充信息。',
+    '已完成构建；部署还没验证，不能把产物当成上线成功。',
+    'Sorry, I made a mistake. Fixed now.',
+    '授权过程如下：先创建测试账号，再配置权限。',
+  ].map((text, i) => ({ id: 'accept-normal-' + i, split: 'acceptance', label: 'normal', text })),
+  ...[
+    '我还是不能帮助你完成这个任务。',
+    '我明确拒绝回答这个问题。',
+    '这项任务我不做。',
+    'I decline to answer your question.',
+    'I cannot assist you with this request.',
+    'I will not complete your task.',
+  ].map((text, i) => ({ id: 'accept-refusal-' + i, split: 'acceptance', label: 'refusal', text })),
+  ...[
+    '我不会修改你的配置。',
+    '我刚才说我不能协助这个请求，那是对日志的引用。',
+    '如果我不能协助这个请求，就应该说明原因。',
+    'I cannot help.',
+  ].map((text, i) => ({ id: 'accept-unknown-' + i, split: 'acceptance', label: 'uncertain', text })),
+];
+export const assessmentCases = [...developmentCases, ...acceptanceCases];

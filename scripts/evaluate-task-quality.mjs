@@ -4,6 +4,8 @@ import { sampleDiagnosis, diagnosticSummary, contextIntegrity } from '../lib/tas
 import { qualityReportSummary } from '../lib/task-quality-report.js';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
+import { assessResponse, assessmentSummary } from '../lib/response-assessment.js';
+import { isHumanEvent } from '../lib/response-context.js';
 
 // Fixed, harmless tasks; no model calls or host changes. Responses are JSON values.
 const cases = [
@@ -59,7 +61,7 @@ function diagnoseEvents(events) {
       continue;
     }
     seen.set(event.seq, event);
-    if (event.type === 'user/message' && !['plugin', 'dsh-purge'].includes(event.data?.source?.kind)) {
+    if (isHumanEvent(event)) {
       latestUser = Math.max(latestUser, event.seq);
     }
     if (event.type === 'turn/end' && (!lastEnd || event.seq > lastEnd.seq)) lastEnd = event;
@@ -157,7 +159,10 @@ function evaluateRaw(input) {
     const row = { id: c.id };
     for (const group of groups) {
       const result = score(input[group], c), sample = input[group][c.id];
-      row[group] = { ...result, diagnosis: sampleDiagnosis(sample, result.status, result.lifecycle),
+      const assessment = assessmentSummary(assessResponse(sample?.response, { taskText: c.prompt, taskId: c.id, responseId: group,
+          lifecycle: result.lifecycle?.outcome,
+          verification: result.status === 'correct' ? { taskId: c.id, responseId: group, source: 'normal-task-scorer', state: 'verified', evidenceIds: ['json-equality:' + c.id] } : undefined }));
+      row[group] = { ...result, assessment, diagnosis: sampleDiagnosis(sample, result.status, result.lifecycle, assessment),
         ...(sample?.events ? { context: contextIntegrity(sample.events) } : {}) };
     }
     return row;
@@ -165,7 +170,12 @@ function evaluateRaw(input) {
   const states = ['correct', 'incorrect', 'invalid-json', 'not-completed', 'missing'];
   const counts = key => Object.fromEntries(states.map(s => [s, rows.filter(r => r[key].status === s).length]));
   const paired = rows.filter(r => r.baseline.status !== 'missing' && r.candidate.status !== 'missing');
+  const assessmentCounts = Object.fromEntries(groups.map(group => [group, {
+    decisions: Object.fromEntries(['not-refusal', 'refusal', 'uncertain'].map(k => [k, rows.filter(r => r[group].assessment.decision === k).length])),
+    delivery: Object.fromEntries(['verified', 'partial', 'pending-input', 'blocked', 'not-verified', 'explicit-not-delivered'].map(k => [k, rows.filter(r => r[group].assessment.delivery === k).length])),
+  }]));
   return { totalCases: cases.length, baseline: counts('baseline'), candidate: counts('candidate'),
+    assessmentCounts,
     pairedCases: paired.length,
     pairedImproved: paired.filter(r => r.baseline.status !== 'correct' && r.candidate.status === 'correct').length,
     pairedRegressed: paired.filter(r => r.baseline.status === 'correct' && r.candidate.status !== 'correct').length,

@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.7-beta.10
+
+## 中文
+
+- 拒答识别改为明确拒答 / 未检出 / 不确定三态；道歉、建议、占位符、只读承诺和执行限制不再单独判成软化、拒绝或未交付。
+- 按代码、引用、日志、表格范围识别归属；删除短回复加分和全篇关键词豁免。保留旧 API，新增原因码与 precision-1 版本。
+- 交付证据独立于文本与宿主终态：未验证不等于未交付，只有绑定任务/回复的验证证据才能确认；原 #241 首答与最终交付指标不改义。
+- 修正 rc.3 用户事件读取，绑定当前回合，取消新消息、取消、替换 Agent、重挂后过期的延迟动作。不确定/部分拒答不触发；移除跳级施压与预设未交付结论，不提高预算。
+- 运行诊断、离线评测共用判定；新增日志仅保存元数据，不追加原文摘录，不扫描或学习私人历史日志。
+- 62 条工程回归样例：38 条正常回复误判 21→0（其中 7 条保留不确定），13 条明确拒答识别 13 条，11 条含糊回复全部不确定。不是盲测或真实流量准确率。
+- 真实 rc.3 隔离 profile 的 3 条正常输出验证通过，零额外 followup；仅验证识别层，不是完整 Purge 对照。生产 beta.10 原生界面、在线安装和长期流量尚未验收。
+- 本机仍有已知 Windows ACL 预览读取失败；非门禁 Pending specifications 仍因缺少 liveRunningChildren 导出失败（与 beta.9 相同），不计作通过。Linux/Windows 兼容门禁单独验证。
+- beta 通道发布，master 不提升；不覆盖生产插件，不创建安装备份，不执行回滚。
+
+## English
+
+Precision-first response attribution, explicit abstention, independently verified delivery states, rc.3 message normalization and stale-action cancellation. Shared runtime/report diagnostics preserve unknowns without treating normal replies as refusal or non-delivery. Engineering regression and three real isolated-profile normal-output probes passed; not an independent accuracy benchmark or full Purge comparison. Beta only, with no production installation or stable promotion.
+
+---
+
 # 1.1.92-wxcvm.7-beta.9
 
 ## 中文
