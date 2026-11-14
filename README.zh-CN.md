@@ -684,3 +684,8 @@ flowchart TD
 ---
 
 感谢 [LINUX DO](https://linux.do) 社区
+
+### 常见故障诊断与修复
+
+新增统一诊断、逐项备份修复与回滚入口，见 [修复中心](docs/REPAIR_CENTER.zh-CN.md)。
+

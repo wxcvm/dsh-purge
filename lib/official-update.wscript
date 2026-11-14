@@ -69,7 +69,26 @@ if (!fso.FileExists(asar)) {
   sh.Run('"' + exe + '"', 1, false);
   WScript.Quit(1);
 }
-function fileVersion(fp) { try { return String(fso.GetFileVersion(fp) || ''); } catch (versionErr) { return ''; } }
+function psLiteral(value) { return "'" + String(value).replace(/'/g, "''") + "'"; }
+function fileVersion(fp) {
+  // .NET FileVersion reads the release string; FSO GetFileVersion reads a numeric PE tuple.
+  var out = logPath + '.file-version.txt';
+  var script = logPath + '.file-version.ps1';
+  try {
+    if (fso.FileExists(out)) fso.DeleteFile(out, true);
+    var writer = fso.CreateTextFile(script, true, true);
+    writer.WriteLine("$ErrorActionPreference='Stop'; [IO.File]::WriteAllText(" + psLiteral(out) + ", (Get-Item -LiteralPath " + psLiteral(fp) + ").VersionInfo.FileVersion, [Text.Encoding]::Unicode)");
+    writer.Close();
+    var code = sh.Run('powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + script + '"', 0, true);
+    if (code === 0 && fso.FileExists(out)) {
+      var reader = fso.OpenTextFile(out, 1, false, -1);
+      var value = reader.ReadAll().replace(/^\s+|\s+$/g, ''); reader.Close();
+      if (value) return value;
+    }
+  } catch (versionErr) { log('release-version-probe ' + versionErr); }
+  // A numeric fallback will not match an rc/beta release: fail closed, not success by inference.
+  try { return String(fso.GetFileVersion(fp) || ''); } catch (fallbackErr) { return ''; }
+}
 function expectedVersion(fp) {
   var m = fso.GetFileName(fp).match(/([0-9]+\.[0-9]+\.[0-9]+-(?:rc|beta)\.[0-9]+)-win/i);
   return m ? m[1].toLowerCase() : '';
@@ -92,7 +111,12 @@ var asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarB
 var changed = exeChanged || asarChanged;
 var afterVersion = fileVersion(exe);
 var versionMatch = !targetVersion || afterVersion.toLowerCase() === targetVersion;
-var ok = code === 0 && asarChanged && fso.FileExists(asar) && versionMatch;
+var runtimeFiles = ['versions.json', 'bin\\node.cmd', 'primary-runtime\\dependencies\\node\\bin\\node.exe', 'primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs'];
+var runtimeMissing = [];
+for (var r = 0; r < runtimeFiles.length; r++) if (fileSize(resources + '\\runtime\\' + runtimeFiles[r]) <= 0) runtimeMissing.push(runtimeFiles[r]);
+var runtimeReady = runtimeMissing.length === 0;
+log('runtime-ready=' + runtimeReady + ' missing=' + runtimeMissing.join(','));
+var ok = code === 0 && asarChanged && fso.FileExists(asar) && versionMatch && runtimeReady;
 log('changed exe=' + exeChanged + ' asar=' + asarChanged);
 log('version before=' + beforeVersion + ' target=' + (targetVersion || 'unavailable') + ' after=' + afterVersion + ' match=' + versionMatch);
 // No second installer invocation: silent NSIS may have staged a payload even

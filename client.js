@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6c7b15b9904a257d";
+		const CLIENT_BUILD_ID = "66c8248f660f5cad";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -44,6 +44,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		function apiTimeoutMs(p, init) {
 			const path = String(p || "");
 			const method = String((init && init.method) || "GET").toUpperCase();
+			if (path.indexOf("/dsh-purge/repair-center") !== -1) return method === "POST" ? 300000 : 20000;
+			if (path.indexOf("/dsh-purge/desktop-runtime") !== -1) return method === "POST" ? 300000 : 20000;
 			if (path.indexOf("/dsh-purge/update-progress") !== -1) return 8000;
 			if (path.indexOf("/dsh-purge/update") !== -1) return method === "POST" ? 900000 : 45000;
 			if (path.indexOf("/dsh-purge/uninstall") !== -1) return 90000;
@@ -1652,9 +1654,50 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			);
 		}
 
+        function RepairCenter({ busy }) {
+          const [snapshot, setSnapshot] = useState(null);
+          const [working, setWorking] = useState(false);
+          const [error, setError] = useState("");
+          const [notice, setNotice] = useState("");
+          const scan = async () => { setWorking(true); setError(""); try { setSnapshot(await apiJson("/dsh-purge/repair-center")); } catch (e) { setError(String(e.message || e)); } finally { setWorking(false); } };
+          const repair = async (action, receiptId) => {
+            setWorking(true); setError(""); setNotice("");
+            try {
+              const r = await apiJson("/dsh-purge/repair-center", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, receiptId }) });
+              setNotice((r.changed ? "操作完成" : "无需修改") + (r.restartRequired ? "；代码需在任务结束后重新加载/重启生效" : "") + (r.receiptId ? "；备份记录：" + r.receiptId : ""));
+              setSnapshot(await apiJson("/dsh-purge/repair-center"));
+            } catch(e) { setError(String(e.message || e)); } finally { setWorking(false); }
+          };
+          return h("div", { className: "dshp-clean-browser" },
+            h("div", { className: "dshp-sub" }, h("h4", null, "常见故障诊断与修复")),
+            h("p", { className: "dshp-hint" }, "检查启动配置、安装 YAML、公共运行时、插件加载和已知历史卡顿。只修明确异常；不删会话、不清账号、不自动卸载插件。"),
+            h(Btn, { disabled: busy || working, onClick: scan }, working ? "处理中…" : "检查常见故障"),
+            error ? h("p", { role: "alert" }, error) : null,
+            notice ? h("p", { role: "status" }, notice) : null,
+            snapshot ? h("div", null, snapshot.checks.map(row => h("div", { key: row.id, className: "dshp-sub" },
+              h("strong", null, row.title + " · " + (row.ok === true ? "正常/无需处理" : row.ok === null ? "未验收" : "需要处理")),
+              h("p", { className: "dshp-hint" }, row.status + (row.details ? " — " + row.details : "")),
+              row.repairable ? h(Btn, { disabled: busy || working, onClick: () => repair(row.id) }, "修复此项（先备份）") : null)),
+              snapshot.receipts.length ? h("details", null, h("summary", null, "最近修复与回滚"), snapshot.receipts.map(r => h("div", { key: r.id },
+                h("p", null, r.action + " · " + r.phase + " · " + r.at),
+                r.phase === "complete" ? h(Btn, { disabled: busy || working, onClick: () => repair("rollback", r.id) }, "回滚此项（校验后执行）") : null))) : null) : null);
+        }
+
 		function CleanDiagnostics({ state, onRefresh, busy }) {
 			const t = useT();
 			const [checking, setChecking] = useState(false);
+            const [runtime, setRuntime] = useState(null);
+            const [runtimeBusy, setRuntimeBusy] = useState(false);
+            const [runtimeError, setRuntimeError] = useState("");
+            const runtimeCheck = async (repair) => {
+              setRuntimeBusy(true); setRuntimeError("");
+              try {
+                const result = await apiJson("/dsh-purge/desktop-runtime", repair ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "restore-missing" }) } : undefined);
+                setRuntime(result.after || result);
+                if (repair) setFeedback(result.changed ? "已恢复 " + result.changed + " 个缺失文件；凭据：" + result.receipt : "运行时完整，无需恢复");
+              } catch (e) { setRuntimeError(String(e.message || e)); }
+              finally { setRuntimeBusy(false); }
+            };
 			const [feedback, setFeedback] = useState("");
 			const rows = state ? patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) })) : [];
 			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
@@ -1677,7 +1720,18 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				catch { setFeedback("复制失败，请选中下方诊断文本手动复制"); }
 			};
 			return h("div", { className: "dshp-clean-browser" },
-				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
+                h(RepairCenter, { busy }),
+				h("div", { className: "dshp-sub" }, h("h4", null, "桌面插件更新运行时")),
+                h("p", { className: "dshp-hint" }, "检查自带 Node、pnpm 和 CLI。恢复只提取本机同版本缓存中缺失的文件，不覆盖现有文件、不升级、不重启。"),
+                h("div", { className: "dshp-row" },
+                  h(Btn, { disabled: busy || runtimeBusy, onClick: () => runtimeCheck(false) }, runtimeBusy ? "处理中…" : "检查更新运行时"),
+                  h(Btn, { disabled: busy || runtimeBusy || !runtime || runtime.ok, onClick: () => runtimeCheck(true) }, "恢复缺失运行时")),
+                runtimeError ? h("p", { role: "alert" }, runtimeError) : null,
+                runtime ? h("div", null,
+                  h("p", { role: "status" }, runtime.ok ? "运行时关键文件完整 · Harness " + runtime.desktopVersion : "发现公共更新运行时异常"),
+                  runtime.issues.map((x, i) => h("p", { key: i, role: "alert" }, x.code + (x.file ? "：" + x.file : ""))),
+                  h("details", null, h("summary", null, "运行时诊断详情"), h("pre", { className: "dshp-clean-diagnostic" }, JSON.stringify(runtime, null, 2)))) : null,
+                h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
 				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
 				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
 				compatibility?.status === "declared" ? h("p", { className: "dshp-hint" }, "宿主磁盘版本在当前插件声明的适配范围内（不代表实机功能已验收）。") : null,
