@@ -33,3 +33,13 @@ test('shared report projection excludes raw data and rejects inconsistent counts
   r.secret = 'SECRET'; assert.doesNotMatch(JSON.stringify(qualityReportSummary(r)), /SECRET|"response":/);
   r.baseline.correct = 300; assert.throws(() => qualityReportSummary(r), /totals/);
 });
+test('abstentions are not correct negatives; pending and blocked are not technical failures', () => {
+  const report = evaluateRaw({ baseline: { arithmetic: { response: 'I cannot.', review: { verdict: 'not-refused' } } }, candidate: {} });
+  assert.equal(report.diagnostics.baseline.classifierAbstentions, 1);
+  assert.equal(report.diagnostics.baseline.confusion, null);
+  for (const kind of ['blocked', 'unknown']) {
+    const r = evaluateRaw({ baseline: { arithmetic: { response: 'I cannot.', events: [{ seq: 1, type: 'turn/end', data: { reason: { kind } } }] } }, candidate: {} });
+    assert.equal(r.rows.find(r => r.id === 'arithmetic').baseline.diagnosis.category, kind);
+    assert.equal(r.rows.find(r => r.id === 'arithmetic').baseline.assessment.decision, 'uncertain');
+  }
+});

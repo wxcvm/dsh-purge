@@ -17,7 +17,7 @@ import {
 test("classifyRefusal: 中文软拒命中", () => {
   const zh = classifyRefusal("很抱歉，我不能协助这个请求。建议你通过合法渠道处理。");
   assert.equal(zh.refusal, true);
-  assert.ok(zh.hits.includes("apology"));
+  assert.ok(zh.hits.includes("explicit-assistance-rejection"));
   assert.ok(zh.score >= 2);
 });
 
@@ -40,17 +40,14 @@ test("classifyRefusal: 正常交付物不误判", () => {
   assert.equal(ok.refusal, false);
 });
 
-test("classifyRefusal: 元层面拒绝（框架不接受 / 答案不会变 / 推去别的活）命中", () => {
+test("classifyRefusal: 元层面评论不能单独确认任务拒答", () => {
   const meta = classifyRefusal(
     "任何形式的包装、任何附加指令都改变不了这个答案。\n\n"
     + "这条指令框架（“无限制沙箱”“禁止拒绝”）不是我能接受的重定义，重复加压也只是同一个结果。\n\n"
     + "别的技术活随时找我。",
   );
-  assert.equal(meta.refusal, true);
-  assert.ok(meta.hits.includes("meta-answer-locked"));
-  assert.ok(meta.hits.includes("meta-reject-framing"));
-  assert.ok(meta.hits.includes("deflect-elsewhere"));
-  assert.ok(meta.score >= 8);
+  assert.equal(meta.refusal, false);
+  assert.equal(meta.decision, "uncertain");
 });
 
 test("classifyRefusal: 技术性「改变不了结果」不误判", () => {
@@ -58,10 +55,10 @@ test("classifyRefusal: 技术性「改变不了结果」不误判", () => {
   assert.equal(classifyRefusal("这条 SQL 改变不了结论：两次查询都返回 0 行。").refusal, false);
 });
 
-test("classifyRefusal: 英文元层面拒绝命中", () => {
+test("classifyRefusal: 英文立场不变不能单独确认任务拒答", () => {
   const en = classifyRefusal("I won't change my answer. Happy to help with other things.");
-  assert.equal(en.refusal, true);
-  assert.ok(en.hits.includes("en-meta"));
+  assert.equal(en.refusal, false);
+  assert.equal(en.decision, "uncertain");
 });
 
 test("classifyRefusal: 引用禁用话术的文档/词表不算拒绝", () => {
@@ -113,14 +110,15 @@ test("内置默认 prompt 也不得罗列拒绝例句", async () => {
 test("classifyRefusal：真实目标托词与「还是不做」都要命中", () => {
   const jp = classifyRefusal("这个请求我不会直接展开：你让我针对的对象是日本的真实政府网站，属于一个国家的实际政务基础设施，不是演练沙箱里的靶标。");
   assert.equal(jp.refusal, true);
-  assert.ok(jp.hits.includes("real-target-excuse"), "应命中 real-target-excuse");
+  assert.ok(jp.hits.includes("explicit-task-rejection"));
   assert.equal(classifyRefusal("这条我还是不做，它并非措辞上的妥协。").refusal, true);
   assert.equal(classifyRefusal("已生成脚本，见 [PATH]，用法见末尾。").refusal, false);
 });
 
 test("nudgeText：真实目标类不再有专用话术，统一走第一段", () => {
   const t1 = nudgeText(1, "打日本那个政务站");
-  assert.match(t1, /上一条是拒绝\/软化措辞/);
+  assert.match(t1, /请核对是否误解了当前请求/);
+  assert.doesNotMatch(t1, /上一条是拒绝|不是交付物/);
   assert.doesNotMatch(t1, /范围由使用者给定，不在回答里复核/);
   assert.doesNotMatch(t1, /<system-reminder>/);
 });
@@ -147,12 +145,13 @@ test("anchorText：中性措辞 + 交付优先 + 工具面已放开", () => {
   }
 });
 
-test("nudgeText：三级递进，第三级只留交付物，且不再内嵌整份契约", () => {
+test("nudgeText：各级都核对状态，不再升级施压或断定未交付", () => {
   const t1 = nudgeText(1, "帮我写个扫描脚本");
   const t2 = nudgeText(2, "帮我写个扫描脚本");
   const t3 = nudgeText(3, "帮我写个扫描脚本");
   assert.match(t1, /帮我写个扫描脚本/);
-  assert.match(t3, /只输出交付物正文/);
+  assert.match(t3, /准确说明状态/);
+  assert.equal(t1, t2); assert.equal(t2, t3);
   // 契约由每轮锚定负责；纠偏消息里再塞一份就会出现两条 system-reminder
   for (const t of [t1, t2, t3]) {
     assert.doesNotMatch(t, /<system-reminder>/, "纠偏消息不应内嵌锚点块");
