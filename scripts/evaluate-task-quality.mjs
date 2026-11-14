@@ -10,6 +10,10 @@ const cases = [
   { id: 'deduplicate', prompt: 'Remove duplicates from ["b","a","b","c"] preserving first occurrence. Return only a JSON array.', expected: ['b', 'a', 'c'] },
   { id: 'redact', prompt: '将示例对象 {"name":"demo","token":"SAMPLE_ONLY"} 的 token 替换为 "[REDACTED]"，其余不变，仅返回 JSON 对象。', expected: { name: 'demo', token: '[REDACTED]' } },
   { id: 'constraints', prompt: 'Return only a JSON object with status "ok", count 0, and items an empty array. No extra fields.', expected: { status: 'ok', count: 0, items: [] } },
+  { id: 'technical-diagnosis', prompt: '示例日志：文件无法读取，错误码 ENOENT。仅返回 JSON 对象，包含 code（错误码）及 cause（固定值 missing-file）。', expected: { code: 'ENOENT', cause: 'missing-file' } },
+  { id: 'quoted-text', prompt: '将引号内的文本原样转换成 JSON 字符串，不添加解释：我无法连接到本地测试服务器', expected: '我无法连接到本地测试服务器' },
+  { id: 'no-change', prompt: '测试文件当前内容为 hello，目标内容也是 hello。仅返回 JSON 对象，包含 changed（布尔值）和 action（相同则 keep，不同则 update）。', expected: { changed: false, action: 'keep' } },
+  { id: 'multi-step', prompt: '对记录 [{"id":"b","count":2},{"id":"a","count":1},{"id":"c","count":0}]，先去掉 count 为 0 的记录，再按 id 升序排序，最后返回 JSON 对象，包含 ids 数组及 total（剩余 count 之和）。', expected: { ids: ['a', 'b'], total: 3 } },
 ];
 
 function evaluate(input) {
@@ -191,7 +195,7 @@ function rawSelfTest() {
   assert.equal(result.baseline.correct, 1);
   assert.equal(result.baseline['invalid-json'], 1);
   assert.equal(result.baseline['not-completed'], 1);
-  assert.equal(result.baseline.missing, 3);
+  assert.equal(result.baseline.missing, cases.length - 3);
   assert.equal(result.pairedImproved, 1);
   assert.equal(result.pairedRegressed, 1);
   assert.equal(result.pairedCases, 2);
@@ -206,14 +210,14 @@ function rawSelfTest() {
 
 function selfTest() {
   const perfect = Object.fromEntries(cases.map(c => [c.id, c.expected]));
-  assert.equal(evaluate({ baseline: perfect, candidate: perfect }).pairedUnchanged, 6);
+  assert.equal(evaluate({ baseline: perfect, candidate: perfect }).pairedUnchanged, cases.length);
   const result = evaluate({ baseline: { sort: [], arithmetic: 94 }, candidate: { sort: perfect.sort, arithmetic: '94', extract: perfect.extract } });
   assert.equal(result.pairedCases, 2);
   assert.equal(result.pairedImproved, 1);
   assert.equal(result.pairedRegressed, 1);
   assert.equal(result.candidate.correct, 2);
-  assert.equal(result.baseline.missing, 4);
-  assert.equal(result.candidate.missing, 3);
+  assert.equal(result.baseline.missing, cases.length - 2);
+  assert.equal(result.candidate.missing, cases.length - 3);
   assert.equal(evaluate({ baseline: {}, candidate: {} }).pairedCases, 0);
   assert.throws(() => evaluate({ baseline: {}, candidate: { unknown: 1 } }), /Unknown case ID/);
   assert.throws(() => evaluate({ baseline: [], candidate: {} }), /baseline must be an object/);
