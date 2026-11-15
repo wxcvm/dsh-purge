@@ -22,7 +22,19 @@ function asar(file,version){
  const headerSize=8+header.length;const pre=Buffer.alloc(16);pre.writeUInt32LE(4,0);pre.writeUInt32LE(headerSize,4);pre.writeUInt32LE(header.length,12);fs.writeFileSync(file,Buffer.concat([pre,header,data]));
 }
 test('missing runtime is a shared failure, inspection does not write',t=>{const f=fixture(t);const r=inspectDesktopRuntime(f);assert.equal(r.ok,false);assert.equal(r.issues.length,RUNTIME_FILES.length);assert.equal(fs.existsSync(path.join(f.resources,'runtime')),false);});
-test('real ASAR identity takes priority over an old unpacked tree',t=>{const f=fixture(t);asar(path.join(f.resources,'app.asar'),'0.2.2-rc.4');assert.equal(readDesktopManifest(f.resources).version,'0.2.2-rc.4');});
+test('real ASAR identity takes priority over an old unpacked tree',t=>{const f=fixture(t);asar(path.join(f.resources,'app.asar'),'0.2.2-rc.4');assert.equal(readDesktopManifest(f.resources).version,'0.2.2-rc.4');
+ const layout=inspectDesktopRuntime(f).layout;
+ assert.equal(layout.status,'sealed-and-unpacked');
+ assert.equal(layout.unpackedVersion,'0.2.2-rc.3');
+ assert.equal(layout.versionMismatch,true);
+ assert.equal(layout.runtimeLoadVerified,false);
+ assert.equal(fs.existsSync(path.join(f.resources,'app.asar')),true);
+ assert.equal(fs.existsSync(path.join(f.resources,'app/package.json')),true);
+});
+test('unpacked desktop layout is reported without claiming a running process loaded it',t=>{
+ const f=fixture(t),r=inspectDesktopRuntime(f);
+ assert.deepEqual(r.layout,{archivePresent:false,unpackedPresent:true,unpackedVersion:f.version,status:'unpacked',versionMismatch:false,runtimeLoadVerified:false});
+});
 test('restore missing payload and preserve existing files byte for byte',async t=>{const f=fixture(t),existing=path.join(f.resources,'runtime/bin/node.cmd');fs.mkdirSync(path.dirname(existing),{recursive:true});fs.writeFileSync(existing,'user existing shim');const r=await restoreRuntimePayload(f);assert.equal(r.changed,RUNTIME_FILES.length-1);assert.equal(fs.readFileSync(existing,'utf8'),'user existing shim');assert.equal(inspectDesktopRuntime(f).ok,true);assert.equal(JSON.parse(fs.readFileSync(r.receipt)).phase,'complete');});
 test('running installation version change prevents writes',async t=>{const f=fixture(t);await assert.rejects(restoreRuntimePayload({...f,version:'wrong'}),{code:'VERSION_MISMATCH'});assert.equal(fs.existsSync(path.join(f.resources,'runtime')),false);});
 test('different runtime versions are not merged',async t=>{const f=fixture(t);fs.mkdirSync(path.join(f.resources,'runtime'));fs.writeFileSync(path.join(f.resources,'runtime/versions.json'),JSON.stringify({node:'old',pnpm:'old'}));await assert.rejects(restoreRuntimePayload(f),{code:'VERSION_MISMATCH'});assert.equal(fs.existsSync(path.join(f.resources,'runtime/bin')),false);});
