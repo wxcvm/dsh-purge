@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "60aaf5d1fd8b7b7a";
+		const CLIENT_BUILD_ID = "460a747cc8887588";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12934,7 +12934,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
      * @param ctx - 客户端根上下文。
      */
     function applyDrillParts() {
-      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth };
+      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api };
     }
 
     exports.inject = inject
@@ -14397,8 +14397,46 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}, node.data.text));
 		}
 
+		// Native slash popup: session comes from the opening composer, never global selection.
+		function installTargetBindingPicker(ctx) {
+			const command = ctx.get("commandUi");
+			if (!command || typeof command.decorate !== "function") return;
+			const sessions = ctx.get("sessions");
+			const remote = ctx.get("remote");
+			const install = (name) => ctx.effect(() => command.decorate({
+				name,
+				available: (session) => !!session.sessionId && !sessions.subagentAddress?.(session.sessionId),
+				ui: {
+					kind: "popupSelect",
+					searchLabels: () => ({ placeholder: "搜索靶标名称或 ID…", empty: "暂无靶标，请先在作战台创建", noResults: "没有匹配的靶标" }),
+					options: async (session, signal) => {
+						const data = await __dshPurgeDrill.api({ op: "sessionBindingOptions", sessionId: session.sessionId });
+						if (signal.aborted) return [];
+						if (!data || !data.ok) throw new Error(data?.error || "读取靶标失败");
+						const rows = data.targets.map(target => ({
+							id: "target:" + target.id, label: target.name, detail: target.id,
+							active: data.current === target.id,
+						}));
+						if (data.current !== null) rows.push({ id: "unbind", label: "解除绑定", detail: "保留当前对话及靶标资料" });
+						return rows;
+					},
+					onSelect: async (option, session) => {
+						const line = "/" + name + (option.id === "unbind" ? " unbind" : " select " + option.id.slice(7));
+						// The official command RPC uses the captured session even for a fresh chat.
+						const result = await remote.commands.execute(session.sessionId, line, []);
+						if (!result?.ok) throw new Error(result?.error?.message || "绑定请求失败");
+						const outcome = result.value?.result;
+						if (!outcome || outcome.kind !== "success") throw new Error(outcome?.text || "绑定未完成");
+					},
+				},
+			}), "dsh-purge: target binding popup " + name);
+			install("bind");
+			install("purge-bind");
+		}
+
 		function apply(ctx) {
 			purgeWorkspaceCtx = ctx;
+			if (typeof ctx.inject === "function") ctx.inject(["commandUi", "sessions", "remote", "remote.commands"], installTargetBindingPicker);
 			ctx.slots.inject("main", () => ctx.slots.register({
 				name: "main", key: PURGE_PANEL_ID, label: "Purge 工作区",
 			}, PurgeWorkspacePage));

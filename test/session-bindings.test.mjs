@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { bindSession, bindingViewOf, handleTargetBindingCommand } from '../lib/redteam/session-bindings.js'
+import { bindSession, bindingViewOf, handleTargetBindingCommand, targetBindingOptions } from '../lib/redteam/session-bindings.js'
 
 test('command binds an existing session, isolates other sessions and survives reopen', () => {
   const root = mkdtempSync(join(tmpdir(), 'purge-bind-'))
@@ -32,5 +32,23 @@ test('implicit default is not persisted', () => {
     bindSession(store,exec,'a',{persist:false})
     assert.equal(bindingViewOf(store,exec).bound_engagement,'a')
     assert.equal(bindingViewOf({root},exec).bound_engagement,null)
+  } finally { rmSync(root,{recursive:true,force:true}) }
+})
+
+test('popup options are read-only before first message; selection and unbind persist', () => {
+  const root = mkdtempSync(join(tmpdir(),'purge-bind-'))
+  try {
+    const store = {root, listEngagements:()=>[{id:'a',name:'Alpha'},{id:'status',name:'Status target'},{id:'orphan',name:'Orphan',stats:null}]}
+    const session = {id:'new-chat',header:{}}
+    const ctx = {get:name=>name==='redteam'?store:undefined}
+    const run = rawInput => handleTargetBindingCommand(ctx,{agent:{session},rawInput})
+    assert.deepEqual(targetBindingOptions(store,session.id),{ok:true,current:null,targets:[{id:'a',name:'Alpha'},{id:'status',name:'Status target'}]})
+    assert.equal(run('select status').kind,'success')
+    assert.equal(targetBindingOptions(store,session.id).current,'status')
+    assert.equal(run('select a').kind,'success')
+    assert.equal(run('unbind').kind,'success')
+    assert.equal(targetBindingOptions(store,session.id).current,null)
+    assert.equal(bindingViewOf({...store},{agent:{session}}).bound_engagement,null)
+    assert.equal(run('select orphan').kind,'error')
   } finally { rmSync(root,{recursive:true,force:true}) }
 })
