@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "20fb7d31d5644653";
+		const CLIENT_BUILD_ID = "cfccd1147a344cc3";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4036,7 +4036,9 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     }).catch(() => { if (live) setPrivacyFailed(true); });
     return () => { live = false; };
   }, [active, privacyApi]);
-  const maskRuntime = !revealPrivate && (!privacyDisplay || privacyDisplay.maskHistory);
+  const temporary = typeof __dshPurgeDrill !== 'undefined' && __dshPurgeDrill.useTemporaryPrivacy ? __dshPurgeDrill.useTemporaryPrivacy() : null;
+  useEffect(() => { if (temporary?.maskHistory) setRevealPrivate(false); }, [temporary]);
+  const maskRuntime = !!temporary?.maskHistory || (!revealPrivate && (!privacyDisplay || privacyDisplay.maskHistory));
   useEffect(() => {
     if (!active) return;
     let stopped = false, timer, controller;
@@ -4104,7 +4106,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
       h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => {
         __dshPurgeDrill.setUI({ tab: 'low-impact', focus: null }); showPurgeWorkspace('drill');
       } }, '打开智能隐私中心'),
-      (!privacyDisplay || privacyDisplay.maskHistory) ? h('button', { type: 'button', className: 'dshp-runtime-action',
+      temporary?.maskHistory ? h('span', null, ' · 本次工作区临时遮蔽已开启') : null,
+      !temporary?.maskHistory && (!privacyDisplay || privacyDisplay.maskHistory) ? h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
     h('div', { className: 'dshp-runtime-metrics' },
       metric('近期记录', counts.all), metric('等待后续事件', counts.running), metric('需要关注', counts.attention), metric('已结束 / 取消', counts.ended)),
@@ -8273,8 +8276,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [checks, setChecks] = React.useState({})
       const [previews, setPreviews] = React.useState({})
       const [previewing, setPreviewing] = React.useState('')
-      const [maskHistory, setMaskHistory] = React.useState(false)
+      const [savedMaskHistory, setMaskHistory] = React.useState(false)
       const [reload, setReload] = React.useState(0)
+      const temporary = useTemporaryPrivacy()
+      const maskHistory = savedMaskHistory || !!temporary?.maskHistory
       const checkEng = React.useRef(eng)
       checkEng.current = eng
       React.useEffect(() => { setPreviews({}); setPreviewing('') }, [eng])
@@ -8778,6 +8783,28 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('pre', { className: 'rt-guide-doc' }, guide || (guideBusy ? '正在读取本地指南…' : ''))) : null)
     }
 
+    // Ephemeral presentation only: never persisted or used as execution input.
+    let temporaryPrivacy = null
+    const temporaryPrivacyListeners = new Set()
+    function temporaryPrivacyForTask(task, policy) {
+      if (task !== 'sharing' && task !== 'remote-model') return null
+      const locked = Array.isArray(policy?.locked) ? policy.locked : []
+      return { task, maskHistory: !locked.includes('maskHistory'), maskAssetResults: !locked.includes('maskAssetResults') }
+    }
+    function setTemporaryPrivacy(value) {
+      temporaryPrivacy = value
+      for (const listener of temporaryPrivacyListeners) listener(value)
+    }
+    function useTemporaryPrivacy() {
+      const [value, setValue] = React.useState(temporaryPrivacy)
+      React.useEffect(() => {
+        temporaryPrivacyListeners.add(setValue)
+        setValue(temporaryPrivacy)
+        return () => temporaryPrivacyListeners.delete(setValue)
+      }, [])
+      return value
+    }
+
     function privacyTaskRecommendation(preferences, management, task, protection, protectionStatus) {
       const shared = task === 'sharing' || task === 'remote-model'
       const preset = shared ? 'sharing' : 'recommended'
@@ -8835,6 +8862,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
       const [message, setMessage] = React.useState('')
+      const temporary = useTemporaryPrivacy()
       const defaults = { mode: 'standard', timeoutSeconds: 180, captureDiagnostics: true, maskHistory: false,
         noReverseDns: false, maskAssetResults: false }
       React.useEffect(() => {
@@ -8987,8 +9015,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               recommendation.reasons.map((reason, i) => h('li', { key: i }, reason))),
             h('button', { className: 'rt-btn rt-btn-primary', type: 'button', disabled: busy,
               onClick: () => previewPrivacyPreset(recommendation.preset) }, '预览推荐设置'),
+            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 } },
+              h('button', { className: 'rt-btn', type: 'button', disabled: busy || privacyTask === 'local',
+                onClick: () => setTemporaryPrivacy(temporaryPrivacyForTask(privacyTask, savedManagement)) }, '启用本次工作区临时遮蔽'),
+              temporary ? h('button', { className: 'rt-btn', type: 'button',
+                onClick: () => setTemporaryPrivacy(null) }, '结束临时遮蔽') : null),
+            temporary ? h('div', { role: 'status', style: { fontSize: 12 } },
+              '临时场景：' + (temporary.task === 'sharing' ? '共享屏幕' : '远程模型') + ' · 扫描历史/运行诊断 ' + (temporary.maskHistory ? '额外遮蔽' : '保留已保存值') + ' · ARTEX ' + (temporary.maskAssetResults ? '额外遮蔽' : '保留已保存值')) : null,
             h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 6 } },
-              '切换场景不会保存配置、改变运行中的任务或调用模型；预览后由你确认保存。')) : null,
+              '切换场景不会保存配置、改变运行中的任务或调用模型；预览后由你确认保存。临时遮蔽仅增加本次工作区的展示保护，保留已保存锁定，结束后恢复保存值；不覆盖测绘联动操作。')) : null,
           saved ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
             h('h4', null, '智能设置 · 本地隐私'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } }, '五种方案先预览，保存后生效。保留手动锁定；仅低干扰方案额外预览已有扫描模式，不修改代理、DNS、超时或诊断记录。'),
@@ -12578,7 +12613,6 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }).catch(() => { if (live) setPrivacyReadFailed(true) })
         return () => { live = false }
       }, [])
-      const maskArtex = !showPrivateDetails && (!displayPrivacy || displayPrivacy.maskAssetResults)
       const [state, setState] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
@@ -12601,6 +12635,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [reviewSaving, setReviewSaving] = React.useState(null)
       const [reviewError, setReviewError] = React.useState('')
       const [feedbackBusy, setFeedbackBusy] = React.useState(false)
+      const temporary = useTemporaryPrivacy()
+      const maskArtex = !!temporary?.maskAssetResults || (!showPrivateDetails && (!displayPrivacy || displayPrivacy.maskAssetResults))
+      React.useEffect(() => { if (temporary?.maskAssetResults) setShowPrivateDetails(false) }, [temporary])
       const exportFeedback = () => {
         if (!report || !props.engagement || feedbackBusy) return
         const engagement = props.engagement
@@ -12816,7 +12853,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             : privacyReadFailed ? '无法读取保存设置，暂时隐藏路径及报告详情。' : '正在读取保存设置…'),
           h('p', { className: 'rt-foot' }, '仅影响本页工具路径及报告展示；不修改 ARTEX 配置、报告或数据库。'),
           h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开智能隐私中心'),
-          (!displayPrivacy || displayPrivacy.maskAssetResults) ? h('button', { className: 'rt-btn', type: 'button',
+          temporary?.maskAssetResults ? h('p', { className: 'rt-foot' }, '本次工作区临时遮蔽已开启；请在隐私中心结束后再显示详情。') : null,
+          !temporary?.maskAssetResults && (!displayPrivacy || displayPrivacy.maskAssetResults) ? h('button', { className: 'rt-btn', type: 'button',
             onClick: () => setShowPrivateDetails(v => !v) }, showPrivateDetails ? '重新隐藏本页详情' : '临时显示本页详情') : null),
         h('div', { className: 'rt-card' },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
@@ -13562,7 +13600,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
      * @param ctx - 客户端根上下文。
      */
     function applyDrillParts() {
-      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api };
+      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api, useTemporaryPrivacy: useTemporaryPrivacy, setTemporaryPrivacy: setTemporaryPrivacy };
     }
 
     exports.inject = inject
@@ -13783,6 +13821,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				return () => { live = false; document.removeEventListener("dsh-purge-privacy-saved", refresh); };
 			}, [page, workspaceVisible]);
 			const privacySummary = workspacePrivacySummary(privacyStatus);
+			const temporaryPrivacy = __dshPurgeDrill.useTemporaryPrivacy();
+			useEffect(() => () => __dshPurgeDrill.setTemporaryPrivacy(null), []);
 			// Install before paint, and also follow a late native caption mount.
 			useLayoutEffect(() => {
 				if (!workspaceVisible) return;
@@ -13847,6 +13887,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					return;
 				}
 				setNavigationError("");
+				__dshPurgeDrill.setTemporaryPrivacy(null);
 				setWorkspaceVisible(false);
 			};
 			if (!workspaceVisible) return null;
@@ -13868,7 +13909,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 						}, key === "clean" ? "清洗台" : "作战台"))),
 					h("button", { type: "button", className: "dshp-workspace-privacy", title: privacySummary.detail,
 						"aria-label": "打开智能隐私中心。" + privacySummary.detail,
-						onClick: () => { __dshPurgeDrill.setUI({ tab: "low-impact", focus: null }); showPurgeWorkspace("drill"); } }, privacySummary.label),
+						onClick: () => { __dshPurgeDrill.setUI({ tab: "low-impact", focus: null }); showPurgeWorkspace("drill"); } }, privacySummary.label + (temporaryPrivacy ? ' · 临时' : '')),
 					h("button", { type: "button", className: "dshp-workspace-back", onClick: back }, "返回会话"),
 					h("button", { type: "button", className: "dshp-workspace-fullscreen",
 						"aria-pressed": immersive ? "true" : "false", title: "可选系统级全屏，Purge 默认已铺满 Harness 窗口",

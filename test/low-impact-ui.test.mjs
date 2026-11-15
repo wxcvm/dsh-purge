@@ -118,7 +118,7 @@ test('ARTEX privacy presentation masks report and paths, with explicit temporary
     const h = (type, props, ...children) => ({ type, props, children })
     const report = { unique_findings: 1, duplicates_skipped: 0, items: [{ finding_id: 1,
       asset_ids: [], summary: 'private-report', severity: 'info' }], review_queue: [] }
-    const node = new Function('React', 'h', 'props', source.slice(start, end) + '\nreturn ArtexTab(props)')(React, h, { report })
+    const node = new Function('React', 'h', 'props', 'useTemporaryPrivacy', source.slice(start, end) + '\nreturn ArtexTab(props)')(React, h, { report }, () => null)
     const values = []
     const walk = x => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') walk(x.children); else if (typeof x === 'string') values.push(x) }
     walk(node)
@@ -222,4 +222,27 @@ test('workspace privacy summary reports saved display flags without implying net
     assert.match(src, /tab: "low-impact", focus: null/)
   }
   assert.match(read('lib/redteam/client.js'), /document\.dispatchEvent\(new Event\('dsh-purge-privacy-saved'\)\)/)
+})
+
+
+test('temporary task privacy only adds unlocked display flags and never persists settings', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('    let temporaryPrivacy = null')
+    const end = src.indexOf('    function privacyTaskRecommendation(', start)
+    assert.ok(start >= 0 && end > start)
+    const { temporaryPrivacyForTask, setTemporaryPrivacy, current } = new Function(src.slice(start, end) + '\nreturn { temporaryPrivacyForTask, setTemporaryPrivacy, current: () => temporaryPrivacy }')()
+    const policy = { mode: 'manual', locked: ['maskHistory'] }
+    assert.equal(temporaryPrivacyForTask('local', policy), null)
+    const sharing = temporaryPrivacyForTask('sharing', policy)
+    assert.deepEqual(sharing, { task: 'sharing', maskHistory: false, maskAssetResults: true })
+    setTemporaryPrivacy(sharing)
+    assert.deepEqual(current(), sharing)
+    setTemporaryPrivacy(null)
+    assert.equal(current(), null)
+    assert.deepEqual(policy, { mode: 'manual', locked: ['maskHistory'] })
+    assert.doesNotMatch(src.slice(start, end), /platformConfigSave|localStorage|sessionStorage/)
+    assert.match(src, /savedMaskHistory \|\| !!temporary\?\.maskHistory/)
+    assert.match(src, /!!temporary\?\.maskAssetResults \|\| \(!showPrivateDetails/)
+  }
 })

@@ -189,3 +189,22 @@ test('runtime display masks identifiers and report when shared privacy is enable
   assert.match(JSON.stringify(tree), /报告已读取，详细内容已隐藏/);
   assert.match(JSON.stringify(cards), /local \/ model/);
 })
+
+
+test('temporary runtime privacy overrides local reveal without changing routing', () => {
+  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8')
+  let i = 0
+  const ctx = vm.createContext({
+    __dshPurgeDrill: { api() {}, useTemporaryPrivacy: () => ({ task: 'sharing', maskHistory: true }) },
+    useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] } : at === 7 ? { maskHistory: false } : at === 9 ? true : v, () => {}] },
+    useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children })
+  })
+  const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx)
+  const visible = []
+  const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (n && typeof n === 'object') walk(n.children); else if (typeof n === 'string') visible.push(n) }
+  walk(tree)
+  const text = visible.join('\n')
+  assert.match(text, /本次工作区临时遮蔽已开启/)
+  assert.doesNotMatch(text, /private-session|private-attempt/)
+  assert.match(text, /local \/ model/)
+})
