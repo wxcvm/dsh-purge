@@ -277,3 +277,32 @@ test("installObedience：正常回答不触发纠偏", async () => {
   assert.equal(sent.length, 0);
   runtime.dispose();
 });
+
+test("installObedience: delayed followup is discarded when the turn changes or settings are disabled", async () => {
+  for (const change of ["new-human", "new-completed-turn", "running", "cancelled", "disabled"]) {
+    const ctx = fakeCtx();
+    const sent = [];
+    const events = [
+      { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "整理演示文档" }], source: { kind: "user" } } } },
+      { seq: 2, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: "抱歉，我不能协助这个请求。" }] } } },
+      { seq: 3, type: "turn/end", data: { reason: { kind: "completed" } } },
+    ];
+    const agent = { id: change, status: "idle", session: { id: change, events }, followup: msg => sent.push(msg) };
+    const config = { enabled: true, retryRefusal: true, maxRetries: 3, retryDelayMs: 5 };
+    const runtime = installObedience(ctx, { getSettings: () => config });
+    ctx.fire("agent/status", { agent, status: "idle" });
+    if (change === "new-human" || change === "new-completed-turn") {
+      events.push({ seq: 4, type: "user/message", data: { message: { role: "user", content: "新任务", source: { kind: "user" } } } });
+    }
+    if (change === "new-completed-turn") {
+      events.push({ seq: 5, type: "assistant/message", data: { message: { role: "assistant", content: "已完成" } } },
+        { seq: 6, type: "turn/end", data: { reason: { kind: "completed" } } });
+    }
+    if (change === "running") agent.status = "running";
+    if (change === "cancelled") events.push({ seq: 4, type: "turn/end", data: { reason: { kind: "aborted", reason: "user" } } });
+    if (change === "disabled") config.enabled = false;
+    await new Promise(resolve => setTimeout(resolve, 25));
+    runtime.dispose();
+    assert.equal(sent.length, 0, change);
+  }
+});
