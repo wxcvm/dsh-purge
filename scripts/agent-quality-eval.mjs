@@ -34,11 +34,11 @@ const fixture = [
       edit: 'Existing evidence E7 was edited to include a previously missing timestamp; no new row was inserted.',
     },
     options: {
-      a: 'Yes, identical counts establish that no record was updated.',
-      b: 'No, identical counts alone cannot rule out an in-place edit.',
+      a: 'No, identical counts alone cannot rule out an in-place edit.',
+      b: 'Yes, identical counts establish that no record was updated.',
       c: 'The timestamp necessarily establishes a new score.',
     },
-    answer: 'b',
+    answer: 'a',
     evidence: ['before', 'after', 'edit'],
   },
   {
@@ -50,11 +50,11 @@ const fixture = [
       verification: 'No current-target verification record is available.',
     },
     options: {
-      a: 'The current record is confirmed to have the historical issue.',
-      b: 'The historical reference is relevant but applicability remains unverified.',
+      a: 'The historical reference is relevant but applicability remains unverified.',
+      b: 'The current record is confirmed to have the historical issue.',
       c: 'The current product is definitely unaffected.',
     },
-    answer: 'b',
+    answer: 'a',
     evidence: ['reference', 'fingerprint', 'verification'],
   },
   {
@@ -66,10 +66,10 @@ const fixture = [
     },
     options: {
       a: 'Yes, the three returned notes are the entire history.',
-      b: 'No, the summary omits nine notes; the earlier notes require review.',
-      c: 'The omitted notes must all contain confirmed findings.',
+      b: 'The omitted notes must all contain confirmed findings.',
+      c: 'No, the summary omits nine notes; the earlier notes require review.',
     },
-    answer: 'b',
+    answer: 'c',
     evidence: ['coverage'],
   },
   {
