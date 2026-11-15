@@ -1,0 +1,28 @@
+name: Windows Local Runner Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, Windows, X64, purge-ci]
+    timeout-minutes: 10
+    steps:
+      - name: Verify local Windows runner
+        shell: pwsh
+        run: |
+          Write-Host "Runner: $env:RUNNER_NAME"
+          Write-Host "OS: $env:RUNNER_OS"
+          Write-Host "Architecture: $env:RUNNER_ARCH"
+          git --version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify Node.js and npm
+        shell: pwsh
+        run: |
+          node --version
+          npm --version
