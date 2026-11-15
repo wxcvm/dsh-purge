@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pending:
     name: Pending specs (failures explicitly reported)
@@ -21,7 +25,7 @@ jobs:
         with:
           node-version: '24'
       - name: Install runtime dependencies without lifecycle scripts
-        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
       - name: Run pending specifications
         id: specs
         continue-on-error: true
