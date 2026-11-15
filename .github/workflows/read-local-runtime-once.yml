@@ -1,4 +1,4 @@
-name: Read local Purge runtime summary once
+name: Read archived Purge runtime metadata once
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -8,68 +8,115 @@ jobs:
   read-summary:
     if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/robin/read-runtime-usage-once'
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 2
+    timeout-minutes: 5
     steps:
-      - name: Read existing local metadata and emit anonymized numerical summary
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read only historical session metadata and emit anonymized numerical summary
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          try {
-            $s = Invoke-RestMethod -Uri 'http://127.0.0.1:43120/dsh-purge/runtime-observations?limit=200' -Method Get -NoProxy -TimeoutSec 8 -MaximumRedirection 0
-          } catch {
-            Write-Output 'PURGE_RUNTIME_RESULT={"status":"local-endpoint-unavailable"}'
-            exit 0
+          @'
+          import fs from 'node:fs'
+          import path from 'node:path'
+          import os from 'node:os'
+          import zlib from 'node:zlib'
+          const target = 'exploit-bucket-backstage'
+          const root = path.join(process.env.DSH_HOME || path.join(process.env.USERPROFILE || os.homedir(), '.dsh'), 'sessions')
+          const magic = Buffer.from([0x28,0xb5,0x2f,0xfd])
+          const fields = ['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens']
+          const reasons = new Set(['stop','tool-calls','max-tokens','error','aborted','content_filter'])
+          const numeric = v => typeof v === 'number' && Number.isFinite(v) && v >= 0
+          const out = x => console.log('PURGE_ARCHIVE_RESULT=' + JSON.stringify(x))
+          const dirs = d => { try { return fs.readdirSync(d,{withFileTypes:true}).filter(x=>x.isDirectory()&&!x.isSymbolicLink()).map(x=>x.name) } catch {return []} }
+          const files = []
+          for(const a of dirs(root)) for(const b of dirs(path.join(root,a))) {
+           const file = path.join(root,a,b,'session.v4.jsonl.zstd')
+           try { const s=fs.lstatSync(file); if(s.isFile()&&!s.isSymbolicLink()) files.push({file,id:b,mtime:s.mtimeMs,size:s.size}) } catch {}
           }
-          if ($s.schemaVersion -ne 1 -or $s.readOnly -ne $true -or $null -eq $s.items) {
-            Write-Output 'PURGE_RUNTIME_RESULT={"status":"unexpected-snapshot"}'
-            exit 0
-          }
-          function Numeric($v) {
-            if ($null -eq $v -or $v -is [bool] -or $v -is [string]) { return $false }
-            return ($v -is [ValueType] -and [double]::IsFinite([double]$v) -and [double]$v -ge 0)
-          }
-          function Stat($rows, $field, $usage) {
-            $sum = 0.0
-            $count = 0
-            foreach ($r in $rows) {
-              $v = if ($usage) { $r.usage.$field } else { $r.$field }
-              if (Numeric $v) { $sum += [double]$v; $count++ }
+          if(!files.length){out({status:'no-readable-session-archives',archiveCount:0});process.exit(0)}
+          files.sort((a,b)=>b.mtime-a.mtime)
+          const selected=files.slice(0,80)
+          const matchingIds=new Set(), records=[]
+          let scanned=0, compressedBytes=0, skipped=0, parsedEvents=0, incompleteFiles=0
+          const exact = x => typeof x==='string' && x===target
+          const labelMatch = x => x && typeof x==='object' && ['label','name','title'].some(k=>exact(x[k]))
+          function fieldSnapshot(u){return u&&typeof u==='object'&&fields.some(k=>numeric(u[k]))?u:null}
+          function newStat(){return Object.fromEntries(fields.map(k=>[k,{observedSum:null,observed:0,missing:0}]))}
+          for(const f of selected){
+           if(f.size>64*1024*1024 || compressedBytes+f.size>256*1024*1024){skipped++;continue}
+           compressedBytes+=f.size
+           let buf; try{buf=fs.readFileSync(f.file)}catch{skipped++;continue}
+           scanned++
+           const stat={id:f.id,matched:false,events:0,attemptEvents:0,usage:newStat(),finish:{stop:0,'tool-calls':0,'max-tokens':0,error:0,aborted:0,content_filter:0,unknown:0},toolStarts:0,withToolStream:0,invalidLines:0,duplicateSeq:0,frameErrors:0,complete:true,observedEventSpanMs:null}
+           let text='', decodedBytes=0, firstTs=null,lastTs=null
+           const seen=new Set()
+           const typeCounts=new Map()
+           const inspect=(obj)=>{
+            if(!obj||typeof obj!=='object')return
+            const e=obj.event&&typeof obj.event.type==='string'?obj.event:obj
+            const d=e.data
+            if(labelMatch(obj.header)||labelMatch(e.header)||labelMatch(d?.header)||labelMatch(obj.meta)||labelMatch(e.meta))stat.matched=true
+            if(['header','session/header','session/meta','session/create','session/created','session/start'].includes(e.type)&&(labelMatch(e)||labelMatch(d)))stat.matched=true
+            if(typeof e.type!=='string')return
+            if(Number.isSafeInteger(e.seq)){if(seen.has(e.seq)){stat.duplicateSeq++;return}seen.add(e.seq)}
+            stat.events++;parsedEvents++;typeCounts.set(e.type,(typeCounts.get(e.type)||0)+1)
+            for(const v of [e.timestamp,e.ts,e.time]){
+             const n=typeof v==='number'&&v>1e12&&v<1e14?v:typeof v==='string'&&/^\d{4}-\d\d-\d\dT/.test(v)?Date.parse(v):NaN
+             if(Number.isFinite(n)){firstTs=firstTs===null?n:Math.min(firstTs,n);lastTs=lastTs===null?n:Math.max(lastTs,n);break}
             }
-            return @{observedSum=if ($count -gt 0) {$sum} else {$null}; observed=$count; missing=$rows.Count-$count}
-          }
-          function Summary($rows) {
-            $usage = @{}
-            foreach ($f in @('inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens')) {
-              $usage[$f] = Stat $rows $f $true
+            if(e.type==='subagent/descriptor'||e.type==='subagent/catalog'){
+             const list=Array.isArray(d)?d:Array.isArray(d?.items)?d.items:Array.isArray(d?.children)?d.children:Array.isArray(d?.catalog)?d.catalog:[d]
+             for(const v of list){
+              if(labelMatch(v)||labelMatch(v?.descriptor)||labelMatch(v?.child)){
+               const id=v?.childId||v?.sessionId||v?.id||v?.descriptor?.id||v?.child?.id
+               if(typeof id==='string'&&id)matchingIds.add(id)
+              }
+             }
             }
-            return @{
-              attempts=$rows.Count
-              usage=$usage
-              elapsedMs=(Stat $rows 'elapsedMs' $false)
-              firstTextMs=(Stat $rows 'firstTextMs' $false)
-              liveToolStarts=(Stat $rows 'toolCalls' $false)
-              durableToolStarts=(Stat $rows 'durableToolStarts' $false)
-              observedErrors=@($rows | Where-Object { $_.finishObserved -eq $true -and $_.terminalConflict -ne $true -and $_.finish -eq 'error' }).Count
-              terminalConflicts=@($rows | Where-Object { $_.terminalConflict -eq $true }).Count
-              streamGaps=@($rows | Where-Object { $_.streamGap -eq $true }).Count
+            if(!['assistant/message','assistant/attempt'].includes(e.type))return
+            stat.attemptEvents++
+            let streamUsage=null,finish=null,starts=0
+            if(Array.isArray(d?.stream)){
+             stat.withToolStream++
+             for(const row of d.stream){const c=row?.chunk
+              if(c?.type==='usage'&&fieldSnapshot(c.usage))streamUsage=c.usage
+              if(c?.type==='finish'&&typeof c.reason?.kind==='string')finish=c.reason.kind
+              if(c?.type==='block-start'&&c.blockType==='tool-call')starts++
+             }
             }
+            stat.toolStarts+=starts
+            stat.finish[reasons.has(finish)?finish:'unknown']++
+            const eventUsage=fieldSnapshot(d?.usage)
+            const u= numeric(eventUsage?.totalTokens)?eventUsage:numeric(streamUsage?.totalTokens)?streamUsage:eventUsage||streamUsage
+            for(const k of fields){const a=stat.usage[k];if(numeric(u?.[k])){a.observedSum=(a.observedSum??0)+u[k];a.observed++}else a.missing++}
+           }
+           const line=s=>{if(!s.trim())return;try{inspect(JSON.parse(s))}catch{stat.invalidLines++}}
+           const processText=s=>{text+=s;let p;while((p=text.indexOf('\n'))!==-1){line(text.slice(0,p));text=text.slice(p+1)}if(text.length>32*1024*1024){stat.complete=false;text=''}}
+           // DSH writes independent zstd frames; use the same magic-boundary approach as
+           // the existing local diagnostic, with bounded per-frame and per-file decoding.
+           const starts=[];let pos=0
+           while((pos=buf.indexOf(magic,pos))!==-1){starts.push(pos);pos+=4}
+           if(!starts.length){stat.complete=false;stat.frameErrors++}
+           for(let i=0;i<starts.length;i++){
+            if(decodedBytes>=128*1024*1024){stat.complete=false;break}
+            try{
+             const frame=zlib.zstdDecompressSync(buf.subarray(starts[i],starts[i+1]??buf.length),{maxOutputLength:32*1024*1024})
+             decodedBytes+=frame.length
+             if(decodedBytes>128*1024*1024){stat.complete=false;break}
+             processText(frame.toString('utf8'))
+            }catch{stat.frameErrors++;stat.complete=false}
+           }
+           if(text.trim())line(text)
+           if(stat.invalidLines)stat.complete=false
+           if(!stat.complete)incompleteFiles++
+           stat.observedEventSpanMs=firstTs!==null&&lastTs!==null?lastTs-firstTs:null
+           records.push(stat)
           }
-          $rows = @($s.items | Where-Object { $null -ne $_ })
-          $groups = @($rows | Group-Object -Property sessionId | Sort-Object Count -Descending)
-          $summaries = @()
-          $n = 0
-          foreach ($g in $groups) {
-            $n++
-            $x = Summary @($g.Group)
-            $x['group'] = $n
-            $summaries += $x
-          }
-          $report = @{
-            status='ok'; completeHistory=$false
-            observedAttempts=$rows.Count
-            evicted=if (Numeric $s.evicted) {$s.evicted} else {$null}
-            streamObserved=($s.streamSupport -eq 'observed')
-            total=(Summary $rows)
-            groups=$summaries
-          }
-          Write-Output ('PURGE_RUNTIME_RESULT=' + ($report | ConvertTo-Json -Compress -Depth 8))
+          const matches=records.filter(x=>x.matched||matchingIds.has(x.id))
+          const candidateMatches=matches.length?matches:records.filter(x=>numeric(x.usage.totalTokens.observedSum)&&x.usage.totalTokens.observedSum>=14.05e6&&x.usage.totalTokens.observedSum<14.15e6)
+          const anonymize=(x,i)=>({sample:i+1,selection:matches.length?'exact-label-or-parent-descriptor':'rounded-total-candidate-unconfirmed',events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,toolStarts:x.toolStarts,assistantEventsWithStream:x.withToolStream,observedEventSpanMs:x.observedEventSpanMs,completeArchiveParse:x.complete,frameErrors:x.frameErrors,invalidLines:x.invalidLines,duplicateSeq:x.duplicateSeq})
+          out({status:matches.length?'matched':candidateMatches.length?'candidate-unconfirmed':'no-matching-archive',archiveCount:files.length,scanned,skipped,incompleteFiles,parsedEvents,matchedByLabel:matches.length,matchedCandidates:candidateMatches.slice(0,5).map(anonymize),coverage:{maxArchives:80,compressedBytes,allArchivesScanned:scanned===files.length}})
+          '@ | node --input-type=module -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
