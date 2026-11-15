@@ -90,3 +90,43 @@ test('registered agent and management bridge expose observed planner as an opt-i
     assert.match(frontend, /op: 'environmentTaskPlan'/)
   }
 })
+
+test('fresh discovery invalidates previous remote probes and changed local paths invalidate local probes', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-env-evidence-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const oldPath = join(root, 'old-nmap.exe')
+  const newPath = join(root, 'new-nmap.exe')
+  writeFileSync(oldPath, 'old')
+  writeFileSync(newPath, 'new')
+  const config = { platform: 'windows', tools: { nmap: oldPath }, binDirs: [], toolkitDir: join(root, 'missing') }
+  const options = { root, config, env: { PATH: '' } }
+  const snapshot = { environments: [
+    { id: 'local', kind: 'local' }, { id: 'wsl:Kali', kind: 'wsl' },
+  ] }
+  rememberEnvironmentDiscovery(root, snapshot)
+  rememberEnvironmentProbe(root, { toolId: 'nmap', environmentId: 'local', path: oldPath, status: 'probe_verified' })
+  rememberEnvironmentProbe(root, { toolId: 'nmap', environmentId: 'wsl:Kali', status: 'probe_verified' })
+  const candidate = (plan, id) => plan.candidates.find(c => c.toolId === 'nmap' && c.environmentId === id)
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'local').status, 'probe_verified')
+  config.tools.nmap = newPath
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'local').status, 'located')
+  rmSync(newPath)
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'local').status, 'missing')
+  rememberEnvironmentDiscovery(root, snapshot)
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'wsl:Kali').status, 'unknown')
+})
+
+test('changed saved SSH endpoint cannot reuse old discovered host or probe', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-env-ssh-evidence-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const config = { platform: 'windows', tools: {}, binDirs: [], toolkitDir: root,
+    kaliVm: { host: '192.0.2.1', port: 22, user: 'kali' } }
+  const options = { root, config, env: { PATH: '' } }
+  rememberEnvironmentDiscovery(root, { environments: [{ id: 'local', kind: 'local' },
+    { id: 'ssh:kali-vm', kind: 'ssh', host: '192.0.2.1', port: 22, user: 'kali' }] })
+  rememberEnvironmentProbe(root, { toolId: 'nmap', environmentId: 'ssh:kali-vm', status: 'probe_verified' })
+  assert.equal(planObservedEnvironmentTask('services', options).selected.environmentId, 'ssh:kali-vm')
+  config.kaliVm.host = '192.0.2.2'
+  assert.equal(planObservedEnvironmentTask('services', options).selected, null)
+  assert.ok(planObservedEnvironmentTask('services', options).candidates.every(c => c.environmentId === 'local'))
+})
