@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "a678128b546c2dcb";
+		const CLIENT_BUILD_ID = "8404b3327f31bf26";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1946,29 +1946,34 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
-		function InjectSwitchSection() {
+		function InjectSwitchSection({ active = true } = {}) {
 			const [off, setOff] = useState(null);
 			const [busy, setBusy] = useState(false);
 			const [error, setError] = useState("");
 			const pending = useRef(false);
 			const epoch = useRef(0);
 			useEffect(() => {
-				let active = true;
-				const load = () => {
-					if (pending.current) return;
-					const serial = epoch.current;
-					apiJson("/dsh-purge/inject")
-						.then((d) => {
-							if (!active || serial !== epoch.current || pending.current) return;
-							if (d && d.ok) { setOff(d.off === true); setError(""); }
-							else setError((d && d.error) || "无法读取注入状态");
-						})
-						.catch((e) => { if (active) setError(String(e.message || e)); });
+				if (!active) return;
+				let stopped = false, timer;
+				const load = async () => {
+					if (stopped) return;
+					if (!pending.current && document.visibilityState !== "hidden") {
+						const serial = epoch.current;
+						try {
+							const d = await apiJson("/dsh-purge/inject");
+							if (!stopped && serial === epoch.current && !pending.current) {
+								if (d && d.ok) { setOff(d.off === true); setError(""); }
+								else setError((d && d.error) || "无法读取注入状态");
+							}
+						} catch (e) {
+							if (!stopped && serial === epoch.current && !pending.current) setError(String(e.message || e));
+						}
+					}
+					if (!stopped) timer = window.setTimeout(load, 2000);
 				};
 				load();
-				const timer = window.setInterval(load, 2000);
-				return () => { active = false; window.clearInterval(timer); };
-			}, []);
+				return () => { stopped = true; window.clearTimeout(timer); };
+			}, [active]);
 			const save = (next) => {
 				if (pending.current || off === null) return;
 				pending.current = true;
@@ -2602,25 +2607,27 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 			useEffect(() => {
 				if (!patchBusy && !uninstallBusy) return undefined;
-				let stop = false;
-				const tick = () => {
-					apiJson("/dsh-purge/status")
-						.then((d) => {
-							if (stop || !d || actionTerminal.current) return;
-							if (d.apply_progress) {
-								setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
-								return;
-							}
-							if (!d.ok) return;
-							setState((prev) => Object.assign({}, prev || {}, d));
-						})
-						.catch(() => {});
+				let stop = false, timer;
+				const tick = async () => {
+					if (stop) return;
+					try {
+						const d = await apiJson("/dsh-purge/status");
+						if (stop || !d || actionTerminal.current) return;
+						if (d.apply_progress) {
+							setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
+							return;
+						}
+						if (!d.ok) return;
+						setState((prev) => Object.assign({}, prev || {}, d));
+					} catch { /* The action response owns the final result. */ }
+					finally {
+						if (!stop && !actionTerminal.current) timer = setTimeout(tick, 450);
+					}
 				};
 				tick();
-				const id = setInterval(tick, 450);
 				return () => {
 					stop = true;
-					clearInterval(id);
+					clearTimeout(timer);
 				};
 			}, [patchBusy, uninstallBusy]);
 
@@ -3093,7 +3100,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
 				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
-				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
+				cleanPane(["prompt"], h(InjectSwitchSection, { active: !section || section === "prompt" }), h(HooksDenySection, { onSaved: loadAll })),
 
 				askUninstall ? h("div", {
 					className: "dshp-modal-bg",
@@ -4007,7 +4014,7 @@ function runtimeRouteKey(row) {
   return JSON.stringify([row.provider ?? null, row.model ?? null]);
 }
 
-function RuntimeObservationsSection({ onNavigate } = {}) {
+function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const [snapshot, setSnapshot] = useState(null), [error, setError] = useState('');
   const [report, setReport] = useState(null), [reportError, setReportError] = useState('');
   const [session, setSession] = useState('');
@@ -4015,8 +4022,8 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
   const [route, setRoute] = useState('');
   const root = useRef(null);
   useEffect(() => {
+    if (!active) return;
     let stopped = false, timer, controller;
-    setSnapshot(null); setError('');
     async function refresh() {
       if (stopped) return;
       if (document.visibilityState !== 'hidden' && root.current?.getClientRects().length) {
@@ -4034,7 +4041,7 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
     }
     refresh();
     return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
-  }, [session]);
+  }, [session, active]);
   async function importReport(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -4216,7 +4223,8 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
 							h("button", { type: "button", key, onClick: () => setSection(key) }, name))) : null,
 					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" },
 						h(PurgifySection, { section })),
-					section === "runtime" ? h(RuntimeObservationsSection, { onNavigate: setSection }) : null,
+					h("div", { className: "dshp-clean-pane", hidden: section !== "runtime" },
+						h(RuntimeObservationsSection, { onNavigate: setSection, active: section === "runtime" })),
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 				),
@@ -10737,6 +10745,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
       const [query, setQuery] = React.useState('')
       const [source, setSource] = React.useState(initialSource)
+      const [category, setCategory] = React.useState('')
+      const [categories, setCategories] = React.useState([])
       const [groups, setGroups] = React.useState([])
       const [detail, setDetail] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -10755,10 +10765,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         } catch (e) { if (id === seq.current) setError(String(e.message || e)) }
         finally { if (id === seq.current) setBusy(false) }
       }
-      const search = (selected = source) => {
+      const search = (selected = source, selectedCategory = category, offset = 0) => {
         setDetail(null); setGroups([]); setSearched(false)
         if (!query.trim() && selected !== 'bundled') return
-        run({ op: 'knowledgeUnifiedSearch', query: query.trim(), source: selected }, r => { setGroups(r.groups); setSearched(true) })
+        run({ op: 'knowledgeUnifiedSearch', query: query.trim(), source: selected, category: selected === 'bundled' ? selectedCategory : '', offset }, r => { setGroups(r.groups); setSearched(true); const built = r.groups.find(g => g.source === 'bundled'); if (built?.categories) setCategories(built.categories) })
       }
       React.useEffect(() => { if (initialSource === 'bundled') search('bundled') }, [initialSource])
       const open = (group, item) => {
@@ -10770,8 +10780,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('p', null, '内置知识安装即用，留空可浏览全部内置条目；选择全部来源并输入关键词可跨库搜索。每个来源最多展示 20 条。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
           h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
-          h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); search(e.target.value) } },
+          h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); setCategory(''); search(e.target.value, '') } },
             Object.entries(labels).map(([key, label]) => h('option', { key, value: key }, label))),
+          source === 'bundled' ? h('select', { className: 'rt-input', 'aria-label': '内置知识分类', value: category, disabled: busy, onChange: e => { setCategory(e.target.value); search('bundled', e.target.value) } },
+            h('option', { value: '' }, '全部分类'), categories.map(name => h('option', { key: name, value: name }, name))) : null,
           h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || (!query.trim() && source !== 'bundled'), onClick: () => search() }, busy ? '读取中…' : '搜索')),
         error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
         !searched && !busy ? h('div', { className: 'rt-empty' }, (source === 'bundled' ? '正在准备内置知识，或点击搜索重新加载' : '输入关键词开始检索')) : null,
@@ -10781,12 +10793,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           group.available && !group.items.length ? h('p', null, '无匹配结果') : null,
           group.items.map(item => h('div', { key: item.id, style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '6px 0' } },
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(group, item) }, item.title),
-            h('span', { className: 'rt-ops-subtle' }, [item.category, item.description].filter(Boolean).join(' · ')))))),
+            h('span', { className: 'rt-ops-subtle' }, [item.category, item.description].filter(Boolean).join(' · ')))),
+          group.source === 'bundled' && source === 'bundled' ? h('div', { className: 'rt-toolbar' },
+            h('button', { className: 'rt-btn', disabled: busy || !group.offset, onClick: () => search('bundled', category, Math.max(0, group.offset - 20)) }, '上一页'),
+            h('span', null, '第 ' + (Math.floor((group.offset || 0) / 20) + 1) + ' 页'),
+            h('button', { className: 'rt-btn', disabled: busy || !group.hasMore, onClick: () => search('bundled', category, (group.offset || 0) + 20) }, '下一页')) : null)),
         detail ? h('div', { style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
           h('h4', null, detail.title),
           h('p', null, '来源：' + labels[detail.origin] + (detail.truncated ? ' · 原文显示已截断' : '')),
           h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情'),
-          h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文')) : null)
+          h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文'),
+          detail.related?.length ? h('div', null, h('h4', null, '相关内置知识'), detail.related.map(item => h('button', { key: item.id, className: 'rt-btn', disabled: busy, onClick: () => open({ source: 'bundled' }, item) }, item.title))) : null) : null)
     }
 
     function knowledgeCredentialMessage(result) {
