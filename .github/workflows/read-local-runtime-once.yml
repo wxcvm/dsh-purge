@@ -1,0 +1,75 @@
+name: Read local Purge runtime summary once
+on:
+  push:
+    branches: [robin/read-runtime-usage-once]
+permissions:
+  contents: read
+jobs:
+  read-summary:
+    if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/robin/read-runtime-usage-once'
+    runs-on: [self-hosted, Windows, X64, purge-ci]
+    timeout-minutes: 2
+    steps:
+      - name: Read existing local metadata and emit anonymized numerical summary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            $s = Invoke-RestMethod -Uri 'http://127.0.0.1:43120/dsh-purge/runtime-observations?limit=200' -Method Get -NoProxy -TimeoutSec 8 -MaximumRedirection 0
+          } catch {
+            Write-Output 'PURGE_RUNTIME_RESULT={"status":"local-endpoint-unavailable"}'
+            exit 0
+          }
+          if ($s.schemaVersion -ne 1 -or $s.readOnly -ne $true -or $null -eq $s.items) {
+            Write-Output 'PURGE_RUNTIME_RESULT={"status":"unexpected-snapshot"}'
+            exit 0
+          }
+          function Numeric($v) {
+            if ($null -eq $v -or $v -is [bool] -or $v -is [string]) { return $false }
+            return ($v -is [ValueType] -and [double]::IsFinite([double]$v) -and [double]$v -ge 0)
+          }
+          function Stat($rows, $field, $usage) {
+            $sum = 0.0
+            $count = 0
+            foreach ($r in $rows) {
+              $v = if ($usage) { $r.usage.$field } else { $r.$field }
+              if (Numeric $v) { $sum += [double]$v; $count++ }
+            }
+            return @{observedSum=if ($count -gt 0) {$sum} else {$null}; observed=$count; missing=$rows.Count-$count}
+          }
+          function Summary($rows) {
+            $usage = @{}
+            foreach ($f in @('inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens')) {
+              $usage[$f] = Stat $rows $f $true
+            }
+            return @{
+              attempts=$rows.Count
+              usage=$usage
+              elapsedMs=(Stat $rows 'elapsedMs' $false)
+              firstTextMs=(Stat $rows 'firstTextMs' $false)
+              liveToolStarts=(Stat $rows 'toolCalls' $false)
+              durableToolStarts=(Stat $rows 'durableToolStarts' $false)
+              observedErrors=@($rows | Where-Object { $_.finishObserved -eq $true -and $_.terminalConflict -ne $true -and $_.finish -eq 'error' }).Count
+              terminalConflicts=@($rows | Where-Object { $_.terminalConflict -eq $true }).Count
+              streamGaps=@($rows | Where-Object { $_.streamGap -eq $true }).Count
+            }
+          }
+          $rows = @($s.items | Where-Object { $null -ne $_ })
+          $groups = @($rows | Group-Object -Property sessionId | Sort-Object Count -Descending)
+          $summaries = @()
+          $n = 0
+          foreach ($g in $groups) {
+            $n++
+            $x = Summary @($g.Group)
+            $x['group'] = $n
+            $summaries += $x
+          }
+          $report = @{
+            status='ok'; completeHistory=$false
+            observedAttempts=$rows.Count
+            evicted=if (Numeric $s.evicted) {$s.evicted} else {$null}
+            streamObserved=($s.streamSupport -eq 'observed')
+            total=(Summary $rows)
+            groups=$summaries
+          }
+          Write-Output ('PURGE_RUNTIME_RESULT=' + ($report | ConvertTo-Json -Compress -Depth 8))
