@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  rememberEnvironmentDiscovery, rememberEnvironmentProbe, planObservedEnvironmentTask,
+  rememberEnvironmentDiscovery, rememberEnvironmentProbe, planObservedEnvironmentTask, agentEnvironmentPlan,
 } from '../lib/redteam/environment-planner.js'
 
 test('cross-environment ranking requires real probe observations and never labels target execution', (t) => {
@@ -135,4 +135,27 @@ test('agent records path-only local verification as located rather than degraded
   const agent = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
   assert.match(agent, /result\.verification\.status === 'path-only' \? 'located'/)
   assert.match(agent, /result\.verification\.status === 'missing' \? 'missing'/)
+})
+
+test('agent fallback is lazy, verified-only and respects explicit local-only mode', () => {
+  const local = { ok: true, selected: { id: 'nmap' }, status: 'located' }
+  const missing = { ok: true, selected: null, status: 'missing' }
+  const failed = { ...local, status: 'verification-failed' }
+  const remote = { environmentId: 'wsl:Kali', toolId: 'nmap', status: 'probe_verified' }
+  const unknown = { environmentId: 'ssh:kali-vm', toolId: 'nmap', status: 'unknown' }
+  const candidates = [{ environmentId: 'local', toolId: 'nmap', status: 'located' }, unknown, remote]
+  let calls = 0
+  const get = () => { calls++; return { ok: true, candidates, selected: candidates[0] } }
+  assert.equal(agentEnvironmentPlan(local, undefined, get), null)
+  assert.equal(agentEnvironmentPlan(missing, false, get), null)
+  assert.equal(agentEnvironmentPlan({ ok: false }, undefined, get), null)
+  assert.equal(calls, 0)
+  const fallback = agentEnvironmentPlan(missing, undefined, get)
+  assert.deepEqual(fallback.candidates, [remote])
+  assert.equal(fallback.selected, remote)
+  assert.equal(fallback.totalCandidates, 3)
+  assert.equal(agentEnvironmentPlan(failed, undefined, get).selected, remote)
+  assert.equal(agentEnvironmentPlan(missing, undefined, () => ({ ok: true, candidates: [unknown] })), null)
+  assert.equal(agentEnvironmentPlan(missing, true, get).candidates.length, 3)
+  assert.equal(agentEnvironmentPlan(local, true, () => ({ ok: true, candidates: Array(15).fill(remote) })).candidates.length, 12)
 })
