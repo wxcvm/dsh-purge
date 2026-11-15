@@ -36,7 +36,7 @@ test("host layout failures fall back to the Dock instead of escaping", () => {
 });
 
 test("failed host navigation keeps the workspace visible", () => {
-  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*setNavigationError\(""\);\s*setWorkspaceVisible\(false\)/);
+  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*setNavigationError\(""\);\s*__dshPurgeDrill\.setTemporaryPrivacy\(null\);\s*setWorkspaceVisible\(false\)/);
 });
 
 test("a page render failure leaves navigation available and supports retry", () => {

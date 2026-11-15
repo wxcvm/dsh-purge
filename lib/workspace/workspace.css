@@ -52,6 +52,7 @@ html[data-windows-titlebar] .dshp-workspace[data-default-full="1"] .dshp-workspa
 .dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}
 .dshp-workspace .dshp-workspace-tabs button,
 .dshp-workspace .dshp-workspace-back,
+.dshp-workspace .dshp-workspace-privacy,
 .dshp-workspace .dshp-workspace-fullscreen{
   appearance:none;border:1px solid transparent;border-radius:8px;
   padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;
@@ -59,12 +60,14 @@ html[data-windows-titlebar] .dshp-workspace[data-default-full="1"] .dshp-workspa
 }
 .dshp-workspace .dshp-workspace-tabs button:hover,
 .dshp-workspace .dshp-workspace-back:hover,
+.dshp-workspace .dshp-workspace-privacy:hover,
 .dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}
 .dshp-workspace .dshp-workspace-tabs button[aria-selected="true"]{
   background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;
 }
 .dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}
 .dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}
+.dshp-workspace .dshp-workspace-privacy{border-color:#365477;color:#d3e5f6;padding:7px 10px}
 .dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}
 .dshp-workspace .dshp-dock-body{
   display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;
