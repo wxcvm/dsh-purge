@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "82595d3c6dec5652";
+		const CLIENT_BUILD_ID = "a678128b546c2dcb";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4058,6 +4058,13 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
   const counts = { all: routeItems.length, running: 0, attention: 0, ended: 0 };
   for (const row of routeItems) counts[runtimeRowStatus(row).key]++;
   const shown = routeItems.filter(row => filter === 'all' || runtimeRowStatus(row).key === filter);
+  const evidence = { text: 0, tools: 0, terminal: 0, cancelled: 0 };
+  for (const row of routeItems) {
+    if (row.firstTextMs != null) evidence.text++;
+    if (row.toolCalls > 0) evidence.tools++;
+    if (row.finishObserved) evidence.terminal++;
+    if (row.turnOutcome === 'aborted' || row.finish === 'aborted') evidence.cancelled++;
+  }
   const metric = (title, count) => h('div', { className: 'dshp-runtime-metric' },
     h('small', null, title), h('strong', null, snapshot ? count : '—'));
   const detail = (title, content) => h('div', null, h('dt', null, title), h('dd', null, content));
@@ -4080,6 +4087,7 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
     error ? h('p', { role: 'alert' }, error + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
     h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
     h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
+    snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
     !snapshot ? h('div', { role: 'status', className: 'dshp-runtime-empty', 'aria-busy': !error },
       h('strong', null, error ? '暂时无法读取运行记录' : '正在读取运行状态…'),
       h('p', null, error ? '页面可见时会自动刷新，无需重复发起模型请求。' : '正在获取近期请求，请稍候。')) :
@@ -10725,10 +10733,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
-    function UnifiedKnowledgeTab() {
-      const labels = { all: '全部来源', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+    function UnifiedKnowledgeTab({ initialSource = 'all' } = {}) {
+      const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
       const [query, setQuery] = React.useState('')
-      const [source, setSource] = React.useState('all')
+      const [source, setSource] = React.useState(initialSource)
       const [groups, setGroups] = React.useState([])
       const [detail, setDetail] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -10749,23 +10757,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       const search = (selected = source) => {
         setDetail(null); setGroups([]); setSearched(false)
-        if (!query.trim()) return
+        if (!query.trim() && selected !== 'bundled') return
         run({ op: 'knowledgeUnifiedSearch', query: query.trim(), source: selected }, r => { setGroups(r.groups); setSearched(true) })
       }
+      React.useEffect(() => { if (initialSource === 'bundled') search('bundled') }, [initialSource])
       const open = (group, item) => {
         setDetail(null)
         run({ op: 'knowledgeUnifiedGet', source: group.source, id: item.id }, r => setDetail(r.item))
       }
       return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
         h('h4', null, '全库检索'),
-        h('p', null, '按来源查询本地知识，每个来源最多展示 20 条；外部资料只读。'),
+        h('p', null, '内置知识安装即用，留空可浏览全部内置条目；选择全部来源并输入关键词可跨库搜索。每个来源最多展示 20 条。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
           h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
           h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); search(e.target.value) } },
             Object.entries(labels).map(([key, label]) => h('option', { key, value: key }, label))),
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !query.trim(), onClick: () => search() }, busy ? '读取中…' : '搜索')),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || (!query.trim() && source !== 'bundled'), onClick: () => search() }, busy ? '读取中…' : '搜索')),
         error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
-        !searched && !busy ? h('div', { className: 'rt-empty' }, '输入关键词开始检索') : null,
+        !searched && !busy ? h('div', { className: 'rt-empty' }, (source === 'bundled' ? '正在准备内置知识，或点击搜索重新加载' : '输入关键词开始检索')) : null,
         groups.map(group => h('div', { key: group.source, style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
           h('h4', null, labels[group.source] + (group.available ? ' · ' + (group.total == null ? '展示 ' + group.items.length : group.total + ' 条') : ' · 不可用')),
           group.error || group.note ? h('p', { className: 'rt-ops-subtle' }, group.error || group.note) : null,
@@ -11031,8 +11040,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             'aria-pressed': view === key, onClick: () => select(key) }, label))),
         page('search', h('div', { className: 'rt-pane' },
           h('div', { className: 'rt-note', style: { marginBottom: 8 } },
-            '按来源检索个人资料、CVE 索引、内置技能、AboutSecurity 与 ARTEX；DSH 官方技能仍可在技能目录查看。'),
-          h(UnifiedKnowledgeTab))),
+            'Purge 内置知识随安装提供，默认直接展示；选择全部来源可同时检索个人资料、CVE 索引、内置技能、AboutSecurity 与 ARTEX。DSH 官方技能仍可在技能目录查看。'),
+          h(UnifiedKnowledgeTab, { initialSource: 'bundled' }))),
         page('skills', h(SkillsTab, { refreshKey })),
         page('knowledge', h(KnowledgeCenterTab, { embeddedLibrary: true })))
     }

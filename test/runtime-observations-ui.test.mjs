@@ -134,4 +134,5 @@ test('runtime route filter uses actual observed provider/model pairs and keeps u
   select.props.onChange({target:{value:''}})
   assert.deepEqual(updates,[[6,'']])
   assert.match(JSON.stringify(tree),/不代表全部 Provider 或协议已兼容/)
+  assert.match(JSON.stringify(tree),/当前路由证据（请求数）：首文本 0 · 工具调用 0 · 已观测终态 0 · 取消 0/)
 })

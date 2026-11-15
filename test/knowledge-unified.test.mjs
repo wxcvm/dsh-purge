@@ -18,8 +18,9 @@ test('unified results preserve source identity and isolate absent or broken sour
     }
     const call = (op, args) => unifiedKnowledgeRequest(root, { op, ...args }, options)
     const r = call('knowledgeUnifiedSearch', { query: 'sqlite' })
-    assert.equal(r.groups.length, 5)
-    assert.deepEqual(r.groups.map(g => g.source), ['personal','cve','redteam','aboutsecurity','artex'])
+    assert.equal(r.groups.length, 6)
+    assert.deepEqual(r.groups.map(g => g.source), ['bundled','personal','cve','redteam','aboutsecurity','artex'])
+    r.groups.shift() // existing source-specific assertions below
     assert.equal(r.groups[0].items[0].id, String(doc.id))
     assert.equal(r.groups[1].items[0].verified, false)
     assert.equal(r.groups[2].items[0].id, 'redteam:sqlite')
@@ -90,4 +91,26 @@ test('federated search reads the skill catalog once and reports bounded result c
     ])
     assert.equal(result.groups[0].items.some(x => Object.hasOwn(x, 'body')), false)
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+
+test('bundled knowledge is readable offline before creating a personal database', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-bundled-'))
+  try {
+    const call = args => unifiedKnowledgeRequest(root, args)
+    const result = call({ op:'knowledgeUnifiedSearch', source:'bundled', query:'' }).groups[0]
+    assert.equal(result.total, 18)
+    assert.equal(result.items.length, 18)
+    assert.equal(new Set(result.items.map(item => item.id)).size, 18)
+    assert.ok(result.items.every(item => !Object.hasOwn(item, 'body')))
+    const article = call({op:'knowledgeUnifiedGet',source:'bundled',id:'stream-sse'}).item
+    assert.equal(article.origin,'bundled')
+    assert.match(article.body,/首个非空文本/)
+    const matched = call({op:'knowledgeUnifiedSearch',source:'bundled',query:'Provider'}).groups[0]
+    assert.ok(matched.items.some(item=>item.id==='provider-adapters'))
+    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',category:'Purge 使用'}).groups[0].total,2)
+    assert.throws(()=>call({op:'knowledgeUnifiedGet',source:'bundled',id:'unknown'}),/不存在/)
+    assert.equal(knowledgeRequest(root,{op:'knowledgeList'}).total,0)
+    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0].total,18)
+  } finally { rmSync(root,{recursive:true,force:true}) }
 })
