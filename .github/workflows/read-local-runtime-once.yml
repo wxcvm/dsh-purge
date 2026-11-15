@@ -1,4 +1,4 @@
-name: Read archived Purge runtime metadata once
+name: Diagnose archived Purge request failures once
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -27,6 +27,27 @@ jobs:
           const magic = Buffer.from([0x28,0xb5,0x2f,0xfd])
           const fields = ['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens']
           const reasons = new Set(['stop','tool-calls','max-tokens','error','aborted','content_filter'])
+          const allowedCodes = new Set(['ECONNRESET','ECONNREFUSED','ETIMEDOUT','ENOTFOUND','EAI_AGAIN','EPIPE','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','UND_ERR_SOCKET','ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_SSL_WRONG_VERSION_NUMBER','ABORT_ERR','ERR_ABORTED','AbortError','TimeoutError','rate_limit_exceeded','insufficient_quota','invalid_request_error','authentication_error','permission_error','overloaded_error','server_error','api_error','context_length_exceeded','invalid_api_key','network_error','timeout','connection_error','stream_error','provider_error','HTTP_ERROR','FETCH_ERROR'])
+          function safeError(reason){
+           const f=reason?.failure
+           const code=typeof f?.code==='string'&&allowedCodes.has(f.code)?f.code:null
+           const status=Number.isInteger(f?.status)&&f.status>=100&&f.status<=599?f.status:null
+           const message=typeof f?.message==='string'?f.message:''
+           let category='unclassified'
+           if(status===429||code==='rate_limit_exceeded')category='rate-limit'
+           else if(status===401||status===403)category='auth-or-permission'
+           else if(status!==null&&status>=500)category='server-http'
+           else if(status!==null&&status>=400)category='client-http'
+           else if(['ECONNRESET','ECONNREFUSED','EPIPE','UND_ERR_SOCKET','network_error','connection_error'].includes(code)||/socket hang up|connection reset|connection refused|unexpected eof|connection closed|fetch failed/i.test(message))category='connection'
+           else if(['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','TimeoutError','timeout'].includes(code)||/timed out|timeout/i.test(message))category='timeout'
+           else if(['ENOTFOUND','EAI_AGAIN'].includes(code))category='dns'
+           else if(['ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_SSL_WRONG_VERSION_NUMBER'].includes(code)||/certificate verify|tls handshake|ssl handshake/i.test(message))category='tls'
+           else if(['ABORT_ERR','ERR_ABORTED','AbortError'].includes(code))category='abort'
+           else if(code==='context_length_exceeded')category='context-limit'
+           else if(code==='insufficient_quota')category='quota'
+           else if(code)category='other-known'
+           return {code,status,category,codePresent:typeof f?.code==='string',failurePresent:!!f,messagePresent:!!message}
+          }
           const numeric = v => typeof v === 'number' && Number.isFinite(v) && v >= 0
           const out = x => console.log('PURGE_ARCHIVE_RESULT=' + JSON.stringify(x))
           const dirs = d => { try { return fs.readdirSync(d,{withFileTypes:true}).filter(x=>x.isDirectory()&&!x.isSymbolicLink()).map(x=>x.name) } catch {return []} }
@@ -49,7 +70,7 @@ jobs:
            compressedBytes+=f.size
            let buf; try{buf=fs.readFileSync(f.file)}catch{skipped++;continue}
            scanned++
-           const stat={id:f.id,matched:false,events:0,attemptEvents:0,usage:newStat(),finish:{stop:0,'tool-calls':0,'max-tokens':0,error:0,aborted:0,content_filter:0,unknown:0},toolStarts:0,withToolStream:0,invalidLines:0,duplicateSeq:0,frameErrors:0,complete:true,observedEventSpanMs:null}
+           const stat={id:f.id,matched:false,events:0,attemptEvents:0,usage:newStat(),finish:{stop:0,'tool-calls':0,'max-tokens':0,error:0,aborted:0,content_filter:0,unknown:0},toolStarts:0,withToolStream:0,invalidLines:0,duplicateSeq:0,frameErrors:0,complete:true,observedEventSpanMs:null,errors:[],terminalSequence:[],turnEnds:[],assistantEventTypes:{message:0,attempt:0}}
            let text='', decodedBytes=0, firstTs=null,lastTs=null
            const seen=new Set()
            const typeCounts=new Map()
@@ -62,9 +83,10 @@ jobs:
             if(typeof e.type!=='string')return
             if(Number.isSafeInteger(e.seq)){if(seen.has(e.seq)){stat.duplicateSeq++;return}seen.add(e.seq)}
             stat.events++;parsedEvents++;typeCounts.set(e.type,(typeCounts.get(e.type)||0)+1)
+            let eventTs=null
             for(const v of [e.timestamp,e.ts,e.time]){
              const n=typeof v==='number'&&v>1e12&&v<1e14?v:typeof v==='string'&&/^\d{4}-\d\d-\d\dT/.test(v)?Date.parse(v):NaN
-             if(Number.isFinite(n)){firstTs=firstTs===null?n:Math.min(firstTs,n);lastTs=lastTs===null?n:Math.max(lastTs,n);break}
+             if(Number.isFinite(n)){eventTs=n;firstTs=firstTs===null?n:Math.min(firstTs,n);lastTs=lastTs===null?n:Math.max(lastTs,n);break}
             }
             if(e.type==='subagent/descriptor'||e.type==='subagent/catalog'){
              const list=Array.isArray(d)?d:Array.isArray(d?.items)?d.items:Array.isArray(d?.children)?d.children:Array.isArray(d?.catalog)?d.catalog:[d]
@@ -75,19 +97,23 @@ jobs:
               }
              }
             }
+            if(e.type==='turn/end'){const k=d?.reason?.kind;stat.turnEnds.push({kind:['completed','aborted','error','cancelled','canceled','interrupted','stopped','failed'].includes(k)?k:'unknown',time:eventTs})}
             if(!['assistant/message','assistant/attempt'].includes(e.type))return
             stat.attemptEvents++
-            let streamUsage=null,finish=null,starts=0
+            stat.assistantEventTypes[e.type==='assistant/message'?'message':'attempt']++
+            let streamUsage=null,finish=null,finishReason=null,starts=0
             if(Array.isArray(d?.stream)){
              stat.withToolStream++
              for(const row of d.stream){const c=row?.chunk
               if(c?.type==='usage'&&fieldSnapshot(c.usage))streamUsage=c.usage
-              if(c?.type==='finish'&&typeof c.reason?.kind==='string')finish=c.reason.kind
+              if(c?.type==='finish'&&typeof c.reason?.kind==='string'){finish=c.reason.kind;finishReason=c.reason}
               if(c?.type==='block-start'&&c.blockType==='tool-call')starts++
              }
             }
             stat.toolStarts+=starts
             stat.finish[reasons.has(finish)?finish:'unknown']++
+            stat.terminalSequence.push({kind:reasons.has(finish)?finish:'unknown',time:eventTs})
+            if(finish==='error')stat.errors.push({eventIndex:stat.attemptEvents,eventType:e.type==='assistant/message'?'message':'attempt',time:eventTs,...safeError(finishReason)})
             const eventUsage=fieldSnapshot(d?.usage)
             const u= numeric(eventUsage?.totalTokens)?eventUsage:numeric(streamUsage?.totalTokens)?streamUsage:eventUsage||streamUsage
             for(const k of fields){const a=stat.usage[k];if(numeric(u?.[k])){a.observedSum=(a.observedSum??0)+u[k];a.observed++}else a.missing++}
@@ -112,11 +138,12 @@ jobs:
            if(stat.invalidLines)stat.complete=false
            if(!stat.complete)incompleteFiles++
            stat.observedEventSpanMs=firstTs!==null&&lastTs!==null?lastTs-firstTs:null
+           stat.firstTs=firstTs
            records.push(stat)
           }
           const matches=records.filter(x=>x.matched||matchingIds.has(x.id))
           const candidateMatches=matches.length?matches:records.filter(x=>numeric(x.usage.totalTokens.observedSum)&&x.usage.totalTokens.observedSum>=14.05e6&&x.usage.totalTokens.observedSum<14.15e6)
-          const anonymize=(x,i)=>({sample:i+1,selection:matches.length?'exact-label-or-parent-descriptor':'rounded-total-candidate-unconfirmed',events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,toolStarts:x.toolStarts,assistantEventsWithStream:x.withToolStream,observedEventSpanMs:x.observedEventSpanMs,completeArchiveParse:x.complete,frameErrors:x.frameErrors,invalidLines:x.invalidLines,duplicateSeq:x.duplicateSeq})
+          const anonymize=(x,i)=>({sample:i+1,selection:matches.length?'exact-label-or-parent-descriptor':'rounded-total-candidate-unconfirmed',events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,toolStarts:x.toolStarts,assistantEventsWithStream:x.withToolStream,observedEventSpanMs:x.observedEventSpanMs,completeArchiveParse:x.complete,frameErrors:x.frameErrors,invalidLines:x.invalidLines,duplicateSeq:x.duplicateSeq,assistantEventTypes:x.assistantEventTypes,errors:x.errors.map(({time,...e})=>({...e,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),terminalSequence:x.terminalSequence.map(({kind,time})=>({kind,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),turnEnds:x.turnEnds.map(({kind,time})=>({kind,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null}))})
           out({status:matches.length?'matched':candidateMatches.length?'candidate-unconfirmed':'no-matching-archive',archiveCount:files.length,scanned,skipped,incompleteFiles,parsedEvents,matchedByLabel:matches.length,matchedCandidates:candidateMatches.slice(0,5).map(anonymize),coverage:{maxArchives:80,compressedBytes,allArchivesScanned:scanned===files.length}})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
