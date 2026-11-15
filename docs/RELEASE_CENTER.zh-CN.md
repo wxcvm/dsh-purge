@@ -4,12 +4,13 @@
 
 > 本页为私有仓库的维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前版本快照 · 2026-11-12
+## 当前版本快照 · 2026-11-15
 
 | 渠道 | 源码版本 | Git 标签 | 状态 |
 | --- | --- | --- | --- |
-| Stable | [1.1.92-wxcvm.6](../package.json) | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | master 源码与标签版本已核对 |
-| Beta | [1.1.92-wxcvm.7-beta.3](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | [v1.1.92-wxcvm.7-beta.3](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.7-beta.3) | beta 源码与标签版本已核对；未提升为 Stable |
+| Stable 历史标签 | 1.1.92-wxcvm.6 | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | 保留旧标签；新版本发布前仍为历史交付基线 |
+| Stable 候选 | [1.1.92-wxcvm.7](../package.json) | 尚未创建 | 集成候选，最终 CI、资产与实机验收待核验 |
+| Beta | [1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 发布资产与标签待独立核验 | beta 源码版本已核对；不整体覆盖 master |
 
 **注意：** Git 标签存在不等于 Release 已发布、资产齐全、校验通过或实机验收完成。本次文档维护没有下载或验证发布资产，也没有执行任何发布流程。
 
@@ -30,7 +31,7 @@
 
 - 在已登录且具备仓库权限的 GitHub 会话中访问 Releases，选择明确的版本和实际上传资产。
 - 若版本提供 SHA256SUMS，下载后核对相应文件的 SHA-256；没有校验文件时不记录为已完成校验。
-- 旧的匿名安装地址、包内公开下载 URL 和自动更新仍需单独适配；本页不宣称这些路径已经修复。
+- 匿名安装地址和 codeload URL 不能直接访问私有仓库。#268 已合并授权更新与恢复实现；实际安装、升级和重启结果仍需核验。参见 [更新恢复](UPDATE_RECOVERY.zh-CN.md)。
 - GitHub 访问令牌不得写入发布文件、日志或仓库文档。
 
 ## 发布与验收记录模板
