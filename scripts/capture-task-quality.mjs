@@ -20,6 +20,24 @@ export function validateCaptureConfig(c) {
   return c;
 }
 
+/** Validate observed routes across all retained attempts; absent evidence is not a zero. */
+export function captureMetrics(probe, expectedRoute, elapsedMs, events) {
+  const items = probe?.items;
+  if (!Array.isArray(items) || !items.length || items.some(a => !a.provider || !a.model || a.provider + '/' + a.model !== expectedRoute)) {
+    throw new Error('actual model route missing/mismatched');
+  }
+  const metrics = { elapsedMs };
+  // The probe defaults to a bounded snapshot. Do not present partial usage as total usage.
+  const complete = probe.evicted === 0 && probe.frames?.start === items.length;
+  if (complete && items.every(a => Number.isFinite(a.usage?.totalTokens) && a.usage.totalTokens >= 0)) {
+    metrics.totalTokens = items.reduce((n, a) => n + a.usage.totalTokens, 0);
+  }
+  const first = items.at(-1);
+  if (complete && Number.isFinite(first.firstTextMs) && first.firstTextMs >= 0) metrics.firstTextMs = first.firstTextMs;
+  metrics.toolCalls = events.filter(e => e.type === 'tool_call').length;
+  return metrics;
+}
+
 export function capture(config, full = false) {
   const c = validateCaptureConfig(config);
   const out = fs.mkdtempSync(join(resolve('.scratch'), 'task-quality-'));
@@ -44,13 +62,12 @@ export function capture(config, full = false) {
       throw new Error('capture stopped on failed/incomplete run; partial observations retained at ' + out);
     }
     const probe = fs.existsSync(observation) ? JSON.parse(fs.readFileSync(observation, 'utf8')) : null;
-    const attempt = probe?.items?.[0];
-    if (!attempt || attempt.provider + '/' + attempt.model !== c[name].model) throw new Error('actual model route missing/mismatched; partial capture at ' + out);
-    const metrics = { elapsedMs: Date.now() - start };
-    if (probe.items.every(a => a.usage?.totalTokens != null)) metrics.totalTokens = probe.items.reduce((n, a) => n + a.usage.totalTokens, 0);
-    const first = probe.items.at(-1);
-    if (first?.firstTextMs != null) metrics.firstTextMs = first.firstTextMs;
-    metrics.toolCalls = events.filter(e => e.type === 'tool_call').length;
+    let metrics;
+    try { metrics = captureMetrics(probe, c[name].model, Date.now() - start, events); }
+    catch (error) {
+      fs.writeFileSync(join(out, 'incomplete.json'), JSON.stringify({ variant: name, case: task.id, reason: error.message }));
+      throw new Error(error.message + '; partial capture at ' + out);
+    }
     matrix[name].samples[task.id] = { response: String(final.text ?? ''), metrics };
     fs.writeFileSync(join(out, 'matrix.json'), JSON.stringify(matrix, null, 2));
   }
