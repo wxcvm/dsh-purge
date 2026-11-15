@@ -1,44 +1,52 @@
-name: Local ACL diagnostic
+name: Latest host local verification
+
 on:
   push:
     branches: [ci/local-acl-diagnostic-20261115]
     paths: ['.github/workflows/local-acl-diagnostic.yml']
+
 permissions:
   contents: read
+
 jobs:
-  verify-fixed-master:
+  windows-compatibility:
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 69c401a56dbe8f0c41b98152ae9958a78f053a7f
+          ref: c3a3454e9be43922409a6befe1e5dae44d402713
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Verify original failing ACL integration test
-        shell: pwsh
-        run: node --test test/storage-audit.test.mjs
-      - name: Prepare same official fixture
+      - name: Prepare latest official fixture, without host or model execution
         shell: pwsh
         run: |
-          node scripts/prepare-host-fixture.mjs 0.2.2-rc.2
+          $fixture = node scripts/prepare-host-fixture.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm install --prefix ".scratch/hosts/0.2.2-rc.2" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
-      - name: Verify generated bundle and Windows regressions
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
+      - name: Install isolated fixture with all lifecycle scripts disabled
+        shell: pwsh
+        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Check generated bundle and syntax
         shell: pwsh
         run: |
           node scripts/build-client.mjs --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/check-syntax.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./maintenance/inject-switch/Build.ps1
-          ./scripts/test-desktop-updater.ps1
-          ./scripts/test-desktop-updater-junction.ps1
-          ./scripts/test-private-acl.ps1
-      - name: Verify complete original test suite
+      - name: Compile optional Windows injection switch
         shell: pwsh
-        run: |
-          $env:DSH_COMPAT_HOST_ROOT = Join-Path $env:GITHUB_WORKSPACE '.scratch/hosts/0.2.2-rc.2'
-          node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
+        run: ./maintenance/inject-switch/Build.ps1
+      - name: Smoke-test Desktop updater and simulated rollback
+        shell: pwsh
+        run: ./scripts/test-desktop-updater.ps1
+      - name: Exercise Windows pnpm junction rollback
+        shell: pwsh
+        run: ./scripts/test-desktop-updater-junction.ps1
+      - name: Smoke-test optional Windows NTFS ACL protector
+        shell: pwsh
+        run: ./scripts/test-private-acl.ps1
+      - name: Run unit and public API contract tests
+        shell: pwsh
+        run: node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
