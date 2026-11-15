@@ -86,6 +86,8 @@ jobs:
         run: npm install --prefix ".scratch/hosts/${{ matrix.hosts }}" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
       - name: Run official host regression tests
         id: fixture-tests
+        env:
+          PURGE_CI_TEST_CONCURRENCY: ${{ vars.PURGE_CI_TEST_CONCURRENCY }}
         run: node scripts/run-compat-tests.mjs ${{ matrix.hosts }}
       - name: Report host result
         if: always()
