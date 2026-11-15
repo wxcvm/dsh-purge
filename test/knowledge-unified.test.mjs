@@ -99,18 +99,32 @@ test('bundled knowledge is readable offline before creating a personal database'
   try {
     const call = args => unifiedKnowledgeRequest(root, args)
     const result = call({ op:'knowledgeUnifiedSearch', source:'bundled', query:'' }).groups[0]
-    assert.equal(result.total, 18)
-    assert.equal(result.items.length, 18)
-    assert.equal(new Set(result.items.map(item => item.id)).size, 18)
+    assert.equal(result.total, 30)
+    assert.equal(result.items.length, 20)
+    assert.equal(new Set(result.items.map(item => item.id)).size, 20)
     assert.ok(result.items.every(item => !Object.hasOwn(item, 'body')))
     const article = call({op:'knowledgeUnifiedGet',source:'bundled',id:'stream-sse'}).item
     assert.equal(article.origin,'bundled')
     assert.match(article.body,/首个非空文本/)
     const matched = call({op:'knowledgeUnifiedSearch',source:'bundled',query:'Provider'}).groups[0]
     assert.ok(matched.items.some(item=>item.id==='provider-adapters'))
-    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',category:'Purge 使用'}).groups[0].total,2)
+    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',category:'Purge 使用'}).groups[0].total,3)
     assert.throws(()=>call({op:'knowledgeUnifiedGet',source:'bundled',id:'unknown'}),/不存在/)
     assert.equal(knowledgeRequest(root,{op:'knowledgeList'}).total,0)
-    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0].total,18)
+    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0].total,30)
   } finally { rmSync(root,{recursive:true,force:true}) }
+})
+
+
+test('bundled pagination and related references are stable', () => {
+  const call = args => unifiedKnowledgeRequest('/unused', args)
+  const first = call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0]
+  const second = call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',offset:20}).groups[0]
+  assert.equal(first.hasMore,true); assert.equal(second.hasMore,false)
+  assert.equal(second.items.length,10); assert.equal(second.offset,20)
+  assert.equal(new Set([...first.items,...second.items].map(row=>row.id)).size,30)
+  assert.ok(first.categories.includes('AI 运行时'))
+  const article = call({op:'knowledgeUnifiedGet',source:'bundled',id:'stream-sse'}).item
+  assert.ok(article.related.length>0)
+  assert.ok(article.related.every(row=>row.id!==article.id && row.category===article.category))
 })
