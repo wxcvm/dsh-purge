@@ -81,3 +81,14 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
   assert.ok(button); button.props.onClick();
   assert.deepEqual(all.updates.at(-1), [5, 'attention']);
 });
+
+test('stream end without observed finish is not labelled an observed terminal', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const ctx=vm.createContext({})
+  const status=vm.runInContext(panel+'\nruntimeRowStatus',ctx)
+  assert.equal(status({streamEnded:true,finishObserved:false}).key,'attention')
+  assert.equal(status({streamEnded:true,finishObserved:false}).label,'结束未观测')
+  assert.equal(status({turnOutcome:'completed',finishObserved:false}).key,'attention')
+  assert.equal(status({turnOutcome:'aborted',interrupted:true}).label,'已取消')
+  assert.equal(status({turnOutcome:'aborted',terminalConflict:true}).key,'attention')
+})
