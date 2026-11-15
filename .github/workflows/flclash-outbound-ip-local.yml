@@ -24,11 +24,39 @@ jobs:
           submodules: recursive
           persist-credentials: false
           path: flclash
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: '3.47.6'
-          cache: true
+      - name: Set up pinned Flutter SDK using native Windows PowerShell
+        shell: pwsh
+        run: |
+          $version = '3.47.6'
+          $root = Join-Path $env:RUNNER_TOOL_CACHE "flclash-flutter-$version"
+          $sdk = Join-Path $root 'flutter'
+          $flutter = Join-Path $sdk 'bin\flutter.bat'
+          if (-not (Test-Path -LiteralPath $flutter)) {
+            $manifest = Invoke-RestMethod 'https://storage.googleapis.com/flutter_infra_release/flutter/releases/releases_windows.json'
+            $release = $manifest.releases | Where-Object {
+              $_.version -eq $version -and $_.channel -eq 'stable' -and
+              (-not $_.dart_sdk_arch -or $_.dart_sdk_arch -eq 'x64')
+            } | Select-Object -First 1
+            if (-not $release) { throw "Flutter stable $version x64 not found" }
+            $zip = Join-Path $env:RUNNER_TEMP "flutter-$version-windows.zip"
+            $stage = Join-Path $env:RUNNER_TEMP "flclash-flutter-$version-$env:GITHUB_RUN_ID"
+            try {
+              Invoke-WebRequest -Uri "$($manifest.base_url)/$($release.archive)" -OutFile $zip
+              New-Item -ItemType Directory -Force -Path $stage | Out-Null
+              tar.exe -xf $zip -C $stage
+              if ($LASTEXITCODE -ne 0) { throw 'Flutter SDK extraction failed' }
+              if (-not (Test-Path (Join-Path $stage 'flutter\bin\flutter.bat'))) { throw 'Flutter SDK missing after extraction' }
+              New-Item -ItemType Directory -Force -Path $root | Out-Null
+              Move-Item -LiteralPath (Join-Path $stage 'flutter') -Destination $sdk
+            } finally {
+              Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
+              Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value (Join-Path $sdk 'bin')
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "FLUTTER_ROOT=$sdk"
+          & $flutter --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install Flutter dependencies
         working-directory: flclash
         run: flutter pub get
