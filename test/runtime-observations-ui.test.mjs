@@ -145,3 +145,13 @@ test('inactive runtime pane preserves local state without scheduling requests', 
  vm.runInContext(panel+'\nRuntimeObservationsSection({active:false})',ctx);
  assert.equal(count,0);assert.equal(cleanup,undefined);
 });
+
+
+test('runtime cards distinguish configured route from assistant-observed route', () => {
+  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const rows=[{generation:1,attemptId:'a',provider:'local',model:'actual',providerSource:'request-header',modelSource:'assistant-event',finishObserved:true}]
+  let i=0;
+  const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx)
+  assert.match(JSON.stringify(tree),/Provider：请求头配置 · 模型：助手事件/)
+})
