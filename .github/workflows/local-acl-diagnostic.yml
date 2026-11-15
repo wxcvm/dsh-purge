@@ -1,0 +1,52 @@
+name: Local ACL diagnostic
+on:
+  push:
+    branches: [ci/local-acl-diagnostic-20261115]
+    paths: ['.github/workflows/local-acl-diagnostic.yml']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Windows, X64, purge-ci]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compare the same isolated ACL fixture in both PowerShell versions
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:TEMP ('purge-acl-diagnostic-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $dir | Out-Null
+          try {
+            Set-Content -LiteralPath (Join-Path $dir 'fixture.txt') -Value 'unchanged'
+            $script = Join-Path $env:GITHUB_WORKSPACE 'scripts/protect-redteam-acl.ps1'
+            Write-Host 'PowerShell 7:'
+            & $script -Root $dir
+            Write-Host 'Windows PowerShell 5.1:'
+            & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Root $dir
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $diagnostic = Join-Path $dir 'diagnostic.ps1'
+            @'
+          param([string]$Root)
+          $ErrorActionPreference = 'Stop'
+          foreach ($item in @((Get-Item -LiteralPath $Root), (Get-Item -LiteralPath (Join-Path $Root 'fixture.txt')))) {
+            try {
+              $acl = Get-Acl -LiteralPath $item.FullName -ErrorAction Stop
+              $rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
+              foreach ($rule in $rules) {
+                if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
+                if ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) { continue }
+                if (-not ($rule.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::ReadData)) { continue }
+                $null = $rule.IdentityReference.Value
+              }
+              Write-Output ('ACL_OK ' + $item.PSIsContainer + ' rules=' + $rules.Count)
+            } catch {
+              Write-Output ('ACL_ERROR ' + $item.PSIsContainer + ' ' + $_.Exception.GetType().FullName + ' ' + $_.FullyQualifiedErrorId)
+            }
+          }
+          '@ | Set-Content -LiteralPath $diagnostic
+            & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $diagnostic -Root $dir
+          } finally {
+            Remove-Item -LiteralPath $dir -Recurse -Force
+          }
