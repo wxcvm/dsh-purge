@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "a59654e70a1aa3bc";
+		const CLIENT_BUILD_ID = "3757ee3325bd988c";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4076,6 +4076,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('small', null, title), h('strong', null, snapshot ? count : '—'));
   const detail = (title, content) => h('div', null, h('dt', null, title), h('dd', null, content));
   const source = r => ({ 'host-stream': '实时流', 'durable-stream': '持久事件', 'not-observed': '未观测' }[r.reasonSource] || '未观测');
+  const routeSource = kind => ({ 'request-header': '请求头配置', 'request-context': '请求上下文', 'assistant-event': '助手事件', 'not-observed': '未观测' }[kind] || '未观测');
   return h('section', { ref: root, className: 'dshp-runtime-observations' },
     h('div', { className: 'dshp-runtime-heading' },
       h('div', null, h('h3', null, '运行诊断 · 只读'), h('p', null, '观察近期请求、终态和异常，不保存提示、正文或工具参数。流结束不等于任务完成。')),
@@ -4113,7 +4114,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           detail('终态 / 回合', (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome)),
           detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
           detail('错误代码', value(r.errorCode)),
-          detail('终态来源', source(r))),
+          detail('终态来源', source(r)),
+          detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource))),
         r.streamGap || r.terminalConflict || r.interrupted ? h('p', { className: 'dshp-runtime-warning' }, [r.streamGap && '分片缺口', r.terminalConflict && '终态证据冲突', r.interrupted && '中断前缀'].filter(Boolean).join(' · ')) : null,
         h('details', null, h('summary', null, '任务质量与原始状态'),
           h('p', null, refusalLabel(r.assessment) + ' / ' + deliveryLabel(r.assessment)),

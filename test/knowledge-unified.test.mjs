@@ -128,3 +128,13 @@ test('bundled pagination and related references are stable', () => {
   assert.ok(article.related.length>0)
   assert.ok(article.related.every(row=>row.id!==article.id && row.category===article.category))
 })
+
+
+test('bundled multi-term search matches across title, tags and body and ranks relevant titles', () => {
+  const call = query => unifiedKnowledgeRequest('/unused', {op:'knowledgeUnifiedSearch', source:'bundled', query}).groups[0]
+  const results = call('Provider 协议')
+  assert.equal(results.items[0].id,'provider-adapters')
+  assert.ok(results.items.some(row=>row.id==='purge-diagnostics'))
+  assert.equal(call('Provider non-existent-phrase-abc').total,0)
+  assert.deepEqual(call('Provider 协议').items.map(row=>row.id),results.items.map(row=>row.id))
+});
