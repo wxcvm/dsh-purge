@@ -141,7 +141,7 @@ test('five privacy preset previews preserve locks and unrelated preferences', ()
     const start = src.indexOf('    function privacyPresetPreview(')
     const end = src.indexOf('    function LowImpactTab(', start)
     assert.ok(start >= 0 && end > start, path)
-    const preview = new Function(src.slice(start, end) + '\\nreturn privacyPresetPreview')()
+    const preview = new Function(src.slice(start, end) + '\nreturn privacyPresetPreview')()
     const preferences = { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: true }
     const management = { mode: 'manual', locked: ['maskHistory'] }
     for (const preset of ['recommended', 'sharing', 'default', 'low-impact', 'custom']) {
