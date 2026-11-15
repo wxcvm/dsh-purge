@@ -112,3 +112,12 @@ test('replacement and observed turn cancellation settle stale pending rows witho
   assert.equal(r.settlement, 'unobserved-end'); assert.equal(r.turnOutcome, 'aborted');
   assert.equal(r.streamEnded, false); assert.equal(r.finishObserved, false); assert.equal(r.elapsedMs, null);
 });
+
+test('unseen late chunk cannot replace the active agent of a session', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o, a);
+  const stray = { id: 's', session: a.session };
+  o.frame({ agent: stray, frame: { type: 'chunk', attemptId: 'old', revision: 99, index: 0, chunk: { type: 'finish', reason: { kind: 'stop' } } } });
+  chunk(o, a, 0, { type: 'finish', reason: { kind: 'error' } }); end(o, a, 1);
+  const r = o.snapshot().items;
+  assert.equal(r.length, 1); assert.equal(r[0].finish, 'error'); assert.equal(r[0].settlement, 'committed');
+});
