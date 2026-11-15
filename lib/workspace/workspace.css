@@ -136,3 +136,69 @@ html[data-windows-titlebar] .dshp-workspace[data-default-full="1"] .dshp-workspa
 .dshp-workspace-recovery p{font-size:13px;line-height:1.6;color:#a2b5cf;margin:0 0 18px}
 .dshp-workspace-recovery button{appearance:none;border:1px solid #365477;border-radius:8px;padding:9px 16px;background:#213a58;color:#eaf4ff;font:inherit;cursor:pointer}
 .dshp-workspace-recovery button:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}
+
+/* Compact runtime and repair cards reuse the existing clean workspace palette. */
+.dshp-runtime-heading,.dshp-runtime-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.dshp-runtime-heading h3{margin:0 0 6px}
+.dshp-runtime-heading p,.dshp-runtime-meta{color:var(--dshp-mute);font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.dshp-runtime-metrics,.dshp-runtime-grid,.dshp-repair-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:14px 0}
+.dshp-runtime-metric,.dshp-runtime-card,.dshp-repair-card{min-width:0;padding:14px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-paper);color:var(--dshp-ink)}
+.dshp-runtime-metric{display:flex;flex-direction:column;gap:5px}
+.dshp-runtime-metric small,.dshp-runtime-card dt{color:var(--dshp-mute);font-size:12px}
+.dshp-runtime-metric strong{font-size:24px;font-variant-numeric:tabular-nums}
+.dshp-runtime-card header,.dshp-repair-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dshp-runtime-card header strong{overflow-wrap:anywhere;min-width:0}
+.dshp-runtime-status{font-size:11px;padding:3px 7px;border-radius:6px;background:var(--dshp-fill);color:var(--dshp-ink);white-space:nowrap}
+.dshp-runtime-card[data-status="attention"] .dshp-runtime-status,.dshp-repair-card[data-status="attention"] .dshp-runtime-status,.dshp-runtime-warning{color:#ffcf96}
+.dshp-runtime-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.dshp-runtime-card dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:13px}
+.dshp-runtime-card details,.dshp-repair-card details{border-top:1px solid var(--dshp-line);padding-top:10px;font-size:12px;overflow-wrap:anywhere}
+.dshp-runtime-card summary,.dshp-repair-card summary{cursor:pointer}
+.dshp-runtime-filters,.dshp-clean-shortcuts{display:flex;gap:8px;flex-wrap:wrap}
+.dshp-runtime-filters button,.dshp-runtime-action,.dshp-clean-shortcuts button{appearance:none;cursor:pointer;border:1px solid var(--dshp-line);border-radius:8px;padding:8px 12px;font:inherit;color:var(--dshp-ink);background:var(--dshp-paper)}
+.dshp-runtime-filters button[aria-pressed="true"]{background:var(--dshp-fill);border-color:var(--dshp-accent)}
+.dshp-runtime-filters button:focus-visible,.dshp-runtime-action:focus-visible,.dshp-clean-shortcuts button:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:2px}
+.dshp-runtime-toolbar input{max-width:100%;padding:7px 9px;border:1px solid var(--dshp-line);border-radius:6px;color:var(--dshp-ink);background:var(--dshp-paper)}
+.dshp-runtime-empty{padding:22px;border:1px dashed var(--dshp-line);border-radius:10px;color:var(--dshp-mute)}
+.dshp-clean-shortcuts{margin:0 0 16px}
+.dshp-repair-card p{overflow-wrap:anywhere}
+
+/* Second pass: compact navigation, real status overview, and narrow window flow. */
+.dshp-clean-nav-group{margin:10px 10px 2px;color:#8ca6c6;font-size:11px;font-weight:700;letter-spacing:.04em}
+.dshp-clean-nav-item{flex-direction:row;align-items:flex-start;gap:9px;position:relative}
+.dshp-clean-nav-icon{flex:0 0 18px;color:inherit;margin-top:1px}
+.dshp-clean-nav-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.dshp-clean-nav-item[aria-current="page"]::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:#78b6ff}
+.dshp-overview-status{margin:0 0 18px}
+.dshp-overview-status header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px}
+.dshp-overview-status header h3{margin:0;font-size:15px}
+.dshp-overview-status header p{margin:5px 0 0;color:var(--dshp-mute);font-size:12px}
+.dshp-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px;margin-top:12px}
+.dshp-overview-card{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-bg,#0c1422);overflow-wrap:anywhere}
+.dshp-overview-card small,.dshp-overview-card span{color:var(--dshp-mute);font-size:12px;line-height:1.5}
+.dshp-overview-card strong{font-size:17px;line-height:1.4;color:var(--dshp-ink)}
+.dshp-overview-card[data-status="attention"] strong,.dshp-overview-status [data-status="attention"]{color:#ffcf96}
+.dshp-clean-workspace .dshp-panel{min-width:0;box-sizing:border-box}
+.dshp-clean-workspace .dshp-metric,.dshp-clean-workspace .dshp-now-ver,.dshp-clean-workspace .dshp-notice,.dshp-clean-workspace .dshp-hint{min-width:0;overflow-wrap:anywhere}
+.dshp-clean-workspace .dshp-ver{min-width:0;width:100%}
+.dshp-clean-workspace .dshp-clean-actions .dshp-btn{min-width:0;max-width:100%;white-space:normal}
+.dshp-clean-workspace .dshp-runtime-toolbar label{min-width:0;max-width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dshp-clean-workspace .dshp-runtime-toolbar input{box-sizing:border-box;min-width:0}
+.dshp-clean-workspace .dshp-runtime-status{white-space:normal;max-width:100%;overflow-wrap:anywhere}
+@media(max-width:800px){
+  .dshp-clean-nav-group{display:none}
+  .dshp-clean-nav-item{align-items:center;gap:6px}
+  .dshp-clean-nav-item[aria-current="page"]::before{left:8px;right:8px;bottom:2px;top:auto;width:auto;height:2px}
+}
+@media(max-width:560px){
+  .dshp-clean-workspace .dshp-panel{padding:12px}
+  .dshp-clean-workspace .dshp-edition{grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "sel" "btn"}
+  .dshp-clean-workspace .dshp-edition .dshp-btn{width:100%}
+  .dshp-clean-workspace .dshp-clean-actions .dshp-btn{flex:1 1 120px}
+  .dshp-clean-workspace .dshp-runtime-card dl{grid-template-columns:minmax(0,1fr)}
+}
+
+/* Third pass: actionable empty and loading states, without a new request path. */
+.dshp-runtime-empty strong{display:block;color:var(--dshp-ink);font-size:14px}
+.dshp-runtime-empty p{margin:6px 0 12px;line-height:1.55}
+.dshp-runtime-empty[aria-busy="true"]{border-style:solid}

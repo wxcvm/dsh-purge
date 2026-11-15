@@ -42,3 +42,81 @@ test('native panel source renders abstention and missing delivery evidence indep
   assert.match(body, /不确定（不触发动作） \/ 尚未验证/);
   assert.doesNotMatch(body, /明确拒答 \/ 有证据未交付/);
 });
+
+test('runtime cards separate missing evidence, cancellation and observed transport errors', () => {
+  const rows = [
+    { generation: 1, attemptId: 'pending', settlement: 'pending', firstTextMs: null },
+    { generation: 1, attemptId: 'finished', finishObserved: true, finish: 'stop', hostReason: 'stop', streamEnded: true, reasonSource: 'host-stream', firstTextMs: 0 },
+    { generation: 1, attemptId: 'cancelled', finish: 'aborted', turnOutcome: 'aborted' },
+    { generation: 1, attemptId: 'lost', settlement: 'unobserved-end', finishObserved: false },
+    { generation: 1, attemptId: 'failed', finish: 'error', errorCode: 'ECONNRESET', httpStatus: 503, terminalConflict: true, reasonSource: 'host-stream' },
+  ];
+  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  const render = filter => {
+    let i = 0;
+    const updates = [];
+    const ctx = { useState: v => { const at = i++; return [at === 0 ? { items: rows } : at === 5 ? filter : v, next => updates.push([at, next])]; },
+      useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) };
+    vm.createContext(ctx);
+    const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx);
+    const all = [];
+    function walk(n) { if (Array.isArray(n)) { n.forEach(walk); return; } if (!n || typeof n !== 'object') return; all.push(n); walk(n.children); }
+    walk(tree);
+    return { all, cards: all.filter(n => n.type === 'article'), updates };
+  };
+  const all = render('all');
+  assert.equal(all.cards.length, 5);
+  assert.equal(all.cards.map(n => n.props['data-status']).join(','), 'running,ended,ended,attention,attention');
+  const body = JSON.stringify(all.cards);
+  assert.match(body, /0 \/ 未观测 ms/);
+  assert.match(body, /已取消/);
+  assert.match(body, /结束未观测/);
+  assert.match(body, /ECONNRESET/);
+  assert.match(body, /503/);
+  assert.match(body, /终态证据冲突/);
+  assert.equal(render('attention').cards.length, 2);
+  assert.equal(render('running').cards.length, 1);
+  assert.equal(render('ended').cards.length, 2);
+  const button = all.all.find(n => n.type === 'button' && n.children.includes('异常 2'));
+  assert.ok(button); button.props.onClick();
+  assert.deepEqual(all.updates.at(-1), [5, 'attention']);
+});
+
+test('stream end without observed finish is not labelled an observed terminal', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const ctx=vm.createContext({})
+  const status=vm.runInContext(panel+'\nruntimeRowStatus',ctx)
+  assert.equal(status({streamEnded:true,finishObserved:false}).key,'attention')
+  assert.equal(status({streamEnded:true,finishObserved:false}).label,'结束未观测')
+  assert.equal(status({turnOutcome:'completed',finishObserved:false}).key,'attention')
+  assert.equal(status({turnOutcome:'aborted',interrupted:true}).label,'已取消')
+  assert.equal(status({turnOutcome:'aborted',terminalConflict:true}).key,'attention')
+})
+
+
+test('runtime empty states distinguish loading, failed read and active filters', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url),'utf8');
+  const render=(snapshot,error,session,filter) => {
+    let i=0; const updates=[], nodes=[];
+    const ctx=vm.createContext({useState:v=>{const at=i++;return [[snapshot,error,null,'',session,filter][at] ?? v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})});
+    const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx);
+    function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n&&typeof n==='object'){nodes.push(n);walk(n.children)}}walk(tree);
+    return {body:JSON.stringify(tree),nodes,updates};
+  };
+  assert.match(render(null,'','','all').body,/正在读取运行状态/);
+  assert.match(render(null,'HTTP 503','','all').body,/暂时无法读取运行记录/);
+  assert.match(render({items:[]},'','','all').body,/暂无运行记录/);
+  const filtered=render({items:[]},'','session-1','attention');
+  assert.match(filtered.body,/当前筛选没有匹配记录/);
+  filtered.nodes.find(n=>n.type==='button'&&n.children.includes('清除筛选')).props.onClick();
+  assert.deepEqual(filtered.updates,[[5,'all'],[0,null],[1,''],[4,'']]);
+});
+
+
+test('inactive runtime pane preserves local state without scheduling requests', () => {
+ const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8');
+ let count=0,cleanup;
+ const ctx=vm.createContext({useState:v=>[v,()=>{count++}],useRef:()=>({}),useEffect:f=>{cleanup=f()},h:(type,props,...children)=>({type,props,children}),fetch:()=>{count++},setTimeout:()=>{count++}});
+ vm.runInContext(panel+'\nRuntimeObservationsSection({active:false})',ctx);
+ assert.equal(count,0);assert.equal(cleanup,undefined);
+});

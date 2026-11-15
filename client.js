@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "fc3a93bb98030a58";
+		const CLIENT_BUILD_ID = "90be731f8c503b70";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1415,7 +1415,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					layer: "",
 					title: "",
 				}));
-			return rows.filter((r) => r.st && r.st !== "na" && Number.isFinite(r.id));
+			return rows.filter((r) => r.st && r.st !== "na" && Number.isFinite(r.id)).map(r => ({ ...r, memberStates: Object.fromEntries(r.ids.map(id => [id, state.patch_status?.[id] || "未知"])) }));
 		}
 
 		function patchIdLabel(r) {
@@ -1472,8 +1472,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				const id = String(row.id);
 				seen.add(id);
 				const old = prior.get(id);
-				if (old && old.st === row.st) continue;
-				changes.push({ id: patchIdLabel(row), title: row.title || (old && old.title) || id, before: old ? old.st : "未列出", after: row.st });
+				if (!old || old.st !== row.st) {
+					changes.push({ id: patchIdLabel(row), title: row.title || (old && old.title) || id, before: old ? old.st : "未列出", after: row.st });
+				} else if (old.memberStates && row.memberStates) {
+					const members = new Set([...Object.keys(old.memberStates), ...Object.keys(row.memberStates)]);
+					for (const member of members) {
+						const before = old.memberStates[member] || "未列出", after = row.memberStates[member] || "未列出";
+						if (before !== after) changes.push({ id: "#" + member, title: row.title || id, before, after });
+					}
+				}
 			}
 			for (const row of before || []) {
 				if (seen.has(String(row.id))) continue;
@@ -1668,16 +1675,29 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
               setSnapshot(await apiJson("/dsh-purge/repair-center"));
             } catch(e) { setError(String(e.message || e)); } finally { setWorking(false); }
           };
+          const checks = snapshot?.checks || [];
+          const rank = row => row.ok === false ? 0 : row.ok === null ? 1 : 2;
+          const ordered = [...checks].sort((a, b) => rank(a) - rank(b));
           return h("div", { className: "dshp-clean-browser" },
             h("div", { className: "dshp-sub" }, h("h4", null, "常见故障诊断与修复")),
             h("p", { className: "dshp-hint" }, "检查启动配置、安装 YAML、公共运行时、插件加载和已知历史卡顿。只修明确异常；不删会话、不清账号、不自动卸载插件。"),
             h(Btn, { disabled: busy || working, onClick: scan }, working ? "处理中…" : "检查常见故障"),
-            error ? h("p", { role: "alert" }, error) : null,
+            error ? h("p", { role: "alert", className: "dshp-runtime-warning" }, error + (snapshot ? "；下方为上次成功读取的检查结果。" : "")) : null,
             notice ? h("p", { role: "status" }, notice) : null,
-            snapshot ? h("div", null, snapshot.checks.map(row => h("div", { key: row.id, className: "dshp-sub" },
-              h("strong", null, row.title + " · " + (row.ok === true ? "正常/无需处理" : row.ok === null ? "未验收" : "需要处理")),
-              h("p", { className: "dshp-hint" }, row.status + (row.details ? " — " + row.details : "")),
-              row.repairable ? h(Btn, { disabled: busy || working, onClick: () => repair(row.id) }, "修复此项（先备份）") : null)),
+            !snapshot ? h("div", { className: "dshp-runtime-empty", role: "status", "aria-busy": working },
+              h("strong", null, working ? "正在检查常见故障…" : error ? "暂时无法读取检查结果" : "尚未检查常见故障"),
+              h("p", null, working ? "正在读取本机状态。" : "点击上方按钮执行只读检查。")) : null,
+            snapshot ? h("div", null,
+              h("div", { className: "dshp-runtime-metrics" },
+                [["需要处理", checks.filter(r => r.ok === false).length], ["未验收", checks.filter(r => r.ok === null).length], ["正常/无需处理", checks.filter(r => r.ok === true).length]].map(([name, count]) =>
+                  h("div", { className: "dshp-runtime-metric", key: name }, h("small", null, name), h("strong", null, count)))),
+              snapshot.checkedAt ? h("p", { className: "dshp-hint" }, "最近检查：" + new Date(snapshot.checkedAt).toLocaleString()) : null,
+              !checks.length ? h("p", { className: "dshp-runtime-empty", role: "status" }, "本次未返回检查项目，不能据此判断全部正常。") : null,
+              h("div", { className: "dshp-repair-grid" }, ordered.map(row => h("article", { key: row.id, className: "dshp-repair-card", "data-status": row.ok === false ? "attention" : row.ok === null ? "unknown" : "normal" },
+                h("header", null, h("strong", null, row.title), h("span", { className: "dshp-runtime-status" }, row.ok === true ? "正常/无需处理" : row.ok === null ? "未验收" : "需要处理")),
+                h("p", { className: "dshp-hint" }, row.status),
+                row.details ? h("details", { open: row.ok === false }, h("summary", null, "检查详情"), h("p", null, row.details)) : null,
+                row.repairable ? h(Btn, { disabled: busy || working, onClick: () => repair(row.id) }, "修复此项（先备份）") : null))),
               snapshot.receipts.length ? h("details", null, h("summary", null, "最近修复与回滚"), snapshot.receipts.map(r => h("div", { key: r.id },
                 h("p", null, r.action + " · " + r.phase + " · " + r.at),
                 r.phase === "complete" ? h(Btn, { disabled: busy || working, onClick: () => repair("rollback", r.id) }, "回滚此项（校验后执行）") : null))) : null) : null);
@@ -1761,7 +1781,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [shownDiagnostics, setShownDiagnostics] = useState(null);
 			const [refreshBusy, setRefreshBusy] = useState(false);
 			const [refreshReport, setRefreshReport] = useState(null);
-			if (!state || !state.patch_status) return h("div", { className: "dshp-skel", style: { height: 120 } });
+			if (!state || state.ok === false || !state.patch_status) return h("div", { className: "dshp-runtime-empty", role: "status" },
+				h("strong", null, state?.ok === false ? "宿主状态读取失败" : "尚未读取补丁状态"),
+				h("p", null, state?.ok === false ? "当前无法判断补丁是否已应用，请重新检测。" : "等待宿主状态，或点击重新检测。"),
+				h(Btn, { tiny: true, disabled: busy || refreshBusy, onClick: async () => {
+					setRefreshBusy(true); setRefreshReport(null);
+					try { await onRefresh(); } catch (e) { setRefreshReport({ error: String(e.message || e) }); }
+					finally { setRefreshBusy(false); }
+				} }, refreshBusy ? "检测中…" : "重新检测"),
+				refreshReport?.error ? h("p", { role: "alert" }, refreshReport.error) : null);
 
 			const rows = patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) }));
 			const tally = tallyPatches(rows);
@@ -1827,6 +1855,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			};
 			return h("div", { className: "dshp-clean-browser" },
 				h("div", { className: "dshp-clean-tools" },
+					h("p", { className: "dshp-block-hint" }, "补丁状态反映当前宿主磁盘检测结果；已应用不等于当前进程已加载。实际运行版本请在状态总览核对。"),
 					h("label", { className: "dshp-clean-search" },
 						"查找补丁",
 						h("input", {
@@ -1852,15 +1881,16 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h(Btn, { tiny: true, disabled: Boolean(busy || refreshBusy), onClick: refreshPatches }, refreshBusy ? "检测中…" : "重新检测"),
 						h(Btn, { tiny: true, onClick: () => copyDiagnostics(filteredDiagnostics, "当前筛选") }, "复制当前筛选"),
 						h(Btn, { tiny: true, onClick: () => copyDiagnostics(diagnostics, "完整") }, "复制完整诊断"),
+						searching ? h(Btn, { tiny: true, onClick: () => { setMode("all"); setSearch(""); } }, "清除筛选") : null,
 					),
 					copyNotice ? h("p", { className: "dshp-hint", role: "status" }, copyNotice) : null,
-					refreshReport ? h("div", { className: "dshp-clean-refresh", role: "status" },
+					refreshReport ? h("div", { className: "dshp-clean-refresh", role: refreshReport.error ? "alert" : "status" },
 						refreshReport.error ? "重新检测失败：" + refreshReport.error
 						: (refreshReport.changes.length
 							? h("details", { open: true },
 								h("summary", null, "已重新检测，" + refreshReport.changes.length + " 项补丁状态发生变化"),
 								h("ul", null, refreshReport.changes.map((change) =>
-									h("li", { key: change.id }, change.id + " " + change.title + "：" + change.before + " → " + change.after))))
+									h("li", { key: change.id }, change.id + " " + change.title + "：" + statusLabel(change.before, t) + " → " + statusLabel(change.after, t)))))
 							: "已重新检测；补丁状态没有变化")
 					) : null,
 					showDiagnostic ? h("pre", {
@@ -1871,7 +1901,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				!state.ai_base
 					? h("p", { className: "dshp-hint" }, "尚未定位到宿主；诊断可复制，补丁列表等待宿主加载。")
 					: selected.length === 0
-						? h("p", { className: "dshp-hint", role: "status" }, "没有匹配的补丁；可清空搜索或切换到「全部」。")
+						? h("div", { className: "dshp-runtime-empty", role: "status" }, h("strong", null, rows.length ? "没有匹配的补丁" : "本次未返回补丁项目"), h("p", null, rows.length ? "可清空搜索或切换到「全部」。" : "无法据此确认所有补丁正常。"))
 						: GROUP_ORDER.filter((key) => groups.has(key)).map((key) => {
 							const visible = groups.get(key).slice().sort((a, b) => a.id - b.id);
 							const local = tallyPatches(visible);
@@ -1916,29 +1946,34 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
-		function InjectSwitchSection() {
+		function InjectSwitchSection({ active = true } = {}) {
 			const [off, setOff] = useState(null);
 			const [busy, setBusy] = useState(false);
 			const [error, setError] = useState("");
 			const pending = useRef(false);
 			const epoch = useRef(0);
 			useEffect(() => {
-				let active = true;
-				const load = () => {
-					if (pending.current) return;
-					const serial = epoch.current;
-					apiJson("/dsh-purge/inject")
-						.then((d) => {
-							if (!active || serial !== epoch.current || pending.current) return;
-							if (d && d.ok) { setOff(d.off === true); setError(""); }
-							else setError((d && d.error) || "无法读取注入状态");
-						})
-						.catch((e) => { if (active) setError(String(e.message || e)); });
+				if (!active) return;
+				let stopped = false, timer;
+				const load = async () => {
+					if (stopped) return;
+					if (!pending.current && document.visibilityState !== "hidden") {
+						const serial = epoch.current;
+						try {
+							const d = await apiJson("/dsh-purge/inject");
+							if (!stopped && serial === epoch.current && !pending.current) {
+								if (d && d.ok) { setOff(d.off === true); setError(""); }
+								else setError((d && d.error) || "无法读取注入状态");
+							}
+						} catch (e) {
+							if (!stopped && serial === epoch.current && !pending.current) setError(String(e.message || e));
+						}
+					}
+					if (!stopped) timer = window.setTimeout(load, 2000);
 				};
 				load();
-				const timer = window.setInterval(load, 2000);
-				return () => { active = false; window.clearInterval(timer); };
-			}, []);
+				return () => { stopped = true; window.clearTimeout(timer); };
+			}, [active]);
 			const save = (next) => {
 				if (pending.current || off === null) return;
 				pending.current = true;
@@ -2184,7 +2219,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				style: { display: "grid", gap: 8, marginTop: 8, overflowWrap: "anywhere" } },
 				h("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
 					h("b", null, "版本更新进度"),
-					h("span", { className: "dshp-pill" }, p?.stage === "failed" ? "失败" : p?.stage === "awaiting_restart" ? "待核验" : p?.active || pending ? "进行中" : "已结束")),
+					h("span", { className: "dshp-pill" }, p?.stage === "failed" ? "失败" : p?.stage === "awaiting_restart" ? "待核验" : unavailable && (pending || p?.active) ? "连接中断" : p?.active || pending ? "进行中" : p?.stage === "done" ? "已结束" : "状态未确认")),
 				h("b", null, updateStageLabel(p?.stage)),
 				p?.ref ? h("span", null, "目标：" + (p.targetVersion ? p.targetVersion + " · " : "") + p.ref + (p.targetSha ? " · " + p.targetSha.slice(0, 7) : "")) : null,
 				elapsed != null ? h("span", null, "已耗时 " + Math.max(0, Math.floor(elapsed / 1000)) + " 秒" +
@@ -2197,7 +2232,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				p?.stage === "copying" ? h("div", { style: { display: "grid", gap: 6 } },
 					h("span", null, "文件组 " + copyCount + "/" + (copyTotal || "—") + (p.group ? " · " + p.group : "")),
 					copyTotal ? h("progress", { "aria-label": "当前文件覆盖进度", value: Math.min(copyCount, copyTotal), max: copyTotal, style: { width: "100%" } }) : null) : null,
-				unavailable && (pending || p?.active) ? h("span", null, "状态连接暂时中断，显示上次收到的进度；请勿重复切换。") : null,
+				unavailable && (pending || p?.active) ? h("span", { role: "status" }, p ? "状态连接暂时中断，显示上次收到的进度；请勿重复切换。" : "尚未收到更新进度，连接暂不可用；请勿重复切换。") : null,
 				p?.profileMigrationPending ? h("span", null, "本地安装包已准备，仍需退出宿主后完成 profile 安装来源迁移。") : null,
 				p?.stage === "awaiting_restart" ? h("span", null, "本次文件更新已结束；重启后还需核对实际运行版本。") : null,
 				p?.error ? h("span", { style: { color: "#ef4444", whiteSpace: "pre-wrap" } }, (p.failedStage ? updateStageLabel(p.failedStage) + "：" : "") + p.error) : null);
@@ -2243,6 +2278,28 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						"目标完整 SHA：" + r.targetSha) : null) : null,
 				unavailable ? h("span", { className: "dshp-hint" }, "状态连接暂不可用，以上为上次读取的结果。") : null,
 				h("span", { className: "dshp-hint" }, "仅核验记录中的四个关键文件和当前宿主，不代表其他宿主已重启。"));
+		}
+
+		// The overview uses the already fetched state, never extra requests.
+		function CleanOverviewStatus({ state, localVersion, hostSurface, located, tally, jobOn, updateBusy, flowFinished, flowInterrupted }) {
+			const loaded = state?.plugin_identity?.loaded;
+			const disk = state?.plugin_identity?.disk || state?.plugin_version;
+			const diskBuild = state?.plugin_renderer_disk_build_id;
+			const stale = Boolean((loaded && disk && loaded !== disk) || (diskBuild && diskBuild !== CLIENT_BUILD_ID));
+			const host = state?.host_identity?.package;
+			const card = (label, value, detail, status = "neutral") => h("div", { className: "dshp-overview-card", "data-status": status },
+				h("small", null, label), h("strong", null, value), h("span", null, detail));
+			const status = state?.ok === false ? "读取异常" : !state ? "读取中" : stale ? "需要重新加载" : "状态已读取";
+			return h("section", { className: "dshp-overview-status", "aria-label": "当前运行环境" },
+				h("header", null, h("div", null, h("h3", null, "当前运行环境"),
+					h("p", null, "基于本机状态；磁盘版本与已加载版本分别显示。")),
+					h("span", { className: "dshp-runtime-status", "data-status": state?.ok === false || stale ? "attention" : "neutral", role: "status" }, status)),
+				h("div", { className: "dshp-overview-grid" },
+					card("插件版本", localVersion || "未读取", "已加载 " + (loaded || "未知") + " · 磁盘 " + (disk || "未知"), stale ? "attention" : "neutral"),
+					card("宿主环境", host?.version || "版本未知", (hostSurface === "desktop" ? "桌面" : hostSurface === "cli" ? "命令行" : "界面/未知") + " · " + (located ? "已定位宿主目录" : state ? "宿主目录未定位" : "等待检测"), state && !located ? "attention" : "neutral"),
+					card("补丁待关注", state && located ? String(tally.pending + tally.unmatched) : "—", located ? "待应用 " + tally.pending + " · 未匹配 " + tally.unmatched : "尚无完整补丁状态", located && (tally.pending || tally.unmatched) ? "attention" : "neutral"),
+					card("当前操作", updateBusy ? "版本操作中" : jobOn ? "处理中" : state?.apply_progress?.error ? "操作失败" : flowInterrupted ? "结果未确认" : flowFinished ? "操作已结束" : "空闲",
+						state?.apply_progress?.error ? String(state.apply_progress.error) : "清洗进度与补丁比例独立", state?.apply_progress?.error || flowInterrupted ? "attention" : "neutral")));
 		}
 
 		function PurgifySection({ section } = {}) {
@@ -2317,6 +2374,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const defaultOverrideRef = useRef("");
 			const promptSeededRef = useRef(false);
 			const promptDirtyRef = useRef(false);
+			const [savedOverride, setSavedOverride] = useState(null);
+			const overrideReadEpoch = useRef(0);
 			const promptAreaRef = useRef(null);
 			overrideRef.current = override;
 			defaultOverrideRef.current = defaultOverride;
@@ -2512,21 +2571,24 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						syncPicks(d);
 					})
 					.catch(() => {});
+				const readEpoch = ++overrideReadEpoch.current;
 				apiJson("/dsh-purge/override")
 					.then((d) => {
+						if (readEpoch !== overrideReadEpoch.current) return;
 						if (d && d.ok) {
 							const packed = typeof d.defaultContent === "string" ? d.defaultContent : "";
 							const shown = typeof d.content === "string" ? d.content : packed;
 							if (packed) setDefaultOverride(packed);
+							setSavedOverride(shown);
 							if (!promptSeededRef.current || !promptDirtyRef.current) {
 								promptSeededRef.current = true;
-								setOverride(shown || packed);
+								setOverride(shown);
 							}
 							setOverrideLoaded(true);
 						}
 						else setNotice({ kind: "error", text: tr("err.override", { error: (d && d.error) || "" }) });
 					})
-					.catch((e) => setNotice({ kind: "error", text: tr("err.override", { error: e.message }) }));
+					.catch((e) => { if (readEpoch === overrideReadEpoch.current) setNotice({ kind: "error", text: tr("err.override", { error: e.message }) }); });
 				apiJson("/dsh-purge/own-servers")
 					.then((d) => {
 						if (d && d.ok) {
@@ -2545,25 +2607,27 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 			useEffect(() => {
 				if (!patchBusy && !uninstallBusy) return undefined;
-				let stop = false;
-				const tick = () => {
-					apiJson("/dsh-purge/status")
-						.then((d) => {
-							if (stop || !d || actionTerminal.current) return;
-							if (d.apply_progress) {
-								setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
-								return;
-							}
-							if (!d.ok) return;
-							setState((prev) => Object.assign({}, prev || {}, d));
-						})
-						.catch(() => {});
+				let stop = false, timer;
+				const tick = async () => {
+					if (stop) return;
+					try {
+						const d = await apiJson("/dsh-purge/status");
+						if (stop || !d || actionTerminal.current) return;
+						if (d.apply_progress) {
+							setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
+							return;
+						}
+						if (!d.ok) return;
+						setState((prev) => Object.assign({}, prev || {}, d));
+					} catch { /* The action response owns the final result. */ }
+					finally {
+						if (!stop && !actionTerminal.current) timer = setTimeout(tick, 450);
+					}
 				};
 				tick();
-				const id = setInterval(tick, 450);
 				return () => {
 					stop = true;
-					clearInterval(id);
+					clearTimeout(timer);
 				};
 			}, [patchBusy, uninstallBusy]);
 
@@ -2591,6 +2655,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						},
 					}));
 					const applyContent = action === "apply" ? readPromptBox() : "";
+					if (action === "apply") overrideReadEpoch.current++;
 					fetch("/dsh-purge/" + action, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
@@ -2621,7 +2686,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							if (action === "apply") {
 								if (typeof d.defaultContent === "string") setDefaultOverride(d.defaultContent);
 								if (typeof d.override_content === "string") {
+									overrideReadEpoch.current++;
 									setOverride(d.override_content);
+									setSavedOverride(d.override_content);
+									promptDirtyRef.current = false;
 									setOverrideLoaded(true);
 								}
 							}
@@ -2706,6 +2774,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					setAskRestart(false);
 					setNotice({ kind: "idle", text: "" });
 					const content = readPromptBox();
+					overrideReadEpoch.current++;
 					fetch("/dsh-purge/override", {
 						method: "POST",
 						headers: { "content-type": "application/json" },
@@ -2722,11 +2791,14 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								setNotice({ kind: "error", text: tr("err.save", { error: (d && d.error) || "bad response" }) });
 								return;
 							}
-							if (typeof d.content === "string") {
-								overrideRef.current = d.content;
-								setOverride(d.content);
+							const saved = typeof d.content === "string" ? d.content : content;
+							overrideReadEpoch.current++;
+							setSavedOverride(saved);
+							if (readPromptBox() === content) {
+								overrideRef.current = saved;
+								setOverride(saved);
+								promptDirtyRef.current = false;
 							}
-							promptDirtyRef.current = false;
 							setNotice({ kind: "ok", text: t("saved.override") });
 						})
 						.catch((e) => {
@@ -2749,10 +2821,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 			const restoreOverride = useCallback(() => {
 				if (!defaultOverride) return;
+				if (promptDirtyRef.current && !window.confirm("当前提示词有未保存修改，确定恢复默认内容吗？")) return;
 				const tr = t;
 				const ticket = ++actionTicket.current;
 				setPatchBusy(true);
 				setNotice({ kind: "idle", text: "" });
+				overrideReadEpoch.current++;
 				apiJson("/dsh-purge/override", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
@@ -2765,8 +2839,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							return;
 						}
 						const saved = typeof d.content === "string" ? d.content : defaultOverride;
+						overrideReadEpoch.current++;
 						overrideRef.current = saved;
 						setOverride(saved);
+						setSavedOverride(saved);
 						promptDirtyRef.current = false;
 						setNotice({ kind: "ok", text: tr("saved.restoreInject") });
 					})
@@ -2934,6 +3010,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("h3", { className: "dshp-title" }, t("purge.title")),
 					h("span", { className: "dshp-pill" }, t("surface." + hostSurface)),
 				),
+				section === "overview" ? h(CleanOverviewStatus, { state: s, localVersion: localVer, hostSurface, located, tally, jobOn, updateBusy, flowFinished, flowInterrupted }) : null,
 				cleanPane(["maintenance"], h("div", { className: "dshp-rel" },
 					h("div", { className: "dshp-now" },
 						h("span", { className: "dshp-now-label" }, t("channel.local")),
@@ -3023,7 +3100,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
 				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
-				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
+				cleanPane(["prompt"], h(InjectSwitchSection, { active: !section || section === "prompt" }), h(HooksDenySection, { onSaved: loadAll })),
 
 				askUninstall ? h("div", {
 					className: "dshp-modal-bg",
@@ -3065,12 +3142,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h(Btn, { tiny: true, disabled: patchBusy || !overrideLoaded || !defaultOverride, onClick: restoreOverride }, t("btn.restoreInject")),
 					),
 				),
+				h("p", { className: "dshp-block-hint", role: "status" }, !overrideLoaded ? "正在读取提示词配置…" : savedOverride !== override ? "有未保存修改" : "编辑内容与已读取的磁盘配置一致"),
+				h("p", { className: "dshp-block-hint" }, "保存配置不等于宿主补丁已应用；补丁与实际运行版本请在状态总览、补丁管理中核对。"),
 				h("textarea", {
 					className: "dshp-area",
 					ref: promptAreaRef,
 					value: override,
+					disabled: patchBusy || !overrideLoaded,
 					onChange: (e) => {
-						promptDirtyRef.current = true;
+						promptDirtyRef.current = savedOverride !== e.target.value;
 						overrideRef.current = e.target.value;
 						setOverride(e.target.value);
 					},
@@ -3108,47 +3188,60 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [newTarget, setNewTarget] = useState("AGENTS.md");
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState({ kind: "idle", text: "" });
+			const [statusLoading, setStatusLoading] = useState(true);
+			const [statusError, setStatusError] = useState("");
+			const [savedDraft, setSavedDraft] = useState(null);
+			const dirty = Boolean(editId && savedDraft && (editName !== savedDraft.name || editTarget !== savedDraft.target || content !== savedDraft.content));
+			const confirmDiscard = () => !dirty || window.confirm("当前规则有未保存修改，确定放弃这些修改吗？");
 
-			const loadStatus = useCallback(() => {
+			const loadStatus = useCallback(async () => {
 				const tr = tRef.current;
 				let cwd = "";
 				try { cwd = clientCurrentCwd(); } catch { /* ignore */ }
-				rulesApi("status", cwd ? { cwd: cwd } : undefined)
-					.then((d) => {
-						if (d && d.ok) setSt(d);
-						else {
-							setSt({ ok: false, rules: [], active: null });
-							setNotice({ kind: "error", text: tr("err.rules", { error: (d && d.error) || "bad response" }) });
-						}
-					})
-					.catch((e) => {
-						setSt({ ok: false, rules: [], active: null });
-						setNotice({ kind: "error", text: tr("err.rules", { error: e.message }) });
-					});
+				setStatusLoading(true);
+				setStatusError("");
+				try {
+					const d = await rulesApi("status", cwd ? { cwd } : undefined);
+					if (!d?.ok) throw new Error(d?.error || "bad response");
+					setSt(d);
+					return true;
+				} catch (e) {
+					setStatusError(tr("err.rules", { error: e.message }));
+					return false;
+				} finally { setStatusLoading(false); }
 			}, []);
 
 			useEffect(() => { loadStatus(); }, [loadStatus]);
 
-			const doPost = useCallback((action, payload, after) => {
+			const doPost = useCallback(async (action, payload, after) => {
 				setBusy(true);
 				setNotice({ kind: "idle", text: "" });
-				rulesApi(action, payload)
-					.then((d) => {
-						if (d && d.ok) {
-							setNotice({ kind: "ok", text: t("ok.done") });
-							if (action === "save" || action === "activate") warnNeedPrompt(d, t);
-							loadStatus();
-							if (after) after();
-						} else {
-							warnNeedPrompt(d, t);
-							setNotice({ kind: "error", text: t("err.action", { error: (d && d.error) || "" }) });
-						}
-					})
-					.catch((e) => setNotice({ kind: "error", text: t("err.action", { error: e.message }) }))
-					.finally(() => setBusy(false));
+				try {
+					const d = await rulesApi(action, payload);
+					if (!d?.ok) {
+						warnNeedPrompt(d, t);
+						throw new Error(d?.error || "bad response");
+					}
+					// Render the persisted selection/policy from the mutation response immediately.
+					if (action === "toggle-cwd" && Array.isArray(d.selections)) {
+						setSt(prev => prev && { ...prev, cwd_selections: d.selections, cwd_candidates: (prev.cwd_candidates || []).map(item => ({ ...item, selected: d.selections.includes(item.path) })) });
+					}
+					if (action === "set-policy" && typeof d.policy === "string") {
+						setSt(prev => prev && { ...prev, workspace_policy: d.policy });
+					}
+					if (action === "save" || action === "activate") warnNeedPrompt(d, t);
+					if (after) after();
+					const refreshed = await loadStatus();
+					setNotice({ kind: "ok", text: refreshed
+						? (action === "toggle-cwd" || action === "set-policy" || action === "save" ? "已保存 · 状态已刷新" : t("ok.done"))
+						: "操作已成功，但最新状态读取失败；请重新读取状态。" });
+				} catch (e) {
+					setNotice({ kind: "error", text: t("err.action", { error: e.message }) });
+				} finally { setBusy(false); }
 			}, [loadStatus, t]);
 
 			const openRule = useCallback((id) => {
+				if (busy || statusLoading || id === editId || !confirmDiscard()) return;
 				setBusy(true);
 				rulesApi("read", { id: id })
 					.then((d) => {
@@ -3156,23 +3249,26 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							setEditId(id);
 							setEditName(d.name || id);
 							setEditTarget(d.target || "AGENTS.md");
-							setContent(typeof d.content === "string" ? d.content : "");
+							const loaded = typeof d.content === "string" ? d.content : "";
+							setContent(loaded);
+							setSavedDraft({ name: d.name || id, target: d.target || "AGENTS.md", content: loaded });
 						} else setNotice({ kind: "error", text: t("err.read", { error: d.error || "" }) });
 					})
 					.catch((e) => setNotice({ kind: "error", text: t("err.read", { error: e.message }) }))
 					.finally(() => setBusy(false));
-			}, [t]);
+			}, [t, busy, statusLoading, editId, dirty]);
 
 			const clearEditor = () => {
 				setEditId(null);
 				setEditName("");
 				setEditTarget("AGENTS.md");
 				setContent("");
+				setSavedDraft(null);
 			};
 
 			let list;
 			if (!st) {
-				list = h("div", { className: "dshp-skel", style: { height: 80, margin: 12 } });
+				list = h("p", { className: "dshp-empty", role: "status" }, statusError ? "暂时无法读取规则列表" : "正在读取规则列表…");
 			} else if (!st.rules || st.rules.length === 0) {
 				list = h("p", { className: "dshp-empty" }, t("rules.empty"));
 			} else {
@@ -3198,7 +3294,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h(Btn, {
 								tiny: true,
 								kind: isActive ? undefined : "primary",
-								disabled: busy || isActive,
+								disabled: busy || statusLoading || isActive,
 								onClick: (e) => {
 									e.stopPropagation();
 									if (!isActive) doPost("activate", { id: r.id });
@@ -3207,12 +3303,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h(Btn, {
 								tiny: true,
 								kind: "danger",
-								disabled: busy,
+								disabled: busy || statusLoading,
 								onClick: (e) => {
 									e.stopPropagation();
 									if (!window.confirm(t("confirm.delete", { id: r.id }))) return;
-									if (editId === r.id) clearEditor();
-									doPost("delete", { id: r.id });
+									if (editId === r.id && !confirmDiscard()) return;
+									doPost("delete", { id: r.id }, () => { if (editId === r.id) clearEditor(); });
 								},
 							}, t("delete")),
 						),
@@ -3229,18 +3325,20 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("h3", { className: "dshp-title" }, t("rules.title")),
 					h("div", { className: "dshp-row", style: { margin: 0 } },
 						noticeNode(notice),
+						h(Btn, { tiny: true, disabled: busy || statusLoading, onClick: loadStatus }, statusLoading ? "读取中…" : "重新读取状态"),
 						h(Btn, {
 							tiny: true,
 							kind: "danger",
-							disabled: busy,
+							disabled: busy || statusLoading,
 							onClick: () => {
 								if (!window.confirm(t("rules.reset.confirm"))) return;
-								clearEditor();
-								doPost("reset", {});
+								if (!confirmDiscard()) return;
+								doPost("reset", {}, clearEditor);
 							},
 						}, t("rules.reset")),
 					),
 				),
+				statusError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, statusError + (st ? "；当前展示上次读取的状态。" : "")) : null,
 				h("div", { className: "dshp-block" },
 					h("div", { className: "dshp-policy-row" },
 						h("label", { htmlFor: "dshp-policy-select" }, t("policy.title")),
@@ -3248,18 +3346,19 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							id: "dshp-policy-select",
 							className: "dshp-field",
 							value: policyValue,
-							disabled: busy || !st,
+							disabled: busy || statusLoading || !st,
 							onChange: (e) => doPost("set-policy", { policy: e.target.value }),
 						}, policyOptions.map((p) => h("option", { key: p, value: p }, t("policy." + p)))),
 					),
 					h("p", { className: "dshp-block-hint" }, t("policy.hint")),
+					st ? h("p", { className: "dshp-block-hint", role: "status" }, "当前已保存策略：" + t("policy." + policyValue) + (statusError ? "（上次读取）" : "") + "。这是配置状态，不是实际请求行为的验证。") : null,
 				),
 				h("div", { className: "dshp-block" },
 					h("div", { className: "dshp-block-head" },
 						h("h4", null, t("cwd.title")),
 						h(Btn, {
 							tiny: true,
-							disabled: busy,
+							disabled: busy || statusLoading,
 							onClick: () => {
 								let cwd = cwdValue;
 								if (!cwd) { try { cwd = clientCurrentCwd(); } catch { /* ignore */ } }
@@ -3268,6 +3367,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						}, t("cwd.rescan")),
 					),
 					cwdValue ? h("p", { className: "dshp-cwd-path" }, cwdValue) : null,
+					st ? h("p", { className: "dshp-block-hint", role: "status" }, "当前目录已选 " + cwdCandidates.filter(item => item.selected).length + " / " + cwdCandidates.length + " 个文件；勾选即保存。") : null,
 					(!st || !cwdValue)
 						? h("p", { className: "dshp-empty" }, t("cwd.no.workspace"))
 						: (cwdCandidates.length === 0
@@ -3279,7 +3379,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								h("input", {
 									type: "checkbox",
 									checked: Boolean(item.selected),
-									disabled: busy,
+									disabled: busy || statusLoading,
 									onChange: (e) => doPost("toggle-cwd", { path: item.path, enabled: e.target.checked }),
 								}),
 								h("div", { className: "dshp-cwd-main" },
@@ -3307,10 +3407,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								h(Btn, {
 									kind: "primary",
 									tiny: true,
-									disabled: busy,
+									disabled: busy || statusLoading,
 									onClick: () => {
 										const id = newId.trim();
 										if (!id) { setNotice({ kind: "error", text: t("need.id") }); return; }
+										if (!confirmDiscard()) return;
 										const name = newName.trim() || id;
 										const target = newTarget;
 										doPost("save", { id, content: "", name, target }, () => {
@@ -3318,8 +3419,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 											setEditName(name);
 											setEditTarget(target);
 											setContent("");
+											setSavedDraft({ name, target, content: "" });
+											setNewId(""); setNewName(""); setNewTarget("AGENTS.md");
 										});
-										setNewId(""); setNewName(""); setNewTarget("AGENTS.md");
 									},
 								}, t("btn.create")),
 							),
@@ -3327,6 +3429,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					),
 					h("div", { className: "dshp-editor" },
 						editId ? [
+							h("p", { key: "draft-status", className: "dshp-block-hint", role: "status" }, dirty ? "有未保存修改 · 切换规则前请保存" : "编辑内容与最近一次读取或保存一致"),
+							h("p", { key: "saved-status", className: "dshp-block-hint", role: "status" }, !st || statusError ? "规则状态未确认" : st.active !== editId ? "此规则未设为当前规则" : st.agents_synced === true ? "当前规则 · 目标文件已同步" : "当前规则 · 目标文件尚未确认同步"),
 							h("div", { key: "meta", className: "dshp-row" },
 								h("input", {
 									className: "dshp-field", placeholder: t("ph.alias.short"), value: editName,
@@ -3346,8 +3450,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h("div", { key: "save", className: "dshp-row" },
 								h(Btn, {
 									kind: "primary",
-									disabled: busy,
-									onClick: () => doPost("save", { id: editId, content, name: editName, target: editTarget }),
+									disabled: busy || statusLoading,
+									onClick: () => {
+										const draft = { content, name: editName, target: editTarget };
+										doPost("save", { id: editId, ...draft }, () => setSavedDraft(draft));
+									},
 								}, t("btn.saveRule")),
 								noticeNode(notice),
 							),
@@ -3890,12 +3997,27 @@ function qualityReportSummary(report) {
     provenance: 'collector-declared', comparisons };
 }
 
-function RuntimeObservationsSection() {
+// These are display categories, not proof of task completion or Provider compatibility.
+function runtimeRowStatus(row) {
+  const abnormal = row.terminalConflict || row.streamGap || row.finish === 'error' || row.finish === 'content_filter'
+    || row.turnOutcome === 'error' || row.errorCode || (row.httpStatus >= 400);
+  if (abnormal) return { key: 'attention', label: '需要关注' };
+  if (row.turnOutcome === 'aborted' || row.finish === 'aborted') return { key: 'ended', label: '已取消' };
+  if (row.interrupted) return { key: 'attention', label: '输出中断' };
+  if (row.settlement === 'unobserved-end' || (row.streamEnded && !row.finishObserved)) return { key: 'attention', label: '结束未观测' };
+  if (row.finishObserved) return { key: 'ended', label: '已观测终态' };
+  if (row.turnOutcome) return { key: 'attention', label: '回合已结束 · 流终态未知' };
+  return { key: 'running', label: row.settlement === 'committed' ? '已提交 · 等待终态' : '等待后续事件' };
+}
+
+function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const [snapshot, setSnapshot] = useState(null), [error, setError] = useState('');
   const [report, setReport] = useState(null), [reportError, setReportError] = useState('');
   const [session, setSession] = useState('');
+  const [filter, setFilter] = useState('all');
   const root = useRef(null);
   useEffect(() => {
+    if (!active) return;
     let stopped = false, timer, controller;
     async function refresh() {
       if (stopped) return;
@@ -3914,7 +4036,7 @@ function RuntimeObservationsSection() {
     }
     refresh();
     return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
-  }, [session]);
+  }, [session, active]);
   async function importReport(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -3928,35 +4050,83 @@ function RuntimeObservationsSection() {
   const value = v => v === null || v === undefined ? '未观测' : String(v);
   const refusalLabel = a => ({ 'not-refusal': '未检出明确拒答', refusal: a?.scope === 'partial' ? '部分拒答（不触发动作）' : '明确拒答', uncertain: '不确定（不触发动作）' }[a?.decision] || '未判定');
   const deliveryLabel = a => ({ verified: '已验证', partial: '部分完成', 'pending-input': '等待输入', blocked: '客观阻塞', 'explicit-not-delivered': '有证据未交付' }[a?.delivery] || '尚未验证');
+  const items = snapshot?.items || [];
+  const counts = { all: items.length, running: 0, attention: 0, ended: 0 };
+  for (const row of items) counts[runtimeRowStatus(row).key]++;
+  const shown = items.filter(row => filter === 'all' || runtimeRowStatus(row).key === filter);
+  const metric = (title, count) => h('div', { className: 'dshp-runtime-metric' },
+    h('small', null, title), h('strong', null, snapshot ? count : '—'));
+  const detail = (title, content) => h('div', null, h('dt', null, title), h('dd', null, content));
+  const source = r => ({ 'host-stream': '实时流', 'durable-stream': '持久事件', 'not-observed': '未观测' }[r.reasonSource] || '未观测');
   return h('section', { ref: root, className: 'dshp-runtime-observations' },
-    h('h3', null, '运行诊断 · 只读'),
-    h('p', null, '仅保留近期运行元数据，不保存提示、输出正文或工具参数。流结束不代表任务正确完成。'),
-    h('p', null, '拒答与交付独立判定：道歉、建议、占位符、只读承诺和执行限制不是拒答证据；尚未验证不等于未交付。'),
-    h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => setSession(e.target.value), placeholder: '留空显示近期会话' })),
-    error ? h('p', { role: 'alert' }, error) : null,
-    h('p', null, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + (snapshot?.evicted || 0)),
-    h('div', { style: { overflowX: 'auto' } }, h('table', null,
-      h('thead', null, h('tr', null, ['会话 / attempt', '模型路由', '阶段 / 结算', '首文本 / 总耗时 ms', '终态 / 回合', 'Token / 错误', '拒答 / 交付证据'].map(s => h('th', { key: s }, s)))),
-      h('tbody', null, (snapshot?.items || []).map(r => h('tr', { key: r.generation + ':' + r.attemptId },
-        h('td', null, value(r.sessionId), h('br'), value(r.attemptId)),
-        h('td', null, value(r.provider) + ' / ' + value(r.model)),
-        h('td', null, (r.streamEnded ? '流已结束' : '流未结束') + ' / ' + r.settlement + (r.streamGap ? ' · 分片缺口' : '')),
-        h('td', null, value(r.firstTextMs) + ' / ' + value(r.elapsedMs)),
-        h('td', null, (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome) + (r.interrupted ? ' · 中断前缀' : '')),
-        h('td', null, value(r.usage?.totalTokens) + ' / ' + value(r.errorCode)),
-        h('td', null, refusalLabel(r.assessment) + ' / ' + deliveryLabel(r.assessment), h('br'), (r.assessment?.reasonCodes || []).join(', '))))))),
+    h('div', { className: 'dshp-runtime-heading' },
+      h('div', null, h('h3', null, '运行诊断 · 只读'), h('p', null, '观察近期请求、终态和异常，不保存提示、正文或工具参数。流结束不等于任务完成。')),
+      onNavigate ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => onNavigate('diagnostics') }, '打开故障诊断') : null),
+    h('div', { className: 'dshp-runtime-metrics' },
+      metric('近期记录', counts.all), metric('等待后续事件', counts.running), metric('需要关注', counts.attention), metric('已结束 / 取消', counts.ended)),
+    h('div', { className: 'dshp-runtime-toolbar' },
+      h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => { setSnapshot(null); setError(''); setSession(e.target.value); }, placeholder: '留空显示近期会话' })),
+      h('div', { className: 'dshp-runtime-filters', 'aria-label': '请求状态筛选' },
+        [['all', '全部'], ['running', '等待中'], ['attention', '异常'], ['ended', '已结束']].map(([key, name]) =>
+          h('button', { key, type: 'button', 'aria-pressed': filter === key, onClick: () => setFilter(key) }, name + ' ' + (snapshot ? counts[key] : '—'))))),
+    error ? h('p', { role: 'alert' }, error + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
+    h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
+    !snapshot ? h('div', { role: 'status', className: 'dshp-runtime-empty', 'aria-busy': !error },
+      h('strong', null, error ? '暂时无法读取运行记录' : '正在读取运行状态…'),
+      h('p', null, error ? '页面可见时会自动刷新，无需重复发起模型请求。' : '正在获取近期请求，请稍候。')) :
+      !shown.length ? h('div', { className: 'dshp-runtime-empty' },
+        h('strong', null, items.length || session ? '当前筛选没有匹配记录' : '暂无运行记录'),
+        h('p', null, items.length || session ? '清除筛选以查看其他近期记录。' : '正常发起模型请求后可在此查看。'),
+        items.length || session ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setFilter('all'); if (session) { setSnapshot(null); setError(''); setSession(''); } } }, '清除筛选') : null) : null,
+    h('div', { className: 'dshp-runtime-grid' }, shown.map(r => {
+      const status = runtimeRowStatus(r);
+      return h('article', { key: r.generation + ':' + r.attemptId, className: 'dshp-runtime-card', 'data-status': status.key },
+        h('header', null, h('strong', null, value(r.provider) + ' / ' + value(r.model)), h('span', { className: 'dshp-runtime-status' }, status.label)),
+        h('p', { className: 'dshp-runtime-meta' }, value(r.sessionId) + ' / ' + value(r.attemptId)),
+        h('dl', null,
+          detail('流 / 结算', (r.streamEnded ? '流已结束' : '流结束未观测') + ' / ' + value(r.settlement)),
+          detail('首文本 / 总耗时', value(r.firstTextMs) + ' / ' + value(r.elapsedMs) + ' ms'),
+          detail('终态 / 回合', (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome)),
+          detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
+          detail('错误代码', value(r.errorCode)),
+          detail('终态来源', source(r))),
+        r.streamGap || r.terminalConflict || r.interrupted ? h('p', { className: 'dshp-runtime-warning' }, [r.streamGap && '分片缺口', r.terminalConflict && '终态证据冲突', r.interrupted && '中断前缀'].filter(Boolean).join(' · ')) : null,
+        h('details', null, h('summary', null, '任务质量与原始状态'),
+          h('p', null, refusalLabel(r.assessment) + ' / ' + deliveryLabel(r.assessment)),
+          h('p', null, (r.assessment?.reasonCodes || []).join(', ')),
+          h('p', null, '回合 ' + value(r.turn) + ' · 步骤 ' + value(r.step) + ' · 分片 ' + value(r.chunks) + ' · 工具调用 ' + value(r.toolCalls))));
+    })),
     h('h3', null, '任务质量报告'),
     h('p', null, '导入 evaluate-task-quality 的输出 JSON；仅在本页面读取，不上传。采集来源由报告作者声明。'),
     h('input', { type: 'file', accept: '.json,application/json', 'aria-label': '导入任务质量报告', onChange: importReport }),
-    reportError ? h('p', { role: 'alert' }, reportError) : null,
-    report ? h('pre', { style: { whiteSpace: 'pre-wrap' } }, JSON.stringify(report, null, 2)) : null);
+    reportError ? h('p', { role: 'alert', className: 'dshp-runtime-warning' }, '导入失败：' + reportError) : null,
+    report ? h('div', null, h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setReport(null); setReportError(''); } }, '清除报告'), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, JSON.stringify(report, null, 2))) : null);
 }
 /* __DSH_PURGE_RUNTIME_END__ */
+
+		function CleanNavIcon({ name }) {
+			const paths = {
+				overview: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+				patches: "M12 3l9 5-9 5-9-5 9-5z M3 12l9 5 9-5 M3 16l9 5 9-5",
+				prompt: "M4 4h16v16H4z M8 9h8 M8 13h8 M8 17h4",
+				rules: "M5 4h14v16H5z M8 9l2 2 5-5 M8 16h8",
+				runtime: "M2 12h4l3-7 5 14 3-7h5",
+				diagnostics: "M4 5h16v14H4z M7 12h3l2-4 2 8 2-4h1",
+				maintenance: "M12 3v12 M7 10l5 5 5-5 M4 17v4h16v-4",
+			};
+			return h("svg", { className: "dshp-clean-nav-icon", width: 18, height: 18, viewBox: "0 0 24 24",
+				fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true" },
+				h("path", { d: paths[name] || paths.overview }));
+		}
 
 		function SettingsRoot(props) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
 			const [theme, setTheme] = useState(readTheme);
 			const [section, setSection] = useState("overview");
+			const contentRef = useRef(null);
+			useLayoutEffect(() => {
+				if (contentRef.current) contentRef.current.scrollTop = 0;
+			}, [section]);
 			useEffect(() => {
 				let cancelled = false;
 				let timer = 0;
@@ -3996,33 +4166,41 @@ function RuntimeObservationsSection() {
 				);
 			}
 			const sections = [
-				{ id: "overview", title: "状态总览", description: "宿主、清洗进度与快捷操作" },
-				{ id: "patches", title: "补丁管理", description: "分类、筛选、检测与诊断" },
-				{ id: "prompt", title: "提示词", description: "编辑、注入与本地配置" },
-				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
-				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
-				{ id: "runtime", title: "运行诊断", description: "流式状态、终态与任务质量报告" },
-				{ id: "diagnostics", title: "诊断中心", description: "运行版本、宿主路径与完整诊断" },
+				{ id: "overview", title: "状态总览", description: "宿主、清洗进度与快捷操作", group: "工作台", icon: "overview" },
+				{ id: "patches", title: "补丁管理", description: "分类、筛选、检测与诊断", group: "工作台", icon: "patches" },
+				{ id: "prompt", title: "提示词", description: "编辑、注入与本地配置", group: "本地配置", icon: "prompt" },
+				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能", group: "本地配置", icon: "rules" },
+				{ id: "runtime", title: "运行诊断", description: "流式状态、终态与任务质量报告", group: "维护与诊断", icon: "runtime" },
+				{ id: "diagnostics", title: "诊断中心", description: "故障修复、宿主身份与完整诊断", group: "维护与诊断", icon: "diagnostics" },
+				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复", group: "维护与诊断", icon: "maintenance" },
 			];
 			const selected = sections.find((item) => item.id === section) || sections[0];
 			return h("div", { className: "dshp-root dshp-clean-workspace", "data-theme": "dusk" },
 				h("style", null, PURGE_CSS),
 				h("nav", { className: "dshp-clean-nav", "aria-label": "清洗台功能导航" },
 					h("div", { className: "dshp-clean-nav-heading" }, "清洗台"),
-					sections.map((item) => h("button", {
-						key: item.id, type: "button", className: "dshp-clean-nav-item",
-						"aria-current": section === item.id ? "page" : undefined,
-						onClick: () => setSection(item.id),
-					}, h("strong", null, item.title), h("small", null, item.description))),
+					sections.flatMap((item, index) => [
+						index === 0 || sections[index - 1].group !== item.group
+							? h("div", { key: "group-" + item.group, className: "dshp-clean-nav-group" }, item.group) : null,
+						h("button", {
+							key: item.id, type: "button", className: "dshp-clean-nav-item",
+							"aria-current": section === item.id ? "page" : undefined,
+							onClick: () => setSection(item.id),
+						}, h(CleanNavIcon, { name: item.icon }), h("span", { className: "dshp-clean-nav-text" },
+							h("strong", null, item.title), h("small", null, item.description)))]),
 				),
-				h("div", { className: "dshp-clean-content" },
+				h("div", { className: "dshp-clean-content", ref: contentRef },
 					h("header", { className: "dshp-clean-page-heading" },
 						h("h2", null, selected.title),
 						h("p", null, selected.description),
 					),
+					section === "overview" ? h("div", { className: "dshp-clean-shortcuts", "aria-label": "快捷入口" },
+						[["runtime", "运行诊断"], ["diagnostics", "故障诊断与修复"], ["maintenance", "版本与恢复"]].map(([key, name]) =>
+							h("button", { type: "button", key, onClick: () => setSection(key) }, name))) : null,
 					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" },
 						h(PurgifySection, { section })),
-					section === "runtime" ? h(RuntimeObservationsSection, null) : null,
+					h("div", { className: "dshp-clean-pane", hidden: section !== "runtime" },
+						h(RuntimeObservationsSection, { onNavigate: setSection, active: section === "runtime" })),
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 				),
@@ -13091,7 +13269,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				setDock({ open: true, maximized: true, tab: purgeWorkspaceBus.page });
 			}
 		}
-		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;\n  max-width:none!important;max-height:none!important;margin:0!important;box-sizing:border-box;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;z-index:10040!important;\n  /* Use the actual containing viewport, not competing vw/vh dimensions. */\n  width:auto!important;height:auto!important;box-sizing:border-box!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"],\nhtml[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,\nhtml[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role=\"button\"]){\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  /* Keep bottom:0 from inset; the browser computes the remaining height. */\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* Windows workspaces start below the native caption row, so reserving\n   caption-button width again would unnecessarily shrink the navigation. */\nhtml[data-windows-titlebar] .dshp-workspace[data-default-full=\"1\"] .dshp-workspace-nav,\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n\n/* A failed page must not hide the workspace navigation or block recovery. */\n.dshp-workspace-recovery{margin:auto;max-width:420px;padding:24px;box-sizing:border-box;color:#e5eefb;text-align:center}\n.dshp-workspace-recovery h2{font-size:18px;margin:0 0 10px}\n.dshp-workspace-recovery p{font-size:13px;line-height:1.6;color:#a2b5cf;margin:0 0 18px}\n.dshp-workspace-recovery button{appearance:none;border:1px solid #365477;border-radius:8px;padding:9px 16px;background:#213a58;color:#eaf4ff;font:inherit;cursor:pointer}\n.dshp-workspace-recovery button:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n";
+		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;\n  max-width:none!important;max-height:none!important;margin:0!important;box-sizing:border-box;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;z-index:10040!important;\n  /* Use the actual containing viewport, not competing vw/vh dimensions. */\n  width:auto!important;height:auto!important;box-sizing:border-box!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"],\nhtml[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,\nhtml[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role=\"button\"]){\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n  /* Keep bottom:0 from inset; the browser computes the remaining height. */\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* Windows workspaces start below the native caption row, so reserving\n   caption-button width again would unnecessarily shrink the navigation. */\nhtml[data-windows-titlebar] .dshp-workspace[data-default-full=\"1\"] .dshp-workspace-nav,\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n\n/* A failed page must not hide the workspace navigation or block recovery. */\n.dshp-workspace-recovery{margin:auto;max-width:420px;padding:24px;box-sizing:border-box;color:#e5eefb;text-align:center}\n.dshp-workspace-recovery h2{font-size:18px;margin:0 0 10px}\n.dshp-workspace-recovery p{font-size:13px;line-height:1.6;color:#a2b5cf;margin:0 0 18px}\n.dshp-workspace-recovery button{appearance:none;border:1px solid #365477;border-radius:8px;padding:9px 16px;background:#213a58;color:#eaf4ff;font:inherit;cursor:pointer}\n.dshp-workspace-recovery button:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n\n/* Compact runtime and repair cards reuse the existing clean workspace palette. */\n.dshp-runtime-heading,.dshp-runtime-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}\n.dshp-runtime-heading h3{margin:0 0 6px}\n.dshp-runtime-heading p,.dshp-runtime-meta{color:var(--dshp-mute);font-size:12px;line-height:1.55;overflow-wrap:anywhere}\n.dshp-runtime-metrics,.dshp-runtime-grid,.dshp-repair-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:14px 0}\n.dshp-runtime-metric,.dshp-runtime-card,.dshp-repair-card{min-width:0;padding:14px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-paper);color:var(--dshp-ink)}\n.dshp-runtime-metric{display:flex;flex-direction:column;gap:5px}\n.dshp-runtime-metric small,.dshp-runtime-card dt{color:var(--dshp-mute);font-size:12px}\n.dshp-runtime-metric strong{font-size:24px;font-variant-numeric:tabular-nums}\n.dshp-runtime-card header,.dshp-repair-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}\n.dshp-runtime-card header strong{overflow-wrap:anywhere;min-width:0}\n.dshp-runtime-status{font-size:11px;padding:3px 7px;border-radius:6px;background:var(--dshp-fill);color:var(--dshp-ink);white-space:nowrap}\n.dshp-runtime-card[data-status=\"attention\"] .dshp-runtime-status,.dshp-repair-card[data-status=\"attention\"] .dshp-runtime-status,.dshp-runtime-warning{color:#ffcf96}\n.dshp-runtime-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}\n.dshp-runtime-card dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:13px}\n.dshp-runtime-card details,.dshp-repair-card details{border-top:1px solid var(--dshp-line);padding-top:10px;font-size:12px;overflow-wrap:anywhere}\n.dshp-runtime-card summary,.dshp-repair-card summary{cursor:pointer}\n.dshp-runtime-filters,.dshp-clean-shortcuts{display:flex;gap:8px;flex-wrap:wrap}\n.dshp-runtime-filters button,.dshp-runtime-action,.dshp-clean-shortcuts button{appearance:none;cursor:pointer;border:1px solid var(--dshp-line);border-radius:8px;padding:8px 12px;font:inherit;color:var(--dshp-ink);background:var(--dshp-paper)}\n.dshp-runtime-filters button[aria-pressed=\"true\"]{background:var(--dshp-fill);border-color:var(--dshp-accent)}\n.dshp-runtime-filters button:focus-visible,.dshp-runtime-action:focus-visible,.dshp-clean-shortcuts button:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:2px}\n.dshp-runtime-toolbar input{max-width:100%;padding:7px 9px;border:1px solid var(--dshp-line);border-radius:6px;color:var(--dshp-ink);background:var(--dshp-paper)}\n.dshp-runtime-empty{padding:22px;border:1px dashed var(--dshp-line);border-radius:10px;color:var(--dshp-mute)}\n.dshp-clean-shortcuts{margin:0 0 16px}\n.dshp-repair-card p{overflow-wrap:anywhere}\n\n/* Second pass: compact navigation, real status overview, and narrow window flow. */\n.dshp-clean-nav-group{margin:10px 10px 2px;color:#8ca6c6;font-size:11px;font-weight:700;letter-spacing:.04em}\n.dshp-clean-nav-item{flex-direction:row;align-items:flex-start;gap:9px;position:relative}\n.dshp-clean-nav-icon{flex:0 0 18px;color:inherit;margin-top:1px}\n.dshp-clean-nav-text{display:flex;flex-direction:column;gap:4px;min-width:0}\n.dshp-clean-nav-item[aria-current=\"page\"]::before{content:\"\";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:#78b6ff}\n.dshp-overview-status{margin:0 0 18px}\n.dshp-overview-status header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px}\n.dshp-overview-status header h3{margin:0;font-size:15px}\n.dshp-overview-status header p{margin:5px 0 0;color:var(--dshp-mute);font-size:12px}\n.dshp-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px;margin-top:12px}\n.dshp-overview-card{display:flex;flex-direction:column;gap:6px;min-width:0;padding:13px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-bg,#0c1422);overflow-wrap:anywhere}\n.dshp-overview-card small,.dshp-overview-card span{color:var(--dshp-mute);font-size:12px;line-height:1.5}\n.dshp-overview-card strong{font-size:17px;line-height:1.4;color:var(--dshp-ink)}\n.dshp-overview-card[data-status=\"attention\"] strong,.dshp-overview-status [data-status=\"attention\"]{color:#ffcf96}\n.dshp-clean-workspace .dshp-panel{min-width:0;box-sizing:border-box}\n.dshp-clean-workspace .dshp-metric,.dshp-clean-workspace .dshp-now-ver,.dshp-clean-workspace .dshp-notice,.dshp-clean-workspace .dshp-hint{min-width:0;overflow-wrap:anywhere}\n.dshp-clean-workspace .dshp-ver{min-width:0;width:100%}\n.dshp-clean-workspace .dshp-clean-actions .dshp-btn{min-width:0;max-width:100%;white-space:normal}\n.dshp-clean-workspace .dshp-runtime-toolbar label{min-width:0;max-width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap}\n.dshp-clean-workspace .dshp-runtime-toolbar input{box-sizing:border-box;min-width:0}\n.dshp-clean-workspace .dshp-runtime-status{white-space:normal;max-width:100%;overflow-wrap:anywhere}\n@media(max-width:800px){\n  .dshp-clean-nav-group{display:none}\n  .dshp-clean-nav-item{align-items:center;gap:6px}\n  .dshp-clean-nav-item[aria-current=\"page\"]::before{left:8px;right:8px;bottom:2px;top:auto;width:auto;height:2px}\n}\n@media(max-width:560px){\n  .dshp-clean-workspace .dshp-panel{padding:12px}\n  .dshp-clean-workspace .dshp-edition{grid-template-columns:minmax(0,1fr);grid-template-areas:\"name\" \"sel\" \"btn\"}\n  .dshp-clean-workspace .dshp-edition .dshp-btn{width:100%}\n  .dshp-clean-workspace .dshp-clean-actions .dshp-btn{flex:1 1 120px}\n  .dshp-clean-workspace .dshp-runtime-card dl{grid-template-columns:minmax(0,1fr)}\n}\n\n/* Third pass: actionable empty and loading states, without a new request path. */\n.dshp-runtime-empty strong{display:block;color:var(--dshp-ink);font-size:14px}\n.dshp-runtime-empty p{margin:6px 0 12px;line-height:1.55}\n.dshp-runtime-empty[aria-busy=\"true\"]{border-style:solid}\n";
 		// Both the native main slot and the old Dock use the same runtime stylesheet.
 		// The main slot must not rely on the overlay slot being mounted first.
 		function ensurePurgeWorkspaceStyles() {
