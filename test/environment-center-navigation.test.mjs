@@ -16,3 +16,18 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     assert.match(src, /op: 'platformConfigSave'/)
   })
 }
+
+for (const path of ['lib/redteam/client.js', 'client.js']) {
+  test(path + ': survey sections and read-only environment setup actions', () => {
+    const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    const survey = src.slice(src.indexOf('function LocalAssetSearchTab(props)'), src.indexOf('function EnvTab(props)'))
+    for (const id of ['platforms', 'assets', 'external', 'active']) {
+      assert.ok(survey.includes("surveyCard('" + id + "',"))
+    }
+    assert.match(survey, /surveyPage === 'assets' \? h\(React.Fragment/)
+    assert.match(survey, /if \(!eng\) \{ setError\('请先选择靶标'\)/)
+    assert.match(src, /onClick: loadCapabilityMatrix \}, matrixBusy \? '正在检测…' : '一键检测环境'/)
+    assert.match(src, /推荐配置与下一步/)
+    assert.match(src, /网络配置诊断/)
+  })
+}

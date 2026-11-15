@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "84a6b531b7a859f7";
+		const CLIENT_BUILD_ID = "361bcf039164a829";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8269,6 +8269,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     let intelSourcesWriteQueue = Promise.resolve()
     function LocalAssetSearchTab(props) {
       const eng = props.engagement
+      const [surveyPage, setSurveyPage] = React.useState('platforms')
+      const surveyPages = [['platforms', '平台管理'], ['assets', '本地资产'], ['external', '外部情报与历史'], ['active', '本机测绘']]
+      const surveyCard = (id, attrs, ...children) => surveyPage === id ? h('div', attrs, ...children) : null
       const [draft, setDraft] = React.useState('domain="example.org" && port=443')
       const [query, setQuery] = React.useState('')
       const [sort, setSort] = React.useState('discovered')
@@ -8457,6 +8460,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       ]
       const search = (value) => {
         const next = String(value === undefined ? draft : value).trim()
+        if (!eng) { setError('请先选择靶标'); return }
         if (!next) { setError('请输入搜索表达式'); return }
         setError('')
         setPage(0)
@@ -8492,17 +8496,22 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           !eng ? h('span', { className: 'rt-tag rt-tag-warn' }, '未选择靶标 · 可管理平台') : null,
           h('span', { className: 'rt-tag rt-tag-live' }, '离线 · SQLite'),
           h('div', { className: 'rt-spacer' }),
-          h('button', { className: 'rt-btn', disabled: !eng, onClick: () => search() }, '刷新'),
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng,
-            onClick: () => search() }, '搜索')),
+          surveyPage === 'assets' ? h('button', { className: 'rt-btn', disabled: !eng, onClick: () => search() }, '刷新资产') : null,
+          surveyPage === 'assets' ? h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng,
+            onClick: () => search() }, '搜索') : null),
+        h('div', { className: 'rt-toolbar', role: 'group', 'aria-label': '测绘中心子页面' },
+          surveyPages.map(([id, label]) => h('button', { key: id, type: 'button',
+            className: 'rt-btn' + (surveyPage === id ? ' rt-btn-primary' : ''),
+            'aria-pressed': surveyPage === id, onClick: () => setSurveyPage(id) }, label))),
         h('div', { className: 'rt-pane rt-survey-pane' },
-          h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.75 } },
+          !eng && surveyPage !== 'platforms' ? h('div', { className: 'rt-card' }, '请在顶部选择靶标，再查询或查看该项目的记录。平台管理不需要靶标。') : null,
+          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.75 } },
             h('h4', null, '网络空间测绘平台 · 总介绍'),
             h('div', null, '这类平台索引互联网上公开可见的主机、端口、服务、网页指纹和证书，适合与本地资产记录交叉核对。'
               + ' 各平台收录范围、查询语言、账号要求和额度不同。'),
             h('div', { style: { marginTop: 5 } },
-              '本地测绘已接通 SQLite 检索；FOFA 保留原有专项技能。下方可查询 InternetDB 与 Shodan 单 IP 情报；其余外部平台提供官网入口。')),
-          h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
+              '本地资产支持 SQLite 检索；FOFA 保留原有专项技能。外部情报支持 InternetDB 与 Shodan 单 IP 查询；其余平台提供官网入口。')),
+          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
             h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
               h('h4', { style: { margin: 0 } }, '选择常用测绘平台'),
               h('span', { className: 'rt-tag' }, '已选 ' + chosen.selected.length + ' / ' + sources.length),
@@ -8528,13 +8537,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     onChange: (e) => saveSelection({ ...sourceDraft.current, preferred: e.target.value }) },
                     activeSources.map((x) => h('option', { key: x.id, value: x.id }, x.name))))
               : h('div', { style: { fontSize: 11, opacity: 0.7, marginTop: 8 } },
-                  '当前没有选中平台；仍可使用下方的本地检索。'),
+                  '当前没有选中平台；仍可切换到本地资产进行检索。'),
             savedSources && sources.length ? h('div', { style: { opacity: 0.72, fontSize: 11, marginTop: 7 } },
               '已保存 ' + savedSources.selected.length + ' 家 · 首选 '
                 + ((sources.find((x) => x.id === savedSources.preferred) || {}).name || '本地资产库'))
               : null,
             sourceMsg ? h('div', { className: 'rt-foot', style: { marginTop: 8 } }, sourceMsg) : null),
-          activeSources.map((source) => h('div', { key: source.id, className: 'rt-card',
+          surveyPage === 'platforms' && activeSources.map((source) => h('div', { key: source.id, className: 'rt-card',
             style: { fontSize: 12, lineHeight: 1.7 } },
             h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } },
               h('b', null, source.name),
@@ -8547,7 +8556,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '证书透明度 · 子域线索'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '免费 crt.sh 历史证书查询。需在项目登记 *.域名 授权范围；只保留范围内的具体子域，不访问目标、不验证存活。'),
@@ -8576,7 +8585,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     !maskAssets ? h('div', { style: { maxHeight: 280, overflowY: 'auto' } },
                       (ctResult.names || []).map(n => h('div', { key: n.name }, n.name + (n.not_after ? ' · 证书到期 ' + n.not_after : '')))) : null)
                   : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('assets', { className: 'rt-card' },
             h('h4', null, '统一资产关联 · 离线清单'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '关联已保存的 CT、subfinder、DNS 与 IP 被动情报；仅保留授权域名与明确授权 IP。不触网、不验证服务存活，不自动增加资产。'),
@@ -8599,7 +8608,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   !maskAssets ? h('details', null, h('summary', null, '结构化 JSON（可复制）'),
                     h('textarea', { className: 'rt-textarea', readOnly: true, value: JSON.stringify(inventory, null, 2),
                       style: { width: '100%', minHeight: 140, fontSize: 11 } })) : null) : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('assets', { className: 'rt-card' },
             h('h4', null, 'ARTEX 本机情报同步'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '仅发送当前项目的历史关联清单至本机 ARTEX，重新读取已保存证据并检查范围；不启动扫描。需要独立情报令牌和两端一致的公司 ID。'),
@@ -8618,7 +8627,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 syncResult.ok ? '已保存 ARTEX 历史快照 #' + syncResult.snapshotId + ' · 公司 #' + syncResult.companyId
                   + ' · 域名 ' + syncResult.names + ' · IP ' + syncResult.ips
                   : h('div', { className: 'rt-err' }, syncResult.error || '同步未确认')) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '统一子域线索 · CT + subfinder'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '合并已保存 CT 快照，或调用本机已安装的 subfinder 被动数据源。需登记 *.域名；不执行主动探测。点选子域可交给下方 DNS 查询，仍需单独确认。'),
@@ -8653,7 +8662,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                           setDnsTarget(n.name); setDnsConsent(false); setDnsResult(null)
                         } }, '填入 DNS 核验')))) : null)
                   : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '免费 DNS 情报 · 单域名'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '使用系统配置的 DNS 解析器查询 A / AAAA / CNAME，不需要 FOFA Key。解析结果仅作为线索，不会自动扩大项目授权范围或主动扫描解析地址。'),
@@ -8680,7 +8689,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     (dnsResult.records || []).map(r => h('div', { key: r.type + r.value },
                       r.type + ' ' + (maskAssets ? '已隐藏' : r.value) + (r.ttl !== undefined ? ' · TTL ' + r.ttl : ''))),
                     (dnsResult.errors || []).map(e => h('div', { key: e.type }, e.type + ': ' + e.code)))) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '外部被动情报 · 单 IP'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史线索不会修改实时端口状态；可保存全部观察并离线查询。'),
@@ -8712,7 +8721,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   h('div', null, '端口线索：' + ((intelResult.ports || []).map(p => p.port + '/' + p.proto + ' (' + p.sources.join(', ') + ')').join('、') || '无')),
                   !maskAssets ? h('div', null, '主机名线索：' + [...new Set((intelResult.results || []).flatMap(r => r.hostnames))].join('、')) : null)
                   : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('active', { className: 'rt-card' },
             h('h4', null, '本机主动测绘 · 单目标'),
             h('div', { style: { fontSize: 12, opacity: 0.85, lineHeight: 1.65, marginBottom: 8 } },
               '直接使用本机 Nmap / httpx，不调用 FOFA、Shodan 等厂商。扫描前核对本项目授权范围；未登记范围时需要你明确确认。'
@@ -8753,7 +8762,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('div', { style: { opacity: 0.8 } },
                 '不会因为成功退出就宣称发现已验证；请在「作战 → 扫描记录」检查证据。'))
               : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('assets', { className: 'rt-card' },
             h('h4', null, '本地资产组合查询 · 已接通'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7, marginBottom: 9 } },
               '以下查询始终只使用当前项目的 SQLite 资产库，不会对外部平台发起请求。'),
@@ -8777,6 +8786,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('option', { value: 'ports' }, '开放端口多优先'),
               h('option', { value: 'ip' }, '按 IP 排序'),
               h('option', { value: 'priority' }, '按已有优先级排序'))),
+          surveyPage === 'assets' ? h(React.Fragment, null,
           error ? h('div', { className: 'rt-err' }, error) : null,
           data ? h('div', { className: 'rt-card', style: { fontSize: 12 } },
             '当前项目命中 ' + data.total + ' 项 · 本页 ' + items.length + ' 项。搜索不触网、不触发扫描。')
@@ -8818,7 +8828,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               '第 ' + (page + 1) + ' 页 / 共 ' + Math.ceil(data.total / limit) + ' 页'),
             h('button', { className: 'rt-btn', disabled: (page + 1) * limit >= data.total,
               onClick: () => setPage((p) => p + 1) }, '下一页'))
-            : null))
+            : null) : null))
     }
 
     function EnvTab(props) {
@@ -9268,6 +9278,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         msg ? h('div', { className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
         sectionCard('summary', { className: 'rt-card' },
           h('h4', null, '环境能力概览'),
+          h('div', { className: 'rt-toolbar', style: { padding: '0 0 8px', border: 0 } },
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || matrixBusy || environmentBusy || !!wslChecking || !!dockerBusy || !!kaliBusy,
+              onClick: loadCapabilityMatrix }, matrixBusy ? '正在检测…' : '一键检测环境'),
+            h('span', { className: 'rt-foot' }, '只读发现环境和工具路径；不安装、不执行目标任务。')),
+          matrixError ? h('div', { className: 'rt-err' }, matrixError) : null,
           h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8 } },
             [['本机工具', data ? found + ' / ' + tools.length + ' 已定位' : '尚未读取', 'tools'],
               ['执行环境', environmentSnapshot ? (environmentSnapshot.environments || []).length + ' 个已发现' : '尚未发现', 'execution'],
@@ -9277,6 +9292,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             ].map(([label, status, id]) => h('button', { key: id, type: 'button', className: 'rt-btn',
               style: { textAlign: 'left', padding: 10, whiteSpace: 'normal' }, onClick: () => setSection(id) },
               h('strong', { style: { display: 'block' } }, label), h('span', null, status))))),
+        sectionCard('summary', { className: 'rt-card' },
+          h('h4', null, '推荐配置与下一步'),
+          h('div', { className: 'rt-foot' }, '根据当前已读取的配置和检测结果推荐；不会覆盖手工设置。'),
+          !data ? h('p', null, '正在读取本机配置；失败时使用刷新重试。') : null,
+          data && draft && draft.platform !== 'auto' ? h('div', { className: 'rt-kv' },
+            h('span', null, '平台模式为 ' + draft.platform + '；跨平台使用时可考虑 auto。'),
+            h('button', { className: 'rt-btn', onClick: () => setSection('tools') }, '查看配置')) : null,
+          data && tools.some(t => !t.path) ? h('div', { className: 'rt-kv' },
+            h('span', null, '尚未定位 ' + tools.filter(t => !t.path).length + ' 个工具；只需补齐当前任务所需工具。'),
+            h('button', { className: 'rt-btn', onClick: () => { setToolGroup('all'); setToolSearch(''); setSection('tools') } }, '查看工具目录')) : null,
+          data && found === tools.length && tools.length > 0 ? h('p', null, '本机工具路径均已定位；可按需进行版本验证。') : null,
+          environmentSnapshot ? h('div', { className: 'rt-kv' },
+            h('span', null, '发现 ' + (environmentSnapshot.environments || []).length + ' 个执行环境；远端工具仍需显式验证。'),
+            h('button', { className: 'rt-btn', onClick: () => setSection('execution') }, '查看环境')) : null,
+          (environmentSnapshot?.localDiagnostics?.issues || []).map((item) =>
+            h('div', { key: item.code, className: 'rt-kv' },
+              h('span', null, item.message),
+              h('button', { className: 'rt-btn', onClick: () => setSection('diagnostics') }, '查看诊断')))),
         sectionCard('summary', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           adapt.message
             || '均可选填：留空则用默认路径/自动查找。填了的覆盖默认。密钥类只在需要测绘/反弹时才填。'),
@@ -9334,7 +9367,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                             ? h('div', { style: { opacity: 0.75, marginTop: 3 } }, 'ARTEX 来源') : null)
                       })))))),
             h('div', { style: { fontSize: 11, opacity: 0.75, marginTop: 8 } },
-              '可使用下方各环境已有的版本验证按钮；结果仅保留于当前页面。'
+              '请在执行环境或工具管理页按需验证版本；结果仅保留于当前环境中心。'
               + ' 已定位 ≠ 可运行；版本已验证 ≠ 依赖齐全或任务已执行。ARTEX 是本机来源，不是独立执行环境。'))
             : h('div', { style: { fontSize: 11.5, opacity: 0.7, marginTop: 7 } },
               '尚未生成矩阵；请点击上方按钮进行只读环境发现。')),
@@ -9399,7 +9432,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     h('span', null, provider.note || '未提供说明'))),
                 (environmentSnapshot.localDiagnostics?.issues || []).map((item) =>
                   h('p', { key: item.code, className: 'rt-foot' }, item.message)))
-            : h('p', { className: 'rt-foot' }, '点击上方发现按钮，读取本机路径与跨环境提供方状态。')),
+            : h('p', { className: 'rt-foot' }, '点击「生成 / 刷新能力矩阵」或环境总览的一键检测，读取本机路径与跨环境提供方状态。')),
         sectionCard('tools', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'ARTEX · 本机工具来源'),
           environmentSnapshot?.providers?.artex
@@ -9414,7 +9447,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     h('span', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
                       item.path))),
                 h('p', { className: 'rt-foot' }, environmentSnapshot.providers.artex.note))
-            : h('p', { className: 'rt-foot' }, '点击上方环境发现后可查看 ARTEX 工具路径来源。'),
+            : h('p', { className: 'rt-foot' }, '在执行环境中发现环境，或使用环境总览的一键检测，即可查看 ARTEX 工具路径来源。'),
         ),
         sectionCard('execution', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'Docker · 已运行容器'),
@@ -9507,6 +9540,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onClick: assignFolder,
             }, busy ? '扫描中…' : '自动分配'))),
         data && data.hint ? sectionCard('summary', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } }, data.hint) : null,
+        sectionCard('network', { className: 'rt-card' },
+          h('h4', null, '网络配置诊断'),
+          h('div', { className: 'rt-foot' }, '以下为运行进程的代理环境变量快照，不代表代理、DNS 或公网连接已验证。'),
+          data?.egress ? h('div', null,
+            h('p', null, (data.egress.http_proxy || data.egress.https_proxy || data.egress.all_proxy)
+              ? '检测到代理环境变量；若外部查询失败，请核对代理地址、端口及系统实际路由。'
+              : '未检测到 HTTP(S)/ALL_PROXY；系统代理、VPN 或 TUN 仍可能生效。'),
+            h('p', null, 'DNS 解析异常时请核对系统 DNS、VPN 与代理 DNS 设置；本页不会更改系统配置。'))
+            : h('p', null, '代理配置尚未读取，请刷新。'),
+          h('button', { className: 'rt-btn', disabled: busy, onClick: load }, '刷新网络配置')),
         data && data.egress ? sectionCard('network', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.55 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '出网状态（借鉴 Z3r0 egress，只读）'),
           h('div', { className: 'rt-mono', style: { fontSize: 11 } }, 'HTTP_PROXY=' + (data.egress.http_proxy || '(空)')),
