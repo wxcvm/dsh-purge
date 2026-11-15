@@ -48,7 +48,7 @@ for (; j < body.length; j += 1) {
 	}
 }
 const applyParts = `function applyDrillParts() {
-      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth };
+      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api, useTemporaryPrivacy: useTemporaryPrivacy, setTemporaryPrivacy: setTemporaryPrivacy };
     }
 `;
 body = body.slice(0, applyAt) + applyParts + body.slice(j);
@@ -71,6 +71,15 @@ const beginAt = client.indexOf(BEGIN);
 const endAt = client.indexOf(END);
 if (beginAt < 0 || endAt < 0 || endAt < beginAt) throw new Error("drill markers out of order");
 let generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.length);
+// Keep the runtime panel and report projection generated from their own sources.
+const runtimeBegin = "/* __DSH_PURGE_RUNTIME_BEGIN__ */";
+const runtimeEnd = "/* __DSH_PURGE_RUNTIME_END__ */";
+const runtimeBody = readFileSync(join(root, "lib", "task-quality-report.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "runtime-panel.js"), "utf8");
+const runtimeAt = generated.indexOf(runtimeBegin), runtimeEndAt = generated.indexOf(runtimeEnd);
+if (runtimeAt < 0 || runtimeEndAt < runtimeAt) throw new Error("runtime panel markers missing");
+generated = generated.slice(0, runtimeAt) + runtimeBegin + "\n" + runtimeBody.replace(/\r\n/g, "\n")
+  + runtimeEnd + generated.slice(runtimeEndAt + runtimeEnd.length);
 // Normalize line endings so a Windows checkout does not change the build identity.
 // FNV-1a is an identity for stale UI detection, not a security signature.
 const buildMarker = /const CLIENT_BUILD_ID = "[^"]*";/;
