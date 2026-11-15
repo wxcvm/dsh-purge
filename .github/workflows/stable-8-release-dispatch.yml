@@ -1,0 +1,176 @@
+name: One-time stable .8 release
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: one-time-stable-8-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'wxcvm/dsh-purge' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'robin/release-dispatch-8-20261115'
+    runs-on: [self-hosted, Linux, X64, purge-ci]
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: wxcvm/dsh-purge
+      CANDIDATE: bc64cb3a0fe5abeb580097cbd96d77e335cf6ba0
+      BASE: 39de010cb0678c0ff6bc1c94fd3cc3ceb8c714b2
+      CI_RUN: '43723948091'
+    steps:
+      - name: Wait for the exact combined CI and merge verified candidate
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          api() {
+            curl --fail --silent --show-error --retry 4 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 60 \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/$GH_REPO/$1"
+          }
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          for attempt in $(seq 1 60); do
+            api "actions/runs/$CI_RUN" > "$tmp/run.json"
+            test "$(node -p "require('$tmp/run.json').head_sha")" = "$CANDIDATE"
+            status="$(node -p "require('$tmp/run.json').status")"
+            if [ "$status" = completed ]; then
+              test "$(node -p "require('$tmp/run.json').conclusion")" = success
+              break
+            fi
+            if [ "$attempt" = 60 ]; then echo "Combined CI still pending; no release"; exit 1; fi
+            echo "Combined CI: $status"
+            sleep 20
+          done
+          api "actions/runs/$CI_RUN/jobs" > "$tmp/jobs.json"
+          node -e 'const j=require(process.argv[1]).jobs; for(const n of ["api-contracts (windows-latest)","api-contracts (ubuntu-latest)"])if(!j.some(x=>x.name===n&&x.conclusion==="success"))throw Error("Missing successful job: "+n)' "$tmp/jobs.json"
+          api "pulls/276" > "$tmp/pr.json"
+          test "$(node -p "require('$tmp/pr.json').head.sha")" = "$CANDIDATE"
+          test "$(node -p "require('$tmp/pr.json').base.ref")" = master
+          if [ "$(node -p "require('$tmp/pr.json').merged")" != true ]; then
+            api git/ref/heads/master > "$tmp/master.json"
+            test "$(node -p "require('$tmp/master.json').object.sha")" = "$BASE"
+            if ! gh api --method PUT "repos/$GH_REPO/pulls/276/merge" -f sha="$CANDIDATE" -f merge_method=merge > "$tmp/merge.json"; then
+              echo "Merge response unsuccessful; checking PR state"
+            fi
+            api "pulls/276" > "$tmp/pr.json"
+          fi
+          test "$(node -p "require('$tmp/pr.json').merged")" = true
+          merged="$(node -p "require('$tmp/pr.json').merge_commit_sha")"
+          api git/ref/heads/master > "$tmp/master.json"
+          test "$(node -p "require('$tmp/master.json').object.sha")" = "$merged"
+          api "git/commits/$CANDIDATE" > "$tmp/candidate.json"
+          api "git/commits/$merged" > "$tmp/merged.json"
+          tree="$(node -p "require('$tmp/candidate.json').tree.sha")"
+          test "$(node -p "require('$tmp/merged.json').tree.sha")" = "$tree"
+          echo "EXPECTED=$merged" >> "$GITHUB_ENV"
+          echo "EXPECTED_TREE=$tree" >> "$GITHUB_ENV"
+          echo "sha=$merged" >> "$GITHUB_OUTPUT"
+          echo "Combined CI passed; merged and verified candidate tree: $merged"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.prepare.outputs.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build and verify exact stable archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          test "$(git rev-parse HEAD^{tree})" = "$EXPECTED_TREE"
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "1.1.92-wxcvm.8"
+          test "$(head -n 1 release-notes-wxcvm.md | tr -d '\r')" = "# $version"
+          zip="dsh-purge-$version.zip"
+          git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$EXPECTED"
+          unzip -tq "$zip"
+          test "$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")" = "$version"
+          for file in client.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/session-bindings.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1; do
+            unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
+          done
+          sha256sum "$zip" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          echo "Verified archive: $zip"
+      - name: Publish and verify stable release with bounded network retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="1.1.92-wxcvm.8"
+          tag="v$version"
+          zip="dsh-purge-$version.zip"
+          retry() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if "$@"; then return 0; fi
+              if [ "$attempt" = 5 ]; then return 1; fi
+              echo "GitHub request failed; retry $attempt/4" >&2
+              sleep "$((attempt * 5))"
+            done
+          }
+          api_read() {
+            curl --silent --show-error --retry 4 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 60 \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              -o "$2" -w '%{http_code}' "https://api.github.com/repos/$GH_REPO/$1"
+          }
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          assert_master() {
+            local code
+            code="$(api_read git/ref/heads/master "$tmp/master.json")"
+            test "$code" = 200
+            test "$(node -p "require('$tmp/master.json').object.sha")" = "$EXPECTED"
+          }
+          check_tag() {
+            local code target kind
+            code="$(api_read "git/ref/tags/$tag" "$tmp/tag.json")"
+            if [ "$code" = 404 ]; then return 2; fi
+            test "$code" = 200 || return 1
+            target="$(node -p "require('$tmp/tag.json').object.sha")"
+            kind="$(node -p "require('$tmp/tag.json').object.type")"
+            if [ "$kind" = tag ]; then
+              code="$(api_read "git/tags/$target" "$tmp/annotated.json")"
+              test "$code" = 200 || return 1
+              target="$(node -p "require('$tmp/annotated.json').object.sha")"
+            fi
+            test "$target" = "$EXPECTED" || { echo "Existing tag points to a different commit" >&2; return 1; }
+          }
+          assert_master
+          if check_tag; then
+            echo "Existing tag matches verified revision"
+          else
+            status=$?
+            test "$status" = 2
+          fi
+          # Check again before every create attempt: a lost response can hide a successful create.
+          ensure_release() {
+            local code
+            code="$(api_read "releases/tags/$tag" "$tmp/release.json")" || return 1
+            if [ "$code" = 200 ]; then
+              check_tag
+              return $?
+            fi
+            test "$code" = 404 || return 1
+            assert_master || return 1
+            gh release create "$tag" --repo "$GH_REPO" --target "$EXPECTED" --title "$tag" --notes-file release-notes-wxcvm.md
+          }
+          retry ensure_release
+          check_tag
+          retry gh release upload "$tag" "$zip" SHA256SUMS.txt --repo "$GH_REPO" --clobber
+          code="$(api_read "releases/tags/$tag" "$tmp/release.json")"
+          test "$code" = 200
+          node -e 'const r=require(process.argv[1]);const tag=process.argv[2];const zip=process.argv[3];if(r.tag_name!==tag||r.draft||r.prerelease)throw Error("Not a stable release");for(const name of [zip,"SHA256SUMS.txt"]){const a=r.assets.find(a=>a.name===name&&a.state==="uploaded"&&a.size>0);if(!a)throw Error("Missing asset "+name);console.log("Verified asset:",name,a.size,"bytes")}console.log("Stable release:",r.html_url)' "$tmp/release.json" "$tag" "$zip"
+          mkdir "$tmp/download"
+          retry gh release download "$tag" --repo "$GH_REPO" --pattern "$zip" --pattern SHA256SUMS.txt --dir "$tmp/download" --clobber
+          (cd "$tmp/download" && sha256sum -c SHA256SUMS.txt)
+          echo "Published and verified $tag"
