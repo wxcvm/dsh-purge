@@ -78,23 +78,18 @@ jobs:
         if: runner.os == 'Windows' && matrix.group == 'current'
         shell: pwsh
         run: ./scripts/test-private-acl.ps1
-      - name: Run isolated official host fixtures and regression tests
-        shell: bash
+      - name: Prepare latest official host fixture
+        id: fixture
+        run: node scripts/prepare-host-fixture.mjs ${{ matrix.hosts }}
+      - name: Install isolated fixture dependencies
+        id: fixture-install
+        run: npm install --prefix ".scratch/hosts/${{ matrix.hosts }}" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+      - name: Run official host regression tests
+        id: fixture-tests
+        run: node scripts/run-compat-tests.mjs ${{ matrix.hosts }}
+      - name: Report host result
+        if: always()
         env:
-          HOSTS: ${{ matrix.hosts }}
-        run: |
-          failed=0
-          for host in $HOSTS; do
-            echo "::group::Harness $host"
-            if node scripts/prepare-host-fixture.mjs "$host" &&
-               npm install --prefix ".scratch/hosts/$host" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional &&
-               node scripts/run-compat-tests.mjs "$host"; then
-              echo "| $host | passed |" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "::error title=Harness $host::Fixture or test failure"
-              echo "| $host | failed |" >> "$GITHUB_STEP_SUMMARY"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit "$failed"
+          HOST_VERSION: ${{ matrix.hosts }}
+          HOST_RESULT: ${{ steps.fixture-tests.outcome }}
+        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '| ' + process.env.HOST_VERSION + ' | ' + (process.env.HOST_RESULT === 'success' ? 'passed' : 'failed or not run') + ' |' + String.fromCharCode(10))"
