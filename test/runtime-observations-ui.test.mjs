@@ -111,3 +111,12 @@ test('runtime empty states distinguish loading, failed read and active filters',
   filtered.nodes.find(n=>n.type==='button'&&n.children.includes('清除筛选')).props.onClick();
   assert.deepEqual(filtered.updates,[[5,'all'],[0,null],[1,''],[4,'']]);
 });
+
+
+test('inactive runtime pane preserves local state without scheduling requests', () => {
+ const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8');
+ let count=0,cleanup;
+ const ctx=vm.createContext({useState:v=>[v,()=>{count++}],useRef:()=>({}),useEffect:f=>{cleanup=f()},h:(type,props,...children)=>({type,props,children}),fetch:()=>{count++},setTimeout:()=>{count++}});
+ vm.runInContext(panel+'\nRuntimeObservationsSection({active:false})',ctx);
+ assert.equal(count,0);assert.equal(cleanup,undefined);
+});

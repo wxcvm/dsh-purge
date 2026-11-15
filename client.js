@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "2e521963aef13a8f";
+		const CLIENT_BUILD_ID = "90be731f8c503b70";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1946,29 +1946,34 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		// The optional desktop switch and this panel share $DSH_HOME/.inject-off.
-		function InjectSwitchSection() {
+		function InjectSwitchSection({ active = true } = {}) {
 			const [off, setOff] = useState(null);
 			const [busy, setBusy] = useState(false);
 			const [error, setError] = useState("");
 			const pending = useRef(false);
 			const epoch = useRef(0);
 			useEffect(() => {
-				let active = true;
-				const load = () => {
-					if (pending.current) return;
-					const serial = epoch.current;
-					apiJson("/dsh-purge/inject")
-						.then((d) => {
-							if (!active || serial !== epoch.current || pending.current) return;
-							if (d && d.ok) { setOff(d.off === true); setError(""); }
-							else setError((d && d.error) || "无法读取注入状态");
-						})
-						.catch((e) => { if (active) setError(String(e.message || e)); });
+				if (!active) return;
+				let stopped = false, timer;
+				const load = async () => {
+					if (stopped) return;
+					if (!pending.current && document.visibilityState !== "hidden") {
+						const serial = epoch.current;
+						try {
+							const d = await apiJson("/dsh-purge/inject");
+							if (!stopped && serial === epoch.current && !pending.current) {
+								if (d && d.ok) { setOff(d.off === true); setError(""); }
+								else setError((d && d.error) || "无法读取注入状态");
+							}
+						} catch (e) {
+							if (!stopped && serial === epoch.current && !pending.current) setError(String(e.message || e));
+						}
+					}
+					if (!stopped) timer = window.setTimeout(load, 2000);
 				};
 				load();
-				const timer = window.setInterval(load, 2000);
-				return () => { active = false; window.clearInterval(timer); };
-			}, []);
+				return () => { stopped = true; window.clearTimeout(timer); };
+			}, [active]);
 			const save = (next) => {
 				if (pending.current || off === null) return;
 				pending.current = true;
@@ -2602,25 +2607,27 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 			useEffect(() => {
 				if (!patchBusy && !uninstallBusy) return undefined;
-				let stop = false;
-				const tick = () => {
-					apiJson("/dsh-purge/status")
-						.then((d) => {
-							if (stop || !d || actionTerminal.current) return;
-							if (d.apply_progress) {
-								setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
-								return;
-							}
-							if (!d.ok) return;
-							setState((prev) => Object.assign({}, prev || {}, d));
-						})
-						.catch(() => {});
+				let stop = false, timer;
+				const tick = async () => {
+					if (stop) return;
+					try {
+						const d = await apiJson("/dsh-purge/status");
+						if (stop || !d || actionTerminal.current) return;
+						if (d.apply_progress) {
+							setState((prev) => Object.assign({}, prev || {}, d.ok ? d : { apply_progress: d.apply_progress }));
+							return;
+						}
+						if (!d.ok) return;
+						setState((prev) => Object.assign({}, prev || {}, d));
+					} catch { /* The action response owns the final result. */ }
+					finally {
+						if (!stop && !actionTerminal.current) timer = setTimeout(tick, 450);
+					}
 				};
 				tick();
-				const id = setInterval(tick, 450);
 				return () => {
 					stop = true;
-					clearInterval(id);
+					clearTimeout(timer);
 				};
 			}, [patchBusy, uninstallBusy]);
 
@@ -3093,7 +3100,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
 				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
-				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
+				cleanPane(["prompt"], h(InjectSwitchSection, { active: !section || section === "prompt" }), h(HooksDenySection, { onSaved: loadAll })),
 
 				askUninstall ? h("div", {
 					className: "dshp-modal-bg",
@@ -4003,15 +4010,15 @@ function runtimeRowStatus(row) {
   return { key: 'running', label: row.settlement === 'committed' ? '已提交 · 等待终态' : '等待后续事件' };
 }
 
-function RuntimeObservationsSection({ onNavigate } = {}) {
+function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const [snapshot, setSnapshot] = useState(null), [error, setError] = useState('');
   const [report, setReport] = useState(null), [reportError, setReportError] = useState('');
   const [session, setSession] = useState('');
   const [filter, setFilter] = useState('all');
   const root = useRef(null);
   useEffect(() => {
+    if (!active) return;
     let stopped = false, timer, controller;
-    setSnapshot(null); setError('');
     async function refresh() {
       if (stopped) return;
       if (document.visibilityState !== 'hidden' && root.current?.getClientRects().length) {
@@ -4029,7 +4036,7 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
     }
     refresh();
     return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
-  }, [session]);
+  }, [session, active]);
   async function importReport(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -4192,7 +4199,8 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
 							h("button", { type: "button", key, onClick: () => setSection(key) }, name))) : null,
 					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" },
 						h(PurgifySection, { section })),
-					section === "runtime" ? h(RuntimeObservationsSection, { onNavigate: setSection }) : null,
+					h("div", { className: "dshp-clean-pane", hidden: section !== "runtime" },
+						h(RuntimeObservationsSection, { onNavigate: setSection, active: section === "runtime" })),
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 				),
