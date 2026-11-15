@@ -48,7 +48,7 @@ jobs:
             npm-compat-${{ runner.os }}-node24-${{ matrix.group }}-
       - name: Install declared plugin dependencies for full regression suite
         if: matrix.group == 'current'
-        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional --package-lock=false
       - name: Check generated bundle and syntax once per OS
         if: matrix.group == 'current'
         run: |
@@ -87,7 +87,7 @@ jobs:
           for host in $HOSTS; do
             echo "::group::Harness $host"
             if node scripts/prepare-host-fixture.mjs "$host" &&
-               npm install --prefix ".scratch/hosts/$host" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional &&
+               npm install --prefix ".scratch/hosts/$host" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional &&
                node scripts/run-compat-tests.mjs "$host"; then
               echo "| $host | passed |" >> "$GITHUB_STEP_SUMMARY"
             else
