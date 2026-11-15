@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "0442c5f9221c6508";
+		const CLIENT_BUILD_ID = "d9a2c4f8d443ef0b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -6737,6 +6737,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [externalRequest, setExternalRequest] = React.useState(false)
       const [removeArmed, setRemoveArmed] = React.useState(false)
       const [relatedSkill, setRelatedSkill] = React.useState(null)
+      const skillReadSeq = React.useRef(0)
+      React.useEffect(() => () => { skillReadSeq.current++ }, [])
 
       const loadExternal = () => {
         api({ op: 'aboutSecurityStatus' }).then((result) => {
@@ -6798,14 +6800,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const open = (skill) => {
         const name = skill && skill.name
         const key = (skill && skill.library ? skill.library : 'redteam') + ':' + name
-        if (active === key) { setActive(null); setDetail(null); return }
+        const request = ++skillReadSeq.current
+        if (active === key) { setActive(null); setDetail(null); setRelatedSkill(null); return }
         setActive(key)
         setDetail(null)
         setRelatedSkill(null)
+        setErr(null)
         api({ op: 'skillRead', name: name, library: skill.library || 'redteam' }).then((r) => {
+          if (request !== skillReadSeq.current) return
           if (r && r.ok) setDetail(r)
           else setErr((r && r.error) || '读取失败')
-        }, (e) => setErr(String((e && e.message) || e)))
+        }, (e) => {
+          if (request === skillReadSeq.current) setErr(String((e && e.message) || e))
+        })
       }
 
       /* Purpose first, source second. Unmatched upstream entries remain 'other'. */

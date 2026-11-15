@@ -102,3 +102,31 @@ test('bundled pagination keeps the submitted keyword and federated results can o
   page().find(n=>n.type==='button'&&n.children.includes('查看全部内置匹配')).props.onClick();await settle()
   assert.equal(calls.at(-1).source,'bundled');assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
 })
+
+
+test('skill detail ignores late reads and errors after switching or closing a skill', async () => {
+  const source=read('lib/redteam/client.js')
+  const tab=source.indexOf('    function SkillsTab(')
+  const start=source.indexOf('      const open = (skill) => {',tab)
+  const end=source.indexOf('      /* Purpose first, source second.',start)
+  assert.ok(start>tab && end>start)
+  assert.match(source,/const skillReadSeq = React\.useRef\(0\)/)
+  assert.match(source,/React\.useEffect\(\(\) => \(\) => \{ skillReadSeq\.current\+\+ \}, \[\]\)/)
+  let active=null,detail=null,error=null,related=null
+  const requests=[],skillReadSeq={current:0}
+  const api=req=>new Promise((resolve,reject)=>requests.push({req,resolve,reject}))
+  const open=new Function('active','skillReadSeq','setActive','setDetail','setRelatedSkill','setErr','api',source.slice(start,end)+'\nreturn open')
+  const click=skill=>open(active,skillReadSeq,v=>{active=v},v=>{detail=v},v=>{related=v},v=>{error=v},api)(skill)
+  const settle=()=>new Promise(resolve=>setImmediate(resolve))
+  click({name:'first'});click({name:'second'})
+  requests[1].resolve({ok:true,content:'SECOND'});await settle()
+  requests[0].resolve({ok:true,content:'FIRST'});await settle()
+  assert.equal(active,'redteam:second');assert.equal(detail.content,'SECOND')
+  click({name:'third'});click({name:'fourth'})
+  requests[3].resolve({ok:true,content:'FOURTH'});await settle()
+  requests[2].reject(Error('late failure'));await settle()
+  assert.equal(detail.content,'FOURTH');assert.equal(error,null)
+  click({name:'fifth'});click({name:'fifth'})
+  requests[4].resolve({ok:true,content:'FIFTH'});await settle()
+  assert.equal(active,null);assert.equal(detail,null);assert.equal(related,null)
+})
