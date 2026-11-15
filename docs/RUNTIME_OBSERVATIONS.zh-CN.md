@@ -7,8 +7,8 @@
 
 - 首文本延迟：从本地 stream/start 至第一个非空 text-delta；不含启动、请求准备或 reasoning 时间，不能冒充端到端首字延迟。
 - 总耗时：同一 attempt 从 stream/start 到 stream/end；采集器另有进程总耗时，两者不要混用。
-- 终态：只信任实际 finish 帧。缺少时为 unknown；宿主默认补出的 stop 不作为观测证据。
-- 结算：committed/abandoned 与回合 completed 是不同维度；都不证明答案正确。
+- 终态：只信任实际 finish 帧。缺少时为 unknown；宿主默认补出的 stop 不作为观测证据。持久事件缺少 finish 时不会抹掉实时终态；实时与持久终态的可见字段不一致时保留实时证据并记录 terminalConflict。reasonSource 区分 host-stream、durable-stream 与 not-observed。
+- 结算：committed/abandoned 与回合 completed 是不同维度；都不证明答案正确。替换 Agent 或回合结束但缺少流结束证据时标为 unobserved-end，不伪造耗时或 finish。迟到的持久事件按已提交 seq 对账，不覆盖新 attempt。
 - Token：适配器上报的快照，缺少字段为 null。缓存计费和总 Token 不混称。
 - Provider 原始终态：rc.3 没有稳定透传保证，本版为 null；不解析私有 replayState 或错误正文。
 
