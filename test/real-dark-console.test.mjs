@@ -15,7 +15,8 @@ test('real full-window console uses its existing hash and actual React navigatio
     assert.match(source, /h\(RtNavIcon, \{ tab: t\[0\] \}\)/)
     assert.match(source, /onClick: \(\) => activate\(t\[0\]\)/)
     assert.match(source, /role: 'tab'/)
-    assert.match(source, /'aria-selected': st\.tab === t\[0\]/)
+    assert.match(source, /'aria-selected': activeTab === t\[0\]/)
+    assert.match(source, /const activeTab = st\.tab === 'local-search' \|\| st\.tab === 'knowledge' \? 'env' : st\.tab/)
     assert.match(source, /full && e\.key === 'ArrowDown'/)
     assert.match(source, /full && e\.key === 'ArrowUp'/)
   }
