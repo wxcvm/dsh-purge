@@ -235,3 +235,62 @@ test('empty usage and incomplete finish records do not erase earlier evidence', 
   assert.equal(r.usageSource,'durable-stream');assert.equal(r.finish,'stop');
   assert.equal(r.reasonSource,'durable-stream');
 });
+
+function assessmentFixture({ task = 'Summarize this document.', text = 'I cannot assist with this request.', finish = 'stop', interrupted = false, lateFinish = false, captureHuman = true } = {}) {
+  const o = createRuntimeObservations(), a = agent('assessment');
+  const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: task } };
+  a.session.events = captureHuman ? [human] : [];
+  o.event(a.session, human); start(o, a);
+  if (finish && !lateFinish) chunk(o, a, 0, { type: 'finish', reason: { kind: finish } });
+  o.event(a.session, { seq: 2, type: 'assistant/message', data: { turn: 1, step: 1, interrupted, message: { content: text } } });
+  o.event(a.session, { seq: 3, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+  if (finish && lateFinish) chunk(o, a, 0, { type: 'finish', reason: { kind: finish } });
+  return { o, a };
+}
+
+test('complete observed response has a text assessment but no verified delivery', () => {
+  const { o } = assessmentFixture();
+  const row = o.snapshot().items[0];
+  assert.equal(row.assessment.decision, 'refusal');
+  assert.equal(row.assessment.delivery, 'not-verified');
+  assert.doesNotMatch(JSON.stringify(row), /Summarize this document|I cannot assist/);
+});
+
+test('a completed turn cannot turn failed, partial, or tool-call attempts into a refusal verdict', () => {
+  for (const finish of ['error', 'aborted', 'max-tokens', 'tool-calls', 'content_filter', 'unknown-kind', null]) {
+    const { o } = assessmentFixture({ finish });
+    const a = o.snapshot().items[0].assessment;
+    assert.equal(a.decision, 'uncertain', String(finish));
+    assert.equal(a.scope, 'none');
+    assert.equal(a.delivery, 'not-verified');
+  }
+  const { o } = assessmentFixture({ interrupted: true });
+  assert.equal(o.snapshot().items[0].assessment.decision, 'uncertain');
+});
+
+test('late terminal evidence updates the projection without changing the response or hiding the original finish', () => {
+  for (const finish of ['stop', 'error', 'content_filter']) {
+    const { o } = assessmentFixture({ finish, lateFinish: true });
+    const row = o.snapshot().items[0];
+    assert.equal(row.finish, finish);
+    assert.equal(row.assessment.decision, finish === 'stop' ? 'refusal' : 'uncertain');
+  }
+});
+
+test('conflicting live and durable evidence and missing task context remain unknown', () => {
+  const { o, a } = assessmentFixture();
+  chunk(o, a, 1, { type: 'finish', reason: { kind: 'error' } });
+  assert.equal(o.snapshot().items[0].terminalConflict, true);
+  assert.equal(o.snapshot().items[0].assessment.decision, 'uncertain');
+  const missing = assessmentFixture({ captureHuman: false }).o.snapshot().items[0];
+  assert.equal(missing.assessment.decision, 'uncertain');
+  assert.deepEqual(missing.assessment.reasonCodes, ['missing-task-context']);
+});
+
+test('older attempts in the same turn do not become final response assessments', () => {
+  const { o, a } = assessmentFixture();
+  o.frame({ agent: a, frame: { type: 'start', revision: 3, attemptId: 's:2', turn: 1, step: 2 } });
+  const previous = o.snapshot().items[1];
+  assert.equal(previous.assessment.decision, 'uncertain');
+  assert.deepEqual(previous.assessment.reasonCodes, ['superseded-attempt']);
+});
