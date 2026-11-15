@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { join, resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { isDeepStrictEqual } from 'node:util';
 import { cases, evaluateMatrix } from './evaluate-task-quality.mjs';
 
 export function validateCaptureConfig(c) {
@@ -38,16 +39,38 @@ export function captureMetrics(probe, expectedRoute, elapsedMs, events) {
   return metrics;
 }
 
-export function capture(config, full = false) {
+// Reuse only completed samples from a compatible, explicitly supplied real matrix.
+// The caller still verifies installed variant identity; metadata is collector-declared.
+export function planCapture(c, full = false, previous = null) {
+  const names = ['host', 'current', 'candidate'];
+  const selected = full ? cases : cases.filter(k => ['arithmetic', 'multi-step'].includes(k.id));
+  const matrix = { captureKind: 'real', ...Object.fromEntries(names.map(k => [k, { ...c[k], samples: {} }])) };
+  if (previous !== null) {
+    if (previous.captureKind !== 'real') throw new Error('resume requires a real capture matrix');
+    evaluateMatrix(previous);
+    for (const name of names) {
+      for (const key of ['profile', 'variant', 'model', 'hostVersion', 'environment', 'settings']) {
+        if (!isDeepStrictEqual(previous[name][key], c[name][key])) throw new Error('resume comparison mismatch: ' + name + '.' + key);
+      }
+      matrix[name].samples = { ...previous[name].samples };
+    }
+  }
+  const pending = selected.flatMap(task => names.filter(name => !Object.hasOwn(matrix[name].samples, task.id)).map(name => ({ task, name })));
+  return { matrix, selected, pending, reusedSamples: selected.length * names.length - pending.length };
+}
+
+export function capture(config, full = false, previous = null) {
   const c = validateCaptureConfig(config);
+  const { matrix, selected, pending, reusedSamples } = planCapture(c, full, previous);
+  fs.mkdirSync(resolve('.scratch'), { recursive: true });
   const out = fs.mkdtempSync(join(resolve('.scratch'), 'task-quality-'));
   const entry = join(out, 'entry.mjs');
   fs.writeFileSync(entry, `import {runDesktopCli} from ${JSON.stringify(pathToFileURL(c.cli).href)}; await runDesktopCli(${JSON.stringify(c.runtime)});`);
-  const matrix = { captureKind: 'real', ...Object.fromEntries(['host', 'current', 'candidate'].map(k => [k, { ...c[k], samples: {} }])) };
-  const selected = full ? cases : cases.filter(k => ['arithmetic', 'multi-step'].includes(k.id));
+  fs.writeFileSync(join(out, 'matrix.json'), JSON.stringify(matrix, null, 2));
   const env = { ...process.env, ELECTRON_RUN_AS_NODE: '1', DSH_HOME: c.dshHome };
-  // One model request per case/variant. No automatic retries at collector level.
-  for (const task of selected) for (const name of ['host', 'current', 'candidate']) {
+  // One CLI run per missing case/variant. The host may perform multiple model attempts.
+  // No automatic retries at collector level. Keep the source matrix untouched.
+  for (const { task, name } of pending) {
     const observation = join(out, name + '-' + task.id + '-metadata.json');
     const overlay = join(out, name + '-' + task.id + '-overlay.json');
     fs.writeFileSync(overlay, JSON.stringify([{ insert: [{ id: 'purge-runtime-observation-probe', name: resolve('scripts/runtime-observation-probe.mjs'), config: { output: observation } }] }]));
@@ -73,15 +96,18 @@ export function capture(config, full = false) {
   }
   const report = evaluateMatrix(matrix);
   fs.writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
-  return { directory: out, capturedCases: selected.length, modelCalls: selected.length * 3 };
+  return { directory: out, capturedCases: selected.length, reusedSamples, newRuns: pending.length, modelCalls: pending.length, modelCallsMeaning: 'collector CLI runs; actual provider attempts may differ' };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    const [mode, file] = process.argv.slice(2);
-    if (!['--preflight', '--smoke', '--full'].includes(mode) || !file) throw new Error('Usage: capture-task-quality.mjs --preflight|--smoke|--full config.json');
+    const [mode, file, ...rest] = process.argv.slice(2);
+    if (!['--preflight', '--smoke', '--full'].includes(mode) || !file || (rest.length !== 0 && (rest.length !== 2 || rest[0] !== '--resume' || !rest[1]))) throw new Error('Usage: capture-task-quality.mjs --preflight|--smoke|--full config.json [--resume matrix.json]');
     const config = validateCaptureConfig(JSON.parse(fs.readFileSync(file, 'utf8')));
-    if (mode === '--preflight') console.log(JSON.stringify({ ok: true, modelCalls: 0, profileSetup: 'existing-only', provenance: 'collector-declared-variant-identity' }));
-    else { fs.mkdirSync(resolve('.scratch'), { recursive: true }); console.log(JSON.stringify(capture(config, mode === '--full'))); }
+    const previous = rest.length ? JSON.parse(fs.readFileSync(rest[1], 'utf8')) : null;
+    if (mode === '--preflight') {
+      const plan = planCapture(config, true, previous);
+      console.log(JSON.stringify({ ok: true, modelCalls: 0, remainingRuns: plan.pending.length, reusedSamples: plan.reusedSamples, profileSetup: 'existing-only', provenance: 'collector-declared-variant-identity' }));
+    } else console.log(JSON.stringify(capture(config, mode === '--full', previous)));
   } catch (e) { console.error(e.message); process.exitCode = 1; }
 }

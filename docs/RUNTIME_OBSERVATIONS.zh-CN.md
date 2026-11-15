@@ -51,7 +51,14 @@ node scripts/capture-task-quality.mjs --full capture-config.json
 ```
 
 preflight 不调用模型；smoke 为两题六次调用；full 为十题三十次调用，每次使用新进程/会话，无采集器自动重试。
-smoke 与 full 是独立运行，会叠加消耗；如需复用已有 smoke 数据，按 CLEAN_EFFECT_VALIDATION 协议手工补采剩余题目，不再次运行 full。
+若已有 smoke 或中途中断的真实 matrix.json，可直接续测：
+
+```powershell
+node scripts/capture-task-quality.mjs --preflight capture-config.json --resume .scratch/task-quality-旧目录/matrix.json
+node scripts/capture-task-quality.mjs --full capture-config.json --resume .scratch/task-quality-旧目录/matrix.json
+```
+
+preflight 列出剩余 CLI 运行次数，不调用模型。六个冒烟样本已完成时，完整续测只需剩余 24 次 CLI 运行；已经采集的错误答案也保留，不因正确率重新执行。续测要求原矩阵为 real、三组 profile/variant/model/hostVersion/environment/settings 完全一致；新目录保存合并矩阵与新采集记录，原矩阵及原证据目录不改写。实际 Provider attempt 数可能多于 CLI 次数，不把次数估算当账单。
 每个案例核对全部已观测 attempt 的实际路由；任一不匹配或缺失即记录采集失败。探针发生淘汰或 start 数与快照条数不一致时，省略 Token 总量与首文本计时，不将部分记录冒充全量。失败会保留本地部分记录并停止，不补写答案或伪造原生会话事件。配置与报告只放本地 .scratch，不提交模型账号材料。
 
 本机只有通用 codex-review 和生产/default profile，尚未准备三个同条件且对应版本已核实的隔离 profile；因此未运行完整三组对照。
