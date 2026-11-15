@@ -111,7 +111,7 @@ test("remount releases the old runtime without disturbing the new runtime or ano
     replacement = installContinueRetry(first.ctx, { config: { autoContinue: false } });
     const replacementHandler = first.listeners.get("agent/status");
     assert.notEqual(replacementHandler, staleHandler);
-    assert.equal(first.listeners.size, 2);
+    assert.equal(first.listeners.size, 5);
 
     // The old scope's cleanup may arrive after the new runtime is installed.
     first.hook.dispose();
@@ -121,7 +121,7 @@ test("remount releases the old runtime without disturbing the new runtime or ano
     await wait(350);
     assert.equal(oldAgent.sent.length, 0);
     assert.equal(otherAgent.sent.length, 1);
-    assert.equal(second.listeners.size, 2);
+    assert.equal(second.listeners.size, 5);
   } finally {
     replacement?.dispose();
     first.hook.dispose();
@@ -174,4 +174,79 @@ test("request-error hook preserves provider terminal decisions and retries a tra
     else globalThis.__dshPurgeRetryPending = previous;
     f.hook.dispose();
   }
+});
+
+
+test("a delayed transport failure cannot retry after a new user message or a completed turn", async () => {
+  for (const event of [
+    { seq: 2, type: "user/message", data: { role: "user", content: "new request" } },
+    { seq: 2, type: "turn/start", data: { turn: 2 } },
+    ended(2, 1, { kind: "aborted", reason: "user" }),
+  ]) {
+    const f = fixture();
+    const agent = agentOf("one", []);
+    const downstream = { kind: "stop" };
+    try {
+      let release;
+      const pending = f.listeners.get("agent/request-error")({ agent, turn: 1, step: 1, failure: { code: "TRANSPORT" } },
+        () => new Promise(resolve => { release = resolve; }));
+      // A lifecycle notification may arrive before the session snapshot updates.
+      f.listeners.get("session/event")(agent.session, event);
+      release(downstream);
+      assert.equal(await pending, downstream);
+    } finally { f.hook.dispose(); }
+  }
+});
+
+test("snapshot changes and agent disposal invalidate a delayed retry even without an abort signal", async () => {
+  for (const change of ["snapshot", "dispose", "replace"]) {
+    const f = fixture(), agent = agentOf("one", []);
+    const downstream = { kind: "stop" };
+    try {
+      let release;
+      const pending = f.listeners.get("agent/request-error")({ agent, turn: 1, step: 1, failure: { code: "TRANSPORT" } },
+        () => new Promise(resolve => { release = resolve; }));
+      if (change === "snapshot") agent.session.events.push({ seq: 2, type: "turn/start", data: { turn: 2 } });
+      if (change === "dispose") f.listeners.get("agent/disposed")({ agent });
+      if (change === "replace") f.listeners.get("agent/created")({ agent: agentOf("one", []) });
+      release(downstream);
+      assert.equal(await pending, downstream);
+    } finally { f.hook.dispose(); }
+  }
+});
+
+test("cancelling one session's delayed failure leaves another session's transient retry intact", async () => {
+  const f = fixture(), first = agentOf("one", []), second = agentOf("two", []);
+  const downstream = { kind: "stop" }, previous = globalThis.__dshPurgeRetryPending;
+  try {
+    const releases = [];
+    const handler = f.listeners.get("agent/request-error");
+    const invoke = agent => handler({ agent, turn: 1, step: 1, failure: { code: "TRANSPORT" } },
+      () => new Promise(resolve => { releases.push(resolve); }));
+    const a = invoke(first), b = invoke(second);
+    f.listeners.get("session/event")(first.session, ended(2, 1, { kind: "aborted", reason: "user" }));
+    releases.forEach(release => release(downstream));
+    assert.equal(await a, downstream);
+    assert.deepEqual(await b, { kind: "retry" });
+  } finally {
+    if (previous === undefined) delete globalThis.__dshPurgeRetryPending;
+    else globalThis.__dshPurgeRetryPending = previous;
+    f.hook.dispose();
+  }
+});
+
+test("agent replacement and new lifecycle notifications cancel only their own delayed continuations", async () => {
+  const f = fixture();
+  try {
+    const a = agentOf("one", [interrupted(1, 1)]), b = agentOf("two", [interrupted(1, 1)]);
+    const c = agentOf("three", [interrupted(1, 1)]);
+    for (const agent of [a, b, c]) f.status(agent, "idle");
+    f.listeners.get("agent/created")({ agent: agentOf("one", []) });
+    f.status(a, "idle"); // stale notification from the replaced Agent
+    f.listeners.get("session/event")(b.session, { seq: 2, type: "turn/start", data: { turn: 2 } });
+    await wait(350);
+    assert.equal(a.sent.length, 0);
+    assert.equal(b.sent.length, 0);
+    assert.equal(c.sent.length, 1);
+  } finally { f.hook.dispose(); }
 });
