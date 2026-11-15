@@ -9,7 +9,7 @@
 | 渠道 | 源码版本 | Git 标签 | 状态 |
 | --- | --- | --- | --- |
 | Stable 历史标签 | 1.1.92-wxcvm.6 | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | 保留旧标签；新版本发布前仍为历史交付基线 |
-| Stable 候选 | [1.1.92-wxcvm.7](../package.json) | 尚未创建 | 集成候选，最终 CI、资产与实机验收待核验 |
+| Stable 候选 | [1.1.92-wxcvm.7](../package.json) | 尚未创建 | 已纳入 #270–#272，最终联合 CI、资产与实机验收待核验 |
 | Beta | [1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 发布资产与标签待独立核验 | beta 源码版本已核对；不整体覆盖 master |
 
 **注意：** Git 标签存在不等于 Release 已发布、资产齐全、校验通过或实机验收完成。本次文档维护没有下载或验证发布资产，也没有执行任何发布流程。

@@ -10,14 +10,18 @@
 - 任务协调：修复并发预留幂等性、容量统计和分页参数错误（#265）。
 - 维护中心：恢复修复中心、桌面运行健康检查与正式版打包分类（#267）。
 - 私有更新：支持本机 Git 凭据或进程环境凭据、代理感知下载、进度、安装来源迁移、中断恢复与重启后版本核验（#268）。凭据不应写入安装包或配置文件。恢复操作须按实际宿主和安装方式执行，参见 docs/UPDATE_RECOVERY.zh-CN.md。
-- CI：现有 Windows + WSL 自托管兼容性工作流保留。#267、#268 的 PR CI 已通过；本候选最终提交的 CI、发布资产、真实 Windows Desktop/Web 安装升级和界面验收须独立核验。
+- 环境中心：修复配置工具路径指向目录时的误识别，保留原路径以便纠正（#270）。
+- 平台管理及 ARTEX：保存失败时保留未提交的勾选；检测失败清除旧在线状态，忽略过期响应（#271）。
+- 工作台：统一全窗口视口、Windows 标题栏点击区域，返回会话失败保留页面，渲染异常提供重试（#272）。
+- CI：现有 Windows + WSL 自托管兼容性工作流保留。#267、#268、#270、#271、#272 的 PR CI 已通过；本候选最终提交的 CI、发布资产、真实 Windows Desktop/Web 安装升级和界面验收须独立核验。
 
 私有仓库的匿名 codeload 地址并不可用。通过有仓库权限的 GitHub 会话获取发布资产；本地更新使用已支持的授权凭据与对应安装路径。正式发布后以 GitHub Release、对应标签和实际下载资产为准。
 
 ## English
 
 - Consolidates the merged master maintenance and workspace changes, including unified skills/knowledge, local privacy diagnostics, read-only runtime observations and offline quality reporting, task coordination, repair center, and authenticated private repository update/recovery.
-- The existing Windows + WSL self-hosted compatibility workflow remains in use. PR checks for #267 and #268 passed; candidate-specific CI, actual release assets, and real Desktop/Web acceptance must be verified separately.
+- Fixes configured tool paths that point to directories (#270), retains unsaved platform choices and clears stale ARTEX connectivity (#271), and restores viewport, caption hit testing and recoverable workspace navigation (#272).
+- The existing Windows + WSL self-hosted compatibility workflow remains in use. PR checks for #267, #268, #270, #271 and #272 passed; candidate-specific CI, actual release assets, and real Desktop/Web acceptance must be verified separately.
 - Access the private release using an authorized GitHub account. Anonymous archive URLs are not supported. See docs/UPDATE_RECOVERY.zh-CN.md for update recovery.
 
 ---
