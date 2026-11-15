@@ -57,7 +57,7 @@ jobs:
         shell: pwsh
         run: ./scripts/test-private-acl.ps1
       - name: Run unit and public API contract tests
-        shell: bash
+        shell: pwsh
         run: |
-          export DSH_COMPAT_HOST_ROOT="$GITHUB_WORKSPACE/.scratch/hosts/$HOST_VERSION"
-          node --test test/*.test.* maintenance/*.test.mjs maintenance/desktop-tools/*.test.mjs
+          $env:DSH_COMPAT_HOST_ROOT = Join-Path $env:GITHUB_WORKSPACE ".scratch/hosts/$env:HOST_VERSION"
+          node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
