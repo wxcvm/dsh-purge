@@ -65,6 +65,6 @@ DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或�
 
 两端使用独立的随机情报令牌（至少 32 字符），ARTEX 服务端设置 ARTEX_PURGE_INTEL_TOKEN、ARTEX_PURGE_INTEL_COMPANY_ID；Purge/DSH 宿主设置同值 DSH_PURGE_ARTEX_INTEL_TOKEN、DSH_PURGE_ARTEX_INTEL_COMPANY_ID。公司必须存在且登记相应域名及 IP/CIDR 范围。不要复用隐私/总览令牌，重启服务使环境变量生效。
 
-测绘中心生成关联清单后，在「ARTEX 本机情报同步」查看接收公司，确认并点击「同步至 ARTEX」。固定发送到 127.0.0.1:8787，先做无凭据健康检查，随后 POST /api/purge/intel-bridge；不支持任意远程地址或重定向。发送前重新构建当前项目授权清单（可能包含该项目其他已授权 IP），接收端独立验证整份数据，不创建已验证资产、端口、漏洞、任务。成功显示公司及快照 ID；失败或回执不明确时请在 ARTEX 资产同步 → Purge 情报查询历史。重复证据可复用快照。
+进入「资源 → ARTEX」的本机情报同步区，填写已登记域名并生成关联清单，查看接收公司，确认并点击「同步至 ARTEX」。环境 → 测绘中心 → 本地资产中的「打开 ARTEX 情报同步」可带入当前项目与目标。固定发送到 127.0.0.1:8787，先做无凭据健康检查，随后 POST /api/purge/intel-bridge；不支持任意远程地址或重定向。发送前重新构建当前项目授权清单（可能包含该项目其他已授权 IP），接收端独立验证整份数据，不创建已验证资产、端口、漏洞、任务。成功显示公司及快照 ID；失败或回执不明确时请在 ARTEX 资产同步 → Purge 情报查询历史。重复证据可复用快照。
 
 接口 scopedIntelSyncConfig（同步，仅配置状态、公司 ID 和固定地址，无令牌）；scopedIntelSync（异步，engagement、target、companyId、confirm=true）。8 MiB 上限，15 秒请求超时。仅手动触发传输，没有定时任务或智能体自动分析。
