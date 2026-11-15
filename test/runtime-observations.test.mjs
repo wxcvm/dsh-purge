@@ -294,3 +294,74 @@ test('older attempts in the same turn do not become final response assessments',
   assert.equal(previous.assessment.decision, 'uncertain');
   assert.deepEqual(previous.assessment.reasonCodes, ['superseded-attempt']);
 });
+
+test('late mount recovers a pending human request from an existing session snapshot', () => {
+  const o = createRuntimeObservations(), a = agent('late-mount');
+  const human = { seq: 10, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+  a.session.events = [{ seq: 9, type: 'turn/end', data: { reason: { kind: 'completed' } } }, human];
+  start(o, a);
+  chunk(o, a, 0, { type: 'finish', reason: { kind: 'stop' } });
+  o.event(a.session, { seq: 11, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Result.' } } });
+  o.event(a.session, { seq: 12, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.humanSeqAtStart, 10);
+  assert.equal(row.humanSourceAtStart, 'session-snapshot');
+  assert.equal(row.taskContextAtResponse, 'present');
+  assert.equal(row.assessment.decision, 'not-refusal');
+  assert.doesNotMatch(JSON.stringify(row), /PRIVATE TASK|Result\./);
+});
+
+test('late mount does not borrow a completed historical request or a plugin notice', () => {
+  const o = createRuntimeObservations(), a = agent('completed-history');
+  a.session.events = [
+    { seq: 10, type: 'user/message', data: { source: { kind: 'human' }, content: 'Old task.' } },
+    { seq: 11, type: 'turn/end', data: { reason: { kind: 'completed' } } },
+    { seq: 12, type: 'user/message', data: { source: { kind: 'plugin' }, content: 'Notice.' } },
+  ];
+  start(o, a);
+  const row = o.snapshot().items[0];
+  assert.equal(row.humanSeqAtStart, 0);
+  assert.equal(row.humanSourceAtStart, 'not-observed');
+});
+
+test('compaction evidence distinguishes present from missing task context without inferring model context loss', () => {
+  for (const keep of [true, false]) {
+    const o = createRuntimeObservations(), a = agent('compact');
+    const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+    a.session.events = [human];
+    o.event(a.session, human);
+    o.event(a.session, { seq: 2, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    start(o, a);
+    chunk(o, a, 0, { type: 'finish', reason: { kind: 'stop' } });
+    o.event(a.session, { seq: 3, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    if (!keep) a.session.events = [{ seq: 3, type: 'compaction/end', data: {} }];
+    o.event(a.session, { seq: 4, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done.' } } });
+    o.event(a.session, { seq: 5, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSourceAtStart, 'session-event');
+    assert.equal(row.compactionSeqAtStart, 2);
+    assert.equal(row.compactionSeqAtResponse, 3);
+    assert.equal(row.taskContextAtResponse, keep ? 'present' : 'missing');
+    assert.equal(row.assessment.decision, keep ? 'not-refusal' : 'uncertain');
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+  }
+});
+
+test('unavailable session snapshot and newer observed task never borrow older task text', () => {
+  for (const unavailable of [true, false]) {
+    const o = createRuntimeObservations(), a = agent('missing');
+    const previous = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'Previous.' } };
+    const current = { seq: 2, type: 'user/message', data: { source: { kind: 'human' }, content: 'Current.' } };
+    a.session.events = [previous];
+    if (unavailable) a.session.snapshotEvents = () => { throw new Error('Unavailable'); };
+    o.event(a.session, previous); o.event(a.session, current);
+    start(o, a);
+    chunk(o, a, 0, { type: 'finish', reason: { kind: 'stop' } });
+    o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done.' } } });
+    o.event(a.session, { seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSeqAtStart, 2);
+    assert.equal(row.taskContextAtResponse, unavailable ? 'unavailable' : 'missing');
+    assert.equal(row.assessment.decision, 'uncertain');
+  }
+});
