@@ -228,8 +228,8 @@ test('empty usage and incomplete finish records do not erase earlier evidence', 
   chunk(o,a,0,{type:'usage',usage:{totalTokens:0}});
   chunk(o,a,1,{type:'usage',usage:{}});
   o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,stream:[
-    {chunk:{type:'finish',reason:{kind:'stop'}}},{chunk:{type:'finish'}},
-    {chunk:{type:'usage',usage:{totalTokens:0}}},{chunk:{type:'usage'}}
+    {chunk:{type:'finish',reason:{kind:'stop'}}},{chunk:{type:'finish',reason:{}}},{chunk:{type:'finish'}},
+    {chunk:{type:'usage',usage:{totalTokens:0}}},{chunk:{type:'usage',usage:{}}},{chunk:{type:'usage'}}
   ]}});
   const r=o.snapshot().items[0];assert.equal(r.usage.totalTokens,0);
   assert.equal(r.usageSource,'durable-stream');assert.equal(r.finish,'stop');
