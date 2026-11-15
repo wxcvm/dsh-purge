@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "c913452449e95c72";
+		const CLIENT_BUILD_ID = "608bee59934ba272";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2566,7 +2566,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						}
 						else setNotice({ kind: "error", text: tr("err.override", { error: (d && d.error) || "" }) });
 					})
-					.catch((e) => setNotice({ kind: "error", text: tr("err.override", { error: e.message }) }));
+					.catch((e) => { if (readEpoch === overrideReadEpoch.current) setNotice({ kind: "error", text: tr("err.override", { error: e.message }) }); });
 				apiJson("/dsh-purge/own-servers")
 					.then((d) => {
 						if (d && d.ok) {
@@ -2662,6 +2662,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							if (action === "apply") {
 								if (typeof d.defaultContent === "string") setDefaultOverride(d.defaultContent);
 								if (typeof d.override_content === "string") {
+									overrideReadEpoch.current++;
 									setOverride(d.override_content);
 									setSavedOverride(d.override_content);
 									promptDirtyRef.current = false;
@@ -2767,6 +2768,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								return;
 							}
 							const saved = typeof d.content === "string" ? d.content : content;
+							overrideReadEpoch.current++;
 							setSavedOverride(saved);
 							if (readPromptBox() === content) {
 								overrideRef.current = saved;
@@ -2813,6 +2815,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							return;
 						}
 						const saved = typeof d.content === "string" ? d.content : defaultOverride;
+						overrideReadEpoch.current++;
 						overrideRef.current = saved;
 						setOverride(saved);
 						setSavedOverride(saved);
