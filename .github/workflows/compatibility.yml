@@ -1,10 +1,7 @@
-name: Maintenance compatibility
+name: Maintenance compatibility (cloud manual fallback)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
-  pull_request:
 
 permissions:
   contents: read

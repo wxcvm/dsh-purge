@@ -2,9 +2,15 @@ name: Windows Local Compatibility
 
 on:
   workflow_dispatch:
+  push:
+    branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
 
 permissions:
   contents: read
+
+concurrency:
+  group: local-windows-compatibility-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows-compatibility:
@@ -35,6 +41,12 @@ jobs:
       - name: Compile optional Windows injection switch
         shell: pwsh
         run: ./maintenance/inject-switch/Build.ps1
+      - name: Attach optional Windows switch executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-inject-switch-windows
+          path: maintenance/inject-switch/dist/dsh-inject-switch.exe
+          retention-days: 14
       - name: Smoke-test Desktop updater and simulated rollback
         shell: pwsh
         run: ./scripts/test-desktop-updater.ps1
