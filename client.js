@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "608bee59934ba272";
+		const CLIENT_BUILD_ID = "f81bfb76936a1b41";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3985,11 +3985,16 @@ function runtimeRowStatus(row) {
   return { key: 'running', label: row.settlement === 'committed' ? '已提交 · 等待终态' : '等待后续事件' };
 }
 
+function runtimeRouteKey(row) {
+  return JSON.stringify([row.provider ?? null, row.model ?? null]);
+}
+
 function RuntimeObservationsSection({ onNavigate } = {}) {
   const [snapshot, setSnapshot] = useState(null), [error, setError] = useState('');
   const [report, setReport] = useState(null), [reportError, setReportError] = useState('');
   const [session, setSession] = useState('');
   const [filter, setFilter] = useState('all');
+  const [route, setRoute] = useState('');
   const root = useRef(null);
   useEffect(() => {
     let stopped = false, timer, controller;
@@ -4026,9 +4031,15 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
   const refusalLabel = a => ({ 'not-refusal': '未检出明确拒答', refusal: a?.scope === 'partial' ? '部分拒答（不触发动作）' : '明确拒答', uncertain: '不确定（不触发动作）' }[a?.decision] || '未判定');
   const deliveryLabel = a => ({ verified: '已验证', partial: '部分完成', 'pending-input': '等待输入', blocked: '客观阻塞', 'explicit-not-delivered': '有证据未交付' }[a?.delivery] || '尚未验证');
   const items = snapshot?.items || [];
-  const counts = { all: items.length, running: 0, attention: 0, ended: 0 };
-  for (const row of items) counts[runtimeRowStatus(row).key]++;
-  const shown = items.filter(row => filter === 'all' || runtimeRowStatus(row).key === filter);
+  const routes = new Map();
+  for (const row of items) {
+    const key = runtimeRouteKey(row);
+    if (!routes.has(key)) routes.set(key, value(row.provider) + ' / ' + value(row.model));
+  }
+  const routeItems = route ? items.filter(row => runtimeRouteKey(row) === route) : items;
+  const counts = { all: routeItems.length, running: 0, attention: 0, ended: 0 };
+  for (const row of routeItems) counts[runtimeRowStatus(row).key]++;
+  const shown = routeItems.filter(row => filter === 'all' || runtimeRowStatus(row).key === filter);
   const metric = (title, count) => h('div', { className: 'dshp-runtime-metric' },
     h('small', null, title), h('strong', null, snapshot ? count : '—'));
   const detail = (title, content) => h('div', null, h('dt', null, title), h('dd', null, content));
@@ -4040,19 +4051,24 @@ function RuntimeObservationsSection({ onNavigate } = {}) {
     h('div', { className: 'dshp-runtime-metrics' },
       metric('近期记录', counts.all), metric('等待后续事件', counts.running), metric('需要关注', counts.attention), metric('已结束 / 取消', counts.ended)),
     h('div', { className: 'dshp-runtime-toolbar' },
-      h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => { setSnapshot(null); setError(''); setSession(e.target.value); }, placeholder: '留空显示近期会话' })),
+      h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => { setSnapshot(null); setError(''); if (route) setRoute(''); setSession(e.target.value); }, placeholder: '留空显示近期会话' })),
+      h('label', null, '按 Provider / 模型筛选 ', h('select', { value: route, onChange: e => setRoute(e.target.value), 'aria-label': 'Provider / 模型筛选' },
+        h('option', { value: '' }, '全部路由'),
+        route && !routes.has(route) ? h('option', { value: route }, '所选路由（当前无记录）') : null,
+        Array.from(routes, ([key, label]) => h('option', { key, value: key }, label)))),
       h('div', { className: 'dshp-runtime-filters', 'aria-label': '请求状态筛选' },
         [['all', '全部'], ['running', '等待中'], ['attention', '异常'], ['ended', '已结束']].map(([key, name]) =>
           h('button', { key, type: 'button', 'aria-pressed': filter === key, onClick: () => setFilter(key) }, name + ' ' + (snapshot ? counts[key] : '—'))))),
     error ? h('p', { role: 'alert' }, error + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
     h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
+    h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
     !snapshot ? h('div', { role: 'status', className: 'dshp-runtime-empty', 'aria-busy': !error },
       h('strong', null, error ? '暂时无法读取运行记录' : '正在读取运行状态…'),
       h('p', null, error ? '页面可见时会自动刷新，无需重复发起模型请求。' : '正在获取近期请求，请稍候。')) :
       !shown.length ? h('div', { className: 'dshp-runtime-empty' },
         h('strong', null, items.length || session ? '当前筛选没有匹配记录' : '暂无运行记录'),
-        h('p', null, items.length || session ? '清除筛选以查看其他近期记录。' : '正常发起模型请求后可在此查看。'),
-        items.length || session ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setFilter('all'); if (session) { setSnapshot(null); setError(''); setSession(''); } } }, '清除筛选') : null) : null,
+        h('p', null, items.length || session ? '清除会话、路由或状态筛选以查看其他近期记录。' : '正常发起模型请求后可在此查看。'),
+        items.length || session ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setFilter('all'); if (route) setRoute(''); if (session) { setSnapshot(null); setError(''); setSession(''); } } }, '清除筛选') : null) : null,
     h('div', { className: 'dshp-runtime-grid' }, shown.map(r => {
       const status = runtimeRowStatus(r);
       return h('article', { key: r.generation + ':' + r.attemptId, className: 'dshp-runtime-card', 'data-status': status.key },
@@ -10808,7 +10824,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body)) : null)
     }
 
-    function KnowledgeCenterTab() {
+    function KnowledgeCenterTab({ embeddedLibrary = false } = {}) {
       const [view, setView] = React.useState('personal')
       const [history, setHistory] = React.useState([])
       const [revision, setRevision] = React.useState(null)
@@ -10929,7 +10945,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return h('div', { className: 'rt-pane' },
         h('div', { className: 'rt-card', style: { display: 'flex', gap: 8 } },
           h('button', { className: 'rt-btn' + (view === 'personal' ? ' rt-btn-primary' : ''), onClick: () => setView('personal') }, '个人资料'),
-          h('button', { className: 'rt-btn' + (view === 'unified' ? ' rt-btn-primary' : ''), onClick: () => setView('unified') }, '全库检索'),
+          embeddedLibrary ? null : h('button', { className: 'rt-btn' + (view === 'unified' ? ' rt-btn-primary' : ''), onClick: () => setView('unified') }, '全库检索'),
           h('button', { className: 'rt-btn' + (view === 'semantic' ? ' rt-btn-primary' : ''), onClick: () => setView('semantic') }, '语义检索')),
         view === 'semantic' ? h(SemanticKnowledgeTab) : view === 'unified' ? h(UnifiedKnowledgeTab) : h('div', { className: 'rt-card' },
           h('h4', null, '知识库 · 个人资料'),
@@ -10973,6 +10989,34 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             revision ? h('div', null, h('h4', null, revision.title), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflow: 'auto' } }, revision.body),
               h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: restore }, '恢复该版本'),
               h('button', { className: 'rt-btn', onClick: () => setRevision(null) }, '关闭历史')) : null) : null) : null)
+    }
+
+    /* Unified library keeps existing catalog and knowledge APIs independent. */
+    function LibraryTab({ refreshKey, initialView = 'search' }) {
+      const [view, setView] = React.useState(initialView)
+      const [visited, setVisited] = React.useState(() => ({ [initialView]: true }))
+      const views = [['search', '全库检索'], ['skills', '技能库'], ['knowledge', '知识库']]
+      const select = (key) => {
+        setVisited(previous => ({ ...previous, [key]: true }))
+        setView(key)
+      }
+      const page = (key, child) => visited[key]
+        ? h('div', { key, 'data-library-view': key, hidden: view !== key,
+            style: { display: view === key ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 } }, child)
+        : null
+      return h('div', { style: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 } },
+        h('div', { className: 'rt-toolbar' },
+          h('strong', null, '技能与知识库'),
+          h('div', { className: 'rt-spacer' }),
+          views.map(([key, label]) => h('button', { key, type: 'button',
+            className: 'rt-btn' + (view === key ? ' rt-btn-primary' : ''),
+            'aria-pressed': view === key, onClick: () => select(key) }, label))),
+        page('search', h('div', { className: 'rt-pane' },
+          h('div', { className: 'rt-note', style: { marginBottom: 8 } },
+            '按来源检索个人资料、CVE 索引、内置技能、AboutSecurity 与 ARTEX；DSH 官方技能仍可在技能目录查看。'),
+          h(UnifiedKnowledgeTab))),
+        page('skills', h(SkillsTab, { refreshKey })),
+        page('knowledge', h(KnowledgeCenterTab, { embeddedLibrary: true })))
     }
 
     function IntelTab(props) {
@@ -12890,10 +12934,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['overview', '概览'], ['assets', '资产'], ['scan-history', '扫描记录'], ['findings', '漏洞'],
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
-        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '知识库'], ['local-search', '测绘中心'], ['artex', 'ARTEX']] },
-        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
+        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '技能与知识库'], ['local-search', '测绘中心'], ['artex', 'ARTEX']] },
+        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
+      const activeTab = st.tab === 'skills' ? 'knowledge-center' : st.tab
       const full = isFullWindow()
       const openFull = () => {
         // A browser popup is not necessarily maximized. Request the available
@@ -12931,10 +12976,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       let body
       if (err) body = h('div', { className: 'rt-err' }, err)
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
-      else if (st.tab === 'knowledge-center') body = h(KnowledgeCenterTab)
+      else if (st.tab === 'knowledge-center' || st.tab === 'skills') body = h(LibraryTab, { refreshKey, initialView: st.tab === 'skills' ? 'skills' : 'search' })
       else if (st.tab === 'env' || st.tab === 'knowledge') body = h(EnvTab, { refreshKey: refreshKey })
       else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey })
-       else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
       else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng,
         report: artexSession && artexSession.engagement === eng ? artexSession.report : null,
         onReportChange: (nextReport) => setArtexSession(nextReport ? { engagement: eng, report: nextReport } : null),
@@ -13032,7 +13076,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         /* 原生按钮提供键盘与读屏语义；方向键 / Home / End 在页签间移动。 */
         h('label', { className: 'rt-compact-nav' },
           h('span', null, '前往页面'),
-          h('select', { className: 'rt-compact-nav-select', value: st.tab,
+          h('select', { className: 'rt-compact-nav-select', value: activeTab,
             'aria-label': '选择作战台页面',
             onChange: (e) => {
               const tab = e.target.value
@@ -13062,10 +13106,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               }
               const unread = unreadOf(t[0])
               return h('button', {
-                key: t[0], type: 'button', className: 'rt-tab' + (st.tab === t[0] ? ' on' : ''),
+                key: t[0], type: 'button', className: 'rt-tab' + (activeTab === t[0] ? ' on' : ''),
                 role: 'tab', 'data-tab': t[0],
-                tabIndex: st.tab === t[0] ? 0 : -1,
-                'aria-selected': st.tab === t[0],
+                tabIndex: activeTab === t[0] ? 0 : -1,
+                'aria-selected': activeTab === t[0],
                 'aria-label': t[1] + (unread ? '，有新内容' : ''),
                 title: unread ? t[1] + '：有新内容' : t[1],
                 onClick: () => activate(t[0]),

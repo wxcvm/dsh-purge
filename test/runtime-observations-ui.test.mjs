@@ -111,3 +111,27 @@ test('runtime empty states distinguish loading, failed read and active filters',
   filtered.nodes.find(n=>n.type==='button'&&n.children.includes('清除筛选')).props.onClick();
   assert.deepEqual(filtered.updates,[[5,'all'],[0,null],[1,''],[4,'']]);
 });
+
+
+test('runtime route filter uses actual observed provider/model pairs and keeps unknown values distinct', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url),'utf8')
+  const rows=[
+    {generation:1,attemptId:'a',provider:'local',model:'model-a',finishObserved:true},
+    {generation:1,attemptId:'b',provider:'local',model:'model-b',finishObserved:false},
+    {generation:1,attemptId:'c',provider:null,model:null,finishObserved:false}
+  ]
+  let i=0; const updates=[]
+  const selected=JSON.stringify(['local','model-b'])
+  const ctx=vm.createContext({useState:v=>{const at=i++;return [at===0?{items:rows}:at===6?selected:v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx)
+  const nodes=[]; function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n&&typeof n==='object'){nodes.push(n);walk(n.children)}}walk(tree)
+  const cards=nodes.filter(n=>n.type==='article')
+  assert.equal(cards.length,1)
+  assert.match(JSON.stringify(cards),/model-b/)
+  const select=nodes.find(n=>n.type==='select'&&n.props['aria-label']==='Provider / 模型筛选')
+  assert.ok(select); assert.equal(select.props.value,selected)
+  assert.ok(nodes.some(n=>n.type==='option'&&n.children.includes('未观测 / 未观测')))
+  select.props.onChange({target:{value:''}})
+  assert.deepEqual(updates,[[6,'']])
+  assert.match(JSON.stringify(tree),/不代表全部 Provider 或协议已兼容/)
+})

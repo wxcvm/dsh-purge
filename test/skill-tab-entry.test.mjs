@@ -1,15 +1,48 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import vm from 'node:vm'
 
 const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8')
 
-test('skill catalog has a visible tab and routes to SkillsTab, not EnvTab', () => {
+test('unified library has one top-level entry and keeps legacy skills routing', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const source = read(path)
-    assert.match(source, /\['skills', '技能库'\]/, path + ' missing skills navigation')
-    assert.match(source, /st\.tab === 'skills'\) body = h\(SkillsTab,/, path + ' skills route missing')
-    assert.doesNotMatch(source, /st\.tab === 'env' \|\| st\.tab === 'knowledge' \|\| st\.tab === 'skills'/,
-      path + ' incorrectly routes skills to EnvTab')
+    assert.match(source, /\['knowledge-center', '技能与知识库'\]/)
+    assert.doesNotMatch(source, /pages: [^\n]*\['skills', '技能库'\]/)
+    assert.match(source, /st\.tab === 'knowledge-center' \|\| st\.tab === 'skills'\) body = h\(LibraryTab,/)
+    assert.match(source, /initialView: st\.tab === 'skills' \? 'skills' : 'search'/)
+    assert.match(source, /const activeTab = st\.tab === 'skills' \? 'knowledge-center' : st\.tab/)
+    assert.match(source, /page\('skills', h\(SkillsTab/)
+    assert.match(source, /page\('knowledge', h\(KnowledgeCenterTab/)
+    assert.match(source, /h\(UnifiedKnowledgeTab\)/)
   }
+})
+
+test('switching library tabs retains visited pages and original components', () => {
+  const source = read('lib/redteam/client.js')
+  const start = source.indexOf('    function LibraryTab(')
+  const end = source.indexOf('    function IntelTab(', start)
+  const state = []
+  let cursor = 0
+  const stub = () => null
+  const ctx = vm.createContext({
+    React: { useState(initial) { const i = cursor++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial; return [state[i], next => { state[i] = typeof next === 'function' ? next(state[i]) : next }] } },
+    h: (type, props, ...children) => ({ type, props, children }),
+    SkillsTab: stub, KnowledgeCenterTab: stub, UnifiedKnowledgeTab: stub
+  })
+  const render = vm.runInContext(source.slice(start, end) + '\nLibraryTab', ctx)
+  function nodes(root) { const all=[]; function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n && typeof n === 'object'){all.push(n);walk(n.children)}} walk(root); return all }
+  function page() { cursor=0; return nodes(render({refreshKey:2,initialView:'skills'})) }
+  const first = page()
+  assert.equal(first.find(n => n.props?.['data-library-view'] === 'skills').props.hidden, false)
+  assert.equal(first.some(n => n.props?.['data-library-view'] === 'knowledge'), false)
+  first.find(n => n.type === 'button' && n.children.includes('知识库')).props.onClick()
+  const second = page()
+  assert.equal(second.find(n => n.props?.['data-library-view'] === 'skills').props.hidden, true)
+  assert.equal(second.find(n => n.props?.['data-library-view'] === 'knowledge').props.hidden, false)
+  second.find(n => n.type === 'button' && n.children.includes('全库检索')).props.onClick()
+  const third=page()
+  assert.equal(third.find(n => n.props?.['data-library-view'] === 'knowledge').props.hidden, true)
+  assert.equal(third.find(n => n.props?.['data-library-view'] === 'search').props.hidden, false)
 })
