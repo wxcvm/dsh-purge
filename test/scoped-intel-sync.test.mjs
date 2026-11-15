@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
-import { scopedIntelSyncConfig, syncScopedIntelToArtex, probeScopedIntelPairing, savedScopedIntelConfig, saveScopedIntelPairing, resolveScopedIntelPairing } from '../lib/redteam/scoped-intel-sync.js'
+import { scopedIntelSyncConfig, syncScopedIntelToArtex, probeScopedIntelPairing, savedScopedIntelConfig, saveScopedIntelPairing, resolveScopedIntelPairing, readScopedIntelOverview } from '../lib/redteam/scoped-intel-sync.js'
 
 const token = 'fixture-only-32-character-secret-123'
 const env = { DSH_PURGE_ARTEX_INTEL_TOKEN: token, DSH_PURGE_ARTEX_INTEL_COMPANY_ID: '12' }
@@ -132,4 +132,24 @@ test('saved pairing reuses existing vault encryption and rejects invalid input w
   assert.equal(readFileSync(file, 'utf8'), before)
   assert.equal(resolveScopedIntelPairing(encrypted, {}).env.DSH_PURGE_ARTEX_INTEL_TOKEN, token)
   assert.throws(() => resolveScopedIntelPairing(store, {}), /无法读取/)
+})
+
+test('overview uses paired company only and whitelists read-only metadata', async () => {
+  const probe = async () => ({ state:'detected' })
+  const payload = { service:'artex', schema_version:1, company_id:12, task_count:1, asset_count:3,
+    linked_finding_count:2, snapshot_count:1, tasks:[{id:7,status:'running',paused:false,queued:false,description:'private'}],
+    snapshots:[{id:9,received_at:'2026-11-15',payload:'private'}], token }
+  const result = await readScopedIntelOverview(null,{env,probe,fetchFn:async(url,opts)=>{
+    assert.equal(url,'http://127.0.0.1:8787/api/purge/intel-bridge/overview')
+    assert.equal(opts.method,'GET')
+    assert.equal(opts.body,undefined)
+    assert.equal(opts.headers['X-Artex-Purge-Intel-Company'],'12')
+    return new Response(JSON.stringify(payload))
+  }})
+  assert.equal(result.ok,true)
+  assert.equal(result.taskCount,1)
+  assert.deepEqual(result.tasks,[{id:7,status:'running',paused:false,queued:false}])
+  assert.equal(JSON.stringify(result).includes('private'),false)
+  assert.equal(JSON.stringify(result).includes(token),false)
+  assert.equal((await readScopedIntelOverview(null,{env,probe,fetchFn:async()=>new Response(JSON.stringify({...payload,company_id:99}))})).ok,false)
 })
