@@ -81,3 +81,24 @@ test('skill detail offers categorized offline references and opens the correct c
   effects.forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve))
   assert.equal(calls.length,1);assert.equal(calls[0].category,'Web 安全')
 })
+
+
+test('bundled pagination keeps the submitted keyword and federated results can open the full bundled list', async () => {
+  const source=read('lib/redteam/client.js'), start=source.indexOf('    function UnifiedKnowledgeTab('),end=source.indexOf('    function knowledgeCredentialMessage(',start)
+  const state=[],effects=[],calls=[];let cursor=0
+  const ctx=vm.createContext({React:{useState(v){const i=cursor++;if(!(i in state))state[i]=v;return [state[i],next=>{state[i]=next}]},useRef:()=>({current:0}),useEffect:fn=>effects.push(fn)},h:(type,props,...children)=>({type,props,children}),api:async req=>{calls.push(req);return {ok:true,groups:[{source:'bundled',available:true,total:30,items:[],offset:req.offset,hasMore:true,categories:[]}]}}})
+  const render=vm.runInContext(source.slice(start,end)+'\nUnifiedKnowledgeTab',ctx)
+  function nodes(n){const all=[];function walk(x){if(Array.isArray(x)){x.forEach(walk);return}if(x&&typeof x==='object'){all.push(x);walk(x.children)}}walk(n);return all}
+  const page=()=>{cursor=0;return nodes(render({initialSource:'bundled'}))}
+  const settle=()=>new Promise(resolve=>setImmediate(resolve))
+  page();effects.forEach(fn=>fn());await settle()
+  page().find(n=>n.type==='input').props.onChange({target:{value:'new keyword'}})
+  const next=page().find(n=>n.type==='button'&&n.children.includes('下一页'))
+  next.props.onClick();await settle()
+  assert.equal(calls.at(-1).query,'');assert.equal(calls.at(-1).offset,20)
+  page().find(n=>n.type==='button'&&n.children.includes('搜索')).props.onClick();await settle()
+  assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
+  page().find(n=>n.type==='select'&&n.props.value==='bundled').props.onChange({target:{value:'all'}});await settle()
+  page().find(n=>n.type==='button'&&n.children.includes('查看全部内置匹配')).props.onClick();await settle()
+  assert.equal(calls.at(-1).source,'bundled');assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
+})

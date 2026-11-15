@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { validateCaptureConfig } from '../scripts/capture-task-quality.mjs';
+import { validateCaptureConfig, captureMetrics } from '../scripts/capture-task-quality.mjs';
 
 test('capture requires three existing isolated like-for-like profiles before any model call', () => {
   const root = mkdtempSync(join(tmpdir(), 'purge-capture-config-'));
@@ -19,4 +19,16 @@ test('capture requires three existing isolated like-for-like profiles before any
     config.candidate.profile = 'candidate'; config.candidate.model = 'different'; assert.throws(() => validateCaptureConfig(config), /comparison mismatch/);
     config.candidate.model = 'fixture/model'; config.candidate.profile = 'missing'; assert.throws(() => validateCaptureConfig(config), /existing isolated/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test('capture metrics validate every attempt route and omit partial or missing measurements', () => {
+  const attempt = (provider='fixture', model='model', tokens=10) => ({provider,model,usage:{totalTokens:tokens},firstTextMs:5});
+  const probe = {evicted:0,frames:{start:2},items:[attempt(),attempt()]};
+  assert.deepEqual(captureMetrics(probe,'fixture/model',100,[{type:'tool_call'}]),{elapsedMs:100,totalTokens:20,firstTextMs:5,toolCalls:1});
+  assert.throws(()=>captureMetrics({...probe,items:[attempt(),attempt('other')]},'fixture/model',100,[]),/route missing\/mismatched/);
+  assert.throws(()=>captureMetrics({...probe,items:[attempt(),attempt(null)]},'fixture/model',100,[]),/route missing\/mismatched/);
+  assert.deepEqual(captureMetrics({...probe,evicted:1},'fixture/model',100,[]),{elapsedMs:100,toolCalls:0});
+  assert.deepEqual(captureMetrics({...probe,frames:{start:3}},'fixture/model',100,[]),{elapsedMs:100,toolCalls:0});
+  assert.deepEqual(captureMetrics({...probe,items:[attempt(),attempt('fixture','model',null)]},'fixture/model',100,[]),{elapsedMs:100,firstTextMs:5,toolCalls:0});
 });

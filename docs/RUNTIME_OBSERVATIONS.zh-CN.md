@@ -52,7 +52,7 @@ node scripts/capture-task-quality.mjs --full capture-config.json
 
 preflight 不调用模型；smoke 为两题六次调用；full 为十题三十次调用，每次使用新进程/会话，无采集器自动重试。
 smoke 与 full 是独立运行，会叠加消耗；如需复用已有 smoke 数据，按 CLEAN_EFFECT_VALIDATION 协议手工补采剩余题目，不再次运行 full。
-失败会保留本地部分记录并停止，不补写答案或伪造原生会话事件。配置与报告只放本地 .scratch，不提交模型账号材料。
+每个案例核对全部已观测 attempt 的实际路由；任一不匹配或缺失即记录采集失败。探针发生淘汰或 start 数与快照条数不一致时，省略 Token 总量与首文本计时，不将部分记录冒充全量。失败会保留本地部分记录并停止，不补写答案或伪造原生会话事件。配置与报告只放本地 .scratch，不提交模型账号材料。
 
 本机只有通用 codex-review 和生产/default profile，尚未准备三个同条件且对应版本已核实的隔离 profile；因此未运行完整三组对照。
 已运行独立 observer-only 探针，证据见 `validation/runtime-observation-20261114.json`。
