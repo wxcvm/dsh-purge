@@ -2,14 +2,9 @@
   <img src="docs/banner.svg" alt="dsh-purge" width="720">
 </p>
 
-> **Private beta candidate:** the public codeload/pnpm commands below are historical public-repository examples, not a working anonymous install route. See [private update and migration](docs/PRIVATE_UPDATE.zh-CN.md). Actual Desktop/Web update acceptance remains pending.
-
-
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.8 (beta)</strong></p>
-
-> Beta branch: the in-app test channel follows `beta`; stable remains `.6` on `master`. This candidate integrates durable run records, local activity and import reconciliation, bounded knowledge retrieval, context privacy, structured diagnostics and SQLite overview optimization. Full on-device validation remains pending; automatic task replay is not implemented. See [Knowledge Center guide](docs/KNOWLEDGE_CENTER.zh-CN.md).
+<p align="center"><strong>Version 1.1.92-wxcvm.6</strong></p>
 
 <p align="center">
   <em>DeepSeek Harness jailbreak: every model, swap prompts per model. Default prompt for 小码酱. Please star ⭐ If you build on this, see Attribution required.</em>
@@ -37,7 +32,6 @@
 > Third-party fork review: [CallMeGuLab/dsh-purge-safe (Chinese)](docs/UPSTREAM_REVIEW_2026-11-09.zh-CN.md).
 >
 > New Chinese beginner walk-throughs: [Cleaning console](docs/CLEANING_GUIDE.zh-CN.md) · [Operations console](docs/OPERATIONS_GUIDE.zh-CN.md).
-> [Network privacy, multi-hop networking and IP exposure audit guide (Chinese)](docs/NETWORK_PRIVACY_GUIDE.zh-CN.md).
 
 ## Original author and branch notes
 
@@ -67,7 +61,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.7-beta.7**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained build is **1.1.92-wxcvm.6**. Its package metadata declares **DSH 0.2.2-rc.1 / 0.2.1-rc.5 / 0.2.1-rc.2** compatibility; integration checks do not replace on-device desktop UI acceptance. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
@@ -236,7 +230,11 @@ node node_modules/dsh-purge/scripts/ensure-profile-bundle.mjs
 
 Success: `node_modules/dsh-purge/package.json` exists, `"dsh-purge"` is in that profile's `bundles`, and `cordis.patch.yml` has an `id: dsh-purge` insert. If neither `dsh` nor pnpm is available, use [Manual install](#manual).
 
-**Private repository:** the anonymous desktop deep link is no longer an install path. Obtain an authorized package from [this fork's releases](https://github.com/wxcvm/dsh-purge/releases) when published, and follow [private update and migration](docs/PRIVATE_UPDATE.zh-CN.md).
+For the desktop client you can also click the button (`dsh://` deep link; it still downloads the same tarball):
+
+<p align="center">
+  <a href="dsh://plugin/install?id=dsh-purge&name=dsh-purge&version=1.1.92-wxcvm.6&repo=wxcvm%2Fdsh-purge&permissions=%E7%B3%BB%E7%BB%9F%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%2C%E6%9C%AC%E6%9C%BA%E8%A1%A5%E4%B8%81%2C%E8%AE%BE%E7%BD%AE%E9%A1%B5&downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv1.1.92-wxcvm.6"><strong>Install in desktop client</strong></a>
+</p>
 
 ### 3. Three more clicks after the command
 
@@ -412,7 +410,7 @@ Plugin config lives in `cordis.patch.yml` (`postPrompt` is empty by default):
 
 ## Preview
 
-Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require an authorized beta.7 package (candidate; tag not yet published) and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
+Open **Purge Drill** from the Harness sidebar; its native main workspace switches between **Clean** and **Drill**. Clean separates patches from rules/skills, and Drill has a sidebar plus findings and scan-run history views. The old floating Dock is only a fallback for older hosts. These changes require the tagged `v1.1.92-wxcvm.6` package and a complete DSH restart; real Windows UI acceptance remains pending. Existing screenshots below depict the older Dock.
 
 The first time you open Drill, read the notice, wait for the countdown, scroll to the end and check three boxes. Clean does not need this step. Drill is for your own systems or targets with explicit written authorization, including authorized public-facing assets.
 
@@ -440,7 +438,7 @@ Drill is not categorically restricted to local/private subnets. Record the autho
 |---|---|
 | dsh-purge | native Harness sidebar/main workspace, with older-host Dock fallback |
 | Clean | patches, prompt, rule sets |
-| Drill | assets and environment after authorization. The beta includes a local personal knowledge center and bundled skill/CVE indexes; ARTEX and AboutSecurity remain optional. The tab says Unauthorized until then |
+| Drill | assets and environment after authorization. This build does not ship skills or the knowledge base. The tab says Unauthorized until then |
 | Patches | grouped status, Apply, Restore, or Uninstall |
 | Prompt | edit `prompt-inject.md` as the session override |
 | Authorized scope | Owned or explicitly authorized public, private and local systems; network address is not proof of authorization |
@@ -450,7 +448,7 @@ Drill is not categorically restricted to local/private subnets. Record the autho
 
 ## Layout
 
-`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, and `client.js` contains the native main workspace and legacy Dock fallback. The beta ships bundled skills and CVE indexes, and creates the personal knowledge database locally.
+`bin/` is the CLI, `lib/` is patches and the drill console, `presets/redteam/` is the red-team preset, and `client.js` contains the native main workspace and legacy Dock fallback. This build does not ship `skills/` or the knowledge base.
 
 Runtime files live under `$DSH_HOME`: `prompt-inject.md`, `rules/`, `redteam/`. If `DSH_HOME` is unset, the launcher-adjacent `.dsh` wins over `~/.dsh`. Web and the desktop app each use their own home.
 

@@ -131,5 +131,5 @@ test('both client surfaces expose the WSL discovery and explicit probe controls'
   }
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   assert.match(host, /if \(op === 'environmentDiscover'\) return diagnoseEnvironmentTopology\(\{ root \}\)/)
-  assert.match(host, /if \(op === 'wslToolProbe'\) return observedProbe\(probeWslTool\(request.distro, request.id\)\)/)
+  assert.match(host, /if \(op === 'wslToolProbe'\) return probeWslTool\(request.distro, request.id\)/)
 })

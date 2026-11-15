@@ -5,8 +5,6 @@ param(
   [ValidateSet('desktop','web')][string]$Profile = 'desktop',
   # 默认取本仓库 package.json 的版本，避免每次发版都要改脚本（-Version 可显式覆盖）
   [string]$Version = '',
-  [string]$Commit = '',
-  [string]$LocalPackage = '',
   [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -20,23 +18,6 @@ if (-not $Version) {
 }
 $version = $Version
 $source = "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v$version"
-if ($Commit) {
-  if ($Commit -notmatch '^[0-9a-fA-F]{40}$') { throw "Commit must be a full 40-character Git SHA" }
-  $source = "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/$Commit"
-}
-
-# An authorized local npm tarball avoids a second anonymous GitHub download.
-if ($LocalPackage) {
-  if ($Commit) { throw '-LocalPackage and -Commit are mutually exclusive; a local package is verified by name and version, not remote commit.' }
-  $archive = (Get-Item -LiteralPath $LocalPackage).FullName
-  if (-not (Test-Path -LiteralPath $archive -PathType Leaf) -or $archive -notmatch '\.tgz$') {
-    throw 'LocalPackage must be an existing .tgz package.'
-  }
-  $validator = Join-Path $repoRoot 'lib\private-install-cache.js'
-  & node --input-type=module -e "import {readFileSync} from 'node:fs'; import {pathToFileURL} from 'node:url'; const {inspectPrivateInstallArchive}=await import(pathToFileURL(process.argv[1]).href); inspectPrivateInstallArchive(readFileSync(process.argv[2]),process.argv[3]);" $validator $archive $version
-  if ($LASTEXITCODE -ne 0) { throw 'Local package validation failed; profile was not modified.' }
-  $source = 'file:' + $archive.Replace('\','/')
-}
 
 if (-not $DshHome) {
   $candidates = @()
@@ -63,28 +44,15 @@ $oldVersion = '(not installed)'
 if (Test-Path -LiteralPath $pluginManifest -PathType Leaf) {
   $oldVersion = (Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json).version
 }
-# Share package payload validation across read-only and transactional install.
-function Assert-PluginPayload {
-  $required = @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')
-  $package = Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json
-  if ((Test-Path -LiteralPath (Join-Path $plugin 'lib\redteam\vps-admin-config.js') -PathType Leaf) -or
-      (Test-Path -LiteralPath (Join-Path $plugin 'lib\redteam\vps-admin-probe.js') -PathType Leaf)) {
-    $required += 'scripts\vps-admin-check.mjs'
-  }
-  if (@($package.files) -contains 'scripts') {
-    $required += 'scripts\ensure-profile-bundle.mjs'
-  }
-  foreach ($file in $required) {
-    if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
-      throw "Installed package is incomplete: $file"
-    }
-  }
-}
 Write-Host "DSH profile: $profileDir"
 Write-Host "Installed dsh-purge: $oldVersion"
 if ($CheckOnly) {
   if ($oldVersion -ne $version) { throw "Expected $version in this profile; found $oldVersion" }
-  Assert-PluginPayload
+  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
+      throw "Installed package is incomplete: $file"
+    }
+  }
   # The package can exist without its Cordis profile entry (postinstall may have been skipped).
   # This is read-only: do not silently modify the user's profile during -CheckOnly.
   $profilePackage = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
@@ -105,7 +73,7 @@ if ($CheckOnly) {
   return
 }
 if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-  throw 'pnpm was not found. Install pnpm before upgrading this profile.'
+  throw 'pnpm was not found. Install pnpm or use dsh plugin add with the pinned tag URL.'
 }
 
 # Preserve files that pnpm and postinstall may change in this profile.
@@ -143,7 +111,11 @@ try {
   if (-not (Test-Path -LiteralPath $pluginManifest -PathType Leaf)) { throw 'Installed package manifest is missing' }
   $actual = (Get-Content -LiteralPath $pluginManifest -Raw | ConvertFrom-Json).version
   if ($actual -ne $version) { throw "Installed version $actual does not match $version" }
-  Assert-PluginPayload
+  foreach ($file in @('client.js','lib\redteam\ui.js','lib\redteam\client.js','lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $plugin $file) -PathType Leaf)) {
+      throw "Installed package is missing required UI file: $file"
+    }
+  }
   $success = $true
   Write-Host "PASS: installed dsh-purge $version in $profileDir"
 } catch {

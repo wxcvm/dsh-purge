@@ -9,89 +9,53 @@ on:
 permissions:
   contents: read
 
-# A newer revision of the same PR/branch supersedes stale queued work.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   api-contracts:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        group: [legacy, current]
-        include:
-          - group: legacy
-            hosts: '0.2.1-rc.2 0.2.1-rc.3 0.2.1-rc.4'
-          - group: current
-            hosts: '0.2.1-rc.5 0.2.2-rc.1 0.2.2-rc.2 0.2.2-rc.3'
+        host: [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-rc.1]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Locate npm download cache
-        id: npm-cache
-        shell: bash
-        run: printf 'path=%s\n' "$(npm config get cache | tr -d '\r')" >> "$GITHUB_OUTPUT"
-      - name: Cache npm downloads (not installed fixtures)
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.npm-cache.outputs.path }}
-          key: npm-compat-${{ runner.os }}-node24-${{ matrix.group }}-${{ hashFiles('scripts/prepare-host-fixture.mjs', 'package.json') }}
-          restore-keys: |
-            npm-compat-${{ runner.os }}-node24-${{ matrix.group }}-
-      - name: Install declared plugin dependencies for full regression suite
-        if: matrix.group == 'current'
-        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false
-      - name: Check generated bundle and syntax once per OS
-        if: matrix.group == 'current'
+      - name: Prepare explicit official fixture, without host or model execution
+        run: node scripts/prepare-host-fixture.mjs ${{ matrix.host }}
+      - name: Install isolated fixture with all lifecycle scripts disabled
+        run: npm install --prefix .scratch/hosts/${{ matrix.host }} --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Check generated bundle and syntax
         run: |
           node scripts/build-client.mjs --check
           node scripts/check-syntax.mjs
-      # These Windows-only checks are unchanged, and run once in the current group.
+      # Build the optional GUI only once in the existing Windows matrix, not five times.
       - name: Compile optional Windows injection switch from source
-        if: runner.os == 'Windows' && matrix.group == 'current'
+        if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
         shell: pwsh
         run: ./maintenance/inject-switch/Build.ps1
       - name: Attach optional Windows switch executable
-        if: runner.os == 'Windows' && matrix.group == 'current'
+        if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
         uses: actions/upload-artifact@v4
         with:
           name: dsh-inject-switch-windows
           path: maintenance/inject-switch/dist/dsh-inject-switch.exe
           retention-days: 14
       - name: Smoke-test Desktop updater and simulated rollback
-        if: runner.os == 'Windows' && matrix.group == 'current'
+        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
         shell: pwsh
         run: ./scripts/test-desktop-updater.ps1
       - name: Exercise Windows pnpm junction rollback
-        if: runner.os == 'Windows' && matrix.group == 'current'
+        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
         shell: pwsh
         run: ./scripts/test-desktop-updater-junction.ps1
       - name: Smoke-test optional Windows NTFS ACL protector
-        if: runner.os == 'Windows' && matrix.group == 'current'
+        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
         shell: pwsh
         run: ./scripts/test-private-acl.ps1
-      - name: Run isolated official host fixtures and regression tests
+      - name: Run unit and actual public API contract tests
         shell: bash
-        env:
-          HOSTS: ${{ matrix.hosts }}
         run: |
-          failed=0
-          for host in $HOSTS; do
-            echo "::group::Harness $host"
-            if node scripts/prepare-host-fixture.mjs "$host" &&
-               npm install --prefix ".scratch/hosts/$host" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional &&
-               node scripts/run-compat-tests.mjs "$host"; then
-              echo "| $host | passed |" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "::error title=Harness $host::Fixture or test failure"
-              echo "| $host | failed |" >> "$GITHUB_STEP_SUMMARY"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit "$failed"
+          export DSH_COMPAT_HOST_ROOT="$GITHUB_WORKSPACE/.scratch/hosts/${{ matrix.host }}"
+          node --test test/*.test.* maintenance/*.test.mjs maintenance/desktop-tools/*.test.mjs

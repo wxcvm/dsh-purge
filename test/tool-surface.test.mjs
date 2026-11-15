@@ -69,23 +69,6 @@ test('reviewed tool names match source declarations and actual registrations', a
   const noTarget = JSON.parse(await quality.execute({}, {}))
   assert.equal(noTarget.ok, false)
 
-  const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
-  const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item
-  const unifiedSearch = registered.get('redteam_knowledge_search')
-  const unifiedGet = registered.get('redteam_knowledge_get')
-  const results = JSON.parse(await unifiedSearch.execute({ query: 'Example', source: 'personal' }))
-  assert.equal(results.ok, true)
-  assert.deepEqual(results.groups[0].items[0].reference, { source: 'personal', id: String(saved.id) })
-  assert.equal(JSON.stringify(results).includes('LOCAL_REFERENCE_BODY'), false)
-  const local = JSON.parse(await unifiedGet.execute({ source: 'personal', id: String(saved.id), max_chars: 5 }))
-  assert.equal(local.ok, true)
-  assert.equal(local.item.body, 'LOCAL')
-  assert.equal(local.item.truncated, true)
-  const full = JSON.parse(await unifiedGet.execute({ source: 'personal', id: String(saved.id) }))
-  assert.equal(full.item.body, 'LOCAL_REFERENCE_BODY')
-  assert.equal(full.item.truncated, false)
-  assert.equal(JSON.parse(await unifiedSearch.execute({ query: '' })).ok, false)
-
   const kbSearch = registered.get('redteam_artex_knowledge_search')
   const search = JSON.parse(await kbSearch.execute({ query: 'Example', limit: 3 }))
   assert.equal(search.ok, true)

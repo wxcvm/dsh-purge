@@ -3,8 +3,7 @@
 [CmdletBinding()]
 param(
     [string]$Root = '',
-    [switch]$Apply,
-    [switch]$Details
+    [switch]$Apply
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,97 +24,20 @@ if (-not $rootItem.PSIsContainer -or ($rootItem.Attributes -band [IO.FileAttribu
     throw 'Workspace root must be a real directory, not a junction or symlink.'
 }
 
-# Use the canonical directory path for relative diagnostic names.
-$Root = $rootItem.FullName.TrimEnd([char[]]'\/')
-
 $identities = @(
     [System.Security.Principal.WindowsIdentity]::GetCurrent().User,
     (New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-18'),
     (New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-32-544')
 )
-# Enumerate explicitly so directory reparse points are never traversed.
-# Enumeration failures are reported rather than being mistaken for clean trees.
-$targets = [System.Collections.Generic.List[object]]::new()
-$pending = [System.Collections.Generic.Stack[object]]::new()
-$pending.Push($rootItem)
-$skippedReparse = 0
-$enumerationErrors = 0
-while ($pending.Count -gt 0) {
-    $item = $pending.Pop()
-    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-        $skippedReparse++
-        continue
-    }
-    $targets.Add($item)
-    if ($item.PSIsContainer) {
-        try {
-            foreach ($child in @(Get-ChildItem -LiteralPath $item.FullName -Force -ErrorAction Stop)) {
-                $pending.Push($child)
-            }
-        } catch {
-            $enumerationErrors++
-        }
-    }
-}
+$entries = @($rootItem) + @(Get-ChildItem -LiteralPath $Root -Recurse -Force)
+$targets = @($entries | Where-Object {
+    -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint)
+})
 Write-Output ("Purge NTFS ACL: {0} files/directories; mode={1}" -f $targets.Count, $(if ($Apply) { 'apply' } else { 'preview' }))
 Write-Output 'New access: current Windows account, SYSTEM, Administrators (FullControl); other access entries removed.'
 if (-not $Apply) {
-    # Count grants, not effective access: deny rules, group membership, parent
-    # traversal permissions and network-share ACLs can change actual access.
-    $allowed = @($identities | ForEach-Object { $_.Value })
-    $broad = @('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545')
-    $summary = [ordered]@{
-        inspected = 0
-        broadRead = 0
-        otherRead = 0
-        inheritanceEnabled = 0
-        aclReadErrors = 0
-        skippedReparse = $skippedReparse
-        enumerationErrors = $enumerationErrors
-    }
-    foreach ($item in $targets) {
-        try {
-            $acl = Get-Acl -LiteralPath $item.FullName -ErrorAction Stop
-            $rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
-            $hasBroad = $false
-            $hasOther = $false
-            foreach ($rule in $rules) {
-                if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) { continue }
-                # Inherit-only ACEs do not grant read access to this item itself.
-                if ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) { continue }
-                if (-not ($rule.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::ReadData)) { continue }
-                $sid = $rule.IdentityReference.Value
-                if ($sid -in $broad) { $hasBroad = $true }
-                if ($sid -notin $allowed -and $sid -notin $broad) { $hasOther = $true }
-            }
-            $summary.inspected++
-            if ($hasBroad) { $summary.broadRead++ }
-            if ($hasOther) { $summary.otherRead++ }
-            if (-not $acl.AreAccessRulesProtected) { $summary.inheritanceEnabled++ }
-            if ($Details -and ($hasBroad -or $hasOther -or -not $acl.AreAccessRulesProtected)) {
-                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart([char[]]'\/') }
-                Write-Output ('ACL_FINDING ' + ([ordered]@{
-                    path = $relative
-                    broadRead = $hasBroad
-                    otherRead = $hasOther
-                    inheritanceEnabled = -not $acl.AreAccessRulesProtected
-                } | ConvertTo-Json -Compress))
-            }
-        } catch {
-            $summary.aclReadErrors++
-            if ($Details) {
-                $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart([char[]]'\/') }
-                Write-Output ('ACL_FINDING ' + ([ordered]@{ path = $relative; status = 'acl_unreadable' } | ConvertTo-Json -Compress))
-            }
-        }
-    }
-    Write-Output ('ACL_AUDIT ' + ($summary | ConvertTo-Json -Compress))
-    Write-Output 'Counts describe observed allow entries, not proven effective access; review broad/other grants and incomplete checks.'
     Write-Output 'Preview only: no changes made. Re-run with -Apply after checking that no other service account needs access.'
     return
-}
-if ($enumerationErrors -gt 0) {
-    throw 'Workspace enumeration was incomplete; no ACL changes made. Review permissions and retry.'
 }
 
 $updated = 0

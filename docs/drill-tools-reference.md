@@ -51,41 +51,6 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 后续 `redteam_next_action` **自动读取**所有持久阻塞键；`previous_task` 与临时 `blocked_task_key(s)` 保持只读、不会自动落库。条件发生变化后要明确 `unblock`，不把暂时故障永久封禁。
 
-### `redteam_task_run`
-
-持久保存任务与尝试，当前唯一验收条件为 `http-evidence-recorded`：本次尝试经归属写入的每条证据仍存在、目标关联一致、请求与响应均非空，且内容与交付时的指纹一致。这里只验收记录交付，不认定流量真实、漏洞有效或计分成功。
-
-- `action=start`、`task_key=focus.task_key`：为资产/漏洞任务创建或复用尝试，同任务不会自动产生第二个活动尝试。
-- `action=status`、`task_key` 或 `attempt_id`：只读任务、尝试及当前证据核对结果。`runtime_activity` 区分 `session-running`、`session-idle` 与 `not-observed`，只说明绑定执行会话，不代表任务动作已执行。运行绑定丢失、正常结束但交付未知、执行器卸载时 `recovery_required=true`。
-- `action=reconcile`、`attempt_id`：核对上次操作的实际结果后，在同一执行会话显式重绑；不重发命令、不新建尝试、不自动验收。恢复时若发现此前漏收的用户停止事件，原尝试变为 cancelled，不重启。
-- `redteam_http_evidence_add(attempt_id=...)`：在原写入工具中原子保存报文和尝试关联；拒绝别的根会话、别的目标、空报文和已提交尝试。省略此参数保持旧行为，旧证据不能事后冒充本次交付。
-- 可同时提供 `operation_key`（1..200 字符），在第一次写入前确定并保留该稳定键。同尝试、同键、同内容重复调用返回原证据 ID 和 `replayed=true`，不新增记录；同键改内容报冲突。证据、归属、回执在同一事务提交。操作键仅在该尝试内有效，不能去重没有键的旧写入或另一个尝试。
-- 运行绑定丢失或尝试已提交/终止时，匹配回执仍可只读返回，但要求原根会话、当前尝试且证据完整未变；这不会清除 `recovery_required`、重绑执行器或证明任务成功。没有匹配回执的新写入仍遵循 running 与 reconcile 约束。证据已删改时拒绝回执，不自动补写。这里仅保障本地记录去重，不保证外部 HTTP 请求或其它工具副作用只执行一次。
-- `action=submit/verify/cancel`、`attempt_id`：分别冻结交付、执行记录完整性验收、停止尝试状态推进。cancel 不会取消已在宿主执行的工具，停止实际操作仍使用宿主停止功能。
-- 验收不满足时变为 `failed`；`action=retry`、`task_key` 仅能为 failed/cancelled 尝试显式建立新尝试，不重用旧证据关联。历史尝试保留且不可覆盖当前状态。
-
-写操作要求宿主根会话身份。新尝试在执行它的会话中 start/retry；绑定后，证据写入和 submit/verify 还要求同一个执行实例，不允许同根的其它子会话代写。运行绑定丢失后这些写操作等待 reconcile，cancel 仍可停止记录推进。用户原生停止使对应执行会话的活动尝试 cancelled，不影响其它执行会话；宿主正常 idle 不会被当作任务完成。`progress_check` 可传 `attempt_id`，`next_action.previous_task` 也支持该字段；对已有持久任务，即使未传尝试 ID，也会核对当前尝试，不允许通过省略参数回退为全局计数验收。任务卡展示已有尝试并先引导读取状态。尚未登记的任务继续使用旧对账行为。
-
-局部计划（第四批，仍使用本工具）：
-
-- `action=dependencies`、`task_key`、`requires=[前置任务键]`、`reason`：替换未启动或已失败/取消任务的依赖；拒绝自环及传递环，失败不改变旧图。前置任务必须有当前已验收且证据仍有效的记录交付；传递祖先失效也会阻止启动。
-- `action=plan`、`task_key`：只读路线、依赖、失败类别、条件指纹及建议，同时返回最近 20 次修订与总量；历史保留方法标签、依赖和修改理由，不覆盖旧路线。不会建立尝试或执行方法。
-- `action=fail`、`attempt_id`、`failure_kind`、`reason`：将当前活动尝试明确记录为 failed；分类为 transient/environment/method/evidence，保留交付和失败历史。未知运行结果仍须先 reconcile，不能用 fail 绕过运行对账。
-- 相同记录条件和路线下，transient 首次失败可显式重试一次；再次失败要求复核。其它分类要求复核、记录输入变化或路线修改，不会自动重跑。未分类的旧验收失败保留旧显式 retry 行为。
-- `action=revise`、`task_key`、`strategy_ref`、`reason`：仅修改未启动或已失败/取消任务的方法标签与修订号，不执行该方法，不改动已验收任务或历史尝试。同一依赖图重复保存不增加修订号、不能清空重试限制。
-
-条件指纹只覆盖已记录的目标及依赖，**不证明真实环境恢复**；输入变化仅提示复核后决定是否重试。next_action 在候选窗口之前排除等待依赖或复核的任务，全部等待键参与筛选；`waiting_plans` 最多返回 30 条摘要，`waiting_plans_total` 返回总数。明确分类失败可暂时切换其它任务，未知执行结果仍保持核查，不被悄悄跳过。
-
-失败驱动知识引用（第五批）：
-
-- `fail` 的成功结果自动附 `failure_knowledge`；`action=knowledge`、`task_key` 可再次读取。再次选中的已登记任务，以及使用完整任务键的 `redteam_task_context`，也会附加最近一次已记录失败的引用。
-- 从失败类别、白名单错误码和识别到的产品名生成最多 3 个字面查询，不把完整失败原因、目标地址、URL 或凭据当作查询。复用个人资料、红队技能、AboutSecurity、ARTEX 的本地检索，不调用模型、外部搜索或语义索引，不自动创建缺失的个人知识库。
-- 合并重复 source/id，按查询命中权重返回最多 3 个标题/分类引用。5/3/1 为错误码/失败类别/产品的初始启发式权重，不是成功概率。`coverage` 区分来源缺失、不可用和已知/未知覆盖量，不把有限摘要当作完整资料。
-- 返回 `verification_scope=historical-reference`，不返回文档正文、不自动加载技能、不执行文档中的内容。需按 source/id 调 `redteam_knowledge_get` 阅读，人工/模型再判断版本与适用条件。引用不能代替当前任务证据。
-- `action=knowledge_feedback`、原始失败的 `attempt_id`、`reference_source`、`reference_id`、`feedback`：记录 adopted/helpful/not-helpful/inconclusive。要求原根会话身份且引用仍在该失败的当前检索结果中；同一引用重复反馈更新一条记录。仅表示自报用途，不固定文档正文版本、不修改资料 verified、不完成任务或放开重试。
-
-开发对照：运行 `node scripts/evaluate-failure-retrieval.mjs`，输出 8 个固定合成夹具的“仅产品查询 vs 失败驱动查询”Recall@3。它验证查询选择与排序机制，不是 DeepSeek、真实 Agent 成功率、性能或成本基准；脚本不调用模型。
-
 ### `redteam_agent_slot`
 【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑（可用 REDTEAM_MAX_AGENTS 配置）。action=status 看还剩几个名额与谁在跑；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
 
@@ -100,9 +65,8 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 参数：
 - `task` — `domains`、`services`、`web`、`vulns`、`internal`、`identity`、`connectivity`
 - `verify` — 可选；`true` 时仅执行推荐工具已定义的本地版本参数，返回 `version-verified`、`path-only` 或 `verification-failed`。默认不运行任何程序。
-- `include_environments` — 可选；`true` 时附带上次用户显式发现的 WSL、SSH Kali、Docker 环境中，确实经过用户版本探针的工具候选及评分（最多 12 项以减少模型上下文）。不执行新的版本检测或任务。
 
-候选优先级根据本机路径与已知版本探测能力确定，不修改已有工具的执行权限，也不会自动选择执行目标测试。其他自定义工具在环境目录中显示但不作为自动执行的候选。 跨环境评分由本机已定位路径和服务端本次会话里保存的显式探针结果决定；没有观测到某环境中某工具版本成功时，结果保持 `unknown` 而非推测已安装。`include_environments` 默认关闭。
+候选优先级根据本机路径与已知版本探测能力确定，不修改已有工具的执行权限，也不会自动选择执行目标测试。其他自定义工具在环境目录中显示但不作为自动执行的候选。
 
 ### `redteam_preflight`
 【开工前必须跑一次】平台技能与资源自检：逐个检查红队技能的必需环境变量（如 FOFA 测绘的 FOFA_KEY）、本机工具与二进制（suo5 / fscan / gogo / frp / 冰蝎 / 哥斯拉 / nmap / nuclei…）、外部基础设施（反弹 Shell 用的 VPS）。返回 available/broken 清单与每个坏掉的技能"缺什么、怎么补"。**缺 key / 缺 VPS 时直接向用户要，或改用替代方案，不要假装能跑。**
@@ -204,12 +168,6 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 参数：`key`（必填，如 `aboutsecurity:recon/passive-recon` 或 `redteam:web-injection`）、`max_chars`（默认 16000）。
 
 AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRATION.md)。
-
-### `redteam_knowledge_search`
-【本机只读】统一检索个人资料、CVE 公开索引、内置技能、AboutSecurity 与 ARTEX。参数 `query` 必填，`source` 可选（默认 all）。每来源最多 20 条，返回 source/id 引用；不把资料视为当前证据。可选 `mode=semantic` 检索已建立本地向量索引的个人资料，返回相似度和原文片段；需启动本地 LM Studio，不自动建立索引或调用云服务。
-
-### `redteam_knowledge_get`
-【本机只读】传入搜索结果的 `source`、`id`（字符串）读取正文与引用。`max_chars` 默认 16000，最大 100000；超出时明确标记。资料是参考数据，不自动执行。任务上下文也会返回最多 3 条相关个人资料的简短引用，不自动附带正文。
 
 ### `redteam_artex_knowledge_search`
 【本机只读】从 ARTEX 已安装的 `knowledge.db` 检索知识条目；与 Purge「资源 → ARTEX」复用同一检索模块。适合在核对产品、组件、CVE 或排错关键词时查阅既有记录，返回条目 ID、标题、分类、验证标记及摘要，不执行其中的脚本。
@@ -925,8 +883,6 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 参数：`engagement`、`before`（必填，原样传入上次 `redteam_next_action` 的 `focus.before` JSON 字符串）、`task_key`（可选）。
 
-资产/漏洞任务的新 `focus.before` 附带 `task_scope`：当前目标及关联记录的 SHA-256 内容指纹，不包含原始报文。对账额外返回 `task_progress`，可识别数量不变的内容修正；全局分数和记录增长仍单独返回，不再替代当前任务进展。移除关联记录、目标缺失或当前目标无变化时，交接要求核查。时间戳刷新不算内容进展。旧基线及其它类型任务保持原全局统计行为；不要删除或自行修改 `task_scope`。指纹变化不是验收通过，也不能区分同一目标上的不同执行者；严格的尝试归属和任务验收仍需后续实现。
-
 ## 典型调用链
 
 ```
@@ -949,5 +905,3 @@ redteam_score_report             出交付报告
 「资源 → 测绘中心」除了离线筛选外，可使用本机 Nmap/httpx 对**已登记的单个授权目标**执行探测，经 `localActiveSurvey` API 复用 `scan-runner`、原始输出记录与 `importBundle`；默认为仅预览，选择入库后才写资产，结果可在历史页核验。模型既有 `redteam_scan_run` 仍保持范围校验。
 
 「管理 → 低干扰」新增 `scanPreferences.noReverseDns` 和 `scanPreferences.maskAssetResults`：前者真实影响下一次 Nmap 命令的 `-n` 参数，后者只保护测绘中心的可视展示。 `privacyPosture` 根据已保存配置列出已经生效、可启用及目标侧日志等无法保护的项目，不能用它声称实现匿名或隐身。
-
-Purge 的 `privacyPosture.bridge` 现在会在 Node HTTP 请求能获取所属服务器的 `server.address()` 时报告实际监听 `boundAddress`、`boundPort` 和 `listenerScope`（`loopback_bound` / `all_interfaces` / `specific_interface`），并与连接接受地址 `acceptedAddress`、`acceptedPort` 区分；无法读取时仍返回 `not_inspected`。**绑定回环地址并不保证公网不可访问**（例如反向代理、容器端口映射或隧道可转发请求），`publicReachability` 始终为 `not_tested`。本项仅做本地运行时观测，不扫描外网、不更改监听行为。

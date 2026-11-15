@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -85,55 +85,4 @@ test('Purge source and embedded runtime expose the same local knowledge UI', () 
     assert.match(source, /op: 'artexKnowledgeGet'/)
     assert.match(source, /kbDetail\.content/)
   }
-})
-
-test('knowledge status distinguishes missing, empty, ready and unusable sources', (t) => {
-  const home = mkdtempSync(join(tmpdir(), 'dsh-purge-artkb-status-'))
-  t.after(() => rmSync(home, { recursive: true, force: true }))
-  const env = { ARTEX_KB_DIR: home }
-  const file = join(home, 'knowledge.db')
-  const missing = artexKnowledgeStatus({ env })
-  assert.equal(missing.state, 'missing')
-  assert.equal(missing.available, false)
-  assert.equal(missing.source, 'local-artex-knowledge')
-
-  mkdirSync(file)
-  const directory = artexKnowledgeStatus({ env })
-  assert.equal(directory.state, 'unavailable')
-  assert.equal(directory.ok, false)
-  assert.equal(directory.count, null)
-  assert.equal(directory.fts, null)
-  rmSync(file, { recursive: true })
-
-  writeFileSync(file, 'not a SQLite database')
-  const invalid = artexKnowledgeStatus({ env })
-  assert.equal(invalid.state, 'unavailable')
-  assert.equal(invalid.ok, false)
-  assert.equal(invalid.count, null)
-  assert.equal(invalid.error.includes(home), false)
-  rmSync(file)
-
-  const db = new DatabaseSync(file)
-  db.exec('CREATE TABLE poc (id INTEGER PRIMARY KEY)')
-  db.close()
-  const incompatible = artexKnowledgeStatus({ env })
-  assert.equal(incompatible.state, 'unavailable')
-  assert.equal(incompatible.available, false)
-  assert.throws(() => searchArtexKnowledge({ query: 'sample' }, { env }), /column/)
-  rmSync(file)
-  const valid = new DatabaseSync(file)
-  valid.exec("CREATE TABLE poc (id INTEGER PRIMARY KEY, title TEXT, category TEXT, kind TEXT, tags TEXT, verified INTEGER, description TEXT, usage TEXT, content TEXT)")
-  valid.close()
-  const empty = artexKnowledgeStatus({ env })
-  assert.equal(empty.state, 'empty')
-  assert.equal(empty.available, true)
-  assert.equal(empty.count, 0)
-  assert.equal(empty.read_only, true)
-
-  const writer = new DatabaseSync(file)
-  writer.exec('INSERT INTO poc(id, title) VALUES (1, \'sample\')')
-  writer.close()
-  const ready = artexKnowledgeStatus({ env })
-  assert.equal(ready.state, 'ready')
-  assert.equal(ready.count, 1)
 })
