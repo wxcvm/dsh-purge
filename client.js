@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e79318e1d0b14e71";
+		const CLIENT_BUILD_ID = "78cf1cd6d623fccb";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8778,6 +8778,31 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('pre', { className: 'rt-guide-doc' }, guide || (guideBusy ? '正在读取本地指南…' : ''))) : null)
     }
 
+    function privacyTaskRecommendation(preferences, management, task, protection, protectionStatus) {
+      const shared = task === 'sharing' || task === 'remote-model'
+      const preset = shared ? 'sharing' : 'recommended'
+      const preview = privacyPresetPreview(preferences, management, preset)
+      const keys = ['maskHistory', 'maskAssetResults']
+      const changes = keys.filter(key => preview.preferences[key] !== preferences[key])
+      const reasons = [
+        task === 'sharing' ? '共享屏幕或展示报告时，减少会话、资产和路径在界面上的意外暴露。'
+          : task === 'remote-model' ? '远程模型场景：建议保护本地界面；发送给 Provider 的请求内容不受展示遮蔽影响。'
+          : '日常本地工作：推荐持续保护未锁定的展示项，保留原始记录与扫描参数。',
+      ]
+      if (management.locked.length) reasons.push('保留 ' + management.locked.length + ' 项手动锁定；锁定为显示的项目不会自动遮蔽。')
+      if (protectionStatus !== 'observed' || !protection) {
+        reasons.push('本机保护状态尚未确认，不推断网络路径、模型位置或安全性。')
+      } else {
+        const scope = protection.bridge?.listenerScope
+        if (scope === 'all_interfaces' || scope === 'specific_interface') reasons.push('观察到管理接口非回环绑定：建议核对现有认证和防火墙。')
+        else if (scope === 'loopback_bound') reasons.push('观察到回环绑定；仍不能据此判断转发路径或远程模型数据流。')
+        else reasons.push('管理接口监听范围未确认。')
+        if (protection.vault?.enabled === false) reasons.push('未配置凭据加密密钥：建议检查本机凭据存储。')
+        if (protection.storageAudit?.available) reasons.push('可按需执行 Windows 存储权限诊断；当前未由推荐功能自动检查。')
+      }
+      return { preset, preview, changes, reasons }
+    }
+
     function privacyPresetPreview(preferences, management, preset) {
       const keys = ['maskHistory', 'maskAssetResults']
       const locked = keys.filter(key => management.locked.includes(key))
@@ -8799,6 +8824,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [management, setManagement] = React.useState({ mode: 'manual', locked: [] })
       const [savedManagement, setSavedManagement] = React.useState({ mode: 'manual', locked: [] })
       const [privacyChanges, setPrivacyChanges] = React.useState([])
+      const [privacyTask, setPrivacyTask] = React.useState('local')
       const [history, setHistory] = React.useState(null)
       const [protection, setProtection] = React.useState(null)
       const [protectionStatus, setProtectionStatus] = React.useState('loading')
@@ -8894,6 +8920,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setManagement(preview.policy)
         setDraft(preview.preferences)
       }
+      const recommendation = draft ? privacyTaskRecommendation(draft, management, privacyTask, protection, protectionStatus) : null
       const discardPrivacyDraft = () => {
         if (!saved || busy) return
         setDraft(saved); setManagement(savedManagement); setError(''); setMessage('')
@@ -8942,6 +8969,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('h4', null, '能力边界'),
             h('div', { style: { fontSize: 12 } },
               '这里减少不必要的网络请求和本地敏感数据显示，不伪装来源、不规避目标侧监测，也不修改或删除目标的审计记录。网络请求仍可能出现在目标日志中。')),
+          draft ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
+            h('h4', null, '智能推荐 · 任务场景'),
+            h('label', { style: { display: 'block', fontSize: 12, marginBottom: 8 } }, '当前工作场景（仅用于推荐）',
+              h('select', { className: 'rt-input', value: privacyTask, disabled: busy,
+                onChange: e => setPrivacyTask(e.target.value), style: { display: 'block', width: '100%', marginTop: 5 } },
+                h('option', { value: 'local' }, '日常本地工作'),
+                h('option', { value: 'sharing' }, '共享屏幕 / 展示报告'),
+                h('option', { value: 'remote-model' }, '远程模型 / Provider 服务'))),
+            h('div', { style: { fontSize: 12 } }, '推荐：' + (recommendation.preset === 'sharing' ? '隐私优先' : '推荐自动保护')),
+            h('div', { style: { fontSize: 12 } }, '预览变更：' + (recommendation.changes.length
+              ? recommendation.changes.map(key => key === 'maskHistory' ? '扫描记录及运行诊断' : '测绘与 ARTEX 展示').join('、')
+              : '展示值无需改变') + ' · 管理模式：' + (recommendation.preview.policy.mode === 'automatic' ? '自动' : '手动')),
+            h('ul', { style: { fontSize: 12, paddingLeft: 20 } },
+              recommendation.reasons.map((reason, i) => h('li', { key: i }, reason))),
+            h('button', { className: 'rt-btn rt-btn-primary', type: 'button', disabled: busy,
+              onClick: () => previewPrivacyPreset(recommendation.preset) }, '预览推荐设置'),
+            h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 6 } },
+              '切换场景不会保存配置、改变运行中的任务或调用模型；预览后由你确认保存。')) : null,
           saved ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
             h('h4', null, '智能设置 · 本地隐私'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } }, '五种方案先预览，保存后生效。保留手动锁定；仅低干扰方案额外预览已有扫描模式，不修改代理、DNS、超时或诊断记录。'),

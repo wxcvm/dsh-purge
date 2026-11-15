@@ -159,3 +159,41 @@ test('five privacy preset previews preserve locks and unrelated preferences', ()
     assert.deepEqual(management, { mode: 'manual', locked: ['maskHistory'] })
   }
 })
+
+
+test('task recommendations distinguish observed posture and preserve locks without mutating preferences', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('    function privacyTaskRecommendation(')
+    const end = src.indexOf('    function LowImpactTab(', start)
+    assert.ok(start >= 0 && end > start, path)
+    const recommend = new Function(src.slice(start, end) + '\nreturn privacyTaskRecommendation')()
+    const prefs = { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: false }
+    const policy = { mode: 'manual', locked: ['maskHistory'] }
+    const local = recommend(prefs, policy, 'local', null, 'unavailable')
+    assert.equal(local.preset, 'recommended')
+    assert.deepEqual(local.changes, ['maskAssetResults'])
+    assert.equal(local.preview.policy.mode, 'automatic')
+    assert.equal(local.preview.preferences.maskHistory, false)
+    assert.match(local.reasons.join(' '), /尚未确认/)
+    const sharing = recommend(prefs, policy, 'sharing', { bridge: { listenerScope: 'all_interfaces' }, vault: { enabled: false }, storageAudit: { available: true } }, 'observed')
+    assert.equal(sharing.preset, 'sharing')
+    assert.equal(sharing.preview.policy.mode, 'manual')
+    assert.match(sharing.reasons.join(' '), /非回环绑定/)
+    assert.match(sharing.reasons.join(' '), /未配置凭据加密密钥/)
+    assert.match(sharing.reasons.join(' '), /未由推荐功能自动检查/)
+    const remote = recommend(prefs, policy, 'remote-model', { bridge: { listenerScope: 'loopback_bound' } }, 'observed')
+    assert.match(remote.reasons.join(' '), /请求内容不受展示遮蔽影响/)
+    assert.match(remote.reasons.join(' '), /不能据此判断/)
+    for (const item of [local, sharing, remote]) {
+      assert.deepEqual(item.preview.policy.locked, ['maskHistory'])
+      assert.equal(item.preview.preferences.mode, 'standard')
+      assert.equal(item.preview.preferences.timeoutSeconds, 300)
+      assert.equal(item.preview.preferences.captureDiagnostics, true)
+      assert.equal(item.preview.preferences.noReverseDns, false)
+    }
+    assert.equal(prefs.maskAssetResults, false)
+    assert.deepEqual(policy, { mode: 'manual', locked: ['maskHistory'] })
+    assert.match(src, /预览推荐设置/)
+  }
+})
