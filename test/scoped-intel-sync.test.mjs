@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
-import { scopedIntelSyncConfig, syncScopedIntelToArtex, probeScopedIntelPairing, savedScopedIntelConfig, saveScopedIntelPairing, resolveScopedIntelPairing, readScopedIntelOverview } from '../lib/redteam/scoped-intel-sync.js'
+import { scopedIntelSyncConfig, syncScopedIntelToArtex, probeScopedIntelPairing, savedScopedIntelConfig, saveScopedIntelPairing, resolveScopedIntelPairing, readScopedIntelOverview, readScopedIntelDetail } from '../lib/redteam/scoped-intel-sync.js'
 
 const token = 'fixture-only-32-character-secret-123'
 const env = { DSH_PURGE_ARTEX_INTEL_TOKEN: token, DSH_PURGE_ARTEX_INTEL_COMPANY_ID: '12' }
@@ -152,4 +152,34 @@ test('overview uses paired company only and whitelists read-only metadata', asyn
   assert.equal(JSON.stringify(result).includes('private'),false)
   assert.equal(JSON.stringify(result).includes(token),false)
   assert.equal((await readScopedIntelOverview(null,{env,probe,fetchFn:async()=>new Response(JSON.stringify({...payload,company_id:99}))})).ok,false)
+})
+
+test('paired asset pages and snapshot analysis only use fixed read endpoints', async () => {
+  const probe=async()=>({state:'detected'})
+  const asset={id:7,type:'service',domain:'example.test',ip:'192.0.2.1',port:443,app_name:'',service_type:'https',last_seen:'2026-11-15',auth:token,url:'private'}
+  const base={service:'artex',schema_version:1,company_id:12}
+  const opts={env,probe,fetchFn:async(url,request)=>{
+    assert.equal(url,'http://127.0.0.1:8787/api/purge/intel-bridge/assets?before=10')
+    assert.equal(request.method,'GET')
+    assert.equal(request.body,undefined)
+    return new Response(JSON.stringify({...base,items:[asset],next_before:0}))
+  }}
+  const page=await readScopedIntelDetail(null,{kind:'assets',companyId:12,before:10},opts)
+  assert.equal(page.ok,true)
+  assert.equal(page.items[0].domain,'example.test')
+  assert.equal(JSON.stringify(page).includes(token),false)
+  assert.equal(JSON.stringify(page).includes('private'),false)
+  assert.equal((await readScopedIntelDetail(null,{kind:'assets',companyId:99},opts)).ok,false)
+  assert.equal((await readScopedIntelDetail(null,{kind:'assets',companyId:12,before:-1},opts)).ok,false)
+  const analysis={schema:'artex.purge-intel-analysis.v1',historical_only:true,truncated:false,target:'example.test',names:1,ips:1,edges:1,port_observations:1,excluded_dns:0,unknown_transport_ports:0,ports_without_observation_time:0,shared_addresses:0,
+    names_with_multiple_sources:[],names_without_dns:[],names_with_dns_failures:[],names_without_retained_address:[],ips_without_domain_link:[],ips_without_port_evidence:[],token}
+  const snapshot=await readScopedIntelDetail(null,{kind:'snapshot',companyId:12,snapshotId:9},{env,probe,fetchFn:async(url,request)=>{
+    assert.equal(url,'http://127.0.0.1:8787/api/purge/intel-bridge/snapshot?snapshot=9')
+    assert.equal(request.method,'GET')
+    return new Response(JSON.stringify({...base,snapshot_id:9,analysis}))
+  }})
+  assert.equal(snapshot.ok,true)
+  assert.equal(snapshot.analysis.names,1)
+  assert.equal(JSON.stringify(snapshot).includes(token),false)
+  assert.equal((await readScopedIntelDetail(null,{kind:'snapshot',companyId:12,snapshotId:9},{env,probe,fetchFn:async()=>new Response(JSON.stringify({...base,snapshot_id:8,analysis}))})).ok,false)
 })

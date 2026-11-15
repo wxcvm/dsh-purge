@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "69d7f2c0a6cb8ed5";
+		const CLIENT_BUILD_ID = "f74aee3df6535173";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11543,9 +11543,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [data, setData] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
+      const [detail, setDetail] = React.useState(null)
+      const [detailBusy, setDetailBusy] = React.useState(false)
+      const [detailError, setDetailError] = React.useState('')
       const load = async () => {
-        if (busy) return
-        setBusy(true); setError(''); setData(null)
+        if (busy || detailBusy) return
+        setBusy(true); setError(''); setData(null); setDetail(null); setDetailError('')
         try {
           const r = await api({ op: 'scopedIntelOverview' })
           if (!r?.ok) throw Error(r?.error || '读取 ARTEX 概览失败')
@@ -11553,16 +11556,50 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         } catch (e) { setError(String(e?.message || e)) }
         finally { setBusy(false) }
       }
+      const openDetail = async (kind, opts = {}) => {
+        if (!data || busy || detailBusy) return
+        setDetailBusy(true); setDetail(null); setDetailError('')
+        try {
+          const r = await api({ op: 'scopedIntelDetail', kind, companyId: data.companyId, ...opts })
+          if (!r?.ok) throw Error(r?.error || '读取 ARTEX 详情失败')
+          setDetail({kind, ...r})
+        } catch (e) { setDetailError(String(e?.message || e)) }
+        finally { setDetailBusy(false) }
+      }
+      const btn = (label, onClick) => h('button', { type:'button', className:'rt-btn', disabled:busy || detailBusy, onClick }, label)
+      const labels = { names:'域名', ips:'IP', edges:'关联关系', port_observations:'历史端口观察', excluded_dns:'排除范围外 DNS', unknown_transport_ports:'未知传输协议端口', ports_without_observation_time:'缺少观察时间的端口', shared_addresses:'共享地址',
+        names_with_multiple_sources:'多来源域名', names_without_dns:'未采集 DNS 的域名', names_with_dns_failures:'DNS 查询失败', names_without_retained_address:'无保留地址的域名', ips_without_domain_link:'无域名关联的 IP', ips_without_port_evidence:'无端口证据的 IP' }
+      const detailView = detail?.kind === 'assets' ? h('div', { className:'rt-card' },
+        h('h4', null, 'ARTEX 公司资产'),
+        h('p', { className:'rt-foot' }, '按公司归属读取每页最多 50 条，不读取认证信息或请求参数。'),
+        detail.items.length ? h('div', { style:{maxHeight:340, overflowY:'auto'} }, detail.items.map(a =>
+          h('div', { key:a.id, className:'rt-kv' },
+            h('div',null, h('b',null,a.domain || a.ip || a.appName || '资产 #'+a.id),
+              h('div',{className:'rt-foot'},'#'+a.id+' · '+a.type+(a.serviceType?' · '+a.serviceType:'')+(a.port?' · 端口 '+a.port:''))),
+            h('span',{className:'rt-foot'},a.lastSeen)))) : h('p',{className:'rt-foot'},'此页暂无资产。'),
+        h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginTop:8}},
+          btn('返回第一页',()=>openDetail('assets')),
+          detail.nextBefore ? btn('下一页',()=>openDetail('assets',{before:detail.nextBefore})) : null,
+          btn('关闭详情',()=>setDetail(null)))) :
+        detail?.kind === 'snapshot' ? h('div',{className:'rt-card'},
+          h('h4',null,'历史快照 #'+detail.snapshotId+' · 分析'),
+          h('p',{className:'rt-foot'},detail.analysis.target+' · 历史证据，不代表当前存活资产或已确认漏洞。'+(detail.analysis.truncated?' 原始数据已截断。':'')),
+          h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}},Object.entries(labels).filter(([k])=>typeof detail.analysis[k]==='number').map(([k,label])=>
+            h('div',{key:k,className:'rt-kv',style:{flex:'1 1 140px'}},h('span',null,label),h('b',null,String(detail.analysis[k]))))),
+          Object.entries(labels).filter(([k])=>Array.isArray(detail.analysis[k])&&detail.analysis[k].length).map(([k,label])=>
+            h('details',{key:k},h('summary',null,label+'（'+detail.analysis[k].length+'）'),h('div',{style:{maxHeight:180,overflowY:'auto',wordBreak:'break-all'}},detail.analysis[k].map(value=>h('div',{key:value,className:'rt-foot'},value))))),
+          btn('关闭详情',()=>setDetail(null))) : null
       return h('div', { className: 'rt-card' },
         h('h4', null, 'ARTEX 公司项目概览'),
         h('p', { className: 'rt-foot' }, '读取已配对公司的真实任务状态、资产归属数量、关联发现及历史情报快照；不会启动任务。'),
-        h('button', { type: 'button', className: 'rt-btn rt-btn-primary', disabled: busy, onClick: load }, busy ? '读取中…' : '读取 / 刷新项目数据'),
+        h('button', { type: 'button', className: 'rt-btn rt-btn-primary', disabled: busy || detailBusy, onClick: load }, busy ? '读取中…' : '读取 / 刷新项目数据'),
         error ? h('p', { className: 'rt-err', role: 'alert' }, error) : null,
         data ? h('div', { role: 'status' },
           h('p', { className: 'rt-foot' }, '接收公司 #' + data.companyId + ' · 当前 Purge 项目：' + (props.engagement || '未选择')),
           h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, margin: '8px 0' } },
             [['关联任务', data.taskCount], ['归属资产', data.assetCount], ['资产关联发现', data.linkedFindingCount], ['历史情报快照', data.snapshotCount]].map(([label,value]) =>
               h('div', { key: label, className: 'rt-card', style: { flex: '1 1 120px', margin: 0 } }, h('b', null, String(value)), h('div', { className: 'rt-foot' }, label)))),
+          btn('浏览公司资产',()=>openDetail('assets')),
           h('h4', null, '最近关联任务（最多 50 条）'),
           data.tasks.length ? h('div', { style: { maxHeight: 260, overflowY: 'auto' } }, data.tasks.map(t =>
             h('div', { key: t.id, className: 'rt-kv' }, h('b', null, '任务 #' + t.id),
@@ -11570,9 +11607,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', { className: 'rt-foot' }, '该公司暂无关联任务。'),
           h('h4', null, '最近历史情报快照（最多 20 条）'),
           data.snapshots.length ? h('div', { style: { maxHeight: 220, overflowY: 'auto' } }, data.snapshots.map(t =>
-            h('div', { key: t.id, className: 'rt-kv' }, h('b', null, '快照 #' + t.id), h('span', null, t.receivedAt)))) :
+            h('div', { key: t.id, className: 'rt-kv' }, h('div',null,h('b', null, '快照 #' + t.id),h('div',{className:'rt-foot'},t.receivedAt)),btn('查看分析',()=>openDetail('snapshot',{snapshotId:t.id}))))) :
             h('p', { className: 'rt-foot' }, '尚无同步历史。'),
-          h('p', { className: 'rt-foot' }, '这里只展示项目概览，不读取报告正文、任务描述或跨公司目标。')) : null)
+          detailBusy ? h('p',{className:'rt-foot'},'读取详情中…') : null,
+          detailError ? h('p',{className:'rt-err',role:'alert'},detailError) : null,
+          detailView,
+          h('p', { className: 'rt-foot' }, '资产与历史分析遵循现有资产遮蔽设置；不读取报告正文、任务描述或跨公司目标。')) : null)
     }
 
     function ArtexTab(props) {
