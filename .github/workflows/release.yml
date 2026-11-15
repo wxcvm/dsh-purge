@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/master'
+    if: github.repository == 'wxcvm/dsh-purge' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
     runs-on: [self-hosted, Linux, X64, purge-ci]
     timeout-minutes: 30
     defaults:
