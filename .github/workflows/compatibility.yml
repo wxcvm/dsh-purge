@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api-contracts:
     runs-on: [self-hosted, Linux, X64, purge-ci]
@@ -25,7 +29,7 @@ jobs:
           fixture="$(node scripts/prepare-host-fixture.mjs)"
           printf 'DSH_COMPAT_HOST_ROOT=%s\n' "$fixture" >> "$GITHUB_ENV"
       - name: Install isolated fixture with all lifecycle scripts disabled
-        run: npm install --prefix "$DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+        run: npm install --prefix "$DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
       - name: Check generated bundle and syntax
         run: |
           node scripts/build-client.mjs --check
