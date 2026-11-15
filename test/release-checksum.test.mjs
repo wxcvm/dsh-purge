@@ -27,3 +27,9 @@ test('fork release archive and installed profile require the same ARTEX knowledg
   }
 })
 
+
+test('stable fork versions are not marked prerelease just because they carry the fork suffix', () => {
+  assert.match(workflow, /\*beta\*\|\*alpha\*\|\*rc\*\)/)
+  assert.doesNotMatch(workflow, /\*wxcvm\*\)/)
+  assert.match(workflow, /Install declared dependencies without lifecycle scripts/)
+})
