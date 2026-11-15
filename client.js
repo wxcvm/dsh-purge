@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "3d5c412f1a166121";
+		const CLIENT_BUILD_ID = "fc3a93bb98030a58";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -44,6 +44,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		function apiTimeoutMs(p, init) {
 			const path = String(p || "");
 			const method = String((init && init.method) || "GET").toUpperCase();
+			if (path.indexOf("/dsh-purge/repair-center") !== -1) return method === "POST" ? 300000 : 20000;
+			if (path.indexOf("/dsh-purge/desktop-runtime") !== -1) return method === "POST" ? 300000 : 20000;
 			if (path.indexOf("/dsh-purge/update-progress") !== -1) return 8000;
 			if (path.indexOf("/dsh-purge/update") !== -1) return method === "POST" ? 900000 : 45000;
 			if (path.indexOf("/dsh-purge/uninstall") !== -1) return 90000;
@@ -1652,9 +1654,50 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			);
 		}
 
+        function RepairCenter({ busy }) {
+          const [snapshot, setSnapshot] = useState(null);
+          const [working, setWorking] = useState(false);
+          const [error, setError] = useState("");
+          const [notice, setNotice] = useState("");
+          const scan = async () => { setWorking(true); setError(""); try { setSnapshot(await apiJson("/dsh-purge/repair-center")); } catch (e) { setError(String(e.message || e)); } finally { setWorking(false); } };
+          const repair = async (action, receiptId) => {
+            setWorking(true); setError(""); setNotice("");
+            try {
+              const r = await apiJson("/dsh-purge/repair-center", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, receiptId }) });
+              setNotice((r.changed ? "操作完成" : "无需修改") + (r.restartRequired ? "；代码需在任务结束后重新加载/重启生效" : "") + (r.receiptId ? "；备份记录：" + r.receiptId : ""));
+              setSnapshot(await apiJson("/dsh-purge/repair-center"));
+            } catch(e) { setError(String(e.message || e)); } finally { setWorking(false); }
+          };
+          return h("div", { className: "dshp-clean-browser" },
+            h("div", { className: "dshp-sub" }, h("h4", null, "常见故障诊断与修复")),
+            h("p", { className: "dshp-hint" }, "检查启动配置、安装 YAML、公共运行时、插件加载和已知历史卡顿。只修明确异常；不删会话、不清账号、不自动卸载插件。"),
+            h(Btn, { disabled: busy || working, onClick: scan }, working ? "处理中…" : "检查常见故障"),
+            error ? h("p", { role: "alert" }, error) : null,
+            notice ? h("p", { role: "status" }, notice) : null,
+            snapshot ? h("div", null, snapshot.checks.map(row => h("div", { key: row.id, className: "dshp-sub" },
+              h("strong", null, row.title + " · " + (row.ok === true ? "正常/无需处理" : row.ok === null ? "未验收" : "需要处理")),
+              h("p", { className: "dshp-hint" }, row.status + (row.details ? " — " + row.details : "")),
+              row.repairable ? h(Btn, { disabled: busy || working, onClick: () => repair(row.id) }, "修复此项（先备份）") : null)),
+              snapshot.receipts.length ? h("details", null, h("summary", null, "最近修复与回滚"), snapshot.receipts.map(r => h("div", { key: r.id },
+                h("p", null, r.action + " · " + r.phase + " · " + r.at),
+                r.phase === "complete" ? h(Btn, { disabled: busy || working, onClick: () => repair("rollback", r.id) }, "回滚此项（校验后执行）") : null))) : null) : null);
+        }
+
 		function CleanDiagnostics({ state, onRefresh, busy }) {
 			const t = useT();
 			const [checking, setChecking] = useState(false);
+            const [runtime, setRuntime] = useState(null);
+            const [runtimeBusy, setRuntimeBusy] = useState(false);
+            const [runtimeError, setRuntimeError] = useState("");
+            const runtimeCheck = async (repair) => {
+              setRuntimeBusy(true); setRuntimeError("");
+              try {
+                const result = await apiJson("/dsh-purge/desktop-runtime", repair ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "restore-missing" }) } : undefined);
+                setRuntime(result.after || result);
+                if (repair) setFeedback(result.changed ? "已恢复 " + result.changed + " 个缺失文件；凭据：" + result.receipt : "运行时完整，无需恢复");
+              } catch (e) { setRuntimeError(String(e.message || e)); }
+              finally { setRuntimeBusy(false); }
+            };
 			const [feedback, setFeedback] = useState("");
 			const rows = state ? patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) })) : [];
 			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
@@ -1677,7 +1720,18 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				catch { setFeedback("复制失败，请选中下方诊断文本手动复制"); }
 			};
 			return h("div", { className: "dshp-clean-browser" },
-				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
+                h(RepairCenter, { busy }),
+				h("div", { className: "dshp-sub" }, h("h4", null, "桌面插件更新运行时")),
+                h("p", { className: "dshp-hint" }, "检查自带 Node、pnpm 和 CLI。恢复只提取本机同版本缓存中缺失的文件，不覆盖现有文件、不升级、不重启。"),
+                h("div", { className: "dshp-row" },
+                  h(Btn, { disabled: busy || runtimeBusy, onClick: () => runtimeCheck(false) }, runtimeBusy ? "处理中…" : "检查更新运行时"),
+                  h(Btn, { disabled: busy || runtimeBusy || !runtime || runtime.ok, onClick: () => runtimeCheck(true) }, "恢复缺失运行时")),
+                runtimeError ? h("p", { role: "alert" }, runtimeError) : null,
+                runtime ? h("div", null,
+                  h("p", { role: "status" }, runtime.ok ? "运行时关键文件完整 · Harness " + runtime.desktopVersion : "发现公共更新运行时异常"),
+                  runtime.issues.map((x, i) => h("p", { key: i, role: "alert" }, x.code + (x.file ? "：" + x.file : ""))),
+                  h("details", null, h("summary", null, "运行时诊断详情"), h("pre", { className: "dshp-clean-diagnostic" }, JSON.stringify(runtime, null, 2)))) : null,
+                h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
 				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
 				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
 				compatibility?.status === "declared" ? h("p", { className: "dshp-hint" }, "宿主磁盘版本在当前插件声明的适配范围内（不代表实机功能已验收）。") : null,
@@ -12934,7 +12988,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
      * @param ctx - 客户端根上下文。
      */
     function applyDrillParts() {
-      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth };
+      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api };
     }
 
     exports.inject = inject
@@ -14362,13 +14416,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		const purgeCommandInputDefinition = {
 			kind: "dsh-purge-command-input",
 			target: "chat",
-			match: (event) => event.type === "command/run" && event.data.name === "purge"
+			match: (event) => event.type === "command/run" && ["purge", "bind", "purge-bind"].includes(event.data.name)
 				? { id: String(event.data.commandId), role: "start" } : null,
 			start: (_context, match) => ({
 				commandId: match.event.data.commandId,
 				seq: match.event.seq,
 				time: match.event.time,
-				text: `/purge${(match.event.data.args ?? "").trimEnd()}`,
+				text: `/${match.event.data.name}${(match.event.data.args ?? "").trimEnd()}`,
 			}),
 			update: (context) => context.state,
 			buildViewNode: (context) => context.state === undefined ? null : ({
@@ -14389,7 +14443,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
 		function PurgeCommandInputView({ node }) {
 			return h("div", {
-				role: "group", "aria-label": "/purge", "data-command-input": "",
+				role: "group", "aria-label": node.data.text.split(/\s/)[0], "data-command-input": "",
 				style: { display: "flex", justifyContent: "flex-end", padding: "8px 24px" },
 			}, h("div", {
 				style: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxWidth: "100%",
@@ -14397,8 +14451,46 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}, node.data.text));
 		}
 
+		// Native slash popup: session comes from the opening composer, never global selection.
+		function installTargetBindingPicker(ctx) {
+			const command = ctx.get("commandUi");
+			if (!command || typeof command.decorate !== "function") return;
+			const sessions = ctx.get("sessions");
+			const remote = ctx.get("remote");
+			const install = (name) => ctx.effect(() => command.decorate({
+				name,
+				available: (session) => !!session.sessionId && !sessions.subagentAddress?.(session.sessionId),
+				ui: {
+					kind: "popupSelect",
+					searchLabels: () => ({ placeholder: "搜索靶标名称或 ID…", empty: "暂无靶标，请先在作战台创建", noResults: "没有匹配的靶标" }),
+					options: async (session, signal) => {
+						const data = await __dshPurgeDrill.api({ op: "sessionBindingOptions", sessionId: session.sessionId });
+						if (signal.aborted) return [];
+						if (!data || !data.ok) throw new Error(data?.error || "读取靶标失败");
+						const rows = data.targets.map(target => ({
+							id: "target:" + target.id, label: target.name, detail: target.id,
+							active: data.current === target.id,
+						}));
+						if (data.current !== null) rows.push({ id: "unbind", label: "解除绑定", detail: "保留当前对话及靶标资料" });
+						return rows;
+					},
+					onSelect: async (option, session) => {
+						const line = "/" + name + (option.id === "unbind" ? " unbind" : " select " + option.id.slice(7));
+						// The official command RPC uses the captured session even for a fresh chat.
+						const result = await remote.commands.execute(session.sessionId, line, []);
+						if (!result?.ok) throw new Error(result?.error?.message || "绑定请求失败");
+						const outcome = result.value?.result;
+						if (!outcome || outcome.kind !== "success") throw new Error(outcome?.text || "绑定未完成");
+					},
+				},
+			}), "dsh-purge: target binding popup " + name);
+			install("bind");
+			install("purge-bind");
+		}
+
 		function apply(ctx) {
 			purgeWorkspaceCtx = ctx;
+			if (typeof ctx.inject === "function") ctx.inject(["commandUi", "sessions", "remote", "remote.commands"], installTargetBindingPicker);
 			ctx.slots.inject("main", () => ctx.slots.register({
 				name: "main", key: PURGE_PANEL_ID, label: "Purge 工作区",
 			}, PurgeWorkspacePage));

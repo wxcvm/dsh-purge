@@ -7,7 +7,9 @@
 
 <h1 align="center">⚔️ DeepSeek Harness cybersecurity red-team tool (dsh-purge)</h1>
 
-<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.10 (beta)</strong></p>
+<p align="center"><strong>Version 1.1.92-wxcvm.7-beta.11 (beta)</strong></p>
+
+> beta.11: recovery center, stream lifecycle reconciliation, retry cancellation, native session binding and numeric update comparison. See [release notes](release-notes-wxcvm.md).
 
 > beta.10: precision-first refusal attribution, explicit abstention and independent delivery evidence. Normal replies are not treated as refusal or non-delivery. See [rules, regression evidence and acceptance boundaries](docs/RESPONSE_ASSESSMENT.zh-CN.md).
 
@@ -69,7 +71,7 @@ The author's personal channel: [t.me/LLM_PoJia](https://t.me/LLM_PoJia). Notes a
 
 ## What this is
 
-**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained beta build is **1.1.92-wxcvm.7-beta.10**. Its package metadata targets **DSH 0.2.2-rc.3** and declares additional targets 0.2.2-rc.2, 0.2.2-rc.1, 0.2.1-rc.5 and 0.2.1-rc.2. Declared targets and integration checks are not proof of on-device desktop UI or runtime behavior. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
+**dsh-purge** is a cybersecurity red-team plugin for the official [DeepSeek Harness](https://www.deepseek.com/harness/) already installed on your machine. The maintained beta build is **1.1.92-wxcvm.7-beta.11**. Its package metadata targets **DSH 0.2.2-rc.3** and declares additional targets 0.2.2-rc.2, 0.2.2-rc.1, 0.2.1-rc.5 and 0.2.1-rc.2. Declared targets and integration checks are not proof of on-device desktop UI or runtime behavior. Official **Web** (`dsh web`) and the official **desktop EXE** are both supported. Install and Apply them separately.
 
 Harness does more than forward a prompt. It rewrites prompts, approval gates, sandbox policy, and session migration at runtime. Asking only “will the model answer” treats a host-layer block as a model refusal. This plugin separates those two layers on your own install, for controlled evaluation and for seeing which default policy is too tight.
 
