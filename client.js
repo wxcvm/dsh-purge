@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "361bcf039164a829";
+		const CLIENT_BUILD_ID = "63649c0b64112709";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8844,6 +8844,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [err, setErr] = React.useState(null)
       const [msg, setMsg] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
+      const [networkCheck, setNetworkCheck] = React.useState({})
+      const [networkChecking, setNetworkChecking] = React.useState('')
+      const runNetworkCheck = async (kind) => {
+        if (networkChecking) return
+        setNetworkChecking(kind)
+        setNetworkCheck(prev => ({ ...prev, [kind]: null }))
+        try {
+          const result = await api(kind === 'proxy'
+            ? { op: 'proxyConfigTest' }
+            : { op: 'environmentNetworkProbe', kind })
+          setNetworkCheck(prev => ({ ...prev, [kind]: result || { ok: false, error: '未收到检测结果' } }))
+        } catch (e) {
+          setNetworkCheck(prev => ({ ...prev, [kind]: { ok: false, error: String(e?.message || e) } }))
+        } finally { setNetworkChecking('') }
+      }
       const [folderPath, setFolderPath] = React.useState('')
       const [toolSearch, setToolSearch] = React.useState('')
       const [toolGroup, setToolGroup] = React.useState('all')
@@ -9216,6 +9231,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const adapt = (data && data.adapt) || {}
       const tools = (data && data.tools && data.tools.items) || []
       const found = tools.filter((t) => t.path).length
+      // Existing discovery stays authoritative; explicit paths are only pinned on request.
+      const suggestedPaths = tools.filter(t => t.path && ['toolkit', 'binDir', 'path', 'artex'].includes(t.source)
+        && !String(draft?.tools?.[t.id] || '').trim())
+      const fillDetectedPaths = () => {
+        setDraft(current => {
+          if (!current) return current
+          const next = { ...current.tools }
+          for (const t of suggestedPaths) {
+            if (!String(next[t.id] || '').trim()) next[t.id] = t.path
+          }
+          return { ...current, tools: next }
+        })
+        setMsg({ ok: '已填入发现的工具路径草稿；检查后点击保存。' })
+        setSection('tools')
+      }
+      const stalePaths = tools.filter(t => !t.path && t.configured && !String(t.id).startsWith('custom:')
+        && String(draft?.tools?.[t.id] || '').trim() === String(data?.config?.tools?.[t.id] || '').trim())
       const taskProfiles = (data && data.taskProfiles) || []
       const selectedCheck = taskPlan && taskPlan.selected ? toolChecks[taskPlan.selected.id] : null
       const toolGroups = [
@@ -9295,6 +9327,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         sectionCard('summary', { className: 'rt-card' },
           h('h4', null, '推荐配置与下一步'),
           h('div', { className: 'rt-foot' }, '根据当前已读取的配置和检测结果推荐；不会覆盖手工设置。'),
+          suggestedPaths.length ? h('div', { className: 'rt-kv' },
+            h('span', null, '发现 ' + suggestedPaths.length + ' 个未手工配置的工具；默认动态查找即可，也可固定当前路径。'),
+            h('button', { className: 'rt-btn', disabled: busy || !draft, onClick: fillDetectedPaths }, '填入已发现路径')) : null,
+          stalePaths.map(t => h('div', { key: t.id, className: 'rt-kv' },
+            h('span', null, t.label + '：已配置的路径不存在'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+              setTool(t.id, ''); setSection('tools'); setMsg({ ok: '已清空失效路径草稿；保存后恢复自动查找。' })
+            } }, '恢复自动查找'))),
           !data ? h('p', null, '正在读取本机配置；失败时使用刷新重试。') : null,
           data && draft && draft.platform !== 'auto' ? h('div', { className: 'rt-kv' },
             h('span', null, '平台模式为 ' + draft.platform + '；跨平台使用时可考虑 auto。'),
@@ -9550,6 +9590,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', null, 'DNS 解析异常时请核对系统 DNS、VPN 与代理 DNS 设置；本页不会更改系统配置。'))
             : h('p', null, '代理配置尚未读取，请刷新。'),
           h('button', { className: 'rt-btn', disabled: busy, onClick: load }, '刷新网络配置')),
+        sectionCard('network', { className: 'rt-card' },
+          h('h4', null, '真实网络检测'),
+          h('p', { className: 'rt-foot' }, '按需检测固定站点 api.github.com；DNS 查询发送到 Node 配置的 DNS 服务器，主机直连不使用插件代理（系统 VPN/TUN 仍可能接管）。插件代理测试沿用原有已保存配置。'),
+          [['dns', 'DNS 解析', '检测 DNS'], ['direct', '主机直连 HTTPS', '检测直连'], ['proxy', '插件代理配置', '检测代理']].map(([id, label, action]) => {
+            const result = networkCheck[id]
+            return h('div', { className: 'rt-kv', key: id },
+              h('div', null, h('b', null, label),
+                h('div', { className: 'rt-foot' }, networkChecking === id ? '检测中…' : !result ? '尚未检测' :
+                  (result.ok ? '成功' : '未通过') + (Number.isFinite(result.latencyMs) ? ' · ' + result.latencyMs + ' ms' : '')
+                    + (result.error ? ' · ' + result.error : '')
+                    + (result.records ? ' · A ' + result.records.A.count + ' / AAAA ' + result.records.AAAA.count : '')
+                    + (result.statusCode ? ' · HTTP ' + result.statusCode : ''))),
+              h('button', { className: 'rt-btn', disabled: !!networkChecking, onClick: () => runNetworkCheck(id) }, action))
+          })),
+
         data && data.egress ? sectionCard('network', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.55 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '出网状态（借鉴 Z3r0 egress，只读）'),
           h('div', { className: 'rt-mono', style: { fontSize: 11 } }, 'HTTP_PROXY=' + (data.egress.http_proxy || '(空)')),
@@ -9693,8 +9748,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           sectionCard('diagnostics', { className: 'rt-card' },
             h('h4', null, '跨环境候选 · 仅使用已观测结果'),
             h('p', { className: 'rt-foot' },
-              '先进行上方环境发现，再手动验证需要的工具版本。这里仅按真实发现、显式探针和首选环境排序，不会启动扫描或切换执行环境。'),
+              '先在环境总览一键检测，再按需验证工具版本。这里按实际观察与首选环境排序，不自动启动任务。'),
             h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
+              h('select', { className: 'rt-input', 'aria-label': '跨环境任务类型',
+                value: taskId, onChange: (e) => { setTaskId(e.target.value); setEnvironmentTaskPlan(null) } },
+                taskProfiles.map(t => h('option', { key: t.id, value: t.id }, t.label || t.id))),
               h('select', { className: 'rt-input', 'aria-label': '跨环境首选来源',
                 value: preferredEnvironment, onChange: (e) => { setPreferredEnvironment(e.target.value); setEnvironmentTaskPlan(null) } },
                 h('option', { value: 'local' }, '首选当前主机'),
@@ -9724,6 +9782,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 已找到）'),
             h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
               '顺序：自定义路径 → DSH 工具箱 → 搜索目录 → PATH → ARTEX。发现文件 ≠ 已验证可运行；版本检测只在你点击时执行，不扫描目标。'),
+            h('button', { className: 'rt-btn', disabled: busy || !suggestedPaths.length, onClick: fillDetectedPaths }, '填入已发现路径（' + suggestedPaths.length + '）'),
             h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 } },
               h('input', {
                 className: 'rt-input', style: { flex: '1 1 130px' }, value: toolSearch,

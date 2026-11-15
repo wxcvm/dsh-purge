@@ -31,3 +31,13 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     assert.match(src, /网络配置诊断/)
   })
 }
+
+for (const path of ['lib/redteam/client.js', 'client.js']) {
+  test(path + ': environment setup and real network checks', () => {
+    const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    assert.match(src, /onClick: fillDetectedPaths/)
+    assert.match(src, /if \(!String\(next\[t\.id\] \|\| ''\)\.trim\(\)\) next\[t\.id\] = t\.path/)
+    assert.match(src, /op: 'environmentNetworkProbe', kind/)
+    assert.match(src, /op: 'proxyConfigTest'/)
+  })
+}
