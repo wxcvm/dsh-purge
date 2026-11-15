@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "cfccd1147a344cc3";
+		const CLIENT_BUILD_ID = "fc0227c6e1f53ebf";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4142,6 +4142,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           detail('首文本 / 总耗时', value(r.firstTextMs) + ' / ' + value(r.elapsedMs) + ' ms'),
           detail('终态 / 回合', (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome)),
           detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
+          detail('用量证据', ({ 'host-stream': '实时流', 'durable-stream': '持久流' }[r.usageSource] || '未观测') + ' · 实时 / 持久总量：' + value(r.liveUsage?.totalTokens) + ' / ' + value(r.durableUsage?.totalTokens)),
           detail('错误代码', value(r.errorCode)),
           detail('终态来源', source(r)),
           detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
@@ -6763,6 +6764,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [externalRequest, setExternalRequest] = React.useState(false)
       const [removeArmed, setRemoveArmed] = React.useState(false)
       const [relatedSkill, setRelatedSkill] = React.useState(null)
+      const skillReadSeq = React.useRef(0)
+      React.useEffect(() => () => { skillReadSeq.current++ }, [])
 
       const loadExternal = () => {
         api({ op: 'aboutSecurityStatus' }).then((result) => {
@@ -6824,14 +6827,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const open = (skill) => {
         const name = skill && skill.name
         const key = (skill && skill.library ? skill.library : 'redteam') + ':' + name
-        if (active === key) { setActive(null); setDetail(null); return }
+        const request = ++skillReadSeq.current
+        if (active === key) { setActive(null); setDetail(null); setRelatedSkill(null); return }
         setActive(key)
         setDetail(null)
         setRelatedSkill(null)
+        setErr(null)
         api({ op: 'skillRead', name: name, library: skill.library || 'redteam' }).then((r) => {
+          if (request !== skillReadSeq.current) return
           if (r && r.ok) setDetail(r)
           else setErr((r && r.error) || '读取失败')
-        }, (e) => setErr(String((e && e.message) || e)))
+        }, (e) => {
+          if (request === skillReadSeq.current) setErr(String((e && e.message) || e))
+        })
       }
 
       /* Purpose first, source second. Unmatched upstream entries remain 'other'. */
@@ -8926,6 +8934,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }
           const current = Object.assign({}, defaults, r.config.scanPreferences)
           setSaved(current); setDraft(current)
+          setTemporaryPrivacy(null)
           document.dispatchEvent(new Event('dsh-purge-privacy-saved'))
           setPrivacyChanges(Array.isArray(r.config.privacyChanges) ? r.config.privacyChanges : [])
           const currentPolicy = r.config && r.config.privacyManagement
@@ -9023,7 +9032,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             temporary ? h('div', { role: 'status', style: { fontSize: 12 } },
               '临时场景：' + (temporary.task === 'sharing' ? '共享屏幕' : '远程模型') + ' · 扫描历史/运行诊断 ' + (temporary.maskHistory ? '额外遮蔽' : '保留已保存值') + ' · ARTEX ' + (temporary.maskAssetResults ? '额外遮蔽' : '保留已保存值')) : null,
             h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 6 } },
-              '切换场景不会保存配置、改变运行中的任务或调用模型；预览后由你确认保存。临时遮蔽仅增加本次工作区的展示保护，保留已保存锁定，结束后恢复保存值；不覆盖测绘联动操作。')) : null,
+              '切换场景不会保存配置、改变运行中的任务或调用模型；预览后由你确认保存。临时遮蔽仅增加本次工作区的展示保护，保留已保存锁定，结束后恢复保存值；保存新配置会结束临时场景，不覆盖测绘联动操作。')) : null,
           saved ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
             h('h4', null, '智能设置 · 本地隐私'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } }, '五种方案先预览，保存后生效。保留手动锁定；仅低干扰方案额外预览已有扫描模式，不修改代理、DNS、超时或诊断记录。'),

@@ -208,3 +208,12 @@ test('temporary runtime privacy overrides local reveal without changing routing'
   assert.doesNotMatch(text, /private-session|private-attempt/)
   assert.match(text, /local \/ model/)
 })
+
+test('runtime card shows usage source and separates live and durable totals', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const rows=[{generation:1,attemptId:'a',usage:{totalTokens:20},usageSource:'host-stream',liveUsage:{totalTokens:20},durableUsage:{totalTokens:null},finishObserved:true}]
+  let i=0
+  const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const output=JSON.stringify(vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx))
+  assert.match(output,/实时流 · 实时 \/ 持久总量：20 \/ 未观测/)
+})

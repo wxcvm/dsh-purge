@@ -198,3 +198,40 @@ test('live and durable copies are not added together; live text timing remains m
   const r=o.snapshot().items[0];assert.equal(r.toolCalls,1);assert.equal(r.durableToolStarts,1);
   assert.equal(r.firstTextMs,10);assert.equal(r.durableTextObserved,true);
 });
+
+
+test('sparse durable usage cannot erase measured live total or invent a combined snapshot', () => {
+  const o=createRuntimeObservations(), a=agent('s'); start(o,a);
+  chunk(o,a,0,{type:'usage',usage:{totalTokens:20,inputTokens:12,outputTokens:8}});
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,usage:{inputTokens:15},stream:[]}});
+  const r=o.snapshot().items[0];
+  assert.equal(r.usage.totalTokens,20); assert.equal(r.usage.inputTokens,12);
+  assert.equal(r.usageSource,'host-stream'); assert.equal(r.durableUsage.totalTokens,null);
+  assert.equal(r.durableUsage.inputTokens,15);
+  r.liveUsage.totalTokens=999; r.durableUsage.inputTokens=999;
+  assert.equal(o.snapshot().items[0].liveUsage.totalTokens,20);
+  assert.equal(o.snapshot().items[0].durableUsage.inputTokens,15);
+});
+
+test('durable usage with a total wins and sparse event metadata cannot hide a complete stream snapshot', () => {
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);
+  chunk(o,a,0,{type:'usage',usage:{totalTokens:10,inputTokens:7,outputTokens:3}});
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,usage:{inputTokens:9},stream:[{chunk:{type:'usage',usage:{totalTokens:14,outputTokens:5}}}]}});
+  const r=o.snapshot().items[0];
+  assert.equal(r.usage.totalTokens,14);assert.equal(r.usage.inputTokens,null);
+  assert.equal(r.usage.outputTokens,5);assert.equal(r.usageSource,'durable-stream');
+  assert.equal(r.liveUsage.totalTokens,10);
+});
+
+test('empty usage and incomplete finish records do not erase earlier evidence', () => {
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);
+  chunk(o,a,0,{type:'usage',usage:{totalTokens:0}});
+  chunk(o,a,1,{type:'usage',usage:{}});
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,stream:[
+    {chunk:{type:'finish',reason:{kind:'stop'}}},{chunk:{type:'finish',reason:{}}},{chunk:{type:'finish'}},
+    {chunk:{type:'usage',usage:{totalTokens:0}}},{chunk:{type:'usage',usage:{}}},{chunk:{type:'usage'}}
+  ]}});
+  const r=o.snapshot().items[0];assert.equal(r.usage.totalTokens,0);
+  assert.equal(r.usageSource,'durable-stream');assert.equal(r.finish,'stop');
+  assert.equal(r.reasonSource,'durable-stream');
+});

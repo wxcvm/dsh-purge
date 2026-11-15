@@ -106,7 +106,7 @@ test('ARTEX privacy presentation masks report and paths, with explicit temporary
   const start = source.indexOf('    function summarizeArtexReviewProgress(')
   const end = source.indexOf('    /* ---------------------------------------------------------- 常驻面板主体', start)
   assert.ok(start >= 0 && end > start)
-  const render = (mask, reveal = false) => {
+  const render = (mask, reveal = false, temporary = null) => {
     let i = 0
     const React = { useState: value => {
       const at = i++
@@ -118,7 +118,7 @@ test('ARTEX privacy presentation masks report and paths, with explicit temporary
     const h = (type, props, ...children) => ({ type, props, children })
     const report = { unique_findings: 1, duplicates_skipped: 0, items: [{ finding_id: 1,
       asset_ids: [], summary: 'private-report', severity: 'info' }], review_queue: [] }
-    const node = new Function('React', 'h', 'props', 'useTemporaryPrivacy', source.slice(start, end) + '\nreturn ArtexTab(props)')(React, h, { report }, () => null)
+    const node = new Function('React', 'h', 'props', 'useTemporaryPrivacy', source.slice(start, end) + '\nreturn ArtexTab(props)')(React, h, { report }, () => temporary)
     const values = []
     const walk = x => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') walk(x.children); else if (typeof x === 'string') values.push(x) }
     walk(node)
@@ -131,6 +131,7 @@ test('ARTEX privacy presentation masks report and paths, with explicit temporary
     assert.equal(masked.includes(secret), false)
     assert.equal(render(false).includes(secret), true)
     assert.equal(render(true, true).includes(secret), true)
+    assert.equal(render(false, true, { task: 'sharing', maskAssetResults: true }).includes(secret), false)
   }
 })
 
