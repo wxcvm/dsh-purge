@@ -99,3 +99,37 @@ test('privacy center previews presets, discards draft and displays stored change
     assert.match(src, /最近五次配置变更/)
   }
 })
+
+
+test('ARTEX privacy presentation masks report and paths, with explicit temporary reveal', () => {
+  const source = read('lib/redteam/client.js')
+  const start = source.indexOf('    function summarizeArtexReviewProgress(')
+  const end = source.indexOf('    /* ---------------------------------------------------------- 常驻面板主体', start)
+  assert.ok(start >= 0 && end > start)
+  const render = (mask, reveal = false) => {
+    let i = 0
+    const React = { useState: value => {
+      const at = i++
+      return [at === 0 ? { maskAssetResults: mask } : at === 1 ? reveal : at === 3 ? {
+        state: 'detected', online: true, tools: [{ id: 'nmap', path: 'private-tool-path', reused: true }],
+        toolRoots: ['private-root'], skillDir: 'private-skill'
+      } : value, () => {}]
+    }, useEffect() {} }
+    const h = (type, props, ...children) => ({ type, props, children })
+    const report = { unique_findings: 1, duplicates_skipped: 0, items: [{ finding_id: 1,
+      asset_ids: [], summary: 'private-report', severity: 'info' }], review_queue: [] }
+    const node = new Function('React', 'h', 'props', source.slice(start, end) + '\nreturn ArtexTab(props)')(React, h, { report })
+    const values = []
+    const walk = x => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') walk(x.children); else if (typeof x === 'string') values.push(x) }
+    walk(node)
+    return values.join('\n')
+  }
+  const masked = render(true)
+  assert.match(masked, /路径已隐藏/)
+  assert.match(masked, /报告已读取/)
+  for (const secret of ['private-tool-path', 'private-root', 'private-skill', 'private-report']) {
+    assert.equal(masked.includes(secret), false)
+    assert.equal(render(false).includes(secret), true)
+    assert.equal(render(true, true).includes(secret), true)
+  }
+})

@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "dc3075793ca99d96";
+		const CLIENT_BUILD_ID = "f88010cc084ffd43";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4100,7 +4100,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
       onNavigate ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => onNavigate('diagnostics') }, '打开故障诊断') : null),
     privacyApi ? h('div', { className: 'dshp-runtime-meta' },
       '智能隐私中心 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
-        : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置'),
+        : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置') + (revealPrivate ? ' · 当前临时显示详情' : ''),
+      h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => {
+        __dshPurgeDrill.setUI({ tab: 'low-impact', focus: null }); showPurgeWorkspace('drill');
+      } }, '打开智能隐私中心'),
       (!privacyDisplay || privacyDisplay.maskHistory) ? h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
     h('div', { className: 'dshp-runtime-metrics' },
@@ -12748,7 +12751,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-card' },
           h('h4', null, '智能隐私中心 · ARTEX 联动'),
           h('p', { className: 'rt-foot' }, displayPrivacy
-            ? '已保存的测绘展示保护：' + (displayPrivacy.maskAssetResults ? '已开启' : '未开启')
+            ? '已保存的测绘展示保护：' + (displayPrivacy.maskAssetResults ? '已开启' : '未开启') + (showPrivateDetails ? ' · 当前临时显示详情' : '')
             : privacyReadFailed ? '无法读取保存设置，暂时隐藏路径及报告详情。' : '正在读取保存设置…'),
           h('p', { className: 'rt-foot' }, '仅影响本页工具路径及报告展示；不修改 ARTEX 配置、报告或数据库。'),
           h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开智能隐私中心'),

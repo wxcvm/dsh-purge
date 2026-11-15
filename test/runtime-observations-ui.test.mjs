@@ -181,6 +181,10 @@ test('runtime display masks identifiers and report when shared privacy is enable
   const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx);
   const cards = tree.children.find(node => node?.props?.className === 'dshp-runtime-grid');
   assert.match(JSON.stringify(cards.children), /会话 \/ 请求标识已隐藏/);
+  const visible = [];
+  const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (n && typeof n === 'object') walk(n.children); else if (typeof n === 'string') visible.push(n); };
+  walk(tree);
+  assert.doesNotMatch(visible.join('\n'), /private-session|private-attempt|private-report/);
   assert.doesNotMatch(JSON.stringify(tree.children.filter(n => n !== cards)), /private-report/);
   assert.match(JSON.stringify(tree), /报告已读取，详细内容已隐藏/);
   assert.match(JSON.stringify(cards), /local \/ model/);
