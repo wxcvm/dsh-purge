@@ -55,6 +55,6 @@ test('failed ARTEX SARIF replacement keeps the current report and handoff state'
     assert.match(handler, /if \(!response\.ok \|\| !result \|\| result\.ok === false\)/)
     assert.match(handler, /setHandoffMessage\(''\)\s+props\.onReportChange\(result\)/,
       'handoff state resets only when the replacement has parsed')
-    assert.match(source, /reportError \+ \(report \? '（当前报告已保留）' : ''\)/)
+    assert.match(source, /\(maskArtex \? '报告读取失败，详情已隐藏。' : reportError\) \+ \(report \? '（当前报告已保留）' : ''\)/)
   }
 })
