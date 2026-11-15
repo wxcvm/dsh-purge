@@ -32,8 +32,10 @@ test('knowledge page and authorized bridge are wired into generated client', () 
   const generated = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
   const ui = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   for (const text of [src, generated]) {
-    assert.ok(text.includes("['knowledge-center', '知识库']"))
-    assert.ok(text.includes("else if (st.tab === 'knowledge-center') body = h(KnowledgeCenterTab)"))
+    assert.ok(text.includes("['knowledge-center', '技能与知识库']"))
+    assert.ok(text.includes("else if (st.tab === 'knowledge-center' || st.tab === 'skills') body = h(LibraryTab,"))
+    assert.ok(text.includes("page('knowledge', h(KnowledgeCenterTab, { embeddedLibrary: true }))"))
+    assert.ok(text.includes("h(UnifiedKnowledgeTab, { initialSource: 'bundled' })"))
   }
   const auth = ui.indexOf('const bridgeAuth = authorizeBridgeRequest(req)')
   const route = ui.indexOf("['knowledgeList', 'knowledgeGet', 'knowledgeSave', 'knowledgeDelete',")
