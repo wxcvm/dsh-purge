@@ -8,7 +8,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    # Opt-in only after the repository's dedicated Windows runner is registered.
+    # Fork PRs retain hosted execution; never route their code onto the personal machine.
+    runs-on: ${{ fromJSON(matrix.os == 'windows-latest' && vars.PURGE_WINDOWS_RUNNER == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted","Windows","X64","purge-ci"]' || format('["{0}"]', matrix.os)) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -26,17 +26,21 @@ jobs:
             hosts: '0.2.1-rc.2 0.2.1-rc.3 0.2.1-rc.4'
           - group: current
             hosts: '0.2.1-rc.5 0.2.2-rc.1 0.2.2-rc.2 0.2.2-rc.3'
-    runs-on: ${{ matrix.os }}
+    # Opt-in only after the repository's dedicated Windows runner is registered.
+    # Fork PRs retain hosted execution; never route their code onto the personal machine.
+    runs-on: ${{ fromJSON(matrix.os == 'windows-latest' && vars.PURGE_WINDOWS_RUNNER == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted","Windows","X64","purge-ci"]' || format('["{0}"]', matrix.os)) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - name: Locate npm download cache
+        if: runner.environment == 'github-hosted'
         id: npm-cache
         shell: bash
         run: printf 'path=%s\n' "$(npm config get cache | tr -d '\r')" >> "$GITHUB_OUTPUT"
       - name: Cache npm downloads (not installed fixtures)
+        if: runner.environment == 'github-hosted'
         uses: actions/cache@v4
         with:
           path: ${{ steps.npm-cache.outputs.path }}
