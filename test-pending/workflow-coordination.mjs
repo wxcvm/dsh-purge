@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import test from 'node:test'
 import { readSettings, settingsPathOf, writeSettings } from '../lib/redteam/settings.js'
-import { apply, liveRunningChildren, reservationStatus, summarizeChildActivity } from '../lib/redteam/tools.js'
+import { collectAgentStatus } from '../lib/redteam/agent-status.js'
 import { addReservation, associateChildReservation, dropReservation, releaseChildReservation, summarizeReservations } from '../lib/redteam/reservation-state.js'
 
 function temporary(t) {
@@ -44,11 +44,18 @@ async function fixture(t, overrides = {}) {
     effect(fn) { cleanup.push(fn()) },
   }
   t.after(() => { for (const dispose of cleanup) dispose?.() })
-  await apply(ctx, { hostPackageFiles: [anchor] })
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = root
+  let apply
+  try { ({ apply } = await import('../lib/redteam/tools.js')) } finally {
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+  }
+  await apply(ctx)
   const exec = { agent: { session: { id: randomUUID() } } }
   const call = async (name, args, context = exec) => JSON.parse(await definitions.get(name).execute(args, context))
   t.after(async () => {
-    const status = reservationStatus(exec.agent.session.id, verified(), 3)
+    const status = await call('redteam_agent_slot', { action: 'status' })
     for (const row of status.reservations) await call('redteam_agent_slot', { action: 'release', key: row.key })
   })
   return { root, store, ctx, definitions, listeners, exec, call }
@@ -173,16 +180,16 @@ test('stale assignment cleanup and delayed run events cannot release a newly reu
 
 test('live registry publishes stable ids, deduplicates rows, and supports property fallback', async () => {
   const rows = [{ id: 'child', activity: 'running' }, { id: 'child', activity: 'running' }]
-  assert.deepEqual(summarizeChildActivity(rows).running_ids, ['child'])
-  assert.equal(summarizeChildActivity(rows).running, 1)
-  const malformed = summarizeChildActivity([null, { activity: 'running' }, 'bad-row'])
+  const read = rows => collectAgentStatus({ get: () => undefined, subagents: { listChildren: async () => rows } }, { rootSessionId: 'root' })
+  const live = await read(rows)
+  assert.deepEqual(live.per_root[0].running_ids, ['child'])
+  assert.equal(live.used, 1)
+  const malformed = await read([null, { activity: 'running' }, 'bad-row'])
   assert.equal(malformed.available, false)
   assert.equal(malformed.unknown_children, 3)
-  const live = await liveRunningChildren({ get: () => undefined, subagents: { listChildren: async () => rows } }, 'root')
-  assert.deepEqual(live.running_ids, ['child'])
-  const missing = await liveRunningChildren({}, 'root')
-  assert.deepEqual(missing.running_ids, [])
+  const missing = await collectAgentStatus({}, { rootSessionId: 'root' })
   assert.equal(missing.available, false)
+  assert.equal(missing.free, null)
 })
 
 test('slot tool retries at capacity are idempotent and failed dispatch can be exactly released', async t => {
@@ -222,7 +229,7 @@ test('concurrent keyed retries do not duplicate reservations or exceed the confi
 test('slot metadata updates after lifecycle events, and release does not invent capacity for running children', async t => {
   const f = await fixture(t)
   await f.call('redteam_agent_slot', { action: 'acquire', key: 'task' })
-  f.listeners.get('subagent/start')({ id: 'child', runId: 'run' }, { session: f.exec.agent.session })
+  f.listeners.get('subagent/start')({ id: 'child', runId: 'run', parentSessionId: f.exec.agent.session.id })
   f.ctx.subagents.listChildren = async () => [{ id: 'child', activity: 'running' }, { id: 'outside', activity: 'running' }]
   const full = await f.call('redteam_agent_slot', { action: 'acquire', key: 'waiting' })
   assert.equal(full.used, 3)
@@ -232,7 +239,7 @@ test('slot metadata updates after lifecycle events, and release does not invent 
   const released = await f.call('redteam_agent_slot', { action: 'release', key: 'task' })
   assert.equal(released.used, 3)
   assert.equal(released.free, 0)
-  f.listeners.get('subagent/end')({ id: 'child', runId: 'run' })
+  f.listeners.get('subagent/end')({ id: 'child', runId: 'run', parentSessionId: f.exec.agent.session.id })
   const after = await f.call('redteam_agent_slot', { action: 'status' })
   assert.deepEqual(after.reservations.map(row => row.key), ['waiting'])
 })
@@ -248,7 +255,7 @@ test('degraded-registry admission is explicitly unverified, not reported as know
   assert.equal(result.free_upper_bound, 2)
 })
 
-test('query wrappers forward requested paging unchanged and return store-applied metadata', async t => {
+test('query wrappers preserve offset and report the existing bounded page contract', async t => {
   const calls = []
   const page = { total: 6000, returned: 0, limit: 1000, offset: 2000, hasMore: true, nextOffset: 3000, items: [] }
   const f = await fixture(t, {
@@ -256,18 +263,19 @@ test('query wrappers forward requested paging unchanged and return store-applied
     listVulns: (id, args) => { calls.push({ id, args }); if (args.limit < 0) throw new Error('invalid limit'); return page },
     vulnStats: () => ({ total: 6000 }),
   })
-  assert.equal(f.definitions.size, 57)
+  const reviewed = JSON.parse(readFileSync(new URL('../test/fixtures/tool-surface.json', import.meta.url), 'utf8'))
+  assert.deepEqual([...f.definitions.keys()].sort(), reviewed)
   for (const name of ['redteam_asset_query', 'redteam_vuln_query']) {
     assert.equal(f.definitions.get(name).parameters.offset.type, 'number')
     const result = await f.call(name, { engagement: 'a', limit: 4000, offset: 2000 })
     assert.equal(calls.at(-1).id, 'a')
-    assert.equal(calls.at(-1).args.limit, 4000)
+    assert.equal(calls.at(-1).args.limit, 200)
     assert.equal(calls.at(-1).args.offset, 2000)
     assert.equal(result.returned, 0)
-    assert.equal(result.hasMore, true)
+    assert.equal(result.hasMore, false)
     assert.equal(result.offset, 2000)
-    assert.equal(result.limit, name === 'redteam_asset_query' ? 2000 : 1000)
-    assert.equal(result.nextOffset, name === 'redteam_asset_query' ? 4000 : 3000)
+    assert.equal(result.limit, 200)
+    assert.equal(result.nextOffset, null)
   }
   await f.call('redteam_asset_query', { engagement: 'b' })
   assert.equal(calls.at(-1).args.limit, 50)
