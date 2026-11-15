@@ -111,7 +111,7 @@ var asarChanged = fileSize(asar) !== asarBeforeSize || fileStamp(asar) !== asarB
 var changed = exeChanged || asarChanged;
 var afterVersion = fileVersion(exe);
 var versionMatch = !targetVersion || afterVersion.toLowerCase() === targetVersion;
-var runtimeFiles = ['versions.json', 'bin\\node.cmd', 'primary-runtime\\dependencies\\node\\bin\\node.exe', 'primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs'];
+var runtimeFiles = ['versions.json', 'bin\\node.cmd', 'cli\\bin\\dsh.cmd', 'primary-runtime\\dependencies\\node\\bin\\node.exe', 'primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs', 'primary-runtime\\dependencies\\pnpm\\dist\\pnpm.mjs'];
 var runtimeMissing = [];
 for (var r = 0; r < runtimeFiles.length; r++) if (fileSize(resources + '\\runtime\\' + runtimeFiles[r]) <= 0) runtimeMissing.push(runtimeFiles[r]);
 var runtimeReady = runtimeMissing.length === 0;
@@ -123,6 +123,12 @@ log('version before=' + beforeVersion + ' target=' + (targetVersion || 'unavaila
 // when it failed to swap directories. A retry could corrupt the pending update.
 if (!ok) {
   log('abort: installer exit=' + code + ' changed=' + changed);
+  // Once the executable version has changed, restoring an older unpacked app
+  // would mix versions. Preserve both layouts for recovery and do not relaunch.
+  if (beforeVersion && afterVersion && beforeVersion.toLowerCase() !== afterVersion.toLowerCase()) {
+    log('manual-recovery-required: executable version changed; preserved current archive and previous app');
+    WScript.Quit(1);
+  }
   // Do not recursively delete a directory recreated by another process.
   if (movedApp && prev && fso.FolderExists(prev)) {
     if (fso.FolderExists(appDir)) {
