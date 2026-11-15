@@ -1,3 +1,20 @@
+# 1.1.92-wxcvm.7-beta.11
+
+## 中文
+
+- 整合 #245–#249、#251：修复中心、启动配置与同版本缓存恢复；更新器统一检查六项运行时文件，失败后保留旧应用与新归档，避免混合版本。只读 ASAR 布局诊断不移动宿主文件。
+- 运行观测保留真实流式终态，区分实时与持久事件，迟到事件按已提交序号对账；Agent 替换和回合取消不伪造结束状态或耗时。
+- 区分明确 Provider 终态、HTTP 客户端错误和临时传输故障；保留既有网络重试预算，取消和新回合使旧回调失效。
+- #250：原生 /bind（冲突时 /purge-bind）可搜索已有靶标、绑定/更换/解绑；显式绑定随重启保留，根会话与子会话继承；不改全局当前靶标。旧宿主保留文本命令。弹窗内创建及顶部靶标标识仍未实现。
+- #244：更新判断按预发布标识的数字顺序比较，修复 beta.9→beta.10/11 的误判。旧客户端需通过显式安装过渡，旧版的运行时代码不会被远端发布自动修正。
+- 验收边界：各原始 PR 的 CI 已通过，联合发布候选需自身 CI 与 Release 归档核验。真实 Windows 桌面首次绑定、升级、网络断开/重连与 socket 释放仍待实机验证。仅预览通道，不提升 master，不修改生产安装。
+
+## English
+
+Integrates repair and recovery, stream observation reconciliation, provider error attribution, cancellation lifecycle fixes, native session binding, and numeric prerelease update comparison. Beta only; real desktop binding, installation and network fault injection remain pending. No stable promotion.
+
+---
+
 # 1.1.92-wxcvm.7-beta.10
 
 ## 中文
