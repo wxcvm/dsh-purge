@@ -41,3 +41,20 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     assert.match(src, /op: 'proxyConfigTest'/)
   })
 }
+
+for (const path of ['lib/redteam/client.js', 'client.js']) {
+  test(path + ': configuration draft survives refresh and merges only edited keys', () => {
+    const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    const start = src.indexOf('    function envDraftDelta(')
+    const end = src.indexOf('    function EnvTab(props)', start)
+    const { envDraftDelta, envDraftMerge } = new Function(src.slice(start, end) + '; return {envDraftDelta, envDraftMerge}')()
+    const before = { tools: { nmap: '/old', httpx: '' }, env: { FOFA_KEY: 'old', ARTEX_HOME: '/old' }, notes: '' }
+    const local = { ...before, tools: { ...before.tools, nmap: '/new' }, notes: 'unsaved' }
+    const remote = { ...before, env: { ...before.env, ARTEX_HOME: '/other' }, tools: { ...before.tools, httpx: '/found' } }
+    const delta = envDraftDelta(before, local)
+    assert.deepEqual(delta, { tools: { nmap: '/new' }, notes: 'unsaved' })
+    assert.deepEqual(envDraftMerge(remote, delta), { ...remote, tools: { nmap: '/new', httpx: '/found' }, notes: 'unsaved' })
+    assert.match(src, /applyDraftFrom\(r, submitted\)/)
+    assert.match(src, /key === 'tools' \|\| key === 'env' \? delta\[key\] : after\[key\]/)
+  })
+}

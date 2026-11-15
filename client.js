@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "63649c0b64112709";
+		const CLIENT_BUILD_ID = "6a9620f60666d895";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8282,6 +8282,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [detail, setDetail] = React.useState(null)
       const [detailId, setDetailId] = React.useState(null)
       const [sources, setSources] = React.useState([])
+      const [sourceStatus, setSourceStatus] = React.useState({})
       const [chosen, setChosen] = React.useState({ selected: ['local'], preferred: 'local' })
       const [savedSources, setSavedSources] = React.useState(null)
       const [sourceBusy, setSourceBusy] = React.useState(false)
@@ -8396,6 +8397,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!live) return
           if (!r || r.ok !== true || !r.selection) { setSourceMsg((r && r.error) || '读取平台列表失败'); return }
           setSources(Array.isArray(r.intelSources) ? r.intelSources : [])
+          setSourceStatus(r.sourceStatus || {})
           setMaskAssets(!!r.maskAssets)
           setMaskSurvey(!!r.maskSurvey)
           if (revision !== sourceRevision.current) return
@@ -8418,6 +8420,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               throw new Error((r && r.error) || '保存回执不一致，请重试')
             }
             setSavedSources(r.selection)
+            setSourceStatus(r.sourceStatus || {})
             if (revision === sourceRevision.current) setSourceMsg('已保存平台选择；不会自动提交外部查询。')
           } catch (e) {
             if (revision === sourceRevision.current) setSourceMsg('保存失败：' + String((e && e.message) || e))
@@ -8519,7 +8522,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn rt-btn-primary', disabled: sourceBusy || !sources.length,
                 onClick: saveSources }, sourceBusy ? '保存中…' : '保存平台选择')),
             h('div', { style: { fontSize: 11, opacity: 0.8, margin: '5px 0 9px' } },
-              '勾选后自动保存；选择只决定本页展示偏好，不会自动提交外部查询。'),
+              '勾选后自动保存；选择只决定本页展示偏好，不会自动提交外部查询。免费起步优先本地库与 InternetDB；平台 Key 是否配置不代表额度或连接已验证。'),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 } },
               [['免费起步', ['local', 'shodan']], ['国内优先', ['local', 'fofa', 'zoomeye', 'quake', 'hunter']], ['全球参考', ['local', 'shodan', 'censys', 'netlas']]].map(([label, selected]) =>
                 h('button', { key: label, type: 'button', className: 'rt-btn', disabled: !sources.length,
@@ -8553,6 +8556,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     : source.mode === 'scoped-api' ? '单 IP 被动查询 · 已接通' : '官网入口 · API 未接入'),
               h('span', { style: { opacity: 0.75 } }, source.language)),
             h('div', null, source.focus),
+            sourceStatus[source.id] ? h('div', { className: 'rt-foot' },
+              sourceStatus[source.id].label + ' · 额度：' + sourceStatus[source.id].quota) : null,
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
@@ -8831,6 +8836,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             : null) : null))
     }
 
+    // Preserve local edits when refreshing or receiving a save acknowledgement.
+    function envDraftDelta(before, after) {
+      const patch = {}
+      for (const key of Object.keys(after || {})) {
+        const oldValue = before?.[key], value = after[key]
+        if (JSON.stringify(oldValue) === JSON.stringify(value)) continue
+        if (value && oldValue && typeof value === 'object' && typeof oldValue === 'object'
+            && !Array.isArray(value) && !Array.isArray(oldValue)) {
+          patch[key] = envDraftDelta(oldValue, value)
+        } else patch[key] = value
+      }
+      return patch
+    }
+    function envDraftMerge(base, patch) {
+      const next = { ...base }
+      for (const [key, value] of Object.entries(patch || {})) {
+        next[key] = value && typeof value === 'object' && !Array.isArray(value)
+          && next[key] && typeof next[key] === 'object' && !Array.isArray(next[key])
+          ? envDraftMerge(next[key], value) : value
+      }
+      return next
+    }
+
     function EnvTab(props) {
       const refreshKey = props.refreshKey || 0
       const [section, setSection] = React.useState(props.initialSection || 'summary')
@@ -8840,7 +8868,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       ]
       const sectionCard = (id, attrs, ...children) => section === id ? h('div', attrs, ...children) : null
       const [data, setData] = React.useState(null)
-      const [draft, setDraft] = React.useState(null)
+      const [draft, setDraftState] = React.useState(null)
+      const draftRef = React.useRef(null)
+      const savedDraftRef = React.useRef(null)
+      const configBusyRef = React.useRef(false)
+      const setDraft = (update) => {
+        const next = typeof update === 'function' ? update(draftRef.current) : update
+        draftRef.current = next
+        setDraftState(next)
+      }
+      const dirty = !!draft && Object.keys(envDraftDelta(savedDraftRef.current, draft)).length > 0
       const [err, setErr] = React.useState(null)
       const [msg, setMsg] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
@@ -8893,11 +8930,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [adminProbeResult, setAdminProbeResult] = React.useState(null)
       const adminProbeRevision = React.useRef(0)
 
-      const applyDraftFrom = (r) => {
+      const applyDraftFrom = (r, baseline = savedDraftRef.current) => {
         adminProbeRevision.current += 1
         setAdminProbeResult(null)
         const c = (r && r.config) || {}
-        setDraft({
+        const next = {
           platform: c.platform || 'auto',
           toolkitDir: c.toolkitDir || '',
           nucleiTemplatesDir: c.nucleiTemplatesDir || '',
@@ -8910,13 +8947,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           vpsAdminRoute: { target: c.vpsAdminRoute?.target || '', jumps: Array.isArray(c.vpsAdminRoute?.jumps) ? [...c.vpsAdminRoute.jumps] : [] },
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
-        })
+        }
+        const edits = baseline && draftRef.current ? envDraftDelta(baseline, draftRef.current) : {}
+        savedDraftRef.current = next
+        setDraft(envDraftMerge(next, edits))
         if (c.toolkitDir) setFolderPath(c.toolkitDir)
       }
 
       const load = () => {
+        if (configBusyRef.current) return
+        configBusyRef.current = true
         setBusy(true); setMsg(null)
         api({ op: 'platformConfigGet' }).then((r) => {
+          configBusyRef.current = false
           setBusy(false)
           setToolChecks({})
           setCapabilityMatrix(null)
@@ -8925,14 +8968,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setErr((r && r.error) || '读取失败'); return }
           setErr(null); setData(r)
           applyDraftFrom(r)
-        }, (e) => { setBusy(false); setErr(String((e && e.message) || e)) })
+        }, (e) => { configBusyRef.current = false; setBusy(false); setErr(String((e && e.message) || e)) })
       }
       React.useEffect(load, [refreshKey])
 
       const save = () => {
-        if (!draft) return
+        if (!draftRef.current || configBusyRef.current) return
+        configBusyRef.current = true
         setBusy(true); setMsg(null)
-        const config = {
+        const submitted = draftRef.current
+        const toConfig = (draft) => ({
           platform: draft.platform,
           toolkitDir: draft.toolkitDir,
           nucleiTemplatesDir: draft.nucleiTemplatesDir,
@@ -8945,10 +8990,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           vpsAdminRoute: draft.vpsAdminRoute,
           env: draft.env,
           notes: draft.notes,
-          envAdaptConfigured: true,
-          envAdaptSkip: false,
-        }
+        })
+        const before = toConfig(savedDraftRef.current)
+        const after = toConfig(submitted)
+        const delta = envDraftDelta(before, after)
+        // Only tools/env are merged by key in savePlatformConfig. Other fields
+        // (including nested planning/SSH structures) are replaced as a whole.
+        const config = Object.fromEntries(Object.keys(delta).map(key =>
+          [key, key === 'tools' || key === 'env' ? delta[key] : after[key]]))
+        config.envAdaptConfigured = true
+        config.envAdaptSkip = false
         api({ op: 'platformConfigSave', config }).then((r) => {
+          configBusyRef.current = false
           setBusy(false)
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '保存失败' }); return }
           setData(r)
@@ -8957,15 +9010,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setKaliProbeResults({})
           setTaskPlan(null)
           setMsg({ ok: '已保存到 '  + ((r.config && r.config.path) || '$DSH_HOME/redteam/config.json') })
-          applyDraftFrom(r)
-        }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
+          applyDraftFrom(r, submitted)
+        }, (e) => { configBusyRef.current = false; setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
       }
 
       const assignFolder = () => {
         const dir = String(folderPath || (draft && draft.toolkitDir) || '').trim()
         if (!dir) { setMsg({ err: '请先填写工具所在文件夹路径' }); return }
+        if (configBusyRef.current) return
+        configBusyRef.current = true
         setBusy(true); setMsg(null)
         api({ op: 'platformAssignToolkit', dir }).then((r) => {
+          configBusyRef.current = false
           setBusy(false)
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '自动分配失败' }); return }
           setData(r)
@@ -8978,7 +9034,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             ok: '已从文件夹分配 ' + (r.assignedCount || 0) + ' 个工具'
               + (r.nucleiTemplatesDir ? '，并识别 nuclei-templates' : ''),
           })
-        }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
+        }, (e) => { configBusyRef.current = false; setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
       }
 
       const planForTask = () => {
@@ -9297,8 +9353,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             adapt.ready ? ('配置可继续 · ' + (adapt.reason || '')) : '待配置'),
           h('span', { className: 'rt-tag' + (found ? ' rt-tag-live' : ' rt-tag-warn') }, data ? '工具 ' + found + '/' + tools.length : '工具未检测'),
           h('div', { className: 'rt-spacer' }),
+          dirty ? h('span', { className: 'rt-tag rt-tag-warn' }, '未保存修改') : null,
           h('button', { className: 'rt-btn', disabled: busy, onClick: load }, busy ? '读取中…' : '刷新'),
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save }, '保存')),
+          dirty ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+            setDraft(savedDraftRef.current); setMsg({ ok: '已恢复上次保存的配置。' })
+          } }, '撤销修改') : null,
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save }, busy ? '处理中…' : '保存')),
         h('div', { className: 'rt-toolbar', role: 'group', 'aria-label': '环境中心子页面' },
           sections.map(([id, label]) => h('button', {
             key: id, type: 'button', className: 'rt-btn' + (section === id ? ' rt-btn-primary' : ''),
@@ -9601,7 +9661,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   (result.ok ? '成功' : '未通过') + (Number.isFinite(result.latencyMs) ? ' · ' + result.latencyMs + ' ms' : '')
                     + (result.error ? ' · ' + result.error : '')
                     + (result.records ? ' · A ' + result.records.A.count + ' / AAAA ' + result.records.AAAA.count : '')
-                    + (result.statusCode ? ' · HTTP ' + result.statusCode : ''))),
+                    + (result.statusCode ? ' · HTTP ' + result.statusCode : '')),
+                result ? h('div', { className: 'rt-foot' },
+                  id === 'dns' ? (result.ok ? '至少一个地址族解析成功；不代表 HTTPS 可达。' : '核对系统 DNS、VPN/TUN 与 DNS 代理配置；可继续单独检测 HTTPS。')
+                    : id === 'direct' ? (result.ok ? '已收到 HTTPS 响应；HTTP 4xx/5xx 不代表服务健康。' : '核对网络路由、系统代理、TLS 证书与防火墙；若 DNS 正常，重点检查连接路径。')
+                    : (result.ok ? '已保存的插件代理通过连接测试；不代表系统代理或整个代理池可用。' : '检查插件代理是否启用、地址端口和认证，并核对直连列表。')) : null),
               h('button', { className: 'rt-btn', disabled: !!networkChecking, onClick: () => runNetworkCheck(id) }, action))
           })),
 
