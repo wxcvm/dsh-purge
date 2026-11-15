@@ -32,26 +32,23 @@ jobs:
           $sdk = Join-Path $root 'flutter'
           $flutter = Join-Path $sdk 'bin\flutter.bat'
           if (-not (Test-Path -LiteralPath $flutter)) {
-            $manifest = Invoke-RestMethod 'https://storage.googleapis.com/flutter_infra_release/flutter/releases/releases_windows.json'
-            $release = $manifest.releases | Where-Object {
-              $_.version -eq $version -and $_.channel -eq 'stable' -and
-              (-not $_.dart_sdk_arch -or $_.dart_sdk_arch -eq 'x64')
-            } | Select-Object -First 1
-            if (-not $release) { throw "Flutter stable $version x64 not found" }
-            $zip = Join-Path $env:RUNNER_TEMP "flutter-$version-windows.zip"
             $stage = Join-Path $env:RUNNER_TEMP "flclash-flutter-$version-$env:GITHUB_RUN_ID"
             try {
-              Invoke-WebRequest -Uri "$($manifest.base_url)/$($release.archive)" -OutFile $zip
-              New-Item -ItemType Directory -Force -Path $stage | Out-Null
-              tar.exe -xf $zip -C $stage
-              if ($LASTEXITCODE -ne 0) { throw 'Flutter SDK extraction failed' }
-              if (-not (Test-Path (Join-Path $stage 'flutter\bin\flutter.bat'))) { throw 'Flutter SDK missing after extraction' }
+              git clone --depth 1 --branch $version https://github.com/flutter/flutter.git $stage
+              if ($LASTEXITCODE -ne 0) { throw 'Flutter SDK clone failed' }
+              $revision = git -C $stage rev-parse HEAD
+              if ($LASTEXITCODE -ne 0 -or $revision -ne '5fc346839b5d0eef006ed8404392afb4dfae428d') {
+                throw 'Flutter SDK revision does not match the pinned release'
+              }
               New-Item -ItemType Directory -Force -Path $root | Out-Null
-              Move-Item -LiteralPath (Join-Path $stage 'flutter') -Destination $sdk
+              Move-Item -LiteralPath $stage -Destination $sdk
             } finally {
-              Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue
               Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
             }
+          }
+          $revision = git -C $sdk rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $revision -ne '5fc346839b5d0eef006ed8404392afb4dfae428d') {
+            throw 'Cached Flutter SDK revision does not match the pinned release'
           }
           Add-Content -LiteralPath $env:GITHUB_PATH -Value (Join-Path $sdk 'bin')
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "FLUTTER_ROOT=$sdk"
