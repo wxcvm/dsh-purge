@@ -92,3 +92,22 @@ test('stream end without observed finish is not labelled an observed terminal', 
   assert.equal(status({turnOutcome:'aborted',interrupted:true}).label,'已取消')
   assert.equal(status({turnOutcome:'aborted',terminalConflict:true}).key,'attention')
 })
+
+
+test('runtime empty states distinguish loading, failed read and active filters', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url),'utf8');
+  const render=(snapshot,error,session,filter) => {
+    let i=0; const updates=[], nodes=[];
+    const ctx=vm.createContext({useState:v=>{const at=i++;return [[snapshot,error,null,'',session,filter][at] ?? v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})});
+    const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx);
+    function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n&&typeof n==='object'){nodes.push(n);walk(n.children)}}walk(tree);
+    return {body:JSON.stringify(tree),nodes,updates};
+  };
+  assert.match(render(null,'','','all').body,/正在读取运行状态/);
+  assert.match(render(null,'HTTP 503','','all').body,/暂时无法读取运行记录/);
+  assert.match(render({items:[]},'','','all').body,/暂无运行记录/);
+  const filtered=render({items:[]},'','session-1','attention');
+  assert.match(filtered.body,/当前筛选没有匹配记录/);
+  filtered.nodes.find(n=>n.type==='button'&&n.children.includes('清除筛选')).props.onClick();
+  assert.deepEqual(filtered.updates,[[5,'all'],[0,null],[1,''],[4,'']]);
+});

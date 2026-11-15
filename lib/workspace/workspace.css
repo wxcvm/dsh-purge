@@ -197,3 +197,8 @@ html[data-windows-titlebar] .dshp-workspace[data-default-full="1"] .dshp-workspa
   .dshp-clean-workspace .dshp-clean-actions .dshp-btn{flex:1 1 120px}
   .dshp-clean-workspace .dshp-runtime-card dl{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Third pass: actionable empty and loading states, without a new request path. */
+.dshp-runtime-empty strong{display:block;color:var(--dshp-ink);font-size:14px}
+.dshp-runtime-empty p{margin:6px 0 12px;line-height:1.55}
+.dshp-runtime-empty[aria-busy="true"]{border-style:solid}
