@@ -39,6 +39,8 @@ test('storage audit executes only the packaged read-only preview with a fixed ro
       assert.equal(options.windowsHide, true)
       assert.equal(options.timeout, 60000)
       assert.equal(options.maxBuffer, 65536)
+      assert.equal(options.env.PSModulePath, win32.join(win32.dirname(executable), 'Modules'))
+      assert.equal(Object.keys(options.env).filter(key => key.toLowerCase() === 'psmodulepath').length, 1)
       return { stdout: line(counts) }
     },
   })
@@ -78,7 +80,7 @@ test('Windows packaged ACL preview runs against a temporary workspace', { skip: 
   writeFileSync(file, 'unchanged')
   const result = await inspectStorageAcl(dir)
   assert.equal(result.ok, true)
-  assert.equal(result.status, 'complete')
+  assert.equal(result.status, 'complete', JSON.stringify(result.counts))
   assert.equal(result.counts.inspected, 2)
   assert.equal(readFileSync(file, 'utf8'), 'unchanged')
 })
