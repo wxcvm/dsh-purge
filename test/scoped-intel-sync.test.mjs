@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
-import { scopedIntelSyncConfig, syncScopedIntelToArtex, probeScopedIntelPairing } from '../lib/redteam/scoped-intel-sync.js'
+import { scopedIntelSyncConfig, syncScopedIntelToArtex, probeScopedIntelPairing, savedScopedIntelConfig, saveScopedIntelPairing, resolveScopedIntelPairing } from '../lib/redteam/scoped-intel-sync.js'
 
 const token = 'fixture-only-32-character-secret-123'
 const env = { DSH_PURGE_ARTEX_INTEL_TOKEN: token, DSH_PURGE_ARTEX_INTEL_COMPANY_ID: '12' }
@@ -102,4 +102,34 @@ test('pairing probe is read-only, fixed loopback and validates identity without 
   assert.equal((await probeScopedIntelPairing({ env, probe, fetchFn: async () => new Response(JSON.stringify({ service: 'artex', schema_version: 1, paired: true, company_id: 99, scope_count: 2 })) })).status, 'invalid_response')
   const fail = await probeScopedIntelPairing({ env, probe, fetchFn: async () => { throw Error(token) } })
   assert.equal(JSON.stringify(fail).includes(token), false)
+})
+
+test('saved pairing survives reopening and never returns the token; environment override is whole-pair', t => {
+  const store = fixture(t)
+  const local = saveScopedIntelPairing(store, { token, companyId: 12 }, {})
+  assert.equal(local.configured, true)
+  assert.equal(local.source, 'saved')
+  assert.equal(JSON.stringify(local).includes(token), false)
+  assert.equal(savedScopedIntelConfig({ root: store.root, secretVault: store.secretVault }, {}).companyId, 12)
+  assert.equal(resolveScopedIntelPairing(store, {}).env.DSH_PURGE_ARTEX_INTEL_TOKEN, token)
+  const overridden = savedScopedIntelConfig(store, { DSH_PURGE_ARTEX_INTEL_COMPANY_ID: '99' })
+  assert.equal(overridden.configured, false)
+  assert.equal(overridden.source, 'environment')
+  assert.equal(saveScopedIntelPairing(store, { clear: true }, env).ok, false)
+  assert.equal(saveScopedIntelPairing(store, { clear: true }, {}).configured, false)
+})
+
+test('saved pairing reuses existing vault encryption and rejects invalid input without replacement', t => {
+  const store = fixture(t)
+  const encrypted = new RedteamStore(store.root, { secretKey: 'a'.repeat(64) })
+  t.after(() => encrypted.close())
+  const r = saveScopedIntelPairing(encrypted, { token, companyId: 12 }, {})
+  assert.equal(r.encrypted, true)
+  const file = join(store.root, 'artex-intel-pairing.json')
+  const before = readFileSync(file, 'utf8')
+  assert.equal(before.includes(token), false)
+  assert.equal(saveScopedIntelPairing(encrypted, { token: 'short', companyId: 12 }, {}).ok, false)
+  assert.equal(readFileSync(file, 'utf8'), before)
+  assert.equal(resolveScopedIntelPairing(encrypted, {}).env.DSH_PURGE_ARTEX_INTEL_TOKEN, token)
+  assert.throws(() => resolveScopedIntelPairing(store, {}), /无法读取/)
 })
