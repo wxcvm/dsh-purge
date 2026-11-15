@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadPlatformConfig, savePlatformConfig, normalizeScanPreferences } from '../lib/redteam/platform-config.js'
+import { loadPlatformConfig, savePlatformConfig, normalizeScanPreferences, privacyDisplayStatus } from '../lib/redteam/platform-config.js'
 
 test('scan preferences persist independently without replacing existing tool paths', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'redteam-scan-options-'))
@@ -71,4 +71,13 @@ test('privacy change history is bounded, records actual changes and excludes unr
   assert.ok(saved.privacyChanges.every(item => item.keys.length === 1 && item.keys[0] === 'scan.timeoutSeconds'))
   assert.deepEqual(loadPlatformConfig(dir).privacyChanges, saved.privacyChanges)
   assert.equal(JSON.stringify(saved.privacyChanges).includes('fixture-secret'), false)
+})
+
+
+test('shared display status exposes effective flags only', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'redteam-shared-privacy-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  assert.deepEqual(privacyDisplayStatus(dir), { ok: true, mode: 'manual', maskHistory: false, maskAssetResults: false })
+  savePlatformConfig({ env: { FOFA_KEY: 'fixture-secret' }, privacyManagement: { mode: 'automatic', locked: ['maskHistory'] } }, dir)
+  assert.deepEqual(privacyDisplayStatus(dir), { ok: true, mode: 'automatic', maskHistory: false, maskAssetResults: true })
 })

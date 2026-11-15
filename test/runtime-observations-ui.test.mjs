@@ -169,3 +169,19 @@ test('runtime cards show separate live and durable evidence and count a request 
   assert.match(output,/0 \/ 2/)
   assert.match(output,/实收分片 1 \/ 序号覆盖 3/)
 })
+
+
+test('runtime display masks identifiers and report when shared privacy is enabled', () => {
+  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  let i = 0;
+  const ctx = vm.createContext({ __dshPurgeDrill: { api() {} },
+    useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] }
+      : at === 2 ? { secret: 'private-report' } : at === 7 ? { maskHistory: true } : v, () => {}]; },
+    useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) });
+  const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx);
+  const cards = tree.children.find(node => node?.props?.className === 'dshp-runtime-grid');
+  assert.match(JSON.stringify(cards.children), /会话 \/ 请求标识已隐藏/);
+  assert.doesNotMatch(JSON.stringify(tree.children.filter(n => n !== cards)), /private-report/);
+  assert.match(JSON.stringify(tree), /报告已读取，详细内容已隐藏/);
+  assert.match(JSON.stringify(cards), /local \/ model/);
+})

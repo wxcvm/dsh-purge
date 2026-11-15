@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "15f407c0abc7a798";
+		const CLIENT_BUILD_ID = "40c02ec272817ce4";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4021,6 +4021,22 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const [filter, setFilter] = useState('all');
   const [route, setRoute] = useState('');
   const root = useRef(null);
+  const privacyApi = typeof __dshPurgeDrill !== 'undefined' ? __dshPurgeDrill.api : null;
+  const [privacyDisplay, setPrivacyDisplay] = useState(privacyApi ? null : { maskHistory: false });
+  const [privacyFailed, setPrivacyFailed] = useState(false);
+  const [revealPrivate, setRevealPrivate] = useState(false);
+  useEffect(() => {
+    if (!active || !privacyApi) return;
+    let live = true;
+    setPrivacyDisplay(null); setPrivacyFailed(false); setRevealPrivate(false);
+    privacyApi({ op: 'privacyDisplayStatus' }).then(result => {
+      if (!live) return;
+      if (result?.ok === true) setPrivacyDisplay(result);
+      else setPrivacyFailed(true);
+    }).catch(() => { if (live) setPrivacyFailed(true); });
+    return () => { live = false; };
+  }, [active, privacyApi]);
+  const maskRuntime = !revealPrivate && (!privacyDisplay || privacyDisplay.maskHistory);
   useEffect(() => {
     if (!active) return;
     let stopped = false, timer, controller;
@@ -4082,10 +4098,15 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('div', { className: 'dshp-runtime-heading' },
       h('div', null, h('h3', null, '运行诊断 · 只读'), h('p', null, '观察近期请求、终态和异常，不保存提示、正文或工具参数。流结束不等于任务完成。')),
       onNavigate ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => onNavigate('diagnostics') }, '打开故障诊断') : null),
+    privacyApi ? h('div', { className: 'dshp-runtime-meta' },
+      '智能隐私中心 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
+        : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置'),
+      (!privacyDisplay || privacyDisplay.maskHistory) ? h('button', { type: 'button', className: 'dshp-runtime-action',
+        onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
     h('div', { className: 'dshp-runtime-metrics' },
       metric('近期记录', counts.all), metric('等待后续事件', counts.running), metric('需要关注', counts.attention), metric('已结束 / 取消', counts.ended)),
     h('div', { className: 'dshp-runtime-toolbar' },
-      h('label', null, '按会话筛选 ', h('input', { value: session, maxLength: 160, onChange: e => { setSnapshot(null); setError(''); if (route) setRoute(''); setSession(e.target.value); }, placeholder: '留空显示近期会话' })),
+      h('label', null, '按会话筛选 ', h('input', { type: maskRuntime ? 'password' : 'text', value: session, maxLength: 160, onChange: e => { setSnapshot(null); setError(''); if (route) setRoute(''); setSession(e.target.value); }, placeholder: '留空显示近期会话' })),
       h('label', null, '按 Provider / 模型筛选 ', h('select', { value: route, onChange: e => setRoute(e.target.value), 'aria-label': 'Provider / 模型筛选' },
         h('option', { value: '' }, '全部路由'),
         route && !routes.has(route) ? h('option', { value: route }, '所选路由（当前无记录）') : null,
@@ -4093,7 +4114,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
       h('div', { className: 'dshp-runtime-filters', 'aria-label': '请求状态筛选' },
         [['all', '全部'], ['running', '等待中'], ['attention', '异常'], ['ended', '已结束']].map(([key, name]) =>
           h('button', { key, type: 'button', 'aria-pressed': filter === key, onClick: () => setFilter(key) }, name + ' ' + (snapshot ? counts[key] : '—'))))),
-    error ? h('p', { role: 'alert' }, error + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
+    error ? h('p', { role: 'alert' }, (maskRuntime ? '运行观测读取失败，详情已隐藏' : error) + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
     h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
     h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
     snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
@@ -4109,7 +4130,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
       const status = runtimeRowStatus(r);
       return h('article', { key: r.generation + ':' + r.attemptId, className: 'dshp-runtime-card', 'data-status': status.key },
         h('header', null, h('strong', null, value(r.provider) + ' / ' + value(r.model)), h('span', { className: 'dshp-runtime-status' }, status.label)),
-        h('p', { className: 'dshp-runtime-meta' }, value(r.sessionId) + ' / ' + value(r.attemptId)),
+        h('p', { className: 'dshp-runtime-meta' }, maskRuntime ? '会话 / 请求标识已隐藏' : value(r.sessionId) + ' / ' + value(r.attemptId)),
         h('dl', null,
           detail('流 / 结算', (r.streamEnded ? '流已结束' : '流结束未观测') + ' / ' + value(r.settlement)),
           detail('首文本 / 总耗时', value(r.firstTextMs) + ' / ' + value(r.elapsedMs) + ' ms'),
@@ -4129,8 +4150,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('h3', null, '任务质量报告'),
     h('p', null, '导入 evaluate-task-quality 的输出 JSON；仅在本页面读取，不上传。采集来源由报告作者声明。'),
     h('input', { type: 'file', accept: '.json,application/json', 'aria-label': '导入任务质量报告', onChange: importReport }),
-    reportError ? h('p', { role: 'alert', className: 'dshp-runtime-warning' }, '导入失败：' + reportError) : null,
-    report ? h('div', null, h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setReport(null); setReportError(''); } }, '清除报告'), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, JSON.stringify(report, null, 2))) : null);
+    reportError ? h('p', { role: 'alert', className: 'dshp-runtime-warning' }, maskRuntime ? '导入失败，详情已隐藏。' : '导入失败：' + reportError) : null,
+    report ? h('div', null, h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setReport(null); setReportError(''); } }, '清除报告'), maskRuntime ? h('p', null, '报告已读取，详细内容已隐藏。') : h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, JSON.stringify(report, null, 2))) : null);
 }
 /* __DSH_PURGE_RUNTIME_END__ */
 
@@ -8978,9 +8999,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('captureDiagnostics', '保留详细错误诊断',
               '关闭后不保存扫描器 stderr，错误只记录退出状态；原始发现和必要执行证据仍保留。'),
             checkField('maskHistory', '在扫描记录页隐藏目标和本地路径',
-              '仅影响页面展示，不修改已有记录、扫描器真实目标或原始证据文件。'),
+              '同时保护清洗台运行诊断的会话标识及导入报告展示；不修改记录或原始证据。'),
             checkField('maskAssetResults', '在测绘中心隐藏资产 IP、域名和详细记录',
-              '适合共享屏幕时使用；只影响测绘中心展示，不会编辑数据库或发送额外请求。'),
+              '同时保护 ARTEX 联动页的工具路径及报告详情；只影响展示，不编辑数据库。'),
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
@@ -12477,6 +12498,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     function ArtexTab(props) {
+      const [displayPrivacy, setDisplayPrivacy] = React.useState(null)
+      const [showPrivateDetails, setShowPrivateDetails] = React.useState(false)
+      const [privacyReadFailed, setPrivacyReadFailed] = React.useState(false)
+      React.useEffect(() => {
+        let live = true
+        api({ op: 'privacyDisplayStatus' }).then(result => {
+          if (!live) return
+          if (result?.ok === true) setDisplayPrivacy(result)
+          else setPrivacyReadFailed(true)
+        }).catch(() => { if (live) setPrivacyReadFailed(true) })
+        return () => { live = false }
+      }, [])
+      const maskArtex = !showPrivateDetails && (!displayPrivacy || displayPrivacy.maskAssetResults)
       const [state, setState] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState('')
@@ -12708,6 +12742,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       ].join('\n') : ''
       return h('div', { className: 'rt-pane' },
         h('div', { className: 'rt-card' },
+          h('h4', null, '智能隐私中心 · ARTEX 联动'),
+          h('p', { className: 'rt-foot' }, displayPrivacy
+            ? '已保存的测绘展示保护：' + (displayPrivacy.maskAssetResults ? '已开启' : '未开启')
+            : privacyReadFailed ? '无法读取保存设置，暂时隐藏路径及报告详情。' : '正在读取保存设置…'),
+          h('p', { className: 'rt-foot' }, '仅影响本页工具路径及报告展示；不修改 ARTEX 配置、报告或数据库。'),
+          h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开智能隐私中心'),
+          (!displayPrivacy || displayPrivacy.maskAssetResults) ? h('button', { className: 'rt-btn', type: 'button',
+            onClick: () => setShowPrivateDetails(v => !v) }, showPrivateDetails ? '重新隐藏本页详情' : '临时显示本页详情') : null),
+        h('div', { className: 'rt-card' },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } },
             h('h4', { style: { margin: 0 } }, 'ARTEX 本机联动'),
             h('button', { type: 'button', className: 'rt-btn', disabled: busy, onClick: refresh },
@@ -12716,13 +12759,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               href: 'http://127.0.0.1:8787/', target: '_blank', rel: 'noopener noreferrer',
               className: 'rt-btn',
             }, '打开 ARTEX') : null),
-          error ? h('p', { className: 'rt-err', role: 'alert' }, error) : null,
+          error ? h('p', { className: 'rt-err', role: 'alert' }, maskArtex ? 'ARTEX 状态读取失败，详情已隐藏。' : error) : null,
           state ? h('div', null,
             h('p', { className: 'rt-hint', role: 'status' },
               (titles[state.state] || (state.online ? titles.detected : 'ARTEX 状态未知'))
               + (state.version ? ' · ' + state.version : '')
               + (state.httpStatus ? ' · HTTP ' + state.httpStatus : '')),
-            state.note ? h('p', { className: 'rt-foot' }, state.note) : null,
+            state.note && !maskArtex ? h('p', { className: 'rt-foot' }, state.note) : null,
             h('p', { className: 'rt-foot' },
               '已发现 ' + tools.length + ' 个本机工具文件，其中 DSH 当前采用 ' + reused + ' 个路径；找到文件不代表可执行已验证。'),
             tools.length ? h('div', { className: 'rt-card' },
@@ -12730,14 +12773,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               tools.map((tool) => h('div', { key: tool.id, className: 'rt-kv' },
                 h('b', null, tool.id),
                 h('span', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
-                  (tool.reused ? 'DSH 已采用 · ' : '未被 DSH 采用 · ') + tool.path)))
+                  (tool.reused ? 'DSH 已采用 · ' : '未被 DSH 采用 · ') + (maskArtex ? '路径已隐藏' : tool.path))))
             ) : h('p', { className: 'rt-foot' }, '未找到可复用的 ARTEX 本机工具文件。'),
-            Array.isArray(state.toolRoots) && state.toolRoots.length
+            !maskArtex && Array.isArray(state.toolRoots) && state.toolRoots.length
               ? h('details', null,
                   h('summary', null, '已发现的 ARTEX 工具目录'),
                   state.toolRoots.map((dir) => h('div', { className: 'rt-mono', key: dir }, dir)))
               : null,
-            state.skillDir ? h('div', { className: 'rt-kv' },
+            !maskArtex && state.skillDir ? h('div', { className: 'rt-kv' },
               h('b', null, 'ARTEX Skill 目录（只读）'), h('span', null, state.skillDir)) : null,
           ) : h('p', { className: 'rt-foot' }, busy ? '正在查询 ARTEX…' : '尚未读取 ARTEX 状态'),
           h('p', { className: 'rt-foot' },
@@ -12794,8 +12837,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           }),
           reportBusy ? h('p', { className: 'rt-hint' }, '正在解析报告…') : null,
           reportError ? h('p', { className: 'rt-err', role: 'alert' },
-            reportError + (report ? '（当前报告已保留）' : '')) : null,
-          report ? h('div', null,
+            (maskArtex ? '报告读取失败，详情已隐藏。' : reportError) + (report ? '（当前报告已保留）' : '')) : null,
+          report && maskArtex ? h('p', { className: 'rt-foot' }, '报告已读取 · ' + report.unique_findings + ' 条记录。详情已隐藏，临时显示后可查看、核查和导出。') : null,
+          report && !maskArtex ? h('div', null,
             h('p', { className: 'rt-hint' },
               'ARTEX 记录 ' + report.unique_findings + ' 条 · 去重 ' + report.duplicates_skipped
               + ' 条 · 展示 ' + report.items.length + ' 条'
