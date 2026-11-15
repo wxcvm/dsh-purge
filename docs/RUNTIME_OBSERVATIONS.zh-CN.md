@@ -66,4 +66,15 @@ preflight 列出剩余 CLI 运行次数，不调用模型。六个冒烟样本�
 页面逻辑有 VM 回归测试；新页面实际图形界面、生产部署和在线安装仍未验收。
 
 
-master 版本沿用原清洗台导航，导入报告需由已有的任务质量采集流程生成；本功能不启动模型、不修改模型输出、不重试请求。实际 Provider 和 GUI 兼容性另行验证。
+master 版本沿用原清洗台导航，导入报告可由下方离线评分命令生成；本功能不启动模型、不修改模型输出、不重试请求。实际 Provider 和 GUI 兼容性另行验证。
+
+## 离线任务质量评分
+
+```sh
+node scripts/evaluate-task-quality.mjs --cases
+node scripts/evaluate-task-quality.mjs --self-test
+node scripts/evaluate-task-quality.mjs --raw capture.json > report.json
+node scripts/evaluate-task-quality.mjs --matrix matrix.json > report.json
+```
+
+`--cases` 列出十项普通 JSON 任务。`--raw` 对已有 baseline/candidate 样本评分；`--matrix` 对已有 host/current/candidate 三组同条件样本评分。两种模式均只读取本地 JSON 并输出报告，不调用模型，不补造缺失指标。采集来源与环境由输入声明，不能代替真实验收。清洗台可直接导入 report.json。
