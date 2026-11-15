@@ -80,6 +80,9 @@ test('privacy center automatically reads the local network snapshot and distingu
     assert.match(card, /if \(!live \|\| inFlight \|\| document\.hidden\) return/)
     assert.match(card, /setTimeout\(\(\) => \{ timer = null; read\(\) \}, 30000\)/)
     assert.match(card, /if \(timer !== null\) clearTimeout\(timer\)/)
+    assert.match(card, /!document\.hidden && \(watch \|\| !lastSnapshot\.current\)/)
+    assert.match(src, /props\.visible !== false \? h\(NetworkPrivacyCard\) : null/)
+    assert.match(src, /visible: full \|\| embedded \|\| st\.open/)
     assert.match(src, /保护状态读取失败；未检查的项目不代表安全/)
     assert.match(src, /智能诊断 · 本机状态/)
   }
