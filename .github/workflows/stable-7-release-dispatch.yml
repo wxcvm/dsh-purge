@@ -1,0 +1,37 @@
+name: One-time stable .7 release dispatch
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.repository == 'wxcvm/dsh-purge' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'robin/release-dispatch-7-20261115'
+    runs-on: [self-hosted, Linux, X64, purge-ci]
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch existing Release workflow for verified stable revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: wxcvm/dsh-purge
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="a8b6b62f672e09ed33b95c4c72e7c085d033a096"
+          actual="$(gh api repos/$GH_REPO/git/ref/heads/master --jq '.object.sha')"
+          test "$actual" = "$expected"
+          gh workflow run release.yml --repo "$GH_REPO" --ref master -f dry_run=true
+          for i in {1..12}; do
+            run="$(gh run list --repo "$GH_REPO" --workflow release.yml --branch master --event workflow_dispatch --limit 10 --json databaseId,headSha,url --jq '.[] | select(.headSha == "'"$expected"'") | .url' | head -n 1)"
+            if [ -n "$run" ]; then
+              echo "Release run: $run"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Dispatch accepted; run not yet listed."
