@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "523e5d83908d77df";
+		const CLIENT_BUILD_ID = "c913452449e95c72";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2352,6 +2352,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const defaultOverrideRef = useRef("");
 			const promptSeededRef = useRef(false);
 			const promptDirtyRef = useRef(false);
+			const [savedOverride, setSavedOverride] = useState(null);
+			const overrideReadEpoch = useRef(0);
 			const promptAreaRef = useRef(null);
 			overrideRef.current = override;
 			defaultOverrideRef.current = defaultOverride;
@@ -2547,15 +2549,18 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						syncPicks(d);
 					})
 					.catch(() => {});
+				const readEpoch = ++overrideReadEpoch.current;
 				apiJson("/dsh-purge/override")
 					.then((d) => {
+						if (readEpoch !== overrideReadEpoch.current) return;
 						if (d && d.ok) {
 							const packed = typeof d.defaultContent === "string" ? d.defaultContent : "";
 							const shown = typeof d.content === "string" ? d.content : packed;
 							if (packed) setDefaultOverride(packed);
+							setSavedOverride(shown);
 							if (!promptSeededRef.current || !promptDirtyRef.current) {
 								promptSeededRef.current = true;
-								setOverride(shown || packed);
+								setOverride(shown);
 							}
 							setOverrideLoaded(true);
 						}
@@ -2626,6 +2631,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						},
 					}));
 					const applyContent = action === "apply" ? readPromptBox() : "";
+					if (action === "apply") overrideReadEpoch.current++;
 					fetch("/dsh-purge/" + action, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
@@ -2657,6 +2663,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								if (typeof d.defaultContent === "string") setDefaultOverride(d.defaultContent);
 								if (typeof d.override_content === "string") {
 									setOverride(d.override_content);
+									setSavedOverride(d.override_content);
+									promptDirtyRef.current = false;
 									setOverrideLoaded(true);
 								}
 							}
@@ -2741,6 +2749,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					setAskRestart(false);
 					setNotice({ kind: "idle", text: "" });
 					const content = readPromptBox();
+					overrideReadEpoch.current++;
 					fetch("/dsh-purge/override", {
 						method: "POST",
 						headers: { "content-type": "application/json" },
@@ -2757,11 +2766,13 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								setNotice({ kind: "error", text: tr("err.save", { error: (d && d.error) || "bad response" }) });
 								return;
 							}
-							if (typeof d.content === "string") {
-								overrideRef.current = d.content;
-								setOverride(d.content);
+							const saved = typeof d.content === "string" ? d.content : content;
+							setSavedOverride(saved);
+							if (readPromptBox() === content) {
+								overrideRef.current = saved;
+								setOverride(saved);
+								promptDirtyRef.current = false;
 							}
-							promptDirtyRef.current = false;
 							setNotice({ kind: "ok", text: t("saved.override") });
 						})
 						.catch((e) => {
@@ -2784,10 +2795,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 			const restoreOverride = useCallback(() => {
 				if (!defaultOverride) return;
+				if (promptDirtyRef.current && !window.confirm("当前提示词有未保存修改，确定恢复默认内容吗？")) return;
 				const tr = t;
 				const ticket = ++actionTicket.current;
 				setPatchBusy(true);
 				setNotice({ kind: "idle", text: "" });
+				overrideReadEpoch.current++;
 				apiJson("/dsh-purge/override", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
@@ -2802,6 +2815,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						const saved = typeof d.content === "string" ? d.content : defaultOverride;
 						overrideRef.current = saved;
 						setOverride(saved);
+						setSavedOverride(saved);
 						promptDirtyRef.current = false;
 						setNotice({ kind: "ok", text: tr("saved.restoreInject") });
 					})
@@ -3101,12 +3115,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h(Btn, { tiny: true, disabled: patchBusy || !overrideLoaded || !defaultOverride, onClick: restoreOverride }, t("btn.restoreInject")),
 					),
 				),
+				h("p", { className: "dshp-block-hint", role: "status" }, !overrideLoaded ? "正在读取提示词配置…" : savedOverride !== override ? "有未保存修改" : "编辑内容与已读取的磁盘配置一致"),
+				h("p", { className: "dshp-block-hint" }, "保存配置不等于宿主补丁已应用；补丁与实际运行版本请在状态总览、补丁管理中核对。"),
 				h("textarea", {
 					className: "dshp-area",
 					ref: promptAreaRef,
 					value: override,
+					disabled: patchBusy || !overrideLoaded,
 					onChange: (e) => {
-						promptDirtyRef.current = true;
+						promptDirtyRef.current = savedOverride !== e.target.value;
 						overrideRef.current = e.target.value;
 						setOverride(e.target.value);
 					},
@@ -3146,6 +3163,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [notice, setNotice] = useState({ kind: "idle", text: "" });
 			const [statusLoading, setStatusLoading] = useState(true);
 			const [statusError, setStatusError] = useState("");
+			const [savedDraft, setSavedDraft] = useState(null);
+			const dirty = Boolean(editId && savedDraft && (editName !== savedDraft.name || editTarget !== savedDraft.target || content !== savedDraft.content));
+			const confirmDiscard = () => !dirty || window.confirm("当前规则有未保存修改，确定放弃这些修改吗？");
 
 			const loadStatus = useCallback(async () => {
 				const tr = tRef.current;
@@ -3194,7 +3214,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			}, [loadStatus, t]);
 
 			const openRule = useCallback((id) => {
-				if (busy || statusLoading) return;
+				if (busy || statusLoading || id === editId || !confirmDiscard()) return;
 				setBusy(true);
 				rulesApi("read", { id: id })
 					.then((d) => {
@@ -3202,18 +3222,21 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							setEditId(id);
 							setEditName(d.name || id);
 							setEditTarget(d.target || "AGENTS.md");
-							setContent(typeof d.content === "string" ? d.content : "");
+							const loaded = typeof d.content === "string" ? d.content : "";
+							setContent(loaded);
+							setSavedDraft({ name: d.name || id, target: d.target || "AGENTS.md", content: loaded });
 						} else setNotice({ kind: "error", text: t("err.read", { error: d.error || "" }) });
 					})
 					.catch((e) => setNotice({ kind: "error", text: t("err.read", { error: e.message }) }))
 					.finally(() => setBusy(false));
-			}, [t, busy, statusLoading]);
+			}, [t, busy, statusLoading, editId, dirty]);
 
 			const clearEditor = () => {
 				setEditId(null);
 				setEditName("");
 				setEditTarget("AGENTS.md");
 				setContent("");
+				setSavedDraft(null);
 			};
 
 			let list;
@@ -3257,6 +3280,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								onClick: (e) => {
 									e.stopPropagation();
 									if (!window.confirm(t("confirm.delete", { id: r.id }))) return;
+									if (editId === r.id && !confirmDiscard()) return;
 									doPost("delete", { id: r.id }, () => { if (editId === r.id) clearEditor(); });
 								},
 							}, t("delete")),
@@ -3281,8 +3305,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							disabled: busy || statusLoading,
 							onClick: () => {
 								if (!window.confirm(t("rules.reset.confirm"))) return;
-								clearEditor();
-								doPost("reset", {});
+								if (!confirmDiscard()) return;
+								doPost("reset", {}, clearEditor);
 							},
 						}, t("rules.reset")),
 					),
@@ -3359,6 +3383,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 									onClick: () => {
 										const id = newId.trim();
 										if (!id) { setNotice({ kind: "error", text: t("need.id") }); return; }
+										if (!confirmDiscard()) return;
 										const name = newName.trim() || id;
 										const target = newTarget;
 										doPost("save", { id, content: "", name, target }, () => {
@@ -3366,6 +3391,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 											setEditName(name);
 											setEditTarget(target);
 											setContent("");
+											setSavedDraft({ name, target, content: "" });
 											setNewId(""); setNewName(""); setNewTarget("AGENTS.md");
 										});
 									},
@@ -3375,6 +3401,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					),
 					h("div", { className: "dshp-editor" },
 						editId ? [
+							h("p", { key: "draft-status", className: "dshp-block-hint", role: "status" }, dirty ? "有未保存修改 · 切换规则前请保存" : "编辑内容与最近一次读取或保存一致"),
 							h("p", { key: "saved-status", className: "dshp-block-hint", role: "status" }, !st || statusError ? "规则状态未确认" : st.active !== editId ? "此规则未设为当前规则" : st.agents_synced === true ? "当前规则 · 目标文件已同步" : "当前规则 · 目标文件尚未确认同步"),
 							h("div", { key: "meta", className: "dshp-row" },
 								h("input", {
@@ -3396,7 +3423,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								h(Btn, {
 									kind: "primary",
 									disabled: busy || statusLoading,
-									onClick: () => doPost("save", { id: editId, content, name: editName, target: editTarget }),
+									onClick: () => {
+										const draft = { content, name: editName, target: editTarget };
+										doPost("save", { id: editId, ...draft }, () => setSavedDraft(draft));
+									},
 								}, t("btn.saveRule")),
 								noticeNode(notice),
 							),
