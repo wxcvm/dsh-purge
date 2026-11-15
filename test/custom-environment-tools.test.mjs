@@ -76,3 +76,30 @@ test('bulk tool discovery preserves precedence and refreshes directory snapshots
   rmSync(preferred)
   assert.equal(find().path, fallback)
 })
+
+test('configured directories are not reported as tool files, but remain saved for correction', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-tool-path-type-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const dir = join(root, 'not-a-tool')
+  mkdirSync(dir)
+  savePlatformConfig({
+    tools: { nmap: dir },
+    customTools: [{ name: 'Directory', path: dir }],
+  }, root)
+  for (const id of ['nmap', 'custom:0']) {
+    const tool = resolveTool(id, { root })
+    assert.equal(tool.path, null)
+    assert.equal(tool.source, 'missing')
+    assert.equal(tool.configured, dir)
+  }
+  const summary = platformSummary(root)
+  assert.equal(summary.tools.items.find(tool => tool.id === 'nmap').path, null)
+  assert.equal(summary.tools.items.find(tool => tool.id === 'custom:0').path, null)
+  assert.equal(loadPlatformConfig(root).tools.nmap, dir)
+  assert.equal(loadPlatformConfig(root).customTools[0].path, dir)
+  const file = join(dir, 'tool.exe')
+  writeFileSync(file, 'fixture')
+  savePlatformConfig({ tools: { nmap: file }, customTools: [{ name: 'Tool', path: file }] }, root)
+  assert.equal(resolveTool('nmap', { root }).path, file)
+  assert.equal(resolveTool('custom:0', { root }).path, file)
+})
