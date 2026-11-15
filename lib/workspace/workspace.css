@@ -136,3 +136,29 @@ html[data-windows-titlebar] .dshp-workspace[data-default-full="1"] .dshp-workspa
 .dshp-workspace-recovery p{font-size:13px;line-height:1.6;color:#a2b5cf;margin:0 0 18px}
 .dshp-workspace-recovery button{appearance:none;border:1px solid #365477;border-radius:8px;padding:9px 16px;background:#213a58;color:#eaf4ff;font:inherit;cursor:pointer}
 .dshp-workspace-recovery button:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}
+
+/* Compact runtime and repair cards reuse the existing clean workspace palette. */
+.dshp-runtime-heading,.dshp-runtime-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.dshp-runtime-heading h3{margin:0 0 6px}
+.dshp-runtime-heading p,.dshp-runtime-meta{color:var(--dshp-mute);font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.dshp-runtime-metrics,.dshp-runtime-grid,.dshp-repair-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:14px 0}
+.dshp-runtime-metric,.dshp-runtime-card,.dshp-repair-card{min-width:0;padding:14px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-paper);color:var(--dshp-ink)}
+.dshp-runtime-metric{display:flex;flex-direction:column;gap:5px}
+.dshp-runtime-metric small,.dshp-runtime-card dt{color:var(--dshp-mute);font-size:12px}
+.dshp-runtime-metric strong{font-size:24px;font-variant-numeric:tabular-nums}
+.dshp-runtime-card header,.dshp-repair-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dshp-runtime-card header strong{overflow-wrap:anywhere;min-width:0}
+.dshp-runtime-status{font-size:11px;padding:3px 7px;border-radius:6px;background:var(--dshp-fill);color:var(--dshp-ink);white-space:nowrap}
+.dshp-runtime-card[data-status="attention"] .dshp-runtime-status,.dshp-repair-card[data-status="attention"] .dshp-runtime-status,.dshp-runtime-warning{color:#ffcf96}
+.dshp-runtime-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
+.dshp-runtime-card dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:13px}
+.dshp-runtime-card details,.dshp-repair-card details{border-top:1px solid var(--dshp-line);padding-top:10px;font-size:12px;overflow-wrap:anywhere}
+.dshp-runtime-card summary,.dshp-repair-card summary{cursor:pointer}
+.dshp-runtime-filters,.dshp-clean-shortcuts{display:flex;gap:8px;flex-wrap:wrap}
+.dshp-runtime-filters button,.dshp-runtime-action,.dshp-clean-shortcuts button{appearance:none;cursor:pointer;border:1px solid var(--dshp-line);border-radius:8px;padding:8px 12px;font:inherit;color:var(--dshp-ink);background:var(--dshp-paper)}
+.dshp-runtime-filters button[aria-pressed="true"]{background:var(--dshp-fill);border-color:var(--dshp-accent)}
+.dshp-runtime-filters button:focus-visible,.dshp-runtime-action:focus-visible,.dshp-clean-shortcuts button:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:2px}
+.dshp-runtime-toolbar input{max-width:100%;padding:7px 9px;border:1px solid var(--dshp-line);border-radius:6px;color:var(--dshp-ink);background:var(--dshp-paper)}
+.dshp-runtime-empty{padding:22px;border:1px dashed var(--dshp-line);border-radius:10px;color:var(--dshp-mute)}
+.dshp-clean-shortcuts{margin:0 0 16px}
+.dshp-repair-card p{overflow-wrap:anywhere}
