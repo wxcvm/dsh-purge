@@ -133,3 +133,29 @@ test('ARTEX privacy presentation masks report and paths, with explicit temporary
     assert.equal(render(true, true).includes(secret), true)
   }
 })
+
+
+test('five privacy preset previews preserve locks and unrelated preferences', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('    function privacyPresetPreview(')
+    const end = src.indexOf('    function LowImpactTab(', start)
+    assert.ok(start >= 0 && end > start, path)
+    const preview = new Function(src.slice(start, end) + '\\nreturn privacyPresetPreview')()
+    const preferences = { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: true }
+    const management = { mode: 'manual', locked: ['maskHistory'] }
+    for (const preset of ['recommended', 'sharing', 'default', 'low-impact', 'custom']) {
+      const result = preview(preferences, management, preset)
+      assert.deepEqual(result.policy.locked, ['maskHistory'], preset)
+      assert.equal(result.preferences.maskHistory, false, preset)
+      assert.equal(result.preferences.timeoutSeconds, 300, preset)
+      assert.equal(result.preferences.captureDiagnostics, true, preset)
+      assert.equal(result.preferences.noReverseDns, false, preset)
+      assert.equal(result.preferences.mode, preset === 'low-impact' ? 'low-impact' : 'standard', preset)
+      assert.equal(result.preferences.maskAssetResults, preset !== 'default', preset)
+      assert.equal(result.policy.mode, preset === 'recommended' ? 'automatic' : 'manual', preset)
+    }
+    assert.deepEqual(preferences, { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: true })
+    assert.deepEqual(management, { mode: 'manual', locked: ['maskHistory'] })
+  }
+})
