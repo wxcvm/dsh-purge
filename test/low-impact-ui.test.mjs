@@ -197,3 +197,29 @@ test('task recommendations distinguish observed posture and preserve locks witho
     assert.match(src, /预览推荐设置/)
   }
 })
+
+
+test('workspace privacy summary reports saved display flags without implying network protection', () => {
+  for (const path of ['lib/workspace/client-shell.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('function workspacePrivacySummary(')
+    const end = src.indexOf('function PurgeWorkspacePage(', start)
+    assert.ok(start >= 0 && end > start, path)
+    const summarize = new Function(src.slice(start, end) + '\nreturn workspacePrivacySummary')()
+    assert.equal(summarize(null).label, '隐私 · 未知')
+    assert.equal(summarize({ ok: false }).label, '隐私 · 未知')
+    assert.equal(summarize({ ok: true, maskHistory: true }).label, '隐私 · 未知')
+    assert.equal(summarize({ ok: true, maskHistory: false, maskAssetResults: false }).label, '隐私 · 0/2')
+    assert.equal(summarize({ ok: true, maskHistory: false, maskAssetResults: true }).label, '隐私 · 1/2')
+    const all = summarize({ ok: true, maskHistory: true, maskAssetResults: true })
+    assert.equal(all.label, '隐私 · 2/2')
+    assert.match(all.detail, /仅本地展示/)
+    assert.match(all.detail, /不代表网络/)
+    assert.match(src, /addEventListener\("dsh-purge-privacy-saved", refresh\)/)
+    assert.match(src, /removeEventListener\("dsh-purge-privacy-saved", refresh\)/)
+    assert.match(src, /current === revision/)
+    assert.match(src, /op: "privacyDisplayStatus"/)
+    assert.match(src, /tab: "low-impact", focus: null/)
+  }
+  assert.match(read('lib/redteam/client.js'), /document\.dispatchEvent\(new Event\('dsh-purge-privacy-saved'\)\)/)
+})
