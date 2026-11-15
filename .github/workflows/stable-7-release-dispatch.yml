@@ -1,37 +1,80 @@
-name: One-time stable .7 release dispatch
+name: One-time stable .7 release completion
 
 on:
   pull_request:
     branches: [master]
-    types: [opened, synchronize, reopened]
+    types: [synchronize]
 
 permissions:
   contents: read
   actions: write
 
 jobs:
-  dispatch:
+  publish:
     if: github.repository == 'wxcvm/dsh-purge' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'robin/release-dispatch-7-20261115'
-    runs-on: [self-hosted, Linux, X64, purge-ci]
-    timeout-minutes: 3
+    runs-on: [self-hosted, Windows, X64, purge-ci]
+    timeout-minutes: 45
     steps:
-      - name: Dispatch existing Release workflow for verified stable revision
+      - name: Verify dry run, dispatch existing Release, and verify published assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: wxcvm/dsh-purge
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          expected="a8b6b62f672e09ed33b95c4c72e7c085d033a096"
-          actual="$(gh api repos/$GH_REPO/git/ref/heads/master --jq '.object.sha')"
-          test "$actual" = "$expected"
-          gh workflow run release.yml --repo "$GH_REPO" --ref master -f dry_run=true
-          for i in {1..12}; do
-            run="$(gh run list --repo "$GH_REPO" --workflow release.yml --branch master --event workflow_dispatch --limit 10 --json databaseId,headSha,url --jq '.[] | select(.headSha == "'"$expected"'") | .url' | head -n 1)"
-            if [ -n "$run" ]; then
-              echo "Release run: $run"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Dispatch accepted; run not yet listed."
+          $ErrorActionPreference = 'Stop'
+          $expected = 'a8b6b62f672e09ed33b95c4c72e7c085d033a096'
+          $version = '1.1.92-wxcvm.7'
+          $tag = "v$version"
+          $base = "https://api.github.com/repos/$env:GH_REPO"
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+          function Read-Api($uri) {
+            Invoke-RestMethod -Uri "$base/$uri" -Headers $headers
+          }
+          function Wait-Run($id) {
+            for ($i = 0; $i -lt 240; $i++) {
+              $r = Read-Api "actions/runs/$id"
+              if ($r.status -eq 'completed') {
+                if ($r.conclusion -ne 'success') { throw "Run $id ended with $($r.conclusion)" }
+                Write-Host "Verified successful run: $($r.html_url)"
+                return $r
+              }
+              Start-Sleep -Seconds 5
+            }
+            throw "Run $id did not finish within the verification window"
+          }
+          function Assert-Master {
+            $ref = Read-Api 'git/ref/heads/master'
+            if ($ref.object.sha -ne $expected) { throw 'Master changed; do not publish an unverified revision' }
+          }
+          function Find-ReleaseRun($excludeId, $since) {
+            for ($i = 0; $i -lt 24; $i++) {
+              $list = Read-Api "actions/workflows/release.yml/runs?branch=master&event=workflow_dispatch&head_sha=$expected&per_page=20"
+              $matches = @($list.workflow_runs | Where-Object { $_.head_sha -eq $expected -and $_.id -ne $excludeId -and [DateTimeOffset]$_.created_at -ge $since })
+              if ($matches.Count -gt 1) { throw 'Ambiguous release runs; not choosing one automatically' }
+              if ($matches.Count -eq 1) { return $matches[0] }
+              Start-Sleep -Seconds 5
+            }
+            throw 'Expected release run not found'
+          }
+          Assert-Master
+          $null = Wait-Run 43708212772
+          $dry = Find-ReleaseRun 0 ([DateTimeOffset]'2026-11-15T11:17:33Z')
+          $null = Wait-Run $dry.id
+          Assert-Master
+          $started = [DateTimeOffset]::UtcNow.AddSeconds(-2)
+          $payload = @{ ref = 'master'; inputs = @{ dry_run = 'false' } } | ConvertTo-Json -Compress
+          Invoke-RestMethod -Uri "$base/actions/workflows/release.yml/dispatches" -Headers $headers -Method Post -ContentType 'application/json' -Body $payload | Out-Null
+          $published = Find-ReleaseRun $dry.id $started
+          $null = Wait-Run $published.id
+          $release = Read-Api "releases/tags/$tag"
+          if ($release.tag_name -ne $tag -or $release.draft -or $release.prerelease) { throw 'Expected stable release was not published' }
+          $ref = Read-Api "git/ref/tags/$tag"
+          $target = $ref.object
+          if ($target.type -eq 'tag') { $target = (Read-Api "git/tags/$($target.sha)").object }
+          if ($target.sha -ne $expected) { throw 'Published tag does not match verified master' }
+          foreach ($name in @("dsh-purge-$version.zip", 'SHA256SUMS.txt')) {
+            $assets = @($release.assets | Where-Object { $_.name -eq $name -and $_.state -eq 'uploaded' -and $_.size -gt 0 })
+            if ($assets.Count -ne 1) { throw "Missing or empty asset: $name" }
+            Write-Host "Verified uploaded asset: $name ($($assets[0].size) bytes)"
+          }
+          Write-Host "Stable release verified: $($release.html_url)"
