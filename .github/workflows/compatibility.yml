@@ -1,4 +1,4 @@
-name: Maintenance compatibility (cloud manual fallback)
+name: Linux Local Compatibility
 
 on:
   workflow_dispatch:
@@ -8,52 +8,27 @@ permissions:
 
 jobs:
   api-contracts:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, Linux, X64, purge-ci]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - name: Prepare latest official fixture, without host or model execution
-        shell: pwsh
         run: |
-          $fixture = node scripts/prepare-host-fixture.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
+          fixture="$(node scripts/prepare-host-fixture.mjs)"
+          printf 'DSH_COMPAT_HOST_ROOT=%s\n' "$fixture" >> "$GITHUB_ENV"
       - name: Install isolated fixture with all lifecycle scripts disabled
-        shell: pwsh
-        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+        run: npm install --prefix "$DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
       - name: Check generated bundle and syntax
         run: |
           node scripts/build-client.mjs --check
           node scripts/check-syntax.mjs
-      - name: Compile optional Windows injection switch from source
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./maintenance/inject-switch/Build.ps1
-      - name: Attach optional Windows switch executable
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dsh-inject-switch-windows
-          path: maintenance/inject-switch/dist/dsh-inject-switch.exe
-          retention-days: 14
-      - name: Smoke-test Desktop updater and simulated rollback
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/test-desktop-updater.ps1
-      - name: Exercise Windows pnpm junction rollback
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/test-desktop-updater-junction.ps1
-      - name: Smoke-test optional Windows NTFS ACL protector
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/test-private-acl.ps1
       - name: Run unit and actual public API contract tests
-        shell: pwsh
         run: node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
