@@ -42,3 +42,13 @@ test('DNS audit separates resolver transports, configuration state and runtime e
   assert.equal(auditProxyProfile('allow-lan: false').dns.state,'unspecified')
   assert.ok(auditProxyProfile('dns:\n  enable: true\n  respect-rules: true\n  nameserver: ["https://dns.example.invalid/dns-query"]').findings.some(x=>x.id==='dns-rule-dependency'))
 })
+
+
+test('Fake-IP compatibility advice is conditional and never claims a measured conflict', () => {
+  const enabled = auditProxyProfile('dns:\n  enable: true\n  enhanced-mode: fake-ip')
+  assert.equal(enabled.compatibilityNotes[0].id, 'fake-ip-dns-ownership')
+  assert.match(enabled.compatibilityNotes[0].message, /无法确认/)
+  assert.equal(enabled.dns.actualResolution, 'not_tested')
+  assert.deepEqual(auditProxyProfile('dns:\n  enable: false\n  enhanced-mode: fake-ip').compatibilityNotes, [])
+  assert.deepEqual(auditProxyProfile('dns:\n  enable: true\n  enhanced-mode: redir-host').compatibilityNotes, [])
+})

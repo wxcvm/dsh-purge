@@ -75,8 +75,11 @@ test('privacy center automatically reads the local network snapshot and distingu
     const card = src.slice(start, end)
     assert.match(card, /React\.useEffect\(\(\) => \{/)
     assert.match(card, /api\(\{ op: 'networkPrivacySnapshot' \}\)/)
-    assert.match(card, /\}, \[refreshVersion\]\)/)
-    assert.match(card, /return \(\) => \{ live = false \}/)
+    assert.match(card, /\}, \[refreshVersion, watch\]\)/)
+    assert.match(card, /document\.removeEventListener\('visibilitychange', onVisibility\)/)
+    assert.match(card, /if \(!live \|\| inFlight \|\| document\.hidden\) return/)
+    assert.match(card, /setTimeout\(\(\) => \{ timer = null; read\(\) \}, 30000\)/)
+    assert.match(card, /if \(timer !== null\) clearTimeout\(timer\)/)
     assert.match(src, /保护状态读取失败；未检查的项目不代表安全/)
     assert.match(src, /智能诊断 · 本机状态/)
   }

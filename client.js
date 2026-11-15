@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "3757ee3325bd988c";
+		const CLIENT_BUILD_ID = "d64f2f5b63bb55a3";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8482,6 +8482,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return rows
     }
 
+    function networkObservationAdvice(before, after) {
+      if (!before || !after || before.platform !== after.platform) return []
+      const rows = compareNetworkPrivacy(before, after)
+      const changed = rows.filter(row => row.state === 'changed')
+      const advice = []
+      if (changed.some(row => row.label.startsWith('网络地址 '))) advice.push('网络地址族计数变化：可能是网卡、VPN 或网络切换，请核对当前实际路由。')
+      if (changed.some(row => row.label.startsWith('Node DNS '))) advice.push('Node DNS 计数变化：请核对当前解析器、VPN 与 DNS 过滤软件的实际解析路径。')
+      if (changed.some(row => /^(HTTP|HTTPS|ALL|NO)_PROXY$/.test(row.label))) advice.push('宿主代理环境变量存在性变化：请确认当前应用使用的代理入口与预期一致。')
+      if (rows.some(row => row.state === 'unknown')) advice.push('部分观察不可用，无法判断这些字段是否变化。')
+      return advice
+    }
+
     function networkPrivacyReport(before, after) {
       const sanitize = s => {
         if (!s) return null
@@ -8602,6 +8614,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', null, 'DNS：' + ({enabled:'已启用',disabled:'已禁用',unspecified:'未明确'}[result.dns.state]) + ' · 模式：' + (result.dns.mode === 'unspecified' ? '未明确' : result.dns.mode) + ' · 规则设置：' + ({enabled:'已启用',disabled:'已禁用',unspecified:'未明确'}[result.dns.respectRules])),
             (result.dns.groups || []).map(g => h('div', { key: g.name }, g.name + '：明文 ' + g.plaintext + ' · 加密 ' + g.encrypted + ' · 未知 ' + g.unknown)),
             h('p', { className: 'rt-foot' }, '仅配置分类；实际解析结果、DNS 连接路径及 Fake-IP 映射均未测试。')) : null,
+          (result.compatibilityNotes || []).map(note => h('div', { key: note.id, style: { marginTop: 8 } },
+            h('b', null, '兼容性提示：'), note.message)),
           h('p', { className: 'rt-ops-subtle' }, result.note)) : null)
     }
 
@@ -8616,18 +8630,50 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [guideBusy, setGuideBusy] = React.useState(false)
       const [guideError, setGuideError] = React.useState('')
       const [refreshVersion, setRefreshVersion] = React.useState(0)
+      const [watch, setWatch] = React.useState(false)
+      const [previous, setPrevious] = React.useState(null)
+      const [stale, setStale] = React.useState(false)
+      const lastSnapshot = React.useRef(null)
       React.useEffect(() => {
-        let live = true
-        setBusy(true); setError(''); setSnapshot(null)
-        api({ op: 'networkPrivacySnapshot' }).then(r => {
-          if (!live) return
-          if (!r || r.ok !== true) throw new Error('无法读取本机网络诊断')
-          setSnapshot(r)
-        }).catch(() => {
-          if (live) setError('无法读取本机网络诊断，请确认插件与宿主版本一致。')
-        }).finally(() => { if (live) setBusy(false) })
-        return () => { live = false }
-      }, [refreshVersion])
+        let live = true, inFlight = false, timer = null
+        const schedule = () => {
+          if (live && watch && !document.hidden && timer === null) {
+            timer = setTimeout(() => { timer = null; read() }, 30000)
+          }
+        }
+        const read = async () => {
+          if (!live || inFlight || document.hidden) return
+          inFlight = true
+          setBusy(true); setError('')
+          try {
+            const r = await api({ op: 'networkPrivacySnapshot' })
+            if (!live) return
+            if (!r || r.ok !== true) throw new Error('无法读取本机网络诊断')
+            setPrevious(lastSnapshot.current)
+            lastSnapshot.current = r
+            setSnapshot(r); setStale(false)
+          } catch (_) {
+            if (live) {
+              setError('无法读取本机网络诊断，请确认插件与宿主版本一致。')
+              setStale(true)
+            }
+          } finally {
+            inFlight = false
+            if (live) { setBusy(false); schedule() }
+          }
+        }
+        const onVisibility = () => {
+          if (timer !== null) { clearTimeout(timer); timer = null }
+          if (!document.hidden && watch) read()
+        }
+        document.addEventListener('visibilitychange', onVisibility)
+        read()
+        return () => {
+          live = false
+          if (timer !== null) clearTimeout(timer)
+          document.removeEventListener('visibilitychange', onVisibility)
+        }
+      }, [refreshVersion, watch])
       const refresh = () => setRefreshVersion(v => v + 1)
       const openGuide = async () => {
         if (guideOpen) { setGuideOpen(false); return }
@@ -8647,10 +8693,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : '未知（未取得本机观察）'))
       return h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
         h('h4', null, '网络隐私诊断 · 本机快照'),
-        h('div', { style: { fontSize: 12 } }, '进入本页自动读取 DSH 宿主的网络地址族、Node DNS 服务器与代理环境变量存在性，也可手动刷新。不会联网、修改网络配置或显示地址和密码。'),
+        h('div', { style: { fontSize: 12 } }, '进入本页自动读取 DSH 宿主的网络地址族、Node DNS 服务器与代理环境变量存在性，也可手动刷新或开启自动观察。仅调用当前宿主的本地诊断接口，不探测公网、不修改网络配置、不显示地址和密码。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 } },
           h('button', { className: 'rt-btn', type: 'button', disabled: busy, onClick: refresh }, busy ? '读取中…' : '检查本机网络'),
-          h('button', { className: 'rt-btn', type: 'button', disabled: busy || !snapshot, onClick: () => setBaseline(snapshot) }, '设为基线'),
+          h('button', { className: 'rt-btn', type: 'button', disabled: busy || !snapshot || stale, onClick: () => setBaseline(snapshot) }, '设为基线'),
           h('button', { className: 'rt-btn', type: 'button', disabled: !baseline || busy, onClick: () => setBaseline(null) }, '清除基线'),
           h('button', { className: 'rt-btn', type: 'button', disabled: busy || !snapshot, onClick: () => {
             setExportError('')
@@ -8664,7 +8710,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             } catch (_) { setExportError('无法导出报告，请确认当前宿主支持文件下载。') }
           } }, '导出诊断报告'),
           h('button', { className: 'rt-btn', type: 'button', onClick: openGuide }, guideOpen ? '收起完整指南' : '打开操作指南')),
+        h('label', { style: { display: 'block', fontSize: 12, marginTop: 8 } },
+          h('input', { type: 'checkbox', checked: watch, disabled: busy, onChange: e => setWatch(e.target.checked) }),
+          ' 自动观察（页面可见时每 30 秒检查；离开页面停止）'),
         error ? h('div', { className: 'rt-err' }, error) : null,
+        stale && snapshot ? h('div', { style: { fontSize: 12 } }, '本次读取失败，下方为上一次成功快照，不代表当前状态。') : null,
         snapshot ? h('div', null,
           h('div', { style: { fontSize: 12, marginTop: 8 } }, '观察时间：' + snapshot.observedAt + ' · ' + snapshot.platform),
           summary('非内部地址数量（不是网卡数量）', snapshot.interfaces, d => ' · 内部地址 ' + d.internal),
@@ -8672,6 +8722,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { style: { fontSize: 12 } }, '代理环境变量：' + snapshot.proxyEnvironment.map(p => p.name + ' ' + (p.configured ? '已设置' : '未设置')).join(' · ')),
           h('div', { style: { fontSize: 12, opacity: 0.85 } }, '真实 IPv4/IPv6 公网出口、实际 DNS 查询路径、浏览器 WebRTC：未测。接口地址、变量存在和解析器设置不等于实际路由或泄漏结论。')) :
           h('div', { style: { fontSize: 12, marginTop: 8 } }, '尚未检查；实际公网出口、DNS 路径和 WebRTC 均未知。'),
+        previous && snapshot && !stale ? h('div', { style: { fontSize: 12, marginTop: 10 } },
+          h('b', null, '连续快照变化'),
+          previous.platform !== snapshot.platform ? h('div', null, '宿主平台不同，无法比较。') : (() => {
+            const rows = compareNetworkPrivacy(previous, snapshot)
+            const changes = rows.filter(row => row.state === 'changed')
+            return h('div', null,
+              h('div', null, changes.length ? '观察到 ' + changes.length + ' 项计数或状态变化' : '未观察到计数或状态变化；不代表路由未变化。'),
+              changes.map(row => h('div', { key: row.label }, row.label + '：' + String(row.previous) + ' → ' + String(row.current))),
+              networkObservationAdvice(previous, snapshot).map(advice => h('div', { key: advice }, advice)))
+          })()) : null,
         exportError ? h('div', { className: 'rt-err' }, exportError) : null,
         baseline ? h('div', { style: { fontSize: 12, marginTop: 10 } },
           h('b', null, '基线对比 · ' + baseline.observedAt),
