@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "3d5c412f1a166121";
+		const CLIENT_BUILD_ID = "60aaf5d1fd8b7b7a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -14362,13 +14362,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		const purgeCommandInputDefinition = {
 			kind: "dsh-purge-command-input",
 			target: "chat",
-			match: (event) => event.type === "command/run" && event.data.name === "purge"
+			match: (event) => event.type === "command/run" && ["purge", "bind", "purge-bind"].includes(event.data.name)
 				? { id: String(event.data.commandId), role: "start" } : null,
 			start: (_context, match) => ({
 				commandId: match.event.data.commandId,
 				seq: match.event.seq,
 				time: match.event.time,
-				text: `/purge${(match.event.data.args ?? "").trimEnd()}`,
+				text: `/${match.event.data.name}${(match.event.data.args ?? "").trimEnd()}`,
 			}),
 			update: (context) => context.state,
 			buildViewNode: (context) => context.state === undefined ? null : ({
@@ -14389,7 +14389,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
 		function PurgeCommandInputView({ node }) {
 			return h("div", {
-				role: "group", "aria-label": "/purge", "data-command-input": "",
+				role: "group", "aria-label": node.data.text.split(/\s/)[0], "data-command-input": "",
 				style: { display: "flex", justifyContent: "flex-end", padding: "8px 24px" },
 			}, h("div", {
 				style: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxWidth: "100%",
