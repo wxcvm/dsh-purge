@@ -1,4 +1,27 @@
-# 1.1.92-wxcvm.7
+# 1.1.92-wxcvm.8
+
+## 中文
+
+本补丁修复 .7 正式版在真实 Harness Desktop 的两个问题：ARTEX 本机联动出现 `cannot get property "redteam" without inject`（#274），以及聊天输入框缺少靶标选择指令（#275）。
+
+- ARTEX 状态接口通过独立的 Cordis 注入作用域取得 Purge 数据服务，保留实际配置的数据根目录。
+- 数据服务未就绪时返回明确的 503 提示；服务恢复或重载后重新检测即可。主插件及其它 Web 路由不增加硬依赖。
+- 新增严格注入代理、服务生命周期及自定义目录回归测试。
+- 恢复原生 `/bind` 靶标选择与绑定、解除绑定、当前对话隔离及显式绑定持久化；复用同一份本地绑定记录（#275）。
+- 不修改 ARTEX 公司 ID、令牌、项目数据或外部连接配置。真实 Desktop 复验仍需在安装补丁后进行。
+
+## English
+
+- Fixes the ARTEX local-status endpoint on strict Cordis hosts by declaring the store dependency in its own lifecycle scope (#274).
+- Uses the actual store root, reports temporary service unavailability clearly, and handles service reload without changing unrelated routes.
+- Restores the native `/bind` target picker, per-session binding/unbinding and persisted explicit bindings (#275).
+- Adds regression coverage for strict injection, custom roots and service lifecycle. Real Desktop acceptance remains to be verified.
+
+The .7 release remains immutable. See [update recovery](docs/UPDATE_RECOVERY.zh-CN.md) for authorized update and recovery instructions.
+
+---
+
+## Historical notes: 1.1.92-wxcvm.7
 
 ## 中文
 

@@ -8,11 +8,12 @@
 
 | 渠道 | 源码版本 | Git 标签 | 状态 |
 | --- | --- | --- | --- |
-| Stable 历史标签 | 1.1.92-wxcvm.6 | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | 保留旧标签；新版本发布前仍为历史交付基线 |
-| Stable 候选 | [1.1.92-wxcvm.7](../package.json) | 尚未创建 | 已纳入 #270–#272，最终联合 CI、资产与实机验收待核验 |
+| Stable 历史标签 | 1.1.92-wxcvm.6 | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | 保留旧标签 |
+| Stable 已发布 | 1.1.92-wxcvm.7 | [v1.1.92-wxcvm.7](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.7) | 双端 CI、发行 ZIP 下载及 SHA256 校验通过；已发现 ARTEX 注入问题 |
+| Stable 补丁候选 | [1.1.92-wxcvm.8](../package.json) | 尚未创建 | #274、#275 修复 ARTEX 宿主注入及聊天靶标绑定，均已通过双端 CI；候选联合 CI、发行与实机复验待完成 |
 | Beta | [1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 发布资产与标签待独立核验 | beta 源码版本已核对；不整体覆盖 master |
 
-**注意：** Git 标签存在不等于 Release 已发布、资产齐全、校验通过或实机验收完成。本次文档维护没有下载或验证发布资产，也没有执行任何发布流程。
+**注意：** Git 标签存在不等于 Release 已发布、资产齐全、校验通过或实机验收完成。.7 的发行任务 [43709689128](https://github.com/wxcvm/dsh-purge/actions/runs/43709689128) 已下载并核验资产；.8 尚未发行。
 
 ## 如何判断版本状态
 
