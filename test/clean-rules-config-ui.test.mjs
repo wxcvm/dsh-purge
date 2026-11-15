@@ -16,19 +16,19 @@ function fixture({failSave=false,failStatus=false,editing=false,confirm=false}={
 test('saved workspace selection remains busy through the authoritative status refresh',async()=>{
   const f=fixture();const check=f.nodes.find(n=>n.type==='input'&&n.props.type==='checkbox');
   const pending=check.props.onChange({target:{checked:true}});
-  await Promise.resolve();await Promise.resolve();
+  await new Promise(resolve=>setImmediate(resolve));
   assert.equal(f.states[8],true);assert.equal(f.states[0].cwd_candidates[0].selected,true);
   f.finishStatus();await pending;assert.equal(f.states[8],false);assert.match(f.states[9].text,/已保存/);
 });
 test('successful write with failed refresh retains saved selection and distinguishes read failure',async()=>{
   const f=fixture({failStatus:true});const check=f.nodes.find(n=>n.type==='input'&&n.props.type==='checkbox');
-  const pending=check.props.onChange({target:{checked:true}});await Promise.resolve();await Promise.resolve();f.finishStatus();await pending;
+  const pending=check.props.onChange({target:{checked:true}});await new Promise(resolve=>setImmediate(resolve));f.finishStatus();await pending;
   assert.equal(f.states[0].cwd_candidates[0].selected,true);assert.equal(f.states[9].kind,'ok');assert.match(f.states[9].text,/读取失败/);
 });
 test('failed create preserves the entered rule ID and name',async()=>{
   const f=fixture({failSave:true});const create=f.nodes.find(n=>n.type==='button'&&n.children.includes('btn.create'));
-  create.props.onClick();await Promise.resolve();await Promise.resolve();assert.equal(f.states[5],'draft-id');assert.equal(f.states[6],'draft-name');assert.equal(f.states[9].kind,'error');
+  create.props.onClick();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.states[5],'draft-id');assert.equal(f.states[6],'draft-name');assert.equal(f.states[9].kind,'error');
 });
 
  test('dirty rule warns and switching does not discard without confirmation',()=>{const f=fixture({editing:true});assert.ok(f.nodes.some(n=>n.children.includes('有未保存修改 · 切换规则前请保存')));f.nodes.find(n=>n.props?.key==='two').props.onClick();assert.equal(f.calls.length,0);assert.equal(f.states[4],'edited');});
-test('successful save marks the captured draft as saved',async()=>{const f=fixture({editing:true});const save=f.nodes.find(n=>n.type==='button'&&n.children.includes('btn.saveRule'));save.props.onClick();await Promise.resolve();await Promise.resolve();assert.equal(f.states[12].content,'edited');f.finishStatus();await Promise.resolve();});
+test('successful save marks the captured draft as saved',async()=>{const f=fixture({editing:true});const save=f.nodes.find(n=>n.type==='button'&&n.children.includes('btn.saveRule'));save.props.onClick();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.states[12].content,'edited');f.finishStatus();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.states[8],false);});
