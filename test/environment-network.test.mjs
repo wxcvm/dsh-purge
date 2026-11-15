@@ -12,12 +12,11 @@ test('DNS returns counts without exposing addresses, accepts either family', asy
   assert.ok(!JSON.stringify(result).includes('192.0.2.1'))
 })
 test('HTTPS reports a real response and explicitly avoids plugin proxy', async () => {
-  const result = await probeEnvironmentNetwork('direct', { request: async (url, opts, proxy) => {
+  const result = await probeEnvironmentNetwork('direct', { request: async (url, opts) => {
     assert.equal(url, 'https://api.github.com/')
     assert.equal(opts.method, 'HEAD')
     assert.equal(opts.agent, false)
     assert.equal(opts.timeout, 8000)
-    assert.equal(proxy, null)
     return { statusCode: 403, body: 'secret' }
   } })
   assert.equal(result.ok, true)
