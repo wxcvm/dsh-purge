@@ -1,6 +1,6 @@
 # Local CI (Windows + WSL)
 
-Daily Windows checks use the registered Windows runner with labels `self-hosted, Windows, X64, purge-ci`. Linux compatibility and the manual Release workflow use a separate Linux runner with labels `self-hosted, Linux, X64, purge-ci`.
+Daily pull requests and the existing push branches run two compatibility jobs, using `self-hosted, Windows, X64, purge-ci` and `self-hosted, Linux, X64, purge-ci`. Fork PRs use hosted runners. Each job installs dependencies once and tests the latest reviewed official host. Windows also runs the existing installer, rollback and ACL smoke tests and reports Pending specs separately without changing the core test result.
 
 ## Register the WSL runner
 
@@ -9,7 +9,7 @@ Daily Windows checks use the registered Windows runner with labels `self-hosted,
 3. Run the displayed configuration command as your regular Linux user, choosing a distinct name (e.g. AH-WSL) and the additional label `purge-ci`. Use the one-time token from GitHub; never store it in the repo.
 4. If required, run `sudo ./bin/installdependencies.sh` in the runner directory. Run `./run.sh` to listen for jobs.
 
-Linux Local Compatibility is manual until the Linux runner is online, so no jobs queue against an unregistered machine. The test uses the same latest-host fixture as Windows.
+The independent Windows Local Compatibility and Pending specifications workflows remain manual. Both daily jobs reuse their local npm download cache. `PURGE_CI_TEST_CONCURRENCY` is optional; the default uses the available logical processors. The existing Release and runner smoke workflows are unchanged.
 
 Release is manual on master only. Set `dry_run: true` to check the ZIP and checksums without creating or modifying a GitHub Release. Set false for the existing publish behavior. The runner uses the job's GITHUB_TOKEN, not a saved personal token.
 
