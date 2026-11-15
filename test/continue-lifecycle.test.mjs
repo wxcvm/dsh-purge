@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as wait } from "node:timers/promises";
-import { installContinueRetry } from "../lib/continue-retry.js";
+import { installContinueRetry, shouldAutoRetry, shouldAutoContinue } from "../lib/continue-retry.js";
 
 function fixture() {
   const listeners = new Map();
@@ -129,4 +129,49 @@ test("remount releases the old runtime without disturbing the new runtime or ano
   }
   assert.equal(first.listeners.size, 0);
   assert.equal(second.listeners.size, 0);
+});
+
+
+test("provider client errors and explicit terminal codes are not transport retries", () => {
+  for (const status of [400, 401, 402, 403, 404, 413, 422]) {
+    assert.equal(shouldAutoRetry({ status }), false, "HTTP " + status);
+    assert.equal(shouldAutoContinue({ kind: "error", failure: { status } }), false);
+    assert.equal(shouldAutoContinue({ kind: "error", error: { status } }), false);
+  }
+  for (const code of ["AUTH", "PROVIDER_REFUSAL", "CONTENT_FILTER", "REFUSAL", "SENSITIVE", "PURGE_REFUSAL"]) {
+    assert.equal(shouldAutoRetry({ code }), false, code);
+    assert.equal(shouldAutoContinue({ kind: "error", failure: { code } }), false);
+  }
+  assert.equal(shouldAutoRetry({ code: "TRANSPORT", status: 403 }), false);
+});
+
+test("temporary network and server errors keep their existing retry behavior", () => {
+  for (const failure of [{ code: "TRANSPORT" }, { code: "ECONNRESET" }, { status: 408 }, { status: 429 }, { status: 503 }]) {
+    assert.equal(shouldAutoRetry(failure), true);
+  }
+  assert.equal(shouldAutoContinue({ kind: "error", failure: { code: "TRANSPORT" } }), false);
+  const controller = new AbortController();
+  controller.abort();
+  assert.equal(shouldAutoRetry({ code: "TRANSPORT" }, controller.signal), false);
+  assert.equal(shouldAutoContinue({ kind: "aborted", reason: "user" }), false);
+});
+
+test("request-error hook preserves provider terminal decisions and retries a transient failure once", async () => {
+  const f = fixture();
+  const previous = globalThis.__dshPurgeRetryPending;
+  try {
+    const agent = agentOf("provider-failure", []);
+    const onError = f.listeners.get("agent/request-error");
+    const downstream = { kind: "stop" };
+    const call = failure => onError({ agent, turn: 1, step: 1, failure }, async () => downstream);
+    assert.equal(await call({ status: 401 }), downstream);
+    assert.equal(await call({ code: "PROVIDER_REFUSAL" }), downstream);
+    assert.equal(globalThis.__dshPurgeRetryPending, previous);
+    assert.deepEqual(await call({ code: "TRANSPORT" }), { kind: "retry" });
+    assert.equal(await call({ code: "TRANSPORT" }), downstream);
+  } finally {
+    if (previous === undefined) delete globalThis.__dshPurgeRetryPending;
+    else globalThis.__dshPurgeRetryPending = previous;
+    f.hook.dispose();
+  }
 });
