@@ -85,6 +85,18 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(full.item.body, 'LOCAL_REFERENCE_BODY')
   assert.equal(full.item.truncated, false)
   assert.equal(JSON.parse(await unifiedSearch.execute({ query: '' })).ok, false)
+  const bundledFirst = JSON.parse(await unifiedSearch.execute({ source: 'bundled' }))
+  const bundledNext = JSON.parse(await unifiedSearch.execute({ source: 'bundled', offset: 20 }))
+  assert.equal(bundledFirst.ok, true)
+  assert.equal(bundledFirst.groups[0].hasMore, true)
+  assert.equal(bundledNext.groups[0].offset, 20)
+  assert.ok(bundledNext.groups[0].items.length > 0)
+  const filtered = JSON.parse(await unifiedSearch.execute({ source: 'bundled', category: 'AI 运行时' }))
+  assert.ok(filtered.groups[0].items.length > 0)
+  assert.ok(filtered.groups[0].items.every(item => item.category === 'AI 运行时'))
+  const reference = filtered.groups[0].items[0].reference
+  const built = JSON.parse(await unifiedGet.execute(reference))
+  assert.equal(built.ok, true); assert.equal(built.item.origin, 'bundled'); assert.ok(built.item.body.length > 0)
 
   const kbSearch = registered.get('redteam_artex_knowledge_search')
   const search = JSON.parse(await kbSearch.execute({ query: 'Example', limit: 3 }))

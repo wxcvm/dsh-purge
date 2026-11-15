@@ -155,3 +155,17 @@ test('runtime cards distinguish configured route from assistant-observed route',
   const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx)
   assert.match(JSON.stringify(tree),/Provider：请求头配置 · 模型：助手事件/)
 })
+
+
+test('runtime cards show separate live and durable evidence and count a request only once', () => {
+  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const rows=[{generation:1,attemptId:'a',provider:'local',model:'model',toolCalls:0,durableToolStarts:2,durableTextObserved:true,firstTextMs:null,observedChunks:1,chunks:3,streamGap:true,finishObserved:true}]
+  let i=0
+  const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx), output=JSON.stringify(tree)
+  assert.match(output,/首文本 0 · 工具调用 1 · 已观测终态 1/)
+  assert.match(output,/仅持久流文本证据/)
+  assert.match(output,/工具开始（实时 \/ 持久）/)
+  assert.match(output,/0 \/ 2/)
+  assert.match(output,/实收分片 1 \/ 序号覆盖 3/)
+})
