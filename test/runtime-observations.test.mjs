@@ -121,3 +121,41 @@ test('unseen late chunk cannot replace the active agent of a session', () => {
   const r = o.snapshot().items;
   assert.equal(r.length, 1); assert.equal(r[0].finish, 'error'); assert.equal(r[0].settlement, 'committed');
 });
+
+
+test('partial request context preserves the header route and records per-field evidence', () => {
+  const o = createRuntimeObservations(), a = agent('s');
+  o.event(a.session, { seq: 1, type: 'request/header', data: { header: { config: { provider: 'local', model: 'configured' } } } });
+  o.event(a.session, { seq: 2, type: 'request/context', data: { model: 'resolved' } });
+  start(o,a);
+  const r = o.snapshot().items[0];
+  assert.equal(r.provider,'local'); assert.equal(r.model,'resolved');
+  assert.equal(r.providerSource,'request-header'); assert.equal(r.modelSource,'request-context');
+});
+
+test('late durable event cannot borrow the next request provider or model', () => {
+  const o = createRuntimeObservations(), a = agent('s');
+  start(o,a); end(o,a,0);
+  o.event(a.session, { seq: 2, type: 'request/header', data: { header: { config: { provider: 'new-provider', model: 'new-model' } } } });
+  o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, stream: [] } });
+  const previous = o.snapshot().items[0];
+  assert.equal(previous.provider,null); assert.equal(previous.model,null);
+  assert.equal(previous.providerSource,'not-observed'); assert.equal(previous.modelSource,'not-observed');
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:2,step:1}});
+  const current=o.snapshot().items[0];
+  assert.equal(current.provider,'new-provider'); assert.equal(current.model,'new-model');
+});
+
+test('only a matched assistant source can refine a captured route and a new attempt without route evidence stays unknown', () => {
+  const o = createRuntimeObservations(), a = agent('s');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'configured',model:'requested'}}}});
+  start(o,a);
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{source:{provider:'actual'}},stream:[]}});
+  const row=o.snapshot().items[0];
+  assert.equal(row.provider,'actual'); assert.equal(row.providerSource,'assistant-event');
+  assert.equal(row.model,'requested'); assert.equal(row.modelSource,'request-header');
+  end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:2,step:1}});
+  assert.equal(o.snapshot().items[0].provider,null);
+  assert.equal(o.snapshot().items[0].model,null);
+});
