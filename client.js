@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f81bfb76936a1b41";
+		const CLIENT_BUILD_ID = "82595d3c6dec5652";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1415,7 +1415,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					layer: "",
 					title: "",
 				}));
-			return rows.filter((r) => r.st && r.st !== "na" && Number.isFinite(r.id));
+			return rows.filter((r) => r.st && r.st !== "na" && Number.isFinite(r.id)).map(r => ({ ...r, memberStates: Object.fromEntries(r.ids.map(id => [id, state.patch_status?.[id] || "未知"])) }));
 		}
 
 		function patchIdLabel(r) {
@@ -1472,8 +1472,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				const id = String(row.id);
 				seen.add(id);
 				const old = prior.get(id);
-				if (old && old.st === row.st) continue;
-				changes.push({ id: patchIdLabel(row), title: row.title || (old && old.title) || id, before: old ? old.st : "未列出", after: row.st });
+				if (!old || old.st !== row.st) {
+					changes.push({ id: patchIdLabel(row), title: row.title || (old && old.title) || id, before: old ? old.st : "未列出", after: row.st });
+				} else if (old.memberStates && row.memberStates) {
+					const members = new Set([...Object.keys(old.memberStates), ...Object.keys(row.memberStates)]);
+					for (const member of members) {
+						const before = old.memberStates[member] || "未列出", after = row.memberStates[member] || "未列出";
+						if (before !== after) changes.push({ id: "#" + member, title: row.title || id, before, after });
+					}
+				}
 			}
 			for (const row of before || []) {
 				if (seen.has(String(row.id))) continue;
@@ -1774,7 +1781,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [shownDiagnostics, setShownDiagnostics] = useState(null);
 			const [refreshBusy, setRefreshBusy] = useState(false);
 			const [refreshReport, setRefreshReport] = useState(null);
-			if (!state || !state.patch_status) return h("div", { className: "dshp-skel", style: { height: 120 } });
+			if (!state || state.ok === false || !state.patch_status) return h("div", { className: "dshp-runtime-empty", role: "status" },
+				h("strong", null, state?.ok === false ? "宿主状态读取失败" : "尚未读取补丁状态"),
+				h("p", null, state?.ok === false ? "当前无法判断补丁是否已应用，请重新检测。" : "等待宿主状态，或点击重新检测。"),
+				h(Btn, { tiny: true, disabled: busy || refreshBusy, onClick: async () => {
+					setRefreshBusy(true); setRefreshReport(null);
+					try { await onRefresh(); } catch (e) { setRefreshReport({ error: String(e.message || e) }); }
+					finally { setRefreshBusy(false); }
+				} }, refreshBusy ? "检测中…" : "重新检测"),
+				refreshReport?.error ? h("p", { role: "alert" }, refreshReport.error) : null);
 
 			const rows = patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) }));
 			const tally = tallyPatches(rows);
@@ -1840,6 +1855,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			};
 			return h("div", { className: "dshp-clean-browser" },
 				h("div", { className: "dshp-clean-tools" },
+					h("p", { className: "dshp-block-hint" }, "补丁状态反映当前宿主磁盘检测结果；已应用不等于当前进程已加载。实际运行版本请在状态总览核对。"),
 					h("label", { className: "dshp-clean-search" },
 						"查找补丁",
 						h("input", {
@@ -1865,15 +1881,16 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h(Btn, { tiny: true, disabled: Boolean(busy || refreshBusy), onClick: refreshPatches }, refreshBusy ? "检测中…" : "重新检测"),
 						h(Btn, { tiny: true, onClick: () => copyDiagnostics(filteredDiagnostics, "当前筛选") }, "复制当前筛选"),
 						h(Btn, { tiny: true, onClick: () => copyDiagnostics(diagnostics, "完整") }, "复制完整诊断"),
+						searching ? h(Btn, { tiny: true, onClick: () => { setMode("all"); setSearch(""); } }, "清除筛选") : null,
 					),
 					copyNotice ? h("p", { className: "dshp-hint", role: "status" }, copyNotice) : null,
-					refreshReport ? h("div", { className: "dshp-clean-refresh", role: "status" },
+					refreshReport ? h("div", { className: "dshp-clean-refresh", role: refreshReport.error ? "alert" : "status" },
 						refreshReport.error ? "重新检测失败：" + refreshReport.error
 						: (refreshReport.changes.length
 							? h("details", { open: true },
 								h("summary", null, "已重新检测，" + refreshReport.changes.length + " 项补丁状态发生变化"),
 								h("ul", null, refreshReport.changes.map((change) =>
-									h("li", { key: change.id }, change.id + " " + change.title + "：" + change.before + " → " + change.after))))
+									h("li", { key: change.id }, change.id + " " + change.title + "：" + statusLabel(change.before, t) + " → " + statusLabel(change.after, t)))))
 							: "已重新检测；补丁状态没有变化")
 					) : null,
 					showDiagnostic ? h("pre", {
@@ -1884,7 +1901,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				!state.ai_base
 					? h("p", { className: "dshp-hint" }, "尚未定位到宿主；诊断可复制，补丁列表等待宿主加载。")
 					: selected.length === 0
-						? h("p", { className: "dshp-hint", role: "status" }, "没有匹配的补丁；可清空搜索或切换到「全部」。")
+						? h("div", { className: "dshp-runtime-empty", role: "status" }, h("strong", null, rows.length ? "没有匹配的补丁" : "本次未返回补丁项目"), h("p", null, rows.length ? "可清空搜索或切换到「全部」。" : "无法据此确认所有补丁正常。"))
 						: GROUP_ORDER.filter((key) => groups.has(key)).map((key) => {
 							const visible = groups.get(key).slice().sort((a, b) => a.id - b.id);
 							const local = tallyPatches(visible);
@@ -3327,6 +3344,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						}, policyOptions.map((p) => h("option", { key: p, value: p }, t("policy." + p)))),
 					),
 					h("p", { className: "dshp-block-hint" }, t("policy.hint")),
+					st ? h("p", { className: "dshp-block-hint", role: "status" }, "当前已保存策略：" + t("policy." + policyValue) + (statusError ? "（上次读取）" : "") + "。这是配置状态，不是实际请求行为的验证。") : null,
 				),
 				h("div", { className: "dshp-block" },
 					h("div", { className: "dshp-block-head" },

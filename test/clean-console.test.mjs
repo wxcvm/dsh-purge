@@ -633,3 +633,26 @@ test('recovery selects the newest receipt belonging to the current profile, not 
   records.delete(direct);
   assert.equal(read(), null);
 });
+
+
+test('rescan reports a changed child even if merged patch status is unchanged', () => {
+ const before=[{id:2,ids:[2,12],title:'Compose',st:'applied',memberStates:{2:'applied',12:'pending'}}]
+ const after=[{...before[0],memberStates:{2:'applied',12:'applied'}}]
+ const changes=patchStatusChanges(before,after)
+ assert.equal(changes.length,1)
+ assert.equal(changes[0].id,'#12')
+ assert.equal(changes[0].before,'pending')
+ assert.equal(changes[0].after,'applied')
+})
+test('patch browser distinguishes failed status from an empty filter and permits read-only retry', () => {
+ const from=client.indexOf('function PatchGroups('),to=client.indexOf('function InjectSwitchSection(',from)
+ const h=(type,props,...children)=>({type,props,children})
+ let i=0;const calls=[]
+ const render=runInNewContext(client.slice(from,to)+'\nPatchGroups',{useT:()=>x=>x,useState:v=>[v,()=>{}],h,Btn:'button'})
+ const tree=render({state:{ok:false,patch_status:{}},onRefresh:async()=>calls.push('refresh'),busy:false})
+ assert.match(JSON.stringify(tree),/宿主状态读取失败/)
+ assert.doesNotMatch(JSON.stringify(tree),/没有匹配的补丁/)
+ const button=tree.children.find(n=>n?.type==='button')
+ assert.equal(button.children[0],'重新检测')
+ return button.props.onClick().then(()=>assert.equal(calls.length,1))
+})
