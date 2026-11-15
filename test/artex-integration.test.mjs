@@ -299,3 +299,50 @@ test('Windows installer default and saved portable paths are recognized', (t) =>
   const tool = put(join(portable, 'tools', 'katana.exe'))
   assert.equal(resolveTool('katana', { root: home, config: { platform: 'windows', env: { ARTEX_HOME: portable } }, env: { PATH: '' } }).path, tool)
 })
+
+test('ARTEX status uses an injected store, preserves custom root, and survives service reload', async () => {
+  const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+  const start = server.indexOf('function watchArtexStore(ctx)')
+  const end = server.indexOf('function installWebServer(ctx, cfg)', start)
+  assert.ok(start >= 0 && end > start)
+  const watch = new Function(server.slice(start, end) + '\nreturn watchArtexStore')()
+  let activate, cleanup
+  const ctx = new Proxy({
+    inject(keys, fn) { assert.deepEqual(keys, ['redteam']); activate = fn }
+  }, { get(target, key) {
+    if (key === 'redteam') throw Error('cannot get property "redteam" without inject')
+    return target[key]
+  } })
+  const getArtexStore = watch(ctx)
+  assert.equal(getArtexStore(), null)
+  const routeStart = server.indexOf('path: "/dsh-purge/artex",')
+  const handlerStart = server.indexOf('handler: ', routeStart) + 'handler: '.length
+  const handlerEnd = server.indexOf('\n        },\n      },', handlerStart)
+  assert.ok(routeStart >= 0 && handlerEnd > handlerStart)
+  const reads = []
+  const config = { env: {} }
+  let status, body
+  const handler = new Function('getArtexStore', 'loadPlatformConfig', 'artexLocalEnv', 'inspectArtex', 'resolveTool', 'sendJson',
+    'return (' + server.slice(handlerStart, handlerEnd) + '\n        })')(
+    getArtexStore, root => { reads.push(root); return config }, c => c.env,
+    async () => ({ ok: true, tools: [{ id: 'sample', path: '/custom/tool' }] }),
+    (id, opts) => { assert.equal(opts.root, reads.at(-1)); assert.equal(opts.config, config); return { path: '/custom/tool' } },
+    (res, code, value) => { status = code; body = value })
+  const request = { method: 'GET' }
+  await handler(request, {})
+  assert.equal(status, 503)
+  assert.equal(reads.length, 0)
+  activate({ redteam: { root: '/custom/profile' }, effect(fn) { cleanup = fn() } })
+  await handler(request, {})
+  assert.equal(status, 200)
+  assert.equal(body.tools[0].reused, true)
+  assert.deepEqual(reads, ['/custom/profile'])
+  cleanup()
+  await handler(request, {})
+  assert.equal(status, 503)
+  activate({ redteam: { root: '/new/profile' }, effect(fn) { cleanup = fn() } })
+  await handler(request, {})
+  assert.equal(status, 200)
+  assert.deepEqual(reads, ['/custom/profile', '/new/profile'])
+  cleanup()
+})
