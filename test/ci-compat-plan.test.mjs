@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { HOSTS, FULL_HOST, selectCompatibilityTests } from '../scripts/run-compat-tests.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const readWorkflow = name => fs.readFileSync(path.join(root, '.github/workflows', name), 'utf8').replace(/\r\n/g, '\n');
 test('daily CI covers the latest official fixture and all existing tests; older fixtures remain selectable', () => {
-  const workflow = fs.readFileSync(path.join(root, '.github/workflows/compatibility.yml'), 'utf8');
+  const workflow = readWorkflow('compatibility.yml');
   assert.equal(HOSTS.length, 7);
   assert.equal(new Set(HOSTS).size, 7);
   assert.equal(FULL_HOST, '0.2.2-rc.3');
@@ -28,6 +29,15 @@ test('daily CI covers the latest official fixture and all existing tests; older 
     for (const name of names) assert.ok(full.includes(dir + '/' + name), name);
   }
   assert.ok(full.length > selectCompatibilityTests(root, HOSTS[0]).length);
+  // The daily two-job matrix covers every former standalone repair test.
+  const repair = readWorkflow('repair-center.yml');
+  const pending = readWorkflow('pending-specs.yml');
+  for (const name of repair.match(/node --test ([^\n\r]+)/)[1].split(' ')) assert.ok(full.includes(name), name);
+  assert.match(workflow, /os: \[ubuntu-latest, windows-latest\]/);
+  assert.match(workflow, /branches: \[master, beta,/);
+  assert.match(workflow, /id: specs\s+if: .*runner\.os == 'Linux'.*root-install\.outcome == 'success'.*\n\s+continue-on-error: true\s+run: node --test test-pending\/\*\.mjs/);
+  assert.match(workflow, /PENDING_OUTCOME: \$\{\{ steps\.specs\.outcome \}\}/);
+  for (const standalone of [repair, pending]) assert.match(standalone, /on:\s*\n  workflow_dispatch:\s*\n(?:\s*\n)?(?:permissions:|concurrency:)/);
 });
 
 test('additional fixture-dependent test files automatically run on each host', t => {
