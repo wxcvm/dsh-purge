@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6033e1dc1d4479cc";
+		const CLIENT_BUILD_ID = "523e5d83908d77df";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3144,47 +3144,57 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [newTarget, setNewTarget] = useState("AGENTS.md");
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState({ kind: "idle", text: "" });
+			const [statusLoading, setStatusLoading] = useState(true);
+			const [statusError, setStatusError] = useState("");
 
-			const loadStatus = useCallback(() => {
+			const loadStatus = useCallback(async () => {
 				const tr = tRef.current;
 				let cwd = "";
 				try { cwd = clientCurrentCwd(); } catch { /* ignore */ }
-				rulesApi("status", cwd ? { cwd: cwd } : undefined)
-					.then((d) => {
-						if (d && d.ok) setSt(d);
-						else {
-							setSt({ ok: false, rules: [], active: null });
-							setNotice({ kind: "error", text: tr("err.rules", { error: (d && d.error) || "bad response" }) });
-						}
-					})
-					.catch((e) => {
-						setSt({ ok: false, rules: [], active: null });
-						setNotice({ kind: "error", text: tr("err.rules", { error: e.message }) });
-					});
+				setStatusLoading(true);
+				setStatusError("");
+				try {
+					const d = await rulesApi("status", cwd ? { cwd } : undefined);
+					if (!d?.ok) throw new Error(d?.error || "bad response");
+					setSt(d);
+					return true;
+				} catch (e) {
+					setStatusError(tr("err.rules", { error: e.message }));
+					return false;
+				} finally { setStatusLoading(false); }
 			}, []);
 
 			useEffect(() => { loadStatus(); }, [loadStatus]);
 
-			const doPost = useCallback((action, payload, after) => {
+			const doPost = useCallback(async (action, payload, after) => {
 				setBusy(true);
 				setNotice({ kind: "idle", text: "" });
-				rulesApi(action, payload)
-					.then((d) => {
-						if (d && d.ok) {
-							setNotice({ kind: "ok", text: t("ok.done") });
-							if (action === "save" || action === "activate") warnNeedPrompt(d, t);
-							loadStatus();
-							if (after) after();
-						} else {
-							warnNeedPrompt(d, t);
-							setNotice({ kind: "error", text: t("err.action", { error: (d && d.error) || "" }) });
-						}
-					})
-					.catch((e) => setNotice({ kind: "error", text: t("err.action", { error: e.message }) }))
-					.finally(() => setBusy(false));
+				try {
+					const d = await rulesApi(action, payload);
+					if (!d?.ok) {
+						warnNeedPrompt(d, t);
+						throw new Error(d?.error || "bad response");
+					}
+					// Render the persisted selection/policy from the mutation response immediately.
+					if (action === "toggle-cwd" && Array.isArray(d.selections)) {
+						setSt(prev => prev && { ...prev, cwd_selections: d.selections, cwd_candidates: (prev.cwd_candidates || []).map(item => ({ ...item, selected: d.selections.includes(item.path) })) });
+					}
+					if (action === "set-policy" && typeof d.policy === "string") {
+						setSt(prev => prev && { ...prev, workspace_policy: d.policy });
+					}
+					if (action === "save" || action === "activate") warnNeedPrompt(d, t);
+					if (after) after();
+					const refreshed = await loadStatus();
+					setNotice({ kind: "ok", text: refreshed
+						? (action === "toggle-cwd" || action === "set-policy" || action === "save" ? "已保存 · 状态已刷新" : t("ok.done"))
+						: "操作已成功，但最新状态读取失败；请重新读取状态。" });
+				} catch (e) {
+					setNotice({ kind: "error", text: t("err.action", { error: e.message }) });
+				} finally { setBusy(false); }
 			}, [loadStatus, t]);
 
 			const openRule = useCallback((id) => {
+				if (busy || statusLoading) return;
 				setBusy(true);
 				rulesApi("read", { id: id })
 					.then((d) => {
@@ -3197,7 +3207,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					})
 					.catch((e) => setNotice({ kind: "error", text: t("err.read", { error: e.message }) }))
 					.finally(() => setBusy(false));
-			}, [t]);
+			}, [t, busy, statusLoading]);
 
 			const clearEditor = () => {
 				setEditId(null);
@@ -3208,7 +3218,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 			let list;
 			if (!st) {
-				list = h("div", { className: "dshp-skel", style: { height: 80, margin: 12 } });
+				list = h("p", { className: "dshp-empty", role: "status" }, statusError ? "暂时无法读取规则列表" : "正在读取规则列表…");
 			} else if (!st.rules || st.rules.length === 0) {
 				list = h("p", { className: "dshp-empty" }, t("rules.empty"));
 			} else {
@@ -3234,7 +3244,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h(Btn, {
 								tiny: true,
 								kind: isActive ? undefined : "primary",
-								disabled: busy || isActive,
+								disabled: busy || statusLoading || isActive,
 								onClick: (e) => {
 									e.stopPropagation();
 									if (!isActive) doPost("activate", { id: r.id });
@@ -3243,12 +3253,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h(Btn, {
 								tiny: true,
 								kind: "danger",
-								disabled: busy,
+								disabled: busy || statusLoading,
 								onClick: (e) => {
 									e.stopPropagation();
 									if (!window.confirm(t("confirm.delete", { id: r.id }))) return;
-									if (editId === r.id) clearEditor();
-									doPost("delete", { id: r.id });
+									doPost("delete", { id: r.id }, () => { if (editId === r.id) clearEditor(); });
 								},
 							}, t("delete")),
 						),
@@ -3265,10 +3274,11 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("h3", { className: "dshp-title" }, t("rules.title")),
 					h("div", { className: "dshp-row", style: { margin: 0 } },
 						noticeNode(notice),
+						h(Btn, { tiny: true, disabled: busy || statusLoading, onClick: loadStatus }, statusLoading ? "读取中…" : "重新读取状态"),
 						h(Btn, {
 							tiny: true,
 							kind: "danger",
-							disabled: busy,
+							disabled: busy || statusLoading,
 							onClick: () => {
 								if (!window.confirm(t("rules.reset.confirm"))) return;
 								clearEditor();
@@ -3277,6 +3287,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						}, t("rules.reset")),
 					),
 				),
+				statusError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, statusError + (st ? "；当前展示上次读取的状态。" : "")) : null,
 				h("div", { className: "dshp-block" },
 					h("div", { className: "dshp-policy-row" },
 						h("label", { htmlFor: "dshp-policy-select" }, t("policy.title")),
@@ -3284,7 +3295,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							id: "dshp-policy-select",
 							className: "dshp-field",
 							value: policyValue,
-							disabled: busy || !st,
+							disabled: busy || statusLoading || !st,
 							onChange: (e) => doPost("set-policy", { policy: e.target.value }),
 						}, policyOptions.map((p) => h("option", { key: p, value: p }, t("policy." + p)))),
 					),
@@ -3295,7 +3306,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						h("h4", null, t("cwd.title")),
 						h(Btn, {
 							tiny: true,
-							disabled: busy,
+							disabled: busy || statusLoading,
 							onClick: () => {
 								let cwd = cwdValue;
 								if (!cwd) { try { cwd = clientCurrentCwd(); } catch { /* ignore */ } }
@@ -3304,6 +3315,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 						}, t("cwd.rescan")),
 					),
 					cwdValue ? h("p", { className: "dshp-cwd-path" }, cwdValue) : null,
+					st ? h("p", { className: "dshp-block-hint", role: "status" }, "当前目录已选 " + cwdCandidates.filter(item => item.selected).length + " / " + cwdCandidates.length + " 个文件；勾选即保存。") : null,
 					(!st || !cwdValue)
 						? h("p", { className: "dshp-empty" }, t("cwd.no.workspace"))
 						: (cwdCandidates.length === 0
@@ -3315,7 +3327,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								h("input", {
 									type: "checkbox",
 									checked: Boolean(item.selected),
-									disabled: busy,
+									disabled: busy || statusLoading,
 									onChange: (e) => doPost("toggle-cwd", { path: item.path, enabled: e.target.checked }),
 								}),
 								h("div", { className: "dshp-cwd-main" },
@@ -3343,7 +3355,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 								h(Btn, {
 									kind: "primary",
 									tiny: true,
-									disabled: busy,
+									disabled: busy || statusLoading,
 									onClick: () => {
 										const id = newId.trim();
 										if (!id) { setNotice({ kind: "error", text: t("need.id") }); return; }
@@ -3354,8 +3366,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 											setEditName(name);
 											setEditTarget(target);
 											setContent("");
+											setNewId(""); setNewName(""); setNewTarget("AGENTS.md");
 										});
-										setNewId(""); setNewName(""); setNewTarget("AGENTS.md");
 									},
 								}, t("btn.create")),
 							),
@@ -3363,6 +3375,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					),
 					h("div", { className: "dshp-editor" },
 						editId ? [
+							h("p", { key: "saved-status", className: "dshp-block-hint", role: "status" }, !st || statusError ? "规则状态未确认" : st.active !== editId ? "此规则未设为当前规则" : st.agents_synced === true ? "当前规则 · 目标文件已同步" : "当前规则 · 目标文件尚未确认同步"),
 							h("div", { key: "meta", className: "dshp-row" },
 								h("input", {
 									className: "dshp-field", placeholder: t("ph.alias.short"), value: editName,
@@ -3382,7 +3395,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h("div", { key: "save", className: "dshp-row" },
 								h(Btn, {
 									kind: "primary",
-									disabled: busy,
+									disabled: busy || statusLoading,
 									onClick: () => doPost("save", { id: editId, content, name: editName, target: editTarget }),
 								}, t("btn.saveRule")),
 								noticeNode(notice),

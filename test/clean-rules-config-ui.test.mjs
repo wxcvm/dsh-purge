@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const client=readFileSync(new URL('../client.js',import.meta.url),'utf8');
+const source=client.slice(client.indexOf('function RulesSection()'),client.indexOf('function skillUiAllowed'));
+function fixture({failSave=false,failStatus=false}={}) {
+  const states=[{ok:true,rules:[],active:null,cwd:'/work',cwd_candidates:[{path:'/work/AGENTS.md',name:'AGENTS.md',selected:false}],workspace_policy:'fallback'},null,'','AGENTS.md','','draft-id','draft-name','AGENTS.md',false,{kind:'idle',text:''},false,''];
+  let i=0,resolveStatus;const calls=[];
+  const ctx=vm.createContext({useT:()=>k=>k,useRef:v=>({current:v}),useState:()=>{const at=i++;return [states[at],v=>{states[at]=typeof v==='function'?v(states[at]):v}]},useCallback:f=>f,useEffect(){},clientCurrentCwd:()=>'/work',warnNeedPrompt(){},rulesApi:async(op,payload)=>{calls.push([op,payload]);if(op==='status')return new Promise(resolve=>{resolveStatus=resolve});if(failSave)return {ok:false,error:'write failed'};return {ok:true,selections:['/work/AGENTS.md']}},h:(type,props,...children)=>({type,props,children}),Btn:'button',noticeNode:()=>null,formatSize:()=>'',TARGETS:['AGENTS.md'],ruleLabel:r=>r.name});
+  const tree=vm.runInContext(source+'\nRulesSection()',ctx);const nodes=[];
+  function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n&&typeof n==='object'){nodes.push(n);walk(n.children)}}walk(tree);
+  return {states,nodes,calls,finishStatus:()=>resolveStatus(failStatus?{ok:false,error:'read failed'}:{...states[0],ok:true})};
+}
+test('saved workspace selection remains busy through the authoritative status refresh',async()=>{
+  const f=fixture();const check=f.nodes.find(n=>n.type==='input'&&n.props.type==='checkbox');
+  const pending=check.props.onChange({target:{checked:true}});
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(f.states[8],true);assert.equal(f.states[0].cwd_candidates[0].selected,true);
+  f.finishStatus();await pending;assert.equal(f.states[8],false);assert.match(f.states[9].text,/已保存/);
+});
+test('successful write with failed refresh retains saved selection and distinguishes read failure',async()=>{
+  const f=fixture({failStatus:true});const check=f.nodes.find(n=>n.type==='input'&&n.props.type==='checkbox');
+  const pending=check.props.onChange({target:{checked:true}});await Promise.resolve();await Promise.resolve();f.finishStatus();await pending;
+  assert.equal(f.states[0].cwd_candidates[0].selected,true);assert.equal(f.states[9].kind,'ok');assert.match(f.states[9].text,/读取失败/);
+});
+test('failed create preserves the entered rule ID and name',async()=>{
+  const f=fixture({failSave:true});const create=f.nodes.find(n=>n.type==='button'&&n.children.includes('btn.create'));
+  create.props.onClick();await Promise.resolve();await Promise.resolve();assert.equal(f.states[5],'draft-id');assert.equal(f.states[6],'draft-name');assert.equal(f.states[9].kind,'error');
+});
