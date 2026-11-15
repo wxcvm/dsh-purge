@@ -138,3 +138,17 @@ test('bundled multi-term search matches across title, tags and body and ranks re
   assert.equal(call('Provider non-existent-phrase-abc').total,0)
   assert.deepEqual(call('Provider 协议').items.map(row=>row.id),results.items.map(row=>row.id))
 });
+
+
+test('runtime reference articles include practical troubleshooting and preserve stable IDs', () => {
+  const get = id => unifiedKnowledgeRequest('/unused', {op:'knowledgeUnifiedGet',source:'bundled',id}).item
+  for (const id of ['stream-sse','provider-adapters','tool-call-contract','stream-events','purge-diagnostics']) {
+    const article = get(id)
+    assert.equal(article.id,id)
+    assert.ok(article.body.length > 400)
+    assert.match(article.body,/验收/)
+  }
+  assert.match(get('stream-sse').body,/UTF-8/)
+  assert.match(get('tool-call-contract').body,/不是两次执行/)
+  assert.match(get('stream-events').body,/实收为 2/)
+})
