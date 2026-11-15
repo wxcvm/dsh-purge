@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "fefab387ccf3ecb9";
+		const CLIENT_BUILD_ID = "a59654e70a1aa3bc";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8694,6 +8694,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [saved, setSaved] = React.useState(null)
       const [management, setManagement] = React.useState({ mode: 'manual', locked: [] })
       const [savedManagement, setSavedManagement] = React.useState({ mode: 'manual', locked: [] })
+      const [privacyChanges, setPrivacyChanges] = React.useState([])
       const [history, setHistory] = React.useState(null)
       const [protection, setProtection] = React.useState(null)
       const [protectionStatus, setProtectionStatus] = React.useState('loading')
@@ -8709,7 +8710,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       React.useEffect(() => {
         let live = true
         setError(''); setMessage(''); setDraft(null); setSaved(null); setHistory(null)
-        setProtection(null); setProtectionStatus('loading')
+        setProtection(null); setProtectionStatus('loading'); setPrivacyChanges([])
         api({ op: 'platformConfigGet' }).then((r) => {
           if (!live) return
           if (!r || r.ok === false) { setError((r && r.error) || '无法读取设置'); return }
@@ -8717,6 +8718,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setSaved(preferences); setDraft(preferences)
           const policy = (r.config && r.config.privacyManagement) || { mode: 'manual', locked: [] }
           setManagement(policy); setSavedManagement(policy)
+          setPrivacyChanges(Array.isArray(r.config?.privacyChanges) ? r.config.privacyChanges : [])
         }, (e) => { if (live) setError(String((e && e.message) || e)) })
         api({ op: 'privacyPosture' }).then((r) => {
           if (!live) return
@@ -8761,8 +8763,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         api({ op: 'platformConfigSave', config: { scanPreferences: expected, privacyManagement: policy } }).then((r) => {
           setBusy(false)
           if (!r || r.ok === false) { setError((r && r.error) || '保存失败'); return }
-          const current = Object.assign({}, defaults, (r.config && r.config.scanPreferences) || {})
+          if (!r.config || !r.config.scanPreferences || !r.config.privacyManagement) {
+            setError('未取得实际保存值，请刷新后确认设置。'); return
+          }
+          const current = Object.assign({}, defaults, r.config.scanPreferences)
           setSaved(current); setDraft(current)
+          setPrivacyChanges(Array.isArray(r.config.privacyChanges) ? r.config.privacyChanges : [])
           const currentPolicy = r.config && r.config.privacyManagement
           if (currentPolicy) { setManagement(currentPolicy); setSavedManagement(currentPolicy) }
           const confirmed = !!currentPolicy && currentPolicy.mode === policy.mode
@@ -8778,6 +8784,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
       }
       const save = () => savePreferences(draft)
+      const previewPrivacyPreset = preset => {
+        if (!draft || busy) return
+        if (preset === 'recommended') {
+          chooseManagement('automatic')
+          return
+        }
+        const policy = { mode: 'manual', locked: [] }
+        setManagement(policy)
+        setDraft(old => old ? { ...old, maskHistory: preset === 'sharing', maskAssetResults: preset === 'sharing' } : old)
+      }
+      const discardPrivacyDraft = () => {
+        if (!saved || busy) return
+        setDraft(saved); setManagement(savedManagement); setError(''); setMessage('')
+      }
+      const changeLabels = { mode: '管理模式', locked: '手动锁定', 'scan.mode': '扫描模式',
+        'scan.timeoutSeconds': '扫描超时', 'scan.captureDiagnostics': '诊断记录',
+        'scan.maskHistory': '扫描记录遮蔽', 'scan.noReverseDns': '反向 DNS', 'scan.maskAssetResults': '测绘展示遮蔽' }
       const applyPrivacyDefaults = () => {
         if (!saved || busy) return
         savePreferences(saved, true, { ...savedManagement, mode: 'automatic' })
@@ -8821,6 +8844,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               '这里减少不必要的网络请求和本地敏感数据显示，不伪装来源、不规避目标侧监测，也不修改或删除目标的审计记录。网络请求仍可能出现在目标日志中。')),
           saved ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
             h('h4', null, '智能设置 · 本地隐私'),
+            h('div', { style: { fontSize: 12, marginBottom: 8 } }, '以下方案仅修改本地展示保护及管理模式，先预览，点击保存设置才生效。共享屏幕与恢复默认会清除本地展示锁定。'),
+            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 } },
+              h('button', { className: 'rt-btn', type: 'button', disabled: busy || !draft, onClick: () => previewPrivacyPreset('recommended') }, '推荐 · 自动保护'),
+              h('button', { className: 'rt-btn', type: 'button', disabled: busy || !draft, onClick: () => previewPrivacyPreset('sharing') }, '共享屏幕 · 双项遮蔽'),
+              h('button', { className: 'rt-btn', type: 'button', disabled: busy || !draft, onClick: () => previewPrivacyPreset('default') }, '恢复默认展示'),
+              h('button', { className: 'rt-btn', type: 'button', disabled: busy || !dirty, onClick: discardPrivacyDraft }, '撤销未保存修改')),
             h('label', { style: { display: 'block', fontSize: 12, marginBottom: 8 } },
               '管理模式（保存后持续生效）',
               h('select', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 5 },
@@ -8851,6 +8880,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               ? h('div', { style: { fontSize: 12 } }, '请先保存手动修改，再使用自动设置。') : null,
             h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 6 } },
               '自动管理仅管理本地展示设置；不会修改代理、DNS、凭据、权限或运行中的任务。')) : null,
+          saved ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
+            h('h4', null, '实际生效与最近变更'),
+            h('div', { style: { fontSize: 12 } }, '已保存管理模式：' + (savedManagement.mode === 'automatic' ? '自动' : '手动')
+              + ' · 手动锁定 ' + savedManagement.locked.length + ' 项'),
+            h('div', { style: { fontSize: 12 } }, '扫描记录：' + (saved.maskHistory ? '已启用遮蔽' : '未遮蔽')
+              + ' · 测绘中心：' + (saved.maskAssetResults ? '已启用遮蔽' : '未遮蔽')),
+            h('div', { style: { fontSize: 12 } }, '重新打开相关页面读取已保存值；不代表原始数据已脱敏。'),
+            h('h4', { style: { marginTop: 12 } }, '最近五次配置变更'),
+            privacyChanges.length ? privacyChanges.map((entry, index) => h('div', {
+              key: entry.at + ':' + index, style: { fontSize: 12, marginTop: 4 } },
+              new Date(entry.at).toLocaleString() + ' · ' + entry.keys.map(key => changeLabels[key] || key).join('、')))
+              : h('div', { style: { fontSize: 12 } }, '暂无记录（旧版设置不会补记历史）。')) : null,
           draft ? h('div', { className: 'rt-card' },
             h('h4', null, '单次探测设置'),
             h('label', { style: { fontSize: 12, display: 'block', marginBottom: 10 } },

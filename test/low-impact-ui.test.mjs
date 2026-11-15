@@ -81,3 +81,15 @@ test('privacy center automatically reads the local network snapshot and distingu
     assert.match(src, /智能诊断 · 本机状态/)
   }
 })
+
+
+test('privacy center previews presets, discards draft and displays stored changes', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    assert.match(src, /previewPrivacyPreset\('recommended'\)/)
+    assert.match(src, /previewPrivacyPreset\('sharing'\)/)
+    assert.match(src, /previewPrivacyPreset\('default'\)/)
+    assert.match(src, /onClick: discardPrivacyDraft/)
+    assert.match(src, /最近五次配置变更/)
+  }
+})

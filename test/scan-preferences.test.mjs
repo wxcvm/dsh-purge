@@ -53,3 +53,22 @@ test('persistent automatic privacy management respects manual locks and old clie
   assert.deepEqual(loadPlatformConfig(dir).privacyManagement, { mode: 'manual', locked: [] })
   assert.equal(loadPlatformConfig(dir).scanPreferences.timeoutSeconds, 300)
 })
+
+
+test('privacy change history is bounded, records actual changes and excludes unrelated config', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'redteam-privacy-changes-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  assert.deepEqual(loadPlatformConfig(dir).privacyChanges, [])
+  let saved = savePlatformConfig({ env: { FOFA_KEY: 'fixture-secret' } }, dir)
+  assert.deepEqual(saved.privacyChanges, [])
+  saved = savePlatformConfig({ privacyManagement: { mode: 'automatic', locked: [] } }, dir)
+  assert.deepEqual(saved.privacyChanges[0].keys, ['mode', 'scan.maskHistory', 'scan.maskAssetResults'])
+  const before = saved.privacyChanges
+  saved = savePlatformConfig({ privacyManagement: { mode: 'automatic', locked: [] } }, dir)
+  assert.deepEqual(saved.privacyChanges, before)
+  for (let i = 0; i < 7; i++) saved = savePlatformConfig({ scanPreferences: { timeoutSeconds: i % 2 ? 60 : 120 } }, dir)
+  assert.equal(saved.privacyChanges.length, 5)
+  assert.ok(saved.privacyChanges.every(item => item.keys.length === 1 && item.keys[0] === 'scan.timeoutSeconds'))
+  assert.deepEqual(loadPlatformConfig(dir).privacyChanges, saved.privacyChanges)
+  assert.equal(JSON.stringify(saved.privacyChanges).includes('fixture-secret'), false)
+})
