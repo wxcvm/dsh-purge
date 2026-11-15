@@ -67,3 +67,17 @@ test('unified library opens bundled knowledge without a search term', async () =
   assert.equal(calls[0].query,'')
   assert.match(JSON.stringify(tree),/Purge 内置知识/)
 })
+
+
+test('skill detail offers categorized offline references and opens the correct category', async () => {
+  const source = read('lib/redteam/client.js')
+  assert.match(source,/skillKnowledgeCategories = \{ recon: '安全评估'/)
+  assert.match(source,/h\(UnifiedKnowledgeTab, \{ key: active, initialSource: 'bundled', initialCategory: category \}\)/)
+  const start=source.indexOf('    function UnifiedKnowledgeTab('),end=source.indexOf('    function knowledgeCredentialMessage(',start)
+  const effects=[],calls=[]
+  const ctx=vm.createContext({React:{useState:v=>[v,()=>{}],useRef:v=>({current:v}),useEffect:fn=>effects.push(fn)},h:(type,props,...children)=>({type,props,children}),api:async req=>{calls.push(req);return {ok:true,groups:[]}}})
+  const render=vm.runInContext(source.slice(start,end)+'\nUnifiedKnowledgeTab',ctx)
+  render({initialSource:'bundled',initialCategory:'Web 安全'})
+  effects.forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(calls.length,1);assert.equal(calls[0].category,'Web 安全')
+})

@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "626e119b68d8174f";
+		const CLIENT_BUILD_ID = "fefab387ccf3ecb9";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -6711,6 +6711,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* ---------------------------------------------------------- 技能库（DSH 原生） */
+    const skillKnowledgeCategories = { recon: '安全评估', vuln: '安全评估', web: 'Web 安全', identity: 'Web 安全', network: '网络基础', cloud: '工程安全', automation: 'AI 运行时' }
     function SkillsTab(props) {
       const refreshKey = props.refreshKey || 0
       const [items, setItems] = React.useState([])
@@ -6728,6 +6729,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [externalError, setExternalError] = React.useState(null)
       const [externalRequest, setExternalRequest] = React.useState(false)
       const [removeArmed, setRemoveArmed] = React.useState(false)
+      const [relatedSkill, setRelatedSkill] = React.useState(null)
 
       const loadExternal = () => {
         api({ op: 'aboutSecurityStatus' }).then((result) => {
@@ -6792,6 +6794,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (active === key) { setActive(null); setDetail(null); return }
         setActive(key)
         setDetail(null)
+        setRelatedSkill(null)
         api({ op: 'skillRead', name: name, library: skill.library || 'redteam' }).then((r) => {
           if (r && r.ok) setDetail(r)
           else setErr((r && r.error) || '读取失败')
@@ -6990,6 +6993,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                       : null)
                 })(),
                 detail.path ? h('div', { className: 'rt-kv' }, h('b', null, '文件'), h('span', { className: 'rt-mono', style: { wordBreak: 'break-all' } }, detail.path)) : null,
+                (() => {
+                  const selected = items.find(item => ((item.library || 'redteam') + ':' + item.name) === active)
+                  const category = selected && skillKnowledgeCategories[categoryOf(selected)]
+                  if (!category) return null
+                  return h('div', { className: 'rt-card' }, h('h4', null, '相关内置知识'),
+                    h('p', null, '按技能功能分类推荐 · ' + category),
+                    h('button', { className: 'rt-btn', type: 'button', 'aria-expanded': relatedSkill === active, onClick: () => setRelatedSkill(relatedSkill === active ? null : active) }, relatedSkill === active ? '收起相关知识' : '查看相关知识'),
+                    relatedSkill === active ? h(UnifiedKnowledgeTab, { key: active, initialSource: 'bundled', initialCategory: category }) : null)
+                })(),
                 h('pre', { className: 'rt-md', style: { border: '1px solid var(--dsw-alias-border-l1)', borderRadius: 6, maxHeight: '52vh' } }, detail.content || '（空）'))
             : h('div', { className: 'rt-pane' },
                 h('div', { style: { fontSize: 12, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
@@ -10844,11 +10856,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
-    function UnifiedKnowledgeTab({ initialSource = 'all' } = {}) {
+    function UnifiedKnowledgeTab({ initialSource = 'all', initialCategory = '' } = {}) {
       const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
       const [query, setQuery] = React.useState('')
       const [source, setSource] = React.useState(initialSource)
-      const [category, setCategory] = React.useState('')
+      const [category, setCategory] = React.useState(initialCategory)
       const [categories, setCategories] = React.useState([])
       const [groups, setGroups] = React.useState([])
       const [detail, setDetail] = React.useState(null)
@@ -10873,7 +10885,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!query.trim() && selected !== 'bundled') return
         run({ op: 'knowledgeUnifiedSearch', query: query.trim(), source: selected, category: selected === 'bundled' ? selectedCategory : '', offset }, r => { setGroups(r.groups); setSearched(true); const built = r.groups.find(g => g.source === 'bundled'); if (built?.categories) setCategories(built.categories) })
       }
-      React.useEffect(() => { if (initialSource === 'bundled') search('bundled') }, [initialSource])
+      React.useEffect(() => { if (initialSource === 'bundled') search('bundled', initialCategory) }, [initialSource, initialCategory])
       const open = (group, item) => {
         setDetail(null)
         run({ op: 'knowledgeUnifiedGet', source: group.source, id: item.id }, r => setDetail(r.item))
