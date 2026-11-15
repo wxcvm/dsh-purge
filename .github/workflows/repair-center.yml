@@ -3,6 +3,10 @@ on:
   pull_request:
   push:
     branches: [beta]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   repair-tests:
     strategy:
@@ -17,6 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: npm install --ignore-scripts --package-lock=false --legacy-peer-deps
+      - run: npm install --ignore-scripts --package-lock=false --legacy-peer-deps --no-audit --no-fund --prefer-offline
       - run: node --test test/repair-center.test.mjs test/repair-center-ui.test.mjs test/desktop-runtime-health.test.mjs test/desktop-runtime-ui.test.mjs test/official-update-handoff.test.mjs
       - run: node scripts/build-client.mjs --check

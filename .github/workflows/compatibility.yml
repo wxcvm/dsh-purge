@@ -92,4 +92,5 @@ jobs:
         env:
           HOST_VERSION: ${{ matrix.hosts }}
           HOST_RESULT: ${{ steps.fixture-tests.outcome }}
-        run: node -e "require('node:fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '| ' + process.env.HOST_VERSION + ' | ' + (process.env.HOST_RESULT === 'success' ? 'passed' : 'failed or not run') + ' |' + String.fromCharCode(10))"
+        run: |
+          node -e "require('node:fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '| ' + process.env.HOST_VERSION + ' | ' + (process.env.HOST_RESULT === 'success' ? 'passed' : 'failed or not run') + ' |' + String.fromCharCode(10))"
