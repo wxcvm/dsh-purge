@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "70a2c9b09441d58f";
+		const CLIENT_BUILD_ID = "46d9cb6320b9311c";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2874,7 +2874,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				cleanPane(["patches"], h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
 				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
-				cleanPane(["diagnostics"], h("div", null, h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy }), h(RepairCenter, { busy: jobOn || updateBusy }))),
+				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
+				cleanPane(["diagnostics"], h(RepairCenter, { busy: jobOn || updateBusy })),
 				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
 
 				askUninstall ? h("div", {
