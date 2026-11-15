@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { INTEL_SOURCES, normalizeIntelSources } from '../lib/redteam/intel-sources.js'
@@ -78,4 +78,13 @@ test('dedicated selection API persists repeated updates and preserves unrelated 
   }
   assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'fixture-key')
   assert.equal(dispatch({ root }, { op: 'intelSourcesSave' }).ok, false)
+})
+
+test('dedicated preference save does not overwrite an unreadable configuration', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-intel-invalid-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const file = join(root, 'config.json')
+  writeFileSync(file, '{ broken')
+  assert.equal(dispatch({ root }, { op: 'intelSourcesSave', selection: { selected: ['local'], preferred: 'local' } }).ok, false)
+  assert.equal(readFileSync(file, 'utf8'), '{ broken')
 })
