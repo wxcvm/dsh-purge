@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url';
 import { HOSTS, FULL_HOST, selectCompatibilityTests } from '../scripts/run-compat-tests.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const readWorkflow = name => fs.readFileSync(path.join(root, '.github/workflows', name), 'utf8').replace(/\r\n/g, '\n');
 test('daily CI covers the latest official fixture and all existing tests; older fixtures remain selectable', () => {
-  const workflow = fs.readFileSync(path.join(root, '.github/workflows/compatibility.yml'), 'utf8');
+  const workflow = readWorkflow('compatibility.yml');
   assert.equal(HOSTS.length, 7);
   assert.equal(new Set(HOSTS).size, 7);
   assert.equal(FULL_HOST, '0.2.2-rc.3');
@@ -29,8 +30,8 @@ test('daily CI covers the latest official fixture and all existing tests; older 
   }
   assert.ok(full.length > selectCompatibilityTests(root, HOSTS[0]).length);
   // The daily two-job matrix covers every former standalone repair test.
-  const repair = fs.readFileSync(path.join(root, '.github/workflows/repair-center.yml'), 'utf8');
-  const pending = fs.readFileSync(path.join(root, '.github/workflows/pending-specs.yml'), 'utf8');
+  const repair = readWorkflow('repair-center.yml');
+  const pending = readWorkflow('pending-specs.yml');
   for (const name of repair.match(/node --test ([^\n\r]+)/)[1].split(' ')) assert.ok(full.includes(name), name);
   assert.match(workflow, /os: \[ubuntu-latest, windows-latest\]/);
   assert.match(workflow, /branches: \[master, beta,/);
