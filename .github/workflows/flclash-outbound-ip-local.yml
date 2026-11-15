@@ -1,0 +1,49 @@
+name: FlClash outbound IP regression (local)
+
+on:
+  push:
+    branches: [ci/flclash-outbound-ip-92]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flclash-outbound-ip-92
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: [self-hosted, Windows, X64, purge-ci]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact reviewed FlClash revision
+        uses: actions/checkout@v4
+        with:
+          repository: wxcvm/FlClash
+          ref: 6acbd4b86fbbd0f68e75fba252625bf50a716abe
+          submodules: recursive
+          persist-credentials: false
+          path: flclash
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.6'
+          cache: true
+      - name: Install Flutter dependencies
+        working-directory: flclash
+        run: flutter pub get
+      - name: Check formatting
+        working-directory: flclash
+        run: dart format --output=none --set-exit-if-changed lib/providers/outbound_ip.dart test/providers/outbound_ip_test.dart
+      - name: Disable Go core build hook for Dart tests
+        working-directory: flclash
+        shell: pwsh
+        run: |
+          $path = 'pubspec.yaml'
+          $text = Get-Content -Raw -LiteralPath $path
+          $text = $text -replace '(?m)(    setup:\r?\n      build_assets:) true', '$1 false'
+          if ($text -notmatch '(?m)    setup:\r?\n      build_assets: false') { throw 'Go build hook setting not found' }
+          Set-Content -LiteralPath $path -Value $text -NoNewline
+      - name: Run outbound IP and route regression tests
+        working-directory: flclash
+        run: flutter test test/providers/outbound_ip_test.dart test/providers/routed_probe_test.dart test/views/dashboard/current_outbound_test.dart --reporter expanded
