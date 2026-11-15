@@ -80,3 +80,29 @@ test('literal persona suffix is preserved without an extra synthetic suffix', ()
   const suffixes = out.sections.filter(s => s.name === 'deployment:persona-suffix' || s.name === 'persona-suffix');
   assert.deepEqual(suffixes, [section]);
 });
+
+test('multi-model gateway does not apply GLM guidance to an explicit non-GLM request', () => {
+  const original = {
+    variables: { model: 'deepseek-v4-flash', provider: 'zhipu' },
+    sections: [{ name: 'workspace-instructions', text: 'Use the project test commands.', interpolate: false }],
+    contexts: [],
+  };
+  const out = rewritePromptAssembly(original, 'User project preferences.', { capabilityProtocol: false });
+  assert.equal(out.sections.find(s => s.name === 'dsh-purge').text, 'User project preferences.');
+  assert.equal(out.sections.some(s => typeof s.text === 'string' && s.text.includes('GLM-PROMPT')), false);
+  assert.equal(out.sections.find(s => s.name === 'workspace-instructions').text, original.sections[0].text);
+});
+
+test('GLM guidance coexists with preserved project instructions and real provider fields', () => {
+  const original = {
+    variables: { model: 'glm-5.3-flash', provider: 'generic-gateway' },
+    sections: [{ name: 'workspace-instructions', text: 'Run the project test command.\nKeep the original output format.', interpolate: false }],
+    contexts: [{ text: 'Current task context' }],
+    tools: [{ name: 'fixture' }],
+  };
+  const out = rewritePromptAssembly(original, 'Fixture prompt.', { capabilityProtocol: false });
+  assert.match(out.sections.find(s => s.name === 'dsh-purge').text, /GLM-PROMPT/);
+  assert.equal(out.sections.find(s => s.name === 'workspace-instructions').text, original.sections[0].text);
+  assert.equal(out.contexts, original.contexts);
+  assert.equal(out.tools, original.tools);
+});
