@@ -96,3 +96,18 @@ test('UI and tool use the same occupied capacity while preserving unknown free s
   assert.equal(unknown.free, null)
   assert.equal(unknown.per_root[0].free, null)
 })
+
+
+test('stable keys preserve age and child restart cannot release the replacement run', () => {
+  const r = createReservations()
+  assert.equal(r.acquire('root', 'root', 'first', 1, 'task'), 'task')
+  assert.equal(r.acquire('root', 'root', 'retry', 100, 'task'), 'task')
+  assert.equal(r.list('root')[0].at, 1)
+  r.acquire('root', 'root', 'next', 2, 'next')
+  assert.equal(r.start({ ...event('old', 'root'), id: 'child' }), true)
+  assert.equal(r.start({ ...event('new', 'root'), id: 'child' }), true)
+  assert.equal(r.end(event('old', 'root')), false)
+  assert.equal(r.list('root')[0].runId, 'new')
+  assert.equal(r.end(event('new', 'root')), true)
+  assert.deepEqual(r.list('root').map(x => x.key), ['next'])
+})
