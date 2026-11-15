@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f0fa53ae5505bc2b";
+		const CLIENT_BUILD_ID = "bc5c725169946f5b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -9161,6 +9161,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [sourceMsg, setSourceMsg] = React.useState('')
       const sourceDraft = React.useRef(chosen)
       const sourceRevision = React.useRef(0)
+      const sourceDirty = React.useRef(false)
       const [savedMaskAssets, setMaskAssets] = React.useState(false)
       const temporary = useTemporaryPrivacy()
       const maskAssets = savedMaskAssets || !!temporary?.maskAssetResults
@@ -9258,13 +9259,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setMaskAssets(!!r.maskAssets)
           setMaskSurvey(!!r.maskSurvey)
           if (revision !== sourceRevision.current) return
+          setSavedSources(r.selection)
+          if (sourceDirty.current) return
           sourceDraft.current = r.selection
-          setChosen(r.selection); setSavedSources(r.selection)
+          setChosen(r.selection)
         }, (e) => { if (live) setSourceMsg(String((e && e.message) || e)) })
         return () => { live = false }
       }, [props.refreshKey])
       const saveSelection = (next) => {
         const revision = ++sourceRevision.current
+        sourceDirty.current = true
         sourceDraft.current = next
         setChosen(next); setSourceBusy(true); setSourceMsg('正在保存平台选择…')
         intelSourcesWriteQueue = intelSourcesWriteQueue.then(async () => {
@@ -9278,7 +9282,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             }
             setSavedSources(r.selection)
             setSourceStatus(r.sourceStatus || {})
-            if (revision === sourceRevision.current) setSourceMsg('已保存平台选择；不会自动提交外部查询。')
+            if (revision === sourceRevision.current) {
+              sourceDirty.current = false
+              setSourceMsg('已保存平台选择；不会自动提交外部查询。')
+            }
           } catch (e) {
             if (revision === sourceRevision.current) setSourceMsg('保存失败：' + String((e && e.message) || e))
           } finally {
@@ -13013,18 +13020,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }).catch((err) => setKbError(String((err && err.message) || err)))
           .finally(() => setKbOpening(null))
       }
+      const artexRefreshRevision = React.useRef(0)
       const refresh = () => {
+        const revision = ++artexRefreshRevision.current
         refreshKnowledge()
-        setBusy(true)
-        fetch('/dsh-purge/artex', { method: 'GET' })
-          .then((res) => res.json())
-          .then((data) => {
-            if (!data || data.ok === false) throw new Error((data && data.error) || 'ARTEX 状态不可用')
-            setState(data)
-            setError('')
+        setBusy(true); setError('')
+        return fetch('/dsh-purge/artex', { method: 'GET' })
+          .then(async (res) => {
+            const data = await res.json()
+            if (!res.ok || !data || data.ok === false) throw new Error((data && data.error) || 'ARTEX 状态不可用')
+            return data
           })
-          .catch((err) => setError(String((err && err.message) || err)))
-          .finally(() => setBusy(false))
+          .then((data) => {
+            if (revision === artexRefreshRevision.current) setState(data)
+          })
+          .catch((err) => {
+            if (revision !== artexRefreshRevision.current) return
+            setState(null)
+            setError(String((err && err.message) || err))
+          })
+          .finally(() => { if (revision === artexRefreshRevision.current) setBusy(false) })
       }
       React.useEffect(() => { refresh(); loadPaths() }, [])
       const titles = {
