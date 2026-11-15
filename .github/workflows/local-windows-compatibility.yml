@@ -31,7 +31,7 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
       - name: Install isolated fixture with all lifecycle scripts disabled
         shell: pwsh
-        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
       - name: Check generated bundle and syntax
         shell: pwsh
         run: |
