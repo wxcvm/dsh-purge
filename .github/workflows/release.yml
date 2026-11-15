@@ -32,6 +32,9 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install declared dependencies without lifecycle scripts
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false --prefer-offline
+
       - name: Syntax-check plugin entry
         run: |
           node --check lib/index.js
@@ -79,7 +82,7 @@ jobs:
           fi
           if ! gh release view "$tag" >/dev/null 2>&1; then
             case "$version" in
-              *beta*|*alpha*|*rc*|*wxcvm*)
+              *beta*|*alpha*|*rc*)
                 gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" --prerelease ;;
               *)
                 gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" ;;
