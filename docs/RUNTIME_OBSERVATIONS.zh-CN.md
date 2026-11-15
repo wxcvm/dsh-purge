@@ -9,6 +9,7 @@
 - 总耗时：同一 attempt 从 stream/start 到 stream/end；采集器另有进程总耗时，两者不要混用。
 - 终态：只信任实际 finish 帧。缺少时为 unknown；宿主默认补出的 stop 不作为观测证据。持久事件缺少 finish 时不会抹掉实时终态；实时与持久终态的可见字段不一致时保留实时证据并记录 terminalConflict。reasonSource 区分 host-stream、durable-stream 与 not-observed。
 - 结算：committed/abandoned 与回合 completed 是不同维度；都不证明答案正确。替换 Agent 或回合结束但缺少流结束证据时标为 unobserved-end，不伪造耗时或 finish。迟到的持久事件按已提交 seq 对账，不覆盖新 attempt。
+- 工具与分片：chunks 为实时分片序号覆盖（最大 index + 1），observedChunks 为实际收到的实时分片数；有缺口时两者可能不同。toolCalls 是实时工具 block-start 计数，durableToolStarts 是匹配持久流中的同类计数（无持久分片为 null）。两者不能相加，也不证明工具已执行。durableTextObserved 仅表示持久流中看到文本，不用于补算首文本延迟。
 - Token：适配器上报的快照，缺少字段为 null。缓存计费和总 Token 不混称。
 - Provider / 模型归因：分别标明 request-header、request-context、assistant-event 或 not-observed。部分 context 不会清除同一次请求头中的已知字段；流开始时消费该请求证据，迟到的持久事件仅用其自身来源补充，不借用新请求路由。没有新证据的 attempt 保持未知。
 - Provider 原始终态：rc.3 没有稳定透传保证，本版为 null；不解析私有 replayState 或错误正文。
