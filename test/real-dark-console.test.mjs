@@ -43,7 +43,7 @@ test('privacy and asset search keep functional APIs while using real card grids 
     assert.match(source, /rt-pane rt-survey-pane/)
     assert.match(source, /\.rt-full \.rt-privacy-pane,\.rt-full \.rt-survey-pane\{display:grid/)
     assert.match(source, /rt-status-pill rt-status-' \+ key/)
-    assert.match(source, /op: 'platformConfigSave', config: \{ scanPreferences: draft \}/)
+    assert.match(source, /op: 'platformConfigSave', config: \{ scanPreferences: expected, privacyManagement: policy \}/)
     assert.match(source, /op: 'privacyPosture'/)
     assert.match(source, /op: 'platformConfigGet'/)
     assert.match(source, /onClick: \(\) => search\(\)/)

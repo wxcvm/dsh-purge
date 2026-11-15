@@ -13,7 +13,7 @@ test('workbench has a real low-impact tab in both source and embedded UI', () =>
     assert.match(src, /function LowImpactTab\(props\)/, path)
     assert.match(src, /\['low-impact', '智能隐私中心'\]/, path)
     assert.match(src, /st\.tab === 'low-impact'/, path)
-    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: preferences \}/, path)
+    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: expected, privacyManagement: policy \}/, path)
     assert.match(src, /maskHistory \? '目标已隐藏'/, path)
     assert.match(src, /item\.output_file && !maskHistory/, path)
   }
@@ -45,7 +45,7 @@ test('privacy center applies only local display defaults and preserves saved sca
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
     assert.match(src, /savePreferences\(\{ \.\.\.saved, maskHistory: true, maskAssetResults: true \}, true\)/, path)
-    assert.match(src, /Object\.keys\(defaults\)\.every\(\(key\) => current\[key\] === preferences\[key\]\)/, path)
+    assert.match(src, /Object\.keys\(defaults\)\.every\(\(key\) => current\[key\] === expected\[key\]\)/, path)
     assert.match(src, /自动设置并保存/, path)
   }
   const dir = mkdtempSync(join(tmpdir(), 'redteam-privacy-ui-'))
