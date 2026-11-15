@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: wxcvm/FlClash
-          ref: 6acbd4b86fbbd0f68e75fba252625bf50a716abe
+          ref: 77cc4f1a9da9d69416ec057d6dbaa55e20fa09a0
           submodules: recursive
           persist-credentials: false
           path: flclash
