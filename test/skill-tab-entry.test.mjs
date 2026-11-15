@@ -15,7 +15,7 @@ test('unified library has one top-level entry and keeps legacy skills routing', 
     assert.match(source, /const activeTab = st\.tab === 'skills' \? 'knowledge-center' : st\.tab/)
     assert.match(source, /page\('skills', h\(SkillsTab/)
     assert.match(source, /page\('knowledge', h\(KnowledgeCenterTab/)
-    assert.match(source, /h\(UnifiedKnowledgeTab\)/)
+    assert.match(source, /h\(UnifiedKnowledgeTab, \{ initialSource: 'bundled' \}\)/)
   }
 })
 
@@ -45,4 +45,25 @@ test('switching library tabs retains visited pages and original components', () 
   const third=page()
   assert.equal(third.find(n => n.props?.['data-library-view'] === 'knowledge').props.hidden, true)
   assert.equal(third.find(n => n.props?.['data-library-view'] === 'search').props.hidden, false)
+})
+
+
+test('unified library opens bundled knowledge without a search term', async () => {
+  const source = read('lib/redteam/client.js')
+  const start = source.indexOf('    function UnifiedKnowledgeTab(')
+  const end = source.indexOf('    function knowledgeCredentialMessage(', start)
+  const effects=[], calls=[]
+  const ctx=vm.createContext({
+    React:{useState:v=>[v,()=>{}],useRef:v=>({current:v}),useEffect:fn=>effects.push(fn)},
+    h:(type,props,...children)=>({type,props,children}),
+    api:async request=>{calls.push(request);return {ok:true,groups:[]}}
+  })
+  const render=vm.runInContext(source.slice(start,end)+'\nUnifiedKnowledgeTab',ctx)
+  const tree=render({initialSource:'bundled'})
+  effects.forEach(fn=>fn())
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(calls.length,1)
+  assert.equal(calls[0].source,'bundled')
+  assert.equal(calls[0].query,'')
+  assert.match(JSON.stringify(tree),/Purge 内置知识/)
 })
