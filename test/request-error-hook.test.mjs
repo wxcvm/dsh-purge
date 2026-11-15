@@ -64,3 +64,61 @@ test('request hook retries only eligible failures and retains deduplication and 
   }
   assert.equal(listeners.size, 0);
 });
+
+test('official provider policy owns the retry decision, including no retry', async () => {
+  const { runtime, handler, agent } = fixture();
+  const old = globalThis.__dshPurgeRetryPending;
+  try {
+    const policy = Object.freeze({ mode: 'normal', retryableCodes: ['SERVER'], maxRetries: 2, maxDelayMs: 1000, initialDelayMs: 100, jitterRatio: 0 });
+    const payload = { agent, turn: 1, step: 1, retryPolicy: policy, provider: 'fixture', failure: { code: 'SERVER', status: 503 } };
+    const original = JSON.parse(JSON.stringify(payload));
+    let calls = 0;
+    assert.equal(await handler(payload, async () => { calls++; return undefined; }), undefined);
+    assert.equal(calls, 1);
+    const decision = { kind: 'retry' };
+    assert.equal(await handler(payload, async () => decision), decision);
+    assert.equal(await handler({ ...payload, failure: { code: 'TIMEOUT' } }, async () => undefined), undefined);
+    assert.equal(await handler({ ...payload, failure: { code: 'SERVER', providerRetryAfterMs: 3000 } }, async () => undefined), undefined);
+    assert.equal(await handler({ ...payload, retryPolicy: { mode: 'always' } }, async () => undefined), undefined);
+    assert.deepEqual(payload, original);
+    assert.equal(globalThis.__dshPurgeRetryPending, old);
+    // Legacy policy-less transient fallback is unchanged and hasn't spent its budget.
+    assert.deepEqual(await handler({ ...payload, retryPolicy: undefined }, async () => undefined), { kind: 'retry' });
+  } finally {
+    if (old === undefined) delete globalThis.__dshPurgeRetryPending; else globalThis.__dshPurgeRetryPending = old;
+    runtime.dispose();
+  }
+});
+
+test('legacy recovery does not ignore a provider requested wait', async () => {
+  const { runtime, handler, agent } = fixture();
+  const old = globalThis.__dshPurgeRetryPending;
+  try {
+    const payload = { agent, turn: 1, step: 1, failure: { code: 'RATE_LIMIT', status: 429, providerRetryAfterMs: 2000 } };
+    assert.equal(await handler(payload, async () => undefined), undefined);
+    assert.equal(globalThis.__dshPurgeRetryPending, old);
+    assert.deepEqual(await handler({ ...payload, failure: { code: 'RATE_LIMIT', status: 429 } }, async () => undefined), { kind: 'retry' });
+  } finally {
+    if (old === undefined) delete globalThis.__dshPurgeRetryPending; else globalThis.__dshPurgeRetryPending = old;
+    runtime.dispose();
+  }
+});
+
+test('official machine codes distinguish repair-required failures from technical transients', () => {
+  for (const code of ['HTTP_400', 'HTTP_401', 'HTTP_403', 'HTTP_422', 'ABORTED', 'ACCOUNT_SIGN_IN_REQUIRED', 'ACCOUNT_TOKEN_INVALID', 'CLIENT_UPGRADE_REQUIRED', 'INVALID_MODEL_MAX_TOKENS', 'INVALID_REPLAY_STATE', 'IMAGE_OFFLOAD_REQUIRED', 'MODEL_SWITCH_COMPACTION_FAILED', 'MODEL_UNSUPPORTED', 'UNKNOWN_MODEL', 'UNSUPPORTED_CONTENT', 'UNSUPPORTED_OPTION', 'UNSUPPORTED_REASONING_EFFORT']) {
+    assert.equal(shouldAutoRetry({ code }), false, code);
+    assert.equal(shouldAutoContinue({ kind: 'error', failure: { code } }), false, code);
+  }
+  for (const code of ['HTTP_408', 'HTTP_429', 'HTTP_503', 'SERVER', 'TIMEOUT', 'STREAM_CLOSED', 'TRANSPORT', 'EMPTY_RESPONSE']) {
+    assert.equal(shouldAutoRetry({ code }), true, code);
+  }
+});
+
+test('disposal during downstream request-error handling prevents a stale plugin retry', async () => {
+  const { runtime, handler, agent } = fixture();
+  const old = globalThis.__dshPurgeRetryPending;
+  const payload = { agent, turn: 1, step: 1, failure: { code: 'SERVER', status: 503 } };
+  assert.equal(await handler(payload, async () => { runtime.dispose(); return undefined; }), undefined);
+  assert.equal(await handler(payload, async () => undefined), undefined);
+  assert.equal(globalThis.__dshPurgeRetryPending, old);
+});
