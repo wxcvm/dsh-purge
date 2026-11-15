@@ -436,3 +436,55 @@ test('an observed assistant route conflict invalidates the capacity for that att
   assert.equal(row.contextBudget.messageBudgetTokens,null);
   assert.equal(row.contextBudget.status,'insufficient-evidence');
 });
+
+test('native tool results pair with committed requests and distinguish recovery outcomes', () => {
+  const o = createRuntimeObservations(), a = agent('tools');
+  start(o,a);
+  chunk(o,a,0,{type:'block-start',blockType:'tool-call'});
+  chunk(o,a,1,{type:'finish',reason:{kind:'tool-calls'}});
+  const ids=['private-a','private-b','private-c','private-d','private-e','private-f'];
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{content:ids.map(id=>({type:'tool-call',id,name:'PRIVATE NAME',arguments:'PRIVATE ARGS'}))}}});
+  const call=(seq,id)=>o.event(a.session,{seq,type:'tool/call',data:{turn:1,step:1,callId:id,arguments:'PRIVATE ARGS'}});
+  const result=(seq,id,code)=>o.event(a.session,{seq,type:'tool/result',data:{turn:1,step:1,message:{toolCallId:id,source:{kind:'tool',callId:id},isError:!!code,content:'PRIVATE RESULT'},...(code?{error:{code,reason:'PRIVATE REASON'}}:{})}});
+  call(3,ids[0]);call(4,ids[1]);call(5,ids[2]);call(6,ids[5]);
+  result(7,ids[1],'TOOL_OUTCOME_UNKNOWN');result(8,ids[0]);result(9,ids[3],'TOOL_NOT_STARTED');result(10,ids[2],'EXECUTION_ERROR');
+  result(11,ids[4],'ABORTED_BEFORE_DISPATCH');
+  const row=o.snapshot().items[0];
+  assert.deepEqual(row.toolEvidence,{requested:6,recorded:4,results:5,nonErrorResults:1,errors:1,notStarted:2,outcomeUnknown:1,unresolved:1,conflicts:0});
+  assert.equal(row.toolCalls,1);
+  assert.equal(row.assessment.delivery,'not-verified');
+  assert.doesNotMatch(JSON.stringify(row),/private-[a-f]|PRIVATE/);
+  row.toolEvidence.results=99;
+  assert.equal(o.snapshot().items[0].toolEvidence.results,5);
+});
+
+test('late tool results remain on their original request and ambiguous ids stay unassigned', () => {
+  const o=createRuntimeObservations(),a=agent('tools-late');
+  const request={type:'tool-call',id:'same',name:'fixture',arguments:'{}'};
+  start(o,a);
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{content:[request]}}});
+  o.event(a.session,{seq:3,type:'tool/call',data:{turn:1,step:1,callId:'same'}});
+  end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:2}});
+  o.event(a.session,{seq:4,type:'assistant/message',data:{turn:1,step:2,message:{content:[request]}}});
+  o.event(a.session,{seq:5,type:'tool/result',data:{turn:1,step:1,message:{toolCallId:'same'}}});
+  let [next,previous]=o.snapshot().items;
+  assert.equal(previous.toolEvidence.results,1);
+  assert.equal(next.toolEvidence.results,0);
+  o.event(a.session,{seq:6,type:'tool/result',data:{turn:1,step:2,callId:'different',message:{toolCallId:'same'}}});
+  assert.equal(o.snapshot().items[0].toolEvidence.results,0);
+  o.event(a.session,{seq:7,type:'tool/result',data:{turn:1,step:1,message:{toolCallId:'same',isError:true},error:{code:'OTHER'}}});
+  previous=o.snapshot().items[1];
+  assert.equal(previous.toolEvidence.results,1);
+  assert.equal(previous.toolEvidence.conflicts,1);
+  assert.equal(previous.toolEvidence.nonErrorResults,0);
+});
+
+test('missing assistant tool content remains unknown; no tools is observed only for an actual block array', () => {
+  for (const [content,expected] of [[undefined,null],[[],0]]) {
+    const o=createRuntimeObservations(),a=agent('unknown-tools');start(o,a);
+    o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{content}}});
+    const evidence=o.snapshot().items[0].toolEvidence;
+    assert.equal(evidence===null?null:evidence.requested,expected);
+  }
+});
