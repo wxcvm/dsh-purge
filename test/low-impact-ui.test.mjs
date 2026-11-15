@@ -11,9 +11,9 @@ test('workbench has a real low-impact tab in both source and embedded UI', () =>
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
     assert.match(src, /function LowImpactTab\(props\)/, path)
-    assert.match(src, /\['low-impact', '低干扰'\]/, path)
+    assert.match(src, /\['low-impact', '智能隐私中心'\]/, path)
     assert.match(src, /st\.tab === 'low-impact'/, path)
-    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: draft \}/, path)
+    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: preferences \}/, path)
     assert.match(src, /maskHistory \? '目标已隐藏'/, path)
     assert.match(src, /item\.output_file && !maskHistory/, path)
   }
@@ -38,4 +38,30 @@ test('workbench API saves only scan preferences and preserves existing configura
   })
   const loaded = dispatch(store, { op: 'platformConfigGet' })
   assert.deepEqual(loaded.config.scanPreferences, result.config.scanPreferences)
+})
+
+
+test('privacy center applies only local display defaults and preserves saved scan preferences', (t) => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    assert.match(src, /savePreferences\(\{ \.\.\.saved, maskHistory: true, maskAssetResults: true \}, true\)/, path)
+    assert.match(src, /Object\.keys\(defaults\)\.every\(\(key\) => current\[key\] === preferences\[key\]\)/, path)
+    assert.match(src, /自动设置并保存/, path)
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'redteam-privacy-ui-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const store = { root: dir }
+  const initial = dispatch(store, { op: 'platformConfigSave', config: {
+    tools: { nmap: '/mock/nmap' },
+    scanPreferences: { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false }
+  } })
+  assert.equal(initial.ok, true)
+  const saved = initial.config.scanPreferences
+  const result = dispatch(store, { op: 'platformConfigSave', config: {
+    scanPreferences: { ...saved, maskHistory: true, maskAssetResults: true }
+  } })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.config.scanPreferences, { ...saved, maskHistory: true, maskAssetResults: true })
+  assert.equal(result.config.tools.nmap, '/mock/nmap')
+  assert.deepEqual(dispatch(store, { op: 'platformConfigGet' }).config.scanPreferences, result.config.scanPreferences)
 })

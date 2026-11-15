@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "82595d3c6dec5652";
+		const CLIENT_BUILD_ID = "9429529720eb726f";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8689,19 +8689,28 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         return () => { live = false }
       }, [eng, props.refreshKey])
       const update = (key, value) => setDraft((old) => old ? { ...old, [key]: value } : old)
-      const save = () => {
-        if (!draft || busy) return
+      const savePreferences = (preferences, automatic = false) => {
+        if (!preferences || busy) return
         setBusy(true); setError(''); setMessage('')
-        api({ op: 'platformConfigSave', config: { scanPreferences: draft } }).then((r) => {
+        api({ op: 'platformConfigSave', config: { scanPreferences: preferences } }).then((r) => {
           setBusy(false)
           if (!r || r.ok === false) { setError((r && r.error) || '保存失败'); return }
           const current = Object.assign({}, defaults, (r.config && r.config.scanPreferences) || {})
           setSaved(current); setDraft(current)
-          setMessage('已保存。下一次扫描起使用新的执行偏好；界面遮蔽在重新打开相应页面后生效。')
+          const confirmed = Object.keys(defaults).every((key) => current[key] === preferences[key])
+          if (!confirmed) { setError('服务返回的设置与请求不一致，请检查实际保存值。'); return }
+          setMessage(automatic
+            ? '已自动保存本地展示隐私设置。重新打开扫描记录或测绘中心后生效；扫描参数和原始证据不变。'
+            : '已保存。下一次扫描起使用新的执行偏好；界面遮蔽在重新打开相应页面后生效。')
           api({ op: 'privacyPosture' }).then((v) => {
             if (v && v.ok !== false) setProtection(v)
           }, () => {})
         }, (e) => { setBusy(false); setError(String((e && e.message) || e)) })
+      }
+      const save = () => savePreferences(draft)
+      const applyPrivacyDefaults = () => {
+        if (!saved || busy) return
+        savePreferences({ ...saved, maskHistory: true, maskAssetResults: true }, true)
       }
       const runArtexOverview = () => {
         if (artexOverviewBusy) return
@@ -8728,7 +8737,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 4 } }, description)))
       return h('div', { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
-          h('b', null, '低干扰与隐私'),
+          h('b', null, '智能隐私中心'),
           saved ? h('span', { className: 'rt-tag' }, saved.mode === 'low-impact' ? '低影响模式' : '标准模式') : null,
           h('div', { className: 'rt-spacer' }),
           h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save },
@@ -8740,12 +8749,28 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('h4', null, '能力边界'),
             h('div', { style: { fontSize: 12 } },
               '这里减少不必要的网络请求和本地敏感数据显示，不伪装来源、不规避目标侧监测，也不修改或删除目标的审计记录。网络请求仍可能出现在目标日志中。')),
+          saved ? h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
+            h('h4', null, '智能设置 · 本地隐私'),
+            h('div', { style: { fontSize: 12 } },
+              '一键启用扫描记录与测绘中心的展示遮蔽，保留已保存的扫描参数、诊断记录和网络配置。不修改原始证据或数据库。'),
+            h('div', { style: { fontSize: 12, marginTop: 6 } },
+              '已保存：扫描记录 ' + (saved.maskHistory ? '已遮蔽' : '未遮蔽')
+                + ' · 测绘中心 ' + (saved.maskAssetResults ? '已遮蔽' : '未遮蔽')),
+            h('button', { className: 'rt-btn rt-btn-primary', type: 'button',
+              disabled: busy || !draft || Object.keys(defaults).some((key) => draft[key] !== saved[key])
+                || (saved.maskHistory && saved.maskAssetResults),
+              onClick: applyPrivacyDefaults, style: { marginTop: 8 } },
+              saved.maskHistory && saved.maskAssetResults ? '本地隐私已启用' : '自动设置并保存'),
+            draft && Object.keys(defaults).some((key) => draft[key] !== saved[key])
+              ? h('div', { style: { fontSize: 12 } }, '请先保存手动修改，再使用自动设置。') : null,
+            h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 6 } },
+              '此功能只自动应用本地展示设置；不会修改代理、DNS、凭据、权限或运行中的任务。')) : null,
           draft ? h('div', { className: 'rt-card' },
             h('h4', null, '单次探测设置'),
             h('label', { style: { fontSize: 12, display: 'block', marginBottom: 10 } },
               'Nmap 任务模式',
               h('select', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 5 },
-                value: draft.mode, onChange: (e) => update('mode', e.target.value) },
+                disabled: busy, value: draft.mode, onChange: (e) => update('mode', e.target.value) },
                 h('option', { value: 'standard' }, '标准 · 端口 + 服务版本探测'),
                 h('option', { value: 'low-impact' }, '低影响 · 只做端口检查，最多重试 1 次'))),
             h('div', { style: { fontSize: 12, opacity: 0.8, marginBottom: 12 } },
@@ -8753,7 +8778,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('label', { style: { fontSize: 12, display: 'block' } },
               '单次扫描执行超时',
               h('select', { className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 5 },
-                value: String(draft.timeoutSeconds),
+                disabled: busy, value: String(draft.timeoutSeconds),
                 onChange: (e) => update('timeoutSeconds', Number(e.target.value)) },
                 [30, 60, 120, 180, 300].map((sec) => h('option', { key: sec, value: sec },
                   sec + ' 秒' + (sec === 180 ? '（原始默认）' : ''))))),
@@ -12953,7 +12978,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
         { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '技能与知识库'], ['local-search', '测绘中心'], ['artex', 'ARTEX']] },
-        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['agents', '智能体'], ['report', '报告']] },
+        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '智能隐私中心'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
       const activeTab = st.tab === 'skills' ? 'knowledge-center' : st.tab
