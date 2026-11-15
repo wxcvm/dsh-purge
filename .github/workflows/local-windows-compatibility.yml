@@ -2,8 +2,6 @@ name: Windows Local Compatibility
 
 on:
   workflow_dispatch:
-  push:
-    branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
 
 permissions:
   contents: read

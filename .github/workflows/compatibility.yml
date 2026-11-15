@@ -1,22 +1,26 @@
-name: Linux Local Compatibility
+name: Local Compatibility (Windows + WSL)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
+  pull_request:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   api-contracts:
-    runs-on: [self-hosted, Linux, X64, purge-ci]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
     timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,15 +28,72 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install declared plugin dependencies once
+        id: root-install
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional --package-lock=false
       - name: Prepare latest official fixture, without host or model execution
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
           fixture="$(node scripts/prepare-host-fixture.mjs)"
           printf 'DSH_COMPAT_HOST_ROOT=%s\n' "$fixture" >> "$GITHUB_ENV"
-      - name: Install isolated fixture with all lifecycle scripts disabled
-        run: npm install --prefix "$DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
-      - name: Check generated bundle and syntax
+      - name: Prepare latest official fixture, without host or model execution
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          node scripts/build-client.mjs --check
-          node scripts/check-syntax.mjs
-      - name: Run unit and actual public API contract tests
-        run: node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
+          $fixture = node scripts/prepare-host-fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
+      - name: Install isolated fixture dependencies
+        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+      - name: Check generated bundle
+        run: node scripts/build-client.mjs --check
+      - name: Check syntax
+        run: node scripts/check-syntax.mjs
+      - name: Compile optional Windows injection switch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./maintenance/inject-switch/Build.ps1
+      - name: Attach optional Windows switch executable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-inject-switch-windows
+          path: maintenance/inject-switch/dist/dsh-inject-switch.exe
+          retention-days: 14
+      - name: Smoke-test Desktop updater and simulated rollback
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-desktop-updater.ps1
+      - name: Exercise Windows pnpm junction rollback
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-desktop-updater-junction.ps1
+      - name: Smoke-test optional Windows NTFS ACL protector
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-private-acl.ps1
+      - name: Run unit and public API contract tests
+        env:
+          PURGE_CI_TEST_CONCURRENCY: ${{ vars.PURGE_CI_TEST_CONCURRENCY }}
+        run: |
+          node -e "const n=Number(process.env.PURGE_CI_TEST_CONCURRENCY || require('node:os').availableParallelism()); if(!Number.isSafeInteger(n)||n<1) throw Error('Invalid test concurrency'); const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-concurrency='+n,'test/*.test.*','maintenance/*.test.mjs','maintenance/desktop-tools/*.test.mjs'],{stdio:'inherit'}); process.exitCode=r.status ?? 1"
+      - name: Run pending specifications
+        id: specs
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.root-install.outcome == 'success' }}
+        continue-on-error: true
+        shell: pwsh
+        run: node --test "test-pending/*.mjs"
+      - name: Report pending status prominently
+        if: ${{ always() && !cancelled() && runner.os == 'Windows' }}
+        shell: pwsh
+        env:
+          PENDING_OUTCOME: ${{ steps.specs.outcome }}
+        run: |
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Pending specifications (not release-gating)' -Encoding utf8
+          if ($env:PENDING_OUTCOME -eq 'failure') {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Pending specifications currently fail. Inspect the preceding test step before claiming full coverage.' -Encoding utf8
+            Write-Host '::warning title=Pending specs failing::Known pending tests are visible and not part of the green release gate.'
+          } else {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Result: $env:PENDING_OUTCOME" -Encoding utf8
+          }
