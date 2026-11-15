@@ -301,7 +301,7 @@ test('Windows installer default and saved portable paths are recognized', (t) =>
 })
 
 test('ARTEX status uses an injected store, preserves custom root, and survives service reload', async () => {
-  const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+  const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const start = server.indexOf('function watchArtexStore(ctx)')
   const end = server.indexOf('function installWebServer(ctx, cfg)', start)
   assert.ok(start >= 0 && end > start)
