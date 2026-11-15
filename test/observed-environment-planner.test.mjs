@@ -130,3 +130,9 @@ test('changed saved SSH endpoint cannot reuse old discovered host or probe', (t)
   assert.equal(planObservedEnvironmentTask('services', options).selected, null)
   assert.ok(planObservedEnvironmentTask('services', options).candidates.every(c => c.environmentId === 'local'))
 })
+
+test('agent records path-only local verification as located rather than degraded', () => {
+  const agent = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  assert.match(agent, /result\.verification\.status === 'path-only' \? 'located'/)
+  assert.match(agent, /result\.verification\.status === 'missing' \? 'missing'/)
+})
