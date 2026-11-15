@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "aca77aaf29a8ed39";
+		const CLIENT_BUILD_ID = "15f407c0abc7a798";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4068,10 +4068,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const evidence = { text: 0, tools: 0, terminal: 0, cancelled: 0 };
   for (const row of routeItems) {
     if (row.firstTextMs != null) evidence.text++;
-    if (row.toolCalls > 0) evidence.tools++;
+    if (row.toolCalls > 0 || row.durableToolStarts > 0) evidence.tools++;
     if (row.finishObserved) evidence.terminal++;
     if (row.turnOutcome === 'aborted' || row.finish === 'aborted') evidence.cancelled++;
   }
+  const durableTextCount = routeItems.filter(row => row.durableTextObserved === true && row.firstTextMs == null).length;
   const metric = (title, count) => h('div', { className: 'dshp-runtime-metric' },
     h('small', null, title), h('strong', null, snapshot ? count : '—'));
   const detail = (title, content) => h('div', null, h('dt', null, title), h('dd', null, content));
@@ -4096,6 +4097,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
     h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
     snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
+    snapshot && durableTextCount ? h('p', { className: 'dshp-runtime-meta' }, '另有 ' + durableTextCount + ' 条仅持久流文本证据，未计入首文本计时。') : null,
     !snapshot ? h('div', { role: 'status', className: 'dshp-runtime-empty', 'aria-busy': !error },
       h('strong', null, error ? '暂时无法读取运行记录' : '正在读取运行状态…'),
       h('p', null, error ? '页面可见时会自动刷新，无需重复发起模型请求。' : '正在获取近期请求，请稍候。')) :
@@ -4115,12 +4117,14 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
           detail('错误代码', value(r.errorCode)),
           detail('终态来源', source(r)),
-          detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource))),
+          detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
+          detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),
+          detail('文本证据', r.firstTextMs != null ? '实时已计时' : r.durableTextObserved === true ? '持久流已观测 · 无实时计时' : '未观测')),
         r.streamGap || r.terminalConflict || r.interrupted ? h('p', { className: 'dshp-runtime-warning' }, [r.streamGap && '分片缺口', r.terminalConflict && '终态证据冲突', r.interrupted && '中断前缀'].filter(Boolean).join(' · ')) : null,
         h('details', null, h('summary', null, '任务质量与原始状态'),
           h('p', null, refusalLabel(r.assessment) + ' / ' + deliveryLabel(r.assessment)),
           h('p', null, (r.assessment?.reasonCodes || []).join(', ')),
-          h('p', null, '回合 ' + value(r.turn) + ' · 步骤 ' + value(r.step) + ' · 分片 ' + value(r.chunks) + ' · 工具调用 ' + value(r.toolCalls))));
+          h('p', null, '回合 ' + value(r.turn) + ' · 步骤 ' + value(r.step) + ' · 实收分片 ' + value(r.observedChunks) + ' / 序号覆盖 ' + value(r.chunks) + ' · 工具开始 ' + value(r.toolCalls) + '（实时）')));
     })),
     h('h3', null, '任务质量报告'),
     h('p', null, '导入 evaluate-task-quality 的输出 JSON；仅在本页面读取，不上传。采集来源由报告作者声明。'),

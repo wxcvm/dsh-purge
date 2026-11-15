@@ -159,3 +159,42 @@ test('only a matched assistant source can refine a captured route and a new atte
   assert.equal(o.snapshot().items[0].provider,null);
   assert.equal(o.snapshot().items[0].model,null);
 });
+
+
+test('durable stream recovers tool-start evidence after a live gap without inventing timing or adding overlapping counts', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o,a);
+  chunk(o,a,2,{type:'block-start',blockType:'tool-call'});
+  const records=[
+    {chunk:{type:'text-delta',text:'PRIVATE TEXT'}},
+    {chunk:{type:'block-start',blockType:'tool-call',id:'PRIVATE ID',name:'PRIVATE TOOL'}},
+    {chunk:{type:'block-start',blockType:'tool-call'}},
+    {chunk:{type:'finish',reason:{kind:'tool-calls'}}}
+  ];
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,stream:records}});
+  end(o,a,3);
+  const r=o.snapshot().items[0];
+  assert.equal(r.chunks,3); assert.equal(r.observedChunks,1); assert.equal(r.streamGap,true);
+  assert.equal(r.toolCalls,1); assert.equal(r.durableToolStarts,2);
+  assert.equal(r.durableTextObserved,true); assert.equal(r.firstTextMs,null);
+  assert.equal(r.finish,'tool-calls'); assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});
+
+test('empty durable evidence remains unknown and late exact-sequence tool evidence stays on the previous attempt', () => {
+  const o=createRuntimeObservations(), a=agent('s'); start(o,a); end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:1}});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,stream:[{chunk:{type:'block-start',blockType:'tool-call'}}]}});
+  const [next,previous]=o.snapshot().items;
+  assert.equal(next.durableToolStarts,null); assert.equal(next.durableTextObserved,null);
+  assert.equal(previous.durableToolStarts,1); assert.equal(previous.durableTextObserved,false);
+  o.event(a.session,{seq:4,type:'assistant/attempt',data:{turn:1,step:1,stream:[]}});
+  assert.equal(o.snapshot().items[0].durableToolStarts,null);
+});
+
+test('live and durable copies are not added together; live text timing remains measured only from live frames', () => {
+  let time=0; const o=createRuntimeObservations({now:()=>time}), a=agent('s');start(o,a);
+  const tool={type:'block-start',blockType:'tool-call'};
+  chunk(o,a,0,tool);time=10;chunk(o,a,1,{type:'text-delta',text:'a'});
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,stream:[{chunk:tool},{chunk:{type:'text-delta',text:'a'}}]}});
+  const r=o.snapshot().items[0];assert.equal(r.toolCalls,1);assert.equal(r.durableToolStarts,1);
+  assert.equal(r.firstTextMs,10);assert.equal(r.durableTextObserved,true);
+});
