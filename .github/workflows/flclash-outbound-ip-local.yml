@@ -16,14 +16,28 @@ jobs:
     runs-on: [self-hosted, Windows, X64, purge-ci]
     timeout-minutes: 30
     steps:
-      - name: Checkout exact reviewed FlClash revision
-        uses: actions/checkout@v4
-        with:
-          repository: wxcvm/FlClash
-          ref: 01e592ca77e5f8bf20d4f6afa367777bdfc9a207
-          submodules: recursive
-          persist-credentials: false
-          path: flclash
+      - name: Reuse persistent checkout of the reviewed FlClash revision
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TOOL_CACHE 'flclash-regression-source'
+          $revision = '01e592ca77e5f8bf20d4f6afa367777bdfc9a207'
+          if (-not (Test-Path (Join-Path $source '.git'))) {
+            New-Item -ItemType Directory -Force -Path $source | Out-Null
+            git -C $source init
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git -C $source remote add origin https://github.com/wxcvm/FlClash.git
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          git -C $source rev-parse --verify --quiet "$revision^{commit}"
+          if ($LASTEXITCODE -ne 0) {
+            git -C $source fetch --no-tags --depth=1 origin $revision
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          git -C $source checkout --detach --force $revision
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C $source -c 'url.https://github.com/.insteadOf=git@github.com:' submodule update --init --recursive --depth=1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "FLCLASH_SOURCE=$source"
       - name: Set up pinned Flutter SDK using native Windows PowerShell
         shell: pwsh
         run: |
@@ -55,13 +69,13 @@ jobs:
           & $flutter --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install Flutter dependencies
-        working-directory: flclash
+        working-directory: ${{ env.FLCLASH_SOURCE }}
         run: flutter pub get
       - name: Check formatting
-        working-directory: flclash
+        working-directory: ${{ env.FLCLASH_SOURCE }}
         run: dart format --output=none --set-exit-if-changed lib/providers/outbound_ip.dart test/providers/outbound_ip_test.dart
       - name: Disable Go core build hook for Dart tests
-        working-directory: flclash
+        working-directory: ${{ env.FLCLASH_SOURCE }}
         shell: pwsh
         run: |
           $path = 'pubspec.yaml'
@@ -70,5 +84,5 @@ jobs:
           if ($text -notmatch '(?m)    setup:\r?\n      build_assets: false') { throw 'Go build hook setting not found' }
           Set-Content -LiteralPath $path -Value $text -NoNewline
       - name: Run outbound IP and route regression tests
-        working-directory: flclash
+        working-directory: ${{ env.FLCLASH_SOURCE }}
         run: flutter test test/providers/outbound_ip_test.dart test/providers/routed_probe_test.dart test/views/dashboard/current_outbound_test.dart --reporter expanded
