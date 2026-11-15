@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { RUNTIME_FILES } from '../lib/desktop-runtime-health.js'
 
 const source = readFileSync(new URL('../lib/official-update.wscript', import.meta.url), 'utf8')
 const exe = 'C:\\Harness\\Dsh Next.exe'
@@ -11,14 +12,14 @@ const asar = resources + '\\app.asar'
 const bak = asar + '.bak'
 const installer = 'C:\\Temp\\deepseek-harness-0.2.2-rc.1-win-x64.exe'
 
-function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false, staleVersion = false, exeOnlyChange = false, numericVersion = false, missingRuntime = false } = {}) {
+function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false, staleVersion = false, exeOnlyChange = false, numericVersion = false, missingRuntime = false, missingRuntimeFile = null } = {}) {
   const dirs = new Set([resources, app])
   const files = new Map([
     [exe, { size: 10, stamp: 1, version: '0.2.1-rc.5' }],
     [installer, { size: 20, stamp: 1 }],
   ])
   if (!noArchive) files.set(bak, { size: 30, stamp: 1 })
-  if (!missingRuntime) for (const rel of ['versions.json','bin\\node.cmd','primary-runtime\\dependencies\\node\\bin\\node.exe','primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs']) files.set(resources + '\\runtime\\' + rel, { size: 1, stamp: 1 });
+  if (!missingRuntime) for (const rel of RUNTIME_FILES) if (rel !== missingRuntimeFile) files.set(resources + '\\runtime\\' + rel.replaceAll('/', '\\'), { size: 1, stamp: 1 });
   if (numericVersion) { files.get(exe).version = '0.2.0.0'; files.get(exe).releaseVersion = '0.2.1-rc.5'; }
   const calls = []
   const logs = []
@@ -144,8 +145,12 @@ test('locked resources/app aborts instead of running NSIS against the patched ho
 test('nonzero installer exit is a failure even if app.asar changed', () => {
   const run = simulate({ installCode: 3, changes: true })
   assert.match(run.logs, /abort: installer exit=3/)
-  assert.ok(run.dirs.has(app), 'previous patched host restored')
-  assert.equal(run.files.has(asar), false, 'prepared asar hidden after failure')
+  assert.match(run.logs, /manual-recovery-required/)
+  assert.equal(run.exitCode, 1)
+  assert.equal(run.dirs.has(app), false, 'old unpacked application must not replace new version')
+  assert.ok(run.dirs.has(app + '.dshpurge-prev'), 'previous app preserved')
+  assert.equal(run.files.has(asar), true, 'current archive preserved')
+  assert.equal(run.calls.filter(x => x === '"' + exe + '"').length, 0, 'do not relaunch mixed installation')
   assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), false)
   assert.equal(run.calls.filter(x => x.includes(installer)).length, 1, 'do not run the installer twice after partial changes')
 })
@@ -211,7 +216,10 @@ test('updating only the exe without replacing app.asar is not a complete upgrade
   assert.match(run.logs, /changed exe=true asar=false/)
   assert.match(run.logs, /abort: installer exit=0 changed=true/)
   assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), false)
-  assert.ok(run.dirs.has(app))
+  assert.equal(run.dirs.has(app), false)
+  assert.ok(run.dirs.has(app + '.dshpurge-prev'))
+  assert.match(run.logs, /manual-recovery-required/)
+  assert.equal(run.exitCode, 1)
 })
 
 test('real Windows numeric PE tuple does not reject a matching prerelease string', () => {
@@ -223,4 +231,15 @@ test('installer success without its runtime payload is not accepted', () => {
   const run = simulate({ missingRuntime: true });
   assert.match(run.logs, /runtime-ready=false/);
   assert.ok(!run.files.has(resources + '\\dsh-purge-reapply-asar'));
+});
+
+test('all six runtime files required by the diagnostic must also pass the installer handoff', () => {
+  for (const rel of RUNTIME_FILES) {
+    const run = simulate({ missingRuntimeFile: rel });
+    assert.match(run.logs, /runtime-ready=false/);
+    assert.ok(run.logs.includes(rel.replaceAll('/', '\\')));
+    assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), false);
+    assert.match(run.logs, /manual-recovery-required/);
+    assert.equal(run.exitCode, 1);
+  }
 });
