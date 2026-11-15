@@ -376,18 +376,28 @@ test('remote target check uses immutable commit and reports per-file differences
   let unavailable = ''
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
   const seen = []
-  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer',
+  let token = ''
+  const verify = new Function('readCurrentUpdateReceipt', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
-    () => receipt, () => 'receipt', () => ({ hashes: local }), files,
-    async (url) => {
-      seen.push(url)
-      const file = url.split('/' + sha + '/')[1]
+    () => receipt, () => ({ hashes: local }), files,
+    async (url, timeout, headers) => {
+      seen.push({ url, headers })
+      const parsed = new URL(url)
+      const file = token ? parsed.pathname.split('/contents/')[1] : url.split('/' + sha + '/')[1]
       if (!file || file === unavailable) throw new Error('unavailable')
       return { arrayBuffer: async () => Buffer.from(file) }
-    }, 'fixture/repo', createHash, Buffer)
+    }, 'fixture/repo', createHash, Buffer, () => token,
+    (ref, file) => 'https://api.github.com/repos/fixture/repo/contents/' + file + '?ref=' + ref)
   assert.equal((await verify()).status, 'match')
   assert.equal(seen.length, 4)
-  assert.ok(seen.every((url) => url.includes('/' + sha + '/')))
+  assert.ok(seen.every(({ url }) => url.includes('/' + sha + '/')))
+  seen.length = 0
+  token = 'fixture-token'
+  assert.equal((await verify()).status, 'match')
+  assert.equal(seen.length, 4)
+  assert.ok(seen.every(({ url, headers }) => new URL(url).searchParams.get('ref') === sha &&
+    headers.accept === 'application/vnd.github.raw+json'))
+  token = ''
   local['client.js'] = 'different'
   assert.equal((await verify()).status, 'mismatch')
   unavailable = 'lib/index.js'
@@ -447,8 +457,10 @@ test('update applies one immutable target across git, archives, profile specs an
     bootProcess: { pid: 123, startedAt: 1000 },
     saveUpdateReceipt: receipt => events.push(['receipt', { ...receipt }]),
     remoteHeadSha: async () => { resolutions++; return resolutions === 1 ? resolved : newer },
+    updateStage: (stage, detail) => events.push(['progress', stage, detail]),
     gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
     overlayFromZip: async (dirs, sha) => events.push(['zip', dirs, sha]),
+    preparePrivateProfileInstall: async () => null,
     pinInstalledSpec: (dir, sha) => events.push(['spec', dir, sha]),
     ensureAllProfileInstall: () => {},
     findDshHome: () => '/home',
@@ -471,6 +483,7 @@ test('update applies one immutable target across git, archives, profile specs an
   const jobs = [{ kind: 'git', dir: '/git' }, { kind: 'dsh', dir: '/zip', profileDir: '/profile' }]
   const result = await apply(jobs, { ref: 'master' })
   assert.equal(result.applied, true)
+  assert.deepEqual(events.filter(e => e[0] === 'progress').map(e => e[1]), ['resolving_target', 'preparing_files', 'git_fetch', 'profile', 'refreshing_versions', 'reapplying'])
   assert.equal(resolutions, 1)
   assert.deepEqual(events.find(e => e[0] === 'git'), ['git', '/git', 'master', target])
   assert.deepEqual(events.find(e => e[0] === 'zip'), ['zip', ['/zip'], target])
@@ -486,11 +499,37 @@ test('update applies one immutable target across git, archives, profile specs an
   assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
   assert.equal(events.at(-1)[1].phase, 'failed')
   assert.equal(events.at(-1)[1].failedPhase, 'resolving_target')
+  events.length = 0
+  resolutions = 0
+  resolved = target
+  const cached = { sha: target, archivePath: '/cache/dsh-purge.tgz', profiles: [{ profile: 'desktop', migrationNeeded: true }] }
+  const privateDeps = {
+    ...deps,
+    preparePrivateProfileInstall: async (jobs, sha) => {
+      events.push(['cache', sha])
+      return cached
+    },
+  }
+  const privateApply = new Function(...Object.keys(privateDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(privateDeps))
+  const privateResult = await privateApply(jobs, { ref: 'master' })
+  assert.equal(privateResult.profileInstall, cached)
+  assert.ok(events.findIndex(e => e[0] === 'cache') < events.findIndex(e => e[0] === 'git'))
+  assert.equal(events.some(e => e[0] === 'spec'), false, 'private update must not rewrite the profile manifest alone')
+  assert.equal(events.filter(e => e[0] === 'receipt').at(-1)[1].profileInstall, cached)
+  events.length = 0
+  resolutions = 0
+  const failureDeps = { ...deps, preparePrivateProfileInstall: async () => { throw Error('cache download failed') } }
+  const failedApply = new Function(...Object.keys(failureDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(failureDeps))
+  await assert.rejects(failedApply(jobs, { ref: 'master' }), /cache download failed/)
+  assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
+  assert.equal(events.at(-1)[1].phase, 'failed')
 })
 
-test('git update keeps channel branch name but never checks out a moving remote ref', () => {
+test('git update keeps channel branch name but never checks out a moving remote ref', async () => {
   const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
-  const start = source.indexOf('function gitResetTo(')
+  const start = source.indexOf('async function gitResetTo(')
   const end = source.indexOf('function extractZip(', start)
   const calls = []
   const reset = new Function('gitTrackedDirty', 'runGit', 'STABLE_REF', 'BETA_REF',
@@ -498,10 +537,11 @@ test('git update keeps channel branch name but never checks out a moving remote 
     () => false, (_dir, args) => { calls.push(args); if (args[0] === 'cat-file') throw Error('missing object') },
     'master', 'beta')
   const sha = 'a'.repeat(40)
-  reset('/git', 'master', { resolvedSha: sha })
+  await reset('/git', 'master', { resolvedSha: sha })
   assert.deepEqual(calls.at(-2), ['fetch', 'origin', sha])
   assert.deepEqual(calls.at(-1), ['checkout', '-B', 'master', sha])
   calls.length = 0
-  reset('/git', 'v1.0.0', { resolvedSha: sha })
+  await reset('/git', 'v1.0.0', { resolvedSha: sha })
   assert.deepEqual(calls.at(-1), ['reset', '--hard', sha])
 })
+
