@@ -15,47 +15,48 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        host: [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-rc.1, 0.2.2-rc.2]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Prepare explicit official fixture, without host or model execution
-        run: node scripts/prepare-host-fixture.mjs ${{ matrix.host }}
+      - name: Prepare latest official fixture, without host or model execution
+        shell: pwsh
+        run: |
+          $fixture = node scripts/prepare-host-fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
       - name: Install isolated fixture with all lifecycle scripts disabled
-        run: npm install --prefix .scratch/hosts/${{ matrix.host }} --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+        shell: pwsh
+        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
       - name: Check generated bundle and syntax
         run: |
           node scripts/build-client.mjs --check
           node scripts/check-syntax.mjs
-      # Build the optional GUI only once in the existing Windows matrix, not five times.
       - name: Compile optional Windows injection switch from source
-        if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./maintenance/inject-switch/Build.ps1
       - name: Attach optional Windows switch executable
-        if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: dsh-inject-switch-windows
           path: maintenance/inject-switch/dist/dsh-inject-switch.exe
           retention-days: 14
       - name: Smoke-test Desktop updater and simulated rollback
-        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/test-desktop-updater.ps1
       - name: Exercise Windows pnpm junction rollback
-        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/test-desktop-updater-junction.ps1
       - name: Smoke-test optional Windows NTFS ACL protector
-        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/test-private-acl.ps1
       - name: Run unit and actual public API contract tests
-        shell: bash
-        run: |
-          export DSH_COMPAT_HOST_ROOT="$GITHUB_WORKSPACE/.scratch/hosts/${{ matrix.host }}"
-          node --test test/*.test.* maintenance/*.test.mjs maintenance/desktop-tools/*.test.mjs
+        shell: pwsh
+        run: node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"

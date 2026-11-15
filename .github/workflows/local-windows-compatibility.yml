@@ -2,19 +2,6 @@ name: Windows Local Compatibility
 
 on:
   workflow_dispatch:
-    inputs:
-      host:
-        description: Official host fixture version
-        required: true
-        type: choice
-        default: 0.2.2-rc.1
-        options:
-          - 0.2.1-rc.2
-          - 0.2.1-rc.3
-          - 0.2.1-rc.4
-          - 0.2.1-rc.5
-          - 0.2.2-rc.1
-          - 0.2.2-rc.2
 
 permissions:
   contents: read
@@ -23,8 +10,6 @@ jobs:
   windows-compatibility:
     runs-on: [self-hosted, Windows, X64, purge-ci]
     timeout-minutes: 30
-    env:
-      HOST_VERSION: ${{ inputs.host }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,12 +17,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Prepare explicit official fixture
+      - name: Prepare latest official fixture, without host or model execution
         shell: pwsh
-        run: node scripts/prepare-host-fixture.mjs $env:HOST_VERSION
-      - name: Install isolated fixture without lifecycle scripts
+        run: |
+          $fixture = node scripts/prepare-host-fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
+      - name: Install isolated fixture with all lifecycle scripts disabled
         shell: pwsh
-        run: npm install --prefix ".scratch/hosts/$env:HOST_VERSION" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
       - name: Check generated bundle and syntax
         shell: pwsh
         run: |
@@ -58,6 +46,4 @@ jobs:
         run: ./scripts/test-private-acl.ps1
       - name: Run unit and public API contract tests
         shell: pwsh
-        run: |
-          $env:DSH_COMPAT_HOST_ROOT = Join-Path $env:GITHUB_WORKSPACE ".scratch/hosts/$env:HOST_VERSION"
-          node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
+        run: node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"

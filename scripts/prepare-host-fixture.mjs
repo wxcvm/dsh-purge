@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const version = process.argv[2] || '0.2.2-rc.1';
-if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2'].includes(version)) {
+// Single reviewed daily CI baseline; update when the next official host is released.
+const latestHost = '0.2.2-rc.3';
+const version = process.argv[2] || latestHost;
+if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2', latestHost].includes(version)) {
   throw new Error('Select one of the explicitly reviewed fixture versions.');
 }
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -21,9 +23,9 @@ const dependencies = {
   '@deepseek-ai/dsh-llm': version,
   '@deepseek-ai/cordis': cordis,
 };
-// rc.2 dsh-llm imports dsh-error at runtime. The fixture deliberately installs
+// rc.2+ dsh-llm imports dsh-error at runtime. The fixture deliberately installs
 // with --legacy-peer-deps, so explicitly pin this official peer/module.
-if (version === '0.2.2-rc.2') {
+if (version === '0.2.2-rc.2' || version === latestHost) {
   dependencies['@deepseek-ai/dsh-error'] = version;
 }
 // Legacy tools import sandbox utilities; the 0.2.2 tool provider no longer does.
