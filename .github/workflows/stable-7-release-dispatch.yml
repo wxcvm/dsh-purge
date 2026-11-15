@@ -1,4 +1,4 @@
-name: One-time stable .7 release completion
+name: One-time stable .7 release
 
 on:
   pull_request:
@@ -6,75 +6,117 @@ on:
     types: [synchronize]
 
 permissions:
-  contents: read
-  actions: write
+  contents: write
+
+concurrency:
+  group: one-time-stable-7-release
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  release:
     if: github.repository == 'wxcvm/dsh-purge' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'robin/release-dispatch-7-20261115'
-    runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 45
+    runs-on: [self-hosted, Linux, X64, purge-ci]
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: wxcvm/dsh-purge
+      EXPECTED: a8b6b62f672e09ed33b95c4c72e7c085d033a096
     steps:
-      - name: Verify dry run, dispatch existing Release, and verify published assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: wxcvm/dsh-purge
-        shell: pwsh
+      - uses: actions/checkout@v4
+        with:
+          ref: a8b6b62f672e09ed33b95c4c72e7c085d033a096
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build and verify exact stable archive
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          $expected = 'a8b6b62f672e09ed33b95c4c72e7c085d033a096'
-          $version = '1.1.92-wxcvm.7'
-          $tag = "v$version"
-          $base = "https://api.github.com/repos/$env:GH_REPO"
-          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
-          function Read-Api($uri) {
-            Invoke-RestMethod -Uri "$base/$uri" -Headers $headers
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED"
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "1.1.92-wxcvm.7"
+          test "$(head -n 1 release-notes-wxcvm.md | tr -d '\r')" = "# $version"
+          zip="dsh-purge-$version.zip"
+          git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$EXPECTED"
+          unzip -tq "$zip"
+          test "$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")" = "$version"
+          for file in client.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1; do
+            unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
+          done
+          sha256sum "$zip" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          echo "Verified archive: $zip"
+      - name: Publish and verify stable release with bounded network retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="1.1.92-wxcvm.7"
+          tag="v$version"
+          zip="dsh-purge-$version.zip"
+          retry() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if "$@"; then return 0; fi
+              if [ "$attempt" = 5 ]; then return 1; fi
+              echo "GitHub request failed; retry $attempt/4" >&2
+              sleep "$((attempt * 5))"
+            done
           }
-          function Wait-Run($id) {
-            for ($i = 0; $i -lt 240; $i++) {
-              $r = Read-Api "actions/runs/$id"
-              if ($r.status -eq 'completed') {
-                if ($r.conclusion -ne 'success') { throw "Run $id ended with $($r.conclusion)" }
-                Write-Host "Verified successful run: $($r.html_url)"
-                return $r
-              }
-              Start-Sleep -Seconds 5
-            }
-            throw "Run $id did not finish within the verification window"
+          api_read() {
+            curl --silent --show-error --retry 4 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 60 \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              -o "$2" -w '%{http_code}' "https://api.github.com/repos/$GH_REPO/$1"
           }
-          function Assert-Master {
-            $ref = Read-Api 'git/ref/heads/master'
-            if ($ref.object.sha -ne $expected) { throw 'Master changed; do not publish an unverified revision' }
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          assert_master() {
+            local code
+            code="$(api_read git/ref/heads/master "$tmp/master.json")"
+            test "$code" = 200
+            test "$(node -p "require('$tmp/master.json').object.sha")" = "$EXPECTED"
           }
-          function Find-ReleaseRun($excludeId, $since) {
-            for ($i = 0; $i -lt 24; $i++) {
-              $list = Read-Api "actions/workflows/release.yml/runs?branch=master&event=workflow_dispatch&head_sha=$expected&per_page=20"
-              $matches = @($list.workflow_runs | Where-Object { $_.head_sha -eq $expected -and $_.id -ne $excludeId -and [DateTimeOffset]$_.created_at -ge $since })
-              if ($matches.Count -gt 1) { throw 'Ambiguous release runs; not choosing one automatically' }
-              if ($matches.Count -eq 1) { return $matches[0] }
-              Start-Sleep -Seconds 5
-            }
-            throw 'Expected release run not found'
+          check_tag() {
+            local code target kind
+            code="$(api_read "git/ref/tags/$tag" "$tmp/tag.json")"
+            if [ "$code" = 404 ]; then return 2; fi
+            test "$code" = 200 || return 1
+            target="$(node -p "require('$tmp/tag.json').object.sha")"
+            kind="$(node -p "require('$tmp/tag.json').object.type")"
+            if [ "$kind" = tag ]; then
+              code="$(api_read "git/tags/$target" "$tmp/annotated.json")"
+              test "$code" = 200 || return 1
+              target="$(node -p "require('$tmp/annotated.json').object.sha")"
+            fi
+            test "$target" = "$EXPECTED" || { echo "Existing tag points to a different commit" >&2; return 1; }
           }
-          Assert-Master
-          $null = Wait-Run 43708212772
-          $dry = Find-ReleaseRun 0 ([DateTimeOffset]'2026-11-15T11:17:33Z')
-          $null = Wait-Run $dry.id
-          Assert-Master
-          $started = [DateTimeOffset]::UtcNow.AddSeconds(-2)
-          $payload = @{ ref = 'master'; inputs = @{ dry_run = 'false' } } | ConvertTo-Json -Compress
-          Invoke-RestMethod -Uri "$base/actions/workflows/release.yml/dispatches" -Headers $headers -Method Post -ContentType 'application/json' -Body $payload | Out-Null
-          $published = Find-ReleaseRun $dry.id $started
-          $null = Wait-Run $published.id
-          $release = Read-Api "releases/tags/$tag"
-          if ($release.tag_name -ne $tag -or $release.draft -or $release.prerelease) { throw 'Expected stable release was not published' }
-          $ref = Read-Api "git/ref/tags/$tag"
-          $target = $ref.object
-          if ($target.type -eq 'tag') { $target = (Read-Api "git/tags/$($target.sha)").object }
-          if ($target.sha -ne $expected) { throw 'Published tag does not match verified master' }
-          foreach ($name in @("dsh-purge-$version.zip", 'SHA256SUMS.txt')) {
-            $assets = @($release.assets | Where-Object { $_.name -eq $name -and $_.state -eq 'uploaded' -and $_.size -gt 0 })
-            if ($assets.Count -ne 1) { throw "Missing or empty asset: $name" }
-            Write-Host "Verified uploaded asset: $name ($($assets[0].size) bytes)"
+          assert_master
+          if check_tag; then
+            echo "Existing tag matches verified revision"
+          else
+            status=$?
+            test "$status" = 2
+          fi
+          # Check again before every create attempt: a lost response can hide a successful create.
+          ensure_release() {
+            local code
+            code="$(api_read "releases/tags/$tag" "$tmp/release.json")" || return 1
+            if [ "$code" = 200 ]; then
+              check_tag
+              return $?
+            fi
+            test "$code" = 404 || return 1
+            assert_master || return 1
+            gh release create "$tag" --repo "$GH_REPO" --target "$EXPECTED" --title "$tag" --notes-file release-notes-wxcvm.md
           }
-          Write-Host "Stable release verified: $($release.html_url)"
+          retry ensure_release
+          check_tag
+          retry gh release upload "$tag" "$zip" SHA256SUMS.txt --repo "$GH_REPO" --clobber
+          code="$(api_read "releases/tags/$tag" "$tmp/release.json")"
+          test "$code" = 200
+          node -e 'const r=require(process.argv[1]);const tag=process.argv[2];const zip=process.argv[3];if(r.tag_name!==tag||r.draft||r.prerelease)throw Error("Not a stable release");for(const name of [zip,"SHA256SUMS.txt"]){const a=r.assets.find(a=>a.name===name&&a.state==="uploaded"&&a.size>0);if(!a)throw Error("Missing asset "+name);console.log("Verified asset:",name,a.size,"bytes")}console.log("Stable release:",r.html_url)' "$tmp/release.json" "$tag" "$zip"
+          mkdir "$tmp/download"
+          retry gh release download "$tag" --repo "$GH_REPO" --pattern "$zip" --pattern SHA256SUMS.txt --dir "$tmp/download" --clobber
+          (cd "$tmp/download" && sha256sum -c SHA256SUMS.txt)
+          echo "Published and verified $tag"
