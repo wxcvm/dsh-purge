@@ -63,3 +63,52 @@ test('context remount unregisters old observation handlers and dispose is idempo
   current.dispose(); current.dispose(); assert.equal(listeners.size, 0);
   assert.equal(runtimeObservations(ctx).streamSupport, 'not-observed');
 });
+
+test('a sparse durable commit cannot erase an observed live terminal or its error metadata', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o, a);
+  chunk(o, a, 0, { type: 'finish', reason: { kind: 'error', failure: { code: 'ECONNRESET', status: 503, message: 'PRIVATE' } } });
+  o.event(a.session, { seq: 2, type: 'assistant/attempt', data: { turn: 1, step: 1, stream: [] } });
+  end(o, a, 1);
+  const r = o.snapshot().items[0];
+  assert.equal(r.finish, 'error'); assert.equal(r.errorCode, 'ECONNRESET'); assert.equal(r.httpStatus, 503);
+  assert.equal(r.reasonSource, 'host-stream'); assert.equal(r.terminalConflict, false);
+  assert.doesNotMatch(JSON.stringify(r), /PRIVATE/);
+});
+
+test('conflicting durable and live terminals remain visible without replacing live evidence', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o, a);
+  o.event(a.session, { seq: 2, type: 'assistant/attempt', data: { turn: 1, step: 1, stream: [{ chunk: { type: 'finish', reason: { kind: 'stop' } } }] } });
+  assert.equal(o.snapshot().items[0].reasonSource, 'durable-stream');
+  chunk(o, a, 0, { type: 'finish', reason: { kind: 'aborted' } });
+  const r = o.snapshot().items[0];
+  assert.equal(r.finish, 'aborted'); assert.equal(r.reasonSource, 'host-stream'); assert.equal(r.terminalConflict, true);
+});
+
+test('late durable event reconciles the exact committed sequence after stream/end', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o, a); end(o, a, 0);
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 3, turn: 1, step: 1 } });
+  o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, interrupted: true, stream: [{ chunk: { type: 'finish', reason: { kind: 'max-tokens' } } }] } });
+  const [current, previous] = o.snapshot().items;
+  assert.equal(current.attemptId, 's:2'); assert.equal(current.finishObserved, false);
+  assert.equal(previous.finish, 'max-tokens'); assert.equal(previous.reasonSource, 'durable-stream'); assert.equal(previous.interrupted, true);
+});
+
+test('unmatched or duplicate frames cannot consume a valid newer revision', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o, a);
+  o.frame({ agent: a, frame: { type: 'chunk', attemptId: 'wrong', revision: 90, index: 0, chunk: { type: 'finish', reason: { kind: 'stop' } } } });
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:1', revision: 91, turn: 1, step: 1 } });
+  chunk(o, a, 0, { type: 'finish', reason: { kind: 'error' } }); end(o, a, 1);
+  const r = o.snapshot().items;
+  assert.equal(r.length, 1); assert.equal(r[0].finish, 'error'); assert.equal(r[0].streamEnded, true);
+});
+
+test('replacement and observed turn cancellation settle stale pending rows without inventing a stream end', () => {
+  const o = createRuntimeObservations(), a = agent('s'); start(o, a);
+  const b = { id: 's', session: a.session };
+  start(o, b, 's:2');
+  assert.equal(o.snapshot().items[1].settlement, 'unobserved-end');
+  o.event(b.session, { seq: 2, type: 'turn/end', data: { turn: 1, reason: { kind: 'aborted' } } });
+  const r = o.snapshot().items[0];
+  assert.equal(r.settlement, 'unobserved-end'); assert.equal(r.turnOutcome, 'aborted');
+  assert.equal(r.streamEnded, false); assert.equal(r.finishObserved, false); assert.equal(r.elapsedMs, null);
+});
