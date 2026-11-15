@@ -26,6 +26,9 @@ jobs:
       BASE: 39de010cb0678c0ff6bc1c94fd3cc3ceb8c714b2
       CI_RUN: '43723948091'
     steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Wait for the exact combined CI and merge verified candidate
         id: prepare
         shell: bash
@@ -80,9 +83,6 @@ jobs:
           ref: ${{ steps.prepare.outputs.sha }}
           fetch-depth: 1
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
       - name: Build and verify exact stable archive
         shell: bash
         run: |
