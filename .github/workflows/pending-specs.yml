@@ -15,9 +15,11 @@ concurrency:
 jobs:
   pending:
     name: Pending specs (failures explicitly reported)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted","Linux","X64","purge-ci"]' || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
