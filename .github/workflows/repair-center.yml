@@ -8,11 +8,12 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-    # Opt-in only after the repository's dedicated Windows runner is registered.
-    # Fork PRs retain hosted execution; never route their code onto the personal machine.
-    runs-on: ${{ fromJSON(matrix.os == 'windows-latest' && vars.PURGE_WINDOWS_RUNNER == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && '["self-hosted","Windows","X64","purge-ci"]' || format('["{0}"]', matrix.os)) }}
+    # Use registered local runners for trusted repository branches; forks remain hosted.
+    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
