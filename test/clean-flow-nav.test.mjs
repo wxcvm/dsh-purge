@@ -60,7 +60,7 @@ test('redteam main section headings are real controls and each page remains navi
   assert.match(rt, /\['artex', 'ARTEX'\]/)
   assert.match(rt, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab, \{ engagement: eng,/)
   assert.match(rt, /onGotoAsset: \(assetId\) =>/)
-  assert.match(rt, /h\('button', \{[\s\S]*?className: 'rt-tab' \+ \(st\.tab === t\[0\]/)
+  assert.match(rt, /h\('button', \{[\s\S]*?className: 'rt-tab' \+ \(activeTab === t\[0\]/)
 })
 
 test('cleaning panel no longer houses ARTEX and embedded drill gets the updated navigator', () => {
