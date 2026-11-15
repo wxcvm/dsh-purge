@@ -66,6 +66,46 @@ jobs:
           }
           Add-Content -LiteralPath $env:GITHUB_PATH -Value (Join-Path $sdk 'bin')
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "FLUTTER_ROOT=$sdk"
+          # Flutter's default BITS/WebRequest restarts the SDK transfer after
+          # a dropped connection. Keep partial bytes in the runner tool cache.
+          $engine = (Get-Content -LiteralPath (Join-Path $sdk 'bin\internal\engine.version')).Trim()
+          $cache = Join-Path $sdk 'bin\cache'
+          $stamp = Join-Path $cache 'engine-dart-sdk.stamp'
+          $dart = Join-Path $cache 'dart-sdk\bin\dart.exe'
+          if (-not (Test-Path $dart) -or -not (Test-Path $stamp) -or (Get-Content $stamp).Trim() -ne $engine) {
+            $archive = Join-Path $root "dart-sdk-$engine-windows-x64.zip"
+            $base = if ($env:FLUTTER_STORAGE_BASE_URL) { $env:FLUTTER_STORAGE_BASE_URL.TrimEnd('/') } else { 'https://storage.googleapis.com' }
+            $url = "$base/flutter_infra_release/flutter/$engine/dart-sdk-windows-x64.zip"
+            $downloaded = $false
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              curl.exe --fail --location --connect-timeout 20 --max-time 240 --continue-at - --output $archive $url
+              if ($LASTEXITCODE -eq 0) { $downloaded = $true; break }
+              # HTTP 416 can mean the prior run already downloaded all bytes.
+              if ((Test-Path $archive) -and $LASTEXITCODE -eq 22) {
+                tar.exe -tf $archive *> $null
+                if ($LASTEXITCODE -eq 0) { $downloaded = $true; break }
+              }
+              if ($attempt -lt 3) { Start-Sleep -Seconds 5 }
+            }
+            if (-not $downloaded) { throw 'Dart SDK transfer incomplete; partial archive retained for next run' }
+            $stage = Join-Path $root 'dart-sdk-extract'
+            New-Item -ItemType Directory -Force -Path $stage | Out-Null
+            try {
+              tar.exe -xf $archive -C $stage
+              if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $stage 'dart-sdk\bin\dart.exe'))) {
+                Remove-Item -LiteralPath $archive -Force
+                throw 'Dart SDK archive is invalid'
+              }
+              New-Item -ItemType Directory -Force -Path $cache | Out-Null
+              $target = Join-Path $cache 'dart-sdk'
+              if (Test-Path $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+              Move-Item -LiteralPath (Join-Path $stage 'dart-sdk') -Destination $target
+              Set-Content -LiteralPath $stamp -Value $engine -Encoding ascii
+              Remove-Item -LiteralPath $archive -Force
+            } finally {
+              Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
           & $flutter --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install Flutter dependencies
