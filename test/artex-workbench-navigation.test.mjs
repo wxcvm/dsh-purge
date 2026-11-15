@@ -58,3 +58,48 @@ test('failed ARTEX SARIF replacement keeps the current report and handoff state'
     assert.match(source, /\(maskArtex \? '报告读取失败，详情已隐藏。' : reportError\) \+ \(report \? '（当前报告已保留）' : ''\)/)
   }
 })
+
+test('ARTEX refresh ignores superseded replies and clears stale online state on HTTP failure', async () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const begin = src.indexOf('      const artexRefreshRevision = React.useRef(0)')
+    const end = src.indexOf('      React.useEffect(() => { refresh(); loadPaths() }, [])', begin)
+    assert.ok(begin >= 0 && end > begin, path)
+    let state = { online: true }, error = '', busy = false
+    const pending = []
+    const refresh = new Function('React', 'refreshKnowledge', 'setBusy', 'setError', 'setState', 'fetch',
+      src.slice(begin, end) + '\nreturn refresh')(
+      { useRef: current => ({ current }) }, () => {}, v => { busy = v },
+      v => { error = v }, v => { state = v },
+      () => new Promise(resolve => pending.push(resolve)))
+    const old = refresh(), latest = refresh()
+    pending[1]({ ok: false, json: async () => ({ error: 'unavailable' }) })
+    await latest
+    assert.equal(state, null)
+    assert.equal(error, 'unavailable')
+    assert.equal(busy, false)
+    pending[0]({ ok: true, json: async () => ({ online: true }) })
+    await old
+    assert.equal(state, null)
+    assert.equal(error, 'unavailable')
+    const retry = refresh()
+    pending[2]({ ok: true, json: async () => ({ online: true }) })
+    await retry
+    assert.deepEqual(state, { online: true })
+    assert.equal(error, '')
+    assert.equal(busy, false)
+  }
+})
+
+test('platform refresh retains unsaved selection while recording persisted configuration', () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const start = src.indexOf('        intelSourcesWriteQueue.then(() => api({ op:')
+    const end = src.indexOf('      const toggleSource =', start)
+    assert.ok(start >= 0 && end > start, path)
+    const code = src.slice(start, end)
+    assert.match(code, /setSavedSources\(r.selection\)\s+if \(sourceDirty.current\) return\s+sourceDraft.current = r.selection/)
+    assert.match(code, /sourceDirty.current = true\s+sourceDraft.current = next/)
+    assert.match(code, /if \(revision === sourceRevision.current\) \{\s+sourceDirty.current = false/)
+  }
+})
