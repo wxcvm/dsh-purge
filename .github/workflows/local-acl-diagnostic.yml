@@ -6,59 +6,39 @@ on:
 permissions:
   contents: read
 jobs:
-  diagnose:
+  verify-fixed-master:
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 69c401a56dbe8f0c41b98152ae9958a78f053a7f
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Capture the specific ACL exception from the real Node invocation
+      - name: Verify original failing ACL integration test
+        shell: pwsh
+        run: node --test test/storage-audit.test.mjs
+      - name: Prepare same official fixture
         shell: pwsh
         run: |
-          $file = 'scripts/protect-redteam-acl.ps1'
-          $source = Get-Content -LiteralPath $file -Raw
-          $original = '            $summary.aclReadErrors++'
-          $replacement = @'
-                      $summary.aclReadErrors++
-                      Write-Output ('ACL_DIAGNOSTIC ' + $_.Exception.GetType().FullName + ' | ' + $_.FullyQualifiedErrorId + ' | ' + $_.Exception.Message.Replace($Root, '<fixture>'))
-          '@
-          if (-not $source.Contains($original)) { throw 'Expected ACL catch not found' }
-          Set-Content -LiteralPath $file -Value $source.Replace($original, $replacement) -Encoding utf8
-          $diagnostic = @'
-          import { execFile } from 'node:child_process'
-          import { promisify } from 'node:util'
-          import { mkdtempSync, writeFileSync } from 'node:fs'
-          import { tmpdir } from 'node:os'
-          import { join } from 'node:path'
-          import { inspectStorageAcl } from './lib/redteam/storage-audit.js'
-          const dir = mkdtempSync(join(tmpdir(), 'purge-storage-audit-'))
-          writeFileSync(join(dir, 'fixture.txt'), 'unchanged')
-          writeFileSync('.acl-fixture-path', dir)
-          const run = promisify(execFile)
-          const result = await inspectStorageAcl(dir, {
-            run: async (exe, args, options) => {
-              const output = await run(exe, args, options)
-              console.log(output.stdout.replaceAll(dir, '<fixture>'))
-              return output
-            },
-          })
-          console.log('NODE_RESULT', JSON.stringify(result))
-          '@
-          Set-Content -LiteralPath '.acl-diagnostic.mjs' -Value $diagnostic -Encoding utf8
-          try {
-            node .acl-diagnostic.mjs
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $dir = Get-Content -LiteralPath '.acl-fixture-path' -Raw
-            Write-Host 'Direct shell on exactly the same Node-created fixture:'
-            & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $file -Root $dir
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally {
-            if (Test-Path -LiteralPath '.acl-fixture-path') {
-              $dir = Get-Content -LiteralPath '.acl-fixture-path' -Raw
-              Remove-Item -LiteralPath $dir -Recurse -Force
-            }
-          }
+          node scripts/prepare-host-fixture.mjs 0.2.2-rc.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm install --prefix ".scratch/hosts/0.2.2-rc.2" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify generated bundle and Windows regressions
+        shell: pwsh
+        run: |
+          node scripts/build-client.mjs --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-syntax.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./maintenance/inject-switch/Build.ps1
+          ./scripts/test-desktop-updater.ps1
+          ./scripts/test-desktop-updater-junction.ps1
+          ./scripts/test-private-acl.ps1
+      - name: Verify complete original test suite
+        shell: pwsh
+        run: |
+          $env:DSH_COMPAT_HOST_ROOT = Join-Path $env:GITHUB_WORKSPACE '.scratch/hosts/0.2.2-rc.2'
+          node --test "test/*.test.*" "maintenance/*.test.mjs" "maintenance/desktop-tools/*.test.mjs"
