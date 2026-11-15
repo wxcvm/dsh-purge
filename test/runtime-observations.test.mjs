@@ -146,7 +146,7 @@ test('late durable event cannot borrow the next request provider or model', () =
   assert.equal(current.provider,'new-provider'); assert.equal(current.model,'new-model');
 });
 
-test('only a matched assistant source can refine a captured route and a new attempt without route evidence stays unknown', () => {
+test('only a matched assistant source refines one attempt; unchanged request inherits its logged route', () => {
   const o = createRuntimeObservations(), a = agent('s');
   o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'configured',model:'requested'}}}});
   start(o,a);
@@ -156,8 +156,8 @@ test('only a matched assistant source can refine a captured route and a new atte
   assert.equal(row.model,'requested'); assert.equal(row.modelSource,'request-header');
   end(o,a,0);
   o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:2,step:1}});
-  assert.equal(o.snapshot().items[0].provider,null);
-  assert.equal(o.snapshot().items[0].model,null);
+  assert.equal(o.snapshot().items[0].provider,'configured');
+  assert.equal(o.snapshot().items[0].model,'requested');
 });
 
 
@@ -364,4 +364,75 @@ test('unavailable session snapshot and newer observed task never borrow older ta
     assert.equal(row.taskContextAtResponse, unavailable ? 'unavailable' : 'missing');
     assert.equal(row.assessment.decision, 'uncertain');
   }
+});
+
+test('unchanged requests inherit official recorded capacity and output envelope', () => {
+  const o=createRuntimeObservations(), a=agent('budget');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'qwen',maxTokens:4096}}}});
+  o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'qwen',contextWindow:32768}});
+  start(o,a);
+  chunk(o,a,0,{type:'usage',usage:{inputTokens:20000,cacheReadTokens:3000,cacheWriteTokens:1000,outputTokens:999,totalTokens:24999}});
+  end(o,a,1);
+  const first=o.snapshot().items[0];
+  assert.equal(first.contextBudget.messageBudgetTokens,28672);
+  assert.equal(first.contextBudget.promptTokens,24000);
+  assert.equal(first.contextBudget.promptTokensSource,'host-stream');
+  assert.equal(first.contextBudget.status,'within-declared-budget');
+  assert.equal(first.requestHeaderSeq,1);assert.equal(first.requestContextSeq,2);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:4,turn:2,step:1}});
+  const next=o.snapshot().items[0];
+  assert.equal(next.provider,'local');assert.equal(next.model,'qwen');
+  assert.equal(next.contextBudget.contextWindow,32768);
+  assert.equal(next.contextBudget.requestMaxTokens,4096);
+  assert.equal(next.contextBudget.promptTokens,null);
+  assert.equal(next.contextBudget.status,'insufficient-evidence');
+});
+
+test('new envelope or route cannot leak previous capacity and prior rows stay unchanged', () => {
+  const o=createRuntimeObservations(),a=agent('route-change');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'a',maxTokens:1024}}}});
+  o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'a',contextWindow:32768}});
+  start(o,a);end(o,a,0);
+  o.event(a.session,{seq:3,type:'request/header',data:{header:{config:{provider:'local',model:'b',maxTokens:2048}}}});
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:2,step:1}});
+  const [next,previous]=o.snapshot().items;
+  assert.equal(next.contextWindow,null);assert.equal(next.requestMaxTokens,2048);
+  assert.equal(previous.contextWindow,32768);assert.equal(previous.model,'a');
+  o.event(a.session,{seq:4,type:'request/context',data:{provider:'local',model:'b',contextWindow:16384}});
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:3',revision:4,turn:3,step:1}});
+  assert.equal(o.snapshot().items[0].contextWindow,16384);
+  o.event(a.session,{seq:5,type:'request/context',data:{provider:'local',model:'b'}});
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:4',revision:5,turn:4,step:1}});
+  assert.equal(o.snapshot().items[0].contextWindow,null);
+});
+
+test('context budgets distinguish reservation errors, measured pressure, and unknown values', () => {
+  for (const [window,output,input,expected] of [
+    [32768,32768,100,'no-message-budget'],
+    [32768,4096,64393,'observed-prompt-over-window'],
+    [32768,4096,30000,'observed-prompt-over-budget'],
+    [32768,null,64393,'observed-prompt-over-window'],
+    [32768,null,100,'insufficient-evidence'],
+    [null,4096,100,'insufficient-evidence'],
+    [32768,4096,null,'insufficient-evidence'],
+  ]) {
+    const o=createRuntimeObservations(),a=agent('pressure');
+    o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'a',maxTokens:output}}}});
+    o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'a',contextWindow:window}});
+    start(o,a);
+    chunk(o,a,0,{type:'usage',usage:{inputTokens:input,totalTokens:999}});
+    assert.equal(o.snapshot().items[0].contextBudget.status,expected);
+  }
+});
+
+test('an observed assistant route conflict invalidates the capacity for that attempt only', () => {
+  const o=createRuntimeObservations(),a=agent('route-conflict');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'a',maxTokens:1024}}}});
+  o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'a',contextWindow:32768}});
+  start(o,a);
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{source:{provider:'other',model:'b'}}}});
+  const row=o.snapshot().items[0];
+  assert.equal(row.model,'b');assert.equal(row.contextBudget.contextWindow,null);
+  assert.equal(row.contextBudget.messageBudgetTokens,null);
+  assert.equal(row.contextBudget.status,'insufficient-evidence');
 });
