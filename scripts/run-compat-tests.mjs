@@ -1,5 +1,6 @@
 /** Run every host-sensitive test on every official fixture; common tests once per OS. */
 import fs from 'node:fs';
+import { availableParallelism } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -34,8 +35,10 @@ function main() {
   if (!fs.existsSync(path.join(fixture, 'package.json'))) throw new Error('Official fixture not prepared: ' + fixture);
   const env = { ...process.env, DSH_COMPAT_HOST_ROOT: fixture };
   delete env.DSH_COMPAT_TOOLS_MODULE;
-  console.log(host + ': ' + files.length + ' test files (' + (host === FULL_HOST ? 'full' : 'host contracts') + ')');
-  const result = spawnSync(process.execPath, ['--test', ...files], { cwd: root, env, stdio: 'inherit', windowsHide: true });
+  const concurrency = Number(process.env.PURGE_CI_TEST_CONCURRENCY || availableParallelism());
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('PURGE_CI_TEST_CONCURRENCY must be a positive integer');
+  console.log(host + ': ' + files.length + ' test files (' + (host === FULL_HOST ? 'full' : 'host contracts') + '), ' + concurrency + ' test workers');
+  const result = spawnSync(process.execPath, ['--test', '--test-concurrency=' + concurrency, ...files], { cwd: root, env, stdio: 'inherit', windowsHide: true });
   if (result.error) throw result.error;
   process.exitCode = result.status ?? 1;
 }

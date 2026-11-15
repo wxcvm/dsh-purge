@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { HOSTS, FULL_HOST, selectCompatibilityTests } from '../scripts/run-compat-tests.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-test('grouped compatibility covers every official fixture and all existing test files on the full host', () => {
+test('daily CI covers the latest official fixture and all existing tests; older fixtures remain selectable', () => {
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/compatibility.yml'), 'utf8');
   assert.equal(HOSTS.length, 7);
   assert.equal(new Set(HOSTS).size, 7);
@@ -16,9 +16,9 @@ test('grouped compatibility covers every official fixture and all existing test 
   assert.equal(manifest.dshTarget, FULL_HOST);
   assert.ok(manifest.dshTargets.includes(FULL_HOST));
   const workflowHosts = [...workflow.matchAll(/hosts: '([^']+)'/g)].flatMap(match => match[1].split(' '));
-  assert.deepEqual(workflowHosts, HOSTS);
+  assert.deepEqual(workflowHosts, [FULL_HOST]);
+  assert.match(workflow, /node scripts\/run-compat-tests\.mjs \$\{\{ matrix\.hosts \}\}/);
   for (const host of HOSTS) {
-    assert.ok(workflow.includes(host), host);
     const tests = selectCompatibilityTests(root, host);
     assert.ok(tests.includes('test/host-compat.test.mjs'), host);
   }
