@@ -73,3 +73,10 @@ test('explicit workspace policy still controls inclusion', () => {
   const out = rewritePromptAssembly(original, { fallbackInject: 'Fixture prompt.', capabilityProtocol: false, dropWorkspaceBaseline: true });
   assert.equal(out.sections.some(s => s.name === section.name), false);
 });
+
+test('literal persona suffix is preserved without an extra synthetic suffix', () => {
+  const section = { name: 'deployment:persona-suffix', text: '  Fixture working directory.  ', interpolate: false, order: 10200 };
+  const out = rewritePromptAssembly({ sections: [section], variables: { model: 'fixture' }, contexts: [] }, '', { capabilityProtocol: false });
+  const suffixes = out.sections.filter(s => s.name === 'deployment:persona-suffix' || s.name === 'persona-suffix');
+  assert.deepEqual(suffixes, [section]);
+});
