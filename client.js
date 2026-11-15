@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "9429529720eb726f";
+		const CLIENT_BUILD_ID = "2b456c672d745390";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8585,16 +8585,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [guideOpen, setGuideOpen] = React.useState(false)
       const [guideBusy, setGuideBusy] = React.useState(false)
       const [guideError, setGuideError] = React.useState('')
-      const refresh = async () => {
-        if (busy) return
+      const [refreshVersion, setRefreshVersion] = React.useState(0)
+      React.useEffect(() => {
+        let live = true
         setBusy(true); setError(''); setSnapshot(null)
-        try {
-          const r = await api({ op: 'networkPrivacySnapshot' })
+        api({ op: 'networkPrivacySnapshot' }).then(r => {
+          if (!live) return
           if (!r || r.ok !== true) throw new Error('无法读取本机网络诊断')
           setSnapshot(r)
-        } catch (_) { setError('无法读取本机网络诊断，请确认插件与宿主版本一致。') }
-        finally { setBusy(false) }
-      }
+        }).catch(() => {
+          if (live) setError('无法读取本机网络诊断，请确认插件与宿主版本一致。')
+        }).finally(() => { if (live) setBusy(false) })
+        return () => { live = false }
+      }, [refreshVersion])
+      const refresh = () => setRefreshVersion(v => v + 1)
       const openGuide = async () => {
         if (guideOpen) { setGuideOpen(false); return }
         setGuideOpen(true)
@@ -8613,7 +8617,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : '未知（未取得本机观察）'))
       return h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },
         h('h4', null, '网络隐私诊断 · 本机快照'),
-        h('div', { style: { fontSize: 12 } }, '读取 DSH 宿主的网络地址族、Node DNS 服务器与代理环境变量存在性。不会联网、修改网络配置或显示地址和密码。'),
+        h('div', { style: { fontSize: 12 } }, '进入本页自动读取 DSH 宿主的网络地址族、Node DNS 服务器与代理环境变量存在性，也可手动刷新。不会联网、修改网络配置或显示地址和密码。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 } },
           h('button', { className: 'rt-btn', type: 'button', disabled: busy, onClick: refresh }, busy ? '读取中…' : '检查本机网络'),
           h('button', { className: 'rt-btn', type: 'button', disabled: busy || !snapshot, onClick: () => setBaseline(snapshot) }, '设为基线'),
@@ -8662,6 +8666,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [saved, setSaved] = React.useState(null)
       const [history, setHistory] = React.useState(null)
       const [protection, setProtection] = React.useState(null)
+      const [protectionStatus, setProtectionStatus] = React.useState('loading')
       const [storageAudit, setStorageAudit] = React.useState(null)
       const [storageBusy, setStorageBusy] = React.useState(false)
       const [artexOverview, setArtexOverview] = React.useState(null)
@@ -8673,7 +8678,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         noReverseDns: false, maskAssetResults: false }
       React.useEffect(() => {
         let live = true
-        setError(''); setMessage(''); setDraft(null); setHistory(null)
+        setError(''); setMessage(''); setDraft(null); setSaved(null); setHistory(null)
+        setProtection(null); setProtectionStatus('loading')
         api({ op: 'platformConfigGet' }).then((r) => {
           if (!live) return
           if (!r || r.ok === false) { setError((r && r.error) || '无法读取设置'); return }
@@ -8681,8 +8687,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setSaved(preferences); setDraft(preferences)
         }, (e) => { if (live) setError(String((e && e.message) || e)) })
         api({ op: 'privacyPosture' }).then((r) => {
-          if (live && r && r.ok !== false) setProtection(r)
-        }, () => {})
+          if (!live) return
+          if (r && r.ok !== false) { setProtection(r); setProtectionStatus('observed') }
+          else setProtectionStatus('unavailable')
+        }, () => { if (live) setProtectionStatus('unavailable') })
         if (eng) api({ op: 'scanHistory', engagement: eng, limit: 1 }).then((r) => {
           if (live && r && r.ok !== false) setHistory(r)
         }, () => {})
@@ -8791,6 +8799,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             checkField('noReverseDns', '减少 Nmap 反向 DNS 查询',
               '对 Nmap 增加 -n，避免扫描过程中的反向 DNS 解析。域名目标仍需要正常的正向解析。'))
             : h('div', { className: 'rt-card' }, '读取设置中…'),
+          h('div', { className: 'rt-card', style: { lineHeight: 1.7 } },
+            h('h4', null, '智能诊断 · 本机状态'),
+            h('div', { style: { fontSize: 12 } },
+              protectionStatus === 'loading' ? '正在读取本机保护状态…'
+                : protectionStatus === 'unavailable' ? '保护状态读取失败；未检查的项目不代表安全。'
+                : '根据当前宿主返回的实际观察给出建议，不进行外部探测。'),
+            protection ? h('div', { style: { fontSize: 12, marginTop: 6 } },
+              protection.bridge ? h('div', null,
+                '管理接口：' + (protection.bridge.listenerScope === 'loopback_bound' ? '观察到回环绑定；仍需确认代理转发'
+                  : protection.bridge.listenerScope === 'all_interfaces' || protection.bridge.listenerScope === 'specific_interface'
+                    ? '观察到非回环绑定；建议检查现有访问认证及防火墙'
+                    : '监听范围未检查；请勿视为已保护')) : null,
+              protection.vault ? h('div', null,
+                '凭据保护：' + (protection.vault.enabled ? '密钥已配置；请核对下方加密覆盖及完整性'
+                  : '未配置加密密钥；建议按需配置并检查已有记录')) : null,
+              protection.artex ? h('div', null,
+                'ARTEX：' + (protection.artex.state === 'detected' ? '服务已确认；请核对下方只读隐私联动状态'
+                  : '未确认运行；使用 ARTEX 时请检查本机服务')) : null,
+              protection.storageAudit && protection.storageAudit.available ? h('div', null,
+                'Windows 存储：建议按需运行下方 ACL 检查；未自动读取文件权限。') : null) : null),
           h(NetworkPrivacyCard),
           h(ProxyProfileAuditCard),
           h('div', { className: 'rt-card', style: { lineHeight: 1.8 } },

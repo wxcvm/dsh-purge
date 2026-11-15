@@ -65,3 +65,19 @@ test('privacy center applies only local display defaults and preserves saved sca
   assert.equal(result.config.tools.nmap, '/mock/nmap')
   assert.deepEqual(dispatch(store, { op: 'platformConfigGet' }).config.scanPreferences, result.config.scanPreferences)
 })
+
+
+test('privacy center automatically reads the local network snapshot and distinguishes unknown posture', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('function NetworkPrivacyCard()')
+    const end = src.indexOf('const openGuide = async', start)
+    const card = src.slice(start, end)
+    assert.match(card, /React\.useEffect\(\(\) => \{/)
+    assert.match(card, /api\(\{ op: 'networkPrivacySnapshot' \}\)/)
+    assert.match(card, /\}, \[refreshVersion\]\)/)
+    assert.match(card, /return \(\) => \{ live = false \}/)
+    assert.match(src, /保护状态读取失败；未检查的项目不代表安全/)
+    assert.match(src, /智能诊断 · 本机状态/)
+  }
+})
