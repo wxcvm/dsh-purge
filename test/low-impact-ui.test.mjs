@@ -44,7 +44,7 @@ test('workbench API saves only scan preferences and preserves existing configura
 test('privacy center applies only local display defaults and preserves saved scan preferences', (t) => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
-    assert.match(src, /savePreferences\(\{ \.\.\.saved, maskHistory: true, maskAssetResults: true \}, true\)/, path)
+    assert.match(src, /savePreferences\(saved, true, \{ \.\.\.savedManagement, mode: 'automatic' \}\)/, path)
     assert.match(src, /Object\.keys\(defaults\)\.every\(\(key\) => current\[key\] === expected\[key\]\)/, path)
     assert.match(src, /自动设置并保存/, path)
   }
