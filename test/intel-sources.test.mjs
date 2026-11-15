@@ -55,9 +55,27 @@ test('source and embedded workbench offer real selection controls and identify e
     assert.match(src, /source\.mode === 'existing-skill'/)
     assert.match(src, /source\.mode === 'local'/)
     assert.match(src, /onClick: saveSources/)
-    assert.match(src, /op: 'platformConfigSave', config: \{ intelSources: chosen \}/)
+    assert.match(src, /op: 'intelSourcesSave', selection: next/)
+    assert.match(src, /intelSourcesWriteQueue/)
+    assert.match(src, /保存回执不一致/)
     assert.match(src, /source\.url, target: '_blank', rel: 'noopener noreferrer'/)
     assert.match(src, /官网入口 · API 未接入/)
     assert.match(src, /本地资产组合查询 · 已接通/)
   }
+})
+
+test('dedicated selection API persists repeated updates and preserves unrelated config', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-intel-dedicated-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  savePlatformConfig({ env: { FOFA_KEY: 'fixture-key' } }, root)
+  for (const selection of [
+    { selected: ['local', 'shodan'], preferred: 'local' },
+    { selected: ['local', 'shodan', 'censys'], preferred: 'censys' },
+    { selected: [], preferred: 'local' },
+  ]) {
+    assert.deepEqual(dispatch({ root }, { op: 'intelSourcesSave', selection }).selection, selection)
+    assert.deepEqual(dispatch({ root }, { op: 'intelSourcesGet' }).selection, selection)
+  }
+  assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'fixture-key')
+  assert.equal(dispatch({ root }, { op: 'intelSourcesSave' }).ok, false)
 })

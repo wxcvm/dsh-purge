@@ -113,8 +113,8 @@ test('ARTEX is mounted in the RedTeam Resources tab and uses the existing read-o
   assert.doesNotMatch(client, /function ArtexLinkSection\(\)/)
   assert.match(client, /fetch\('\/dsh-purge\/artex', \{ method: 'GET' \}\)/)
   assert.match(server, /path: "\/dsh-purge\/artex"/)
-  assert.match(server, /const state = await inspectArtex\(\)/)
-  assert.match(server, /reused: resolveTool\(item\.id\)\.path === item\.path/)
+  assert.match(server, /const state = await inspectArtex\(\{ env: artexLocalEnv\(config\) \}\)/)
+  assert.match(server, /reused: resolveTool\(item\.id, \{ root, config \}\)\.path === item\.path/)
 })
 
 test('local health distinguishes verified ARTEX from authenticated or unrelated services', async () => {
@@ -289,4 +289,13 @@ test('ARTEX privacy probe fails without overstating scope or leaking errors', as
   })
   assert.equal(unreachable.privacyExposure, 'unavailable')
   assert.ok(!JSON.stringify(unreachable).includes('private-test-token'))
+})
+
+test('Windows installer default and saved portable paths are recognized', (t) => {
+  const home = workspace(t)
+  const standard = put(join(home, 'Programs', 'ARTEX', 'tools', 'dnsx.exe'))
+  assert.equal(findArtexTool('dnsx', { env: { LOCALAPPDATA: home }, platform: 'win32' }), standard)
+  const portable = join(home, 'portable')
+  const tool = put(join(portable, 'tools', 'katana.exe'))
+  assert.equal(resolveTool('katana', { root: home, config: { platform: 'windows', env: { ARTEX_HOME: portable } }, env: { PATH: '' } }).path, tool)
 })
