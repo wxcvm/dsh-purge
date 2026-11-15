@@ -42,8 +42,8 @@ const client = readFileSync(new URL('../lib/redteam/client.js', import.meta.url)
 const helperStart = client.indexOf('    function compareNetworkPrivacy(')
 const helperEnd = client.indexOf('    function NetworkPrivacyCard()', helperStart)
 assert.ok(helperStart >= 0 && helperEnd > helperStart)
-const { compareNetworkPrivacy, networkPrivacyReport } = runInNewContext(
-  client.slice(helperStart, helperEnd) + '\n;({ compareNetworkPrivacy, networkPrivacyReport })'
+const { compareNetworkPrivacy, networkPrivacyReport, networkObservationAdvice } = runInNewContext(
+  client.slice(helperStart, helperEnd) + '\n;({ compareNetworkPrivacy, networkPrivacyReport, networkObservationAdvice })'
 )
 const plain = x => JSON.parse(JSON.stringify(x))
 const sample = overrides => ({
@@ -82,4 +82,17 @@ test('report keeps observations and comparison but not extra source properties',
   assert.ok(!JSON.stringify(report).includes('sensitive-secret'))
   assert.ok(!JSON.stringify(report).includes('192.0.2.23'))
   assert.equal(networkPrivacyReport(null, after).baseline, null)
+})
+
+
+test('network advice is evidence-based and does not infer an unchanged route', () => {
+  const before = sample()
+  const after = sample({ dns: { status: 'observed', ipv4: 2, ipv6: 0, other: 0 },
+    proxyEnvironment: [{ name: 'HTTPS_PROXY', configured: true }] })
+  const notes = networkObservationAdvice(before, after)
+  assert.ok(notes.some(note => note.includes('Node DNS 计数变化')))
+  assert.ok(notes.some(note => note.includes('代理环境变量存在性变化')))
+  assert.ok(notes.some(note => note.includes('部分观察不可用')))
+  assert.equal(networkObservationAdvice(before, sample({ platform: 'linux' })).length, 0)
+  assert.ok(!networkObservationAdvice(before, before).some(note => note.includes('计数变化')))
 })
