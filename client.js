@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "360da78493a97877";
+		const CLIENT_BUILD_ID = "acee1c28e08e4b21";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11310,8 +11310,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [consent, setConsent] = React.useState(false)
       const [result, setResult] = React.useState(null)
       const [syncBusy, setSyncBusy] = React.useState(false)
+      const [pairing, setPairing] = React.useState(null)
+      const [pairBusy, setPairBusy] = React.useState(false)
+      const checkPairing = async () => {
+        if (pairBusy || !config?.configured) return
+        setPairBusy(true); setPairing(null)
+        try { setPairing(await api({ op: 'scopedIntelPairingProbe' }) || { error: '无配对回执' }) }
+        catch (e) { setPairing({ error: String(e?.message || e) }) }
+        finally { setPairBusy(false) }
+      }
       const reload = () => {
-        setLoading(true); setConfig(null); setMasked(null); setConsent(false); setConfigError('')
+        setLoading(true); setConfig(null); setMasked(null); setConsent(false); setConfigError(''); setPairing(null)
         Promise.all([api({ op: 'scopedIntelSyncConfig' }), api({ op: 'intelSourcesGet' })]).then(([c, p]) => {
           if (!c || c.ok !== true || !p || p.ok !== true) throw Error(c?.error || p?.error || '无法读取联动配置')
           setConfig(c); setMasked(!!p.maskAssets)
@@ -11344,7 +11353,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-kv' }, h('b', null, '当前 Purge 项目'), h('span', null, eng || '尚未选择项目')),
         h('div', { className: 'rt-kv' }, h('b', null, 'ARTEX 接收公司'), h('span', null,
           loading ? '读取中…' : config?.configured ? '公司 #' + config.companyId : '未配置独立情报令牌或公司 ID')),
-        h('button', { type: 'button', className: 'rt-btn', disabled: loading || syncBusy, onClick: reload }, '刷新联动配置'),
+        h('button', { type: 'button', className: 'rt-btn', disabled: loading || syncBusy || pairBusy, onClick: reload }, '刷新联动配置'),
+        h('button', { type: 'button', className: 'rt-btn', disabled: loading || syncBusy || pairBusy || !config?.configured, onClick: checkPairing }, pairBusy ? '检测中…' : '检测真实配对'),
+        pairing ? h('p', { className: pairing.ok ? 'rt-foot' : 'rt-err', role: 'status' }, pairing.ok
+          ? '两端配对已确认 · 公司 #' + pairing.companyId + ' · ' + pairing.scopeCount + ' 条范围规则（尚未验证本次清单）'
+          : pairing.error || '配对未确认') : null,
         configError ? h('p', { className: 'rt-err', role: 'alert' }, configError) : null,
         config && !config.configured ? h('details', null, h('summary', null, '查看配对方法'),
           h('p', { className: 'rt-foot' }, 'ARTEX：ARTEX_PURGE_INTEL_TOKEN / ARTEX_PURGE_INTEL_COMPANY_ID；Purge：DSH_PURGE_ARTEX_INTEL_TOKEN / DSH_PURGE_ARTEX_INTEL_COMPANY_ID。两端使用同一独立令牌（至少 32 字符）和公司 ID，重启宿主后刷新。')) : null,
