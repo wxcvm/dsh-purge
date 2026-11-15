@@ -183,3 +183,31 @@ test('paired asset pages and snapshot analysis only use fixed read endpoints', a
   assert.equal(JSON.stringify(snapshot).includes(token),false)
   assert.equal((await readScopedIntelDetail(null,{kind:'snapshot',companyId:12,snapshotId:9},{env,probe,fetchFn:async()=>new Response(JSON.stringify({...base,snapshot_id:8,analysis}))})).ok,false)
 })
+
+test('paired task, findings and report reads preserve scope and validate returned identity', async () => {
+  const probe=async()=>({state:'detected'})
+  const base={service:'artex',schema_version:1,company_id:12}
+  const item={id:8,name:'fixture',severity:'low',status:'pending',created_at:'2026-11-15',has_report:true,token}
+  const task={...base,task_id:7,name:'task',status:'running',paused:false,queued:false,shared:false,created_at:'2026-11-15',started_at:'',completed_at:'',asset_count:2,finding_count:1,token}
+  const check=async(req,path,payload)=>readScopedIntelDetail(null,{companyId:12,...req},{env,probe,fetchFn:async(url,opts)=>{
+    assert.equal(url,'http://127.0.0.1:8787/api/purge/intel-bridge'+path)
+    assert.equal(opts.method,'GET')
+    assert.equal(opts.body,undefined)
+    return new Response(JSON.stringify(payload))
+  }})
+  const t=await check({kind:'task',taskId:7},'/task?task=7',task)
+  assert.equal(t.ok,true)
+  assert.equal(t.task.assetCount,2)
+  assert.equal(JSON.stringify(t).includes(token),false)
+  assert.equal((await check({kind:'task',taskId:7},'/task?task=7',{...task,task_id:9})).ok,false)
+  const list=await check({kind:'findings',taskId:7,before:10},'/findings?before=10&task=7',{...base,items:[item],next_before:0})
+  assert.equal(list.ok,true)
+  assert.equal(list.items[0].hasReport,true)
+  assert.equal(JSON.stringify(list).includes(token),false)
+  const report=await check({kind:'report',findingId:8},'/report?finding=8',{...base,finding:item,report:'fixture report'})
+  assert.equal(report.ok,true)
+  assert.equal(report.report,'fixture report')
+  assert.equal(JSON.stringify(report).includes(token),false)
+  assert.equal((await check({kind:'report',findingId:8},'/report?finding=8',{...base,finding:{...item,id:9},report:'wrong'})).ok,false)
+  assert.equal((await readScopedIntelDetail(null,{kind:'report',findingId:8,companyId:99},{env,probe,fetchFn:()=>{throw Error('unexpected network')}})).ok,false)
+})

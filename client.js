@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f74aee3df6535173";
+		const CLIENT_BUILD_ID = "cf0a0dda2fe6456a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11569,7 +11569,32 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const btn = (label, onClick) => h('button', { type:'button', className:'rt-btn', disabled:busy || detailBusy, onClick }, label)
       const labels = { names:'域名', ips:'IP', edges:'关联关系', port_observations:'历史端口观察', excluded_dns:'排除范围外 DNS', unknown_transport_ports:'未知传输协议端口', ports_without_observation_time:'缺少观察时间的端口', shared_addresses:'共享地址',
         names_with_multiple_sources:'多来源域名', names_without_dns:'未采集 DNS 的域名', names_with_dns_failures:'DNS 查询失败', names_without_retained_address:'无保留地址的域名', ips_without_domain_link:'无域名关联的 IP', ips_without_port_evidence:'无端口证据的 IP' }
-      const detailView = detail?.kind === 'assets' ? h('div', { className:'rt-card' },
+      const taskStatus = t => t.queued ? '排队中' : t.paused ? '已暂停' : ({running:'运行中',done:'已完成',failed:'失败',timeout:'超时'}[t.status] || t.status)
+      const detailView = detail?.kind === 'task' ? h('div',{className:'rt-card'},
+        h('h4',null,detail.task.name || '任务 #'+detail.task.id),
+        h('p',{className:'rt-foot'},'任务 #'+detail.task.id+' · '+taskStatus(detail.task)+(detail.task.shared?' · 多公司任务，仅显示基本状态及本公司统计':'')),
+        [['创建时间',detail.task.createdAt],['首次运行',detail.task.startedAt],['完成时间',detail.task.completedAt],['公司关联资产',detail.task.assetCount],['可读取发现',detail.task.findingCount]].map(([label,value])=>
+          h('div',{key:label,className:'rt-kv'},h('span',null,label),h('b',null,String(value || (value===0?0:'—'))))),
+        btn('查看此任务发现',()=>openDetail('findings',{taskId:detail.task.id})),
+        btn('刷新任务详情',()=>openDetail('task',{taskId:detail.task.id})),
+        btn('关闭详情',()=>setDetail(null))) :
+      detail?.kind === 'findings' ? h('div',{className:'rt-card'},
+        h('h4',null,detail.taskId?'任务 #'+detail.taskId+' · 发现':'ARTEX 公司发现'),
+        h('p',{className:'rt-foot'},'展示关联资产全部归属当前公司的发现；混合公司报告不在此处读取。'),
+        detail.items.length?h('div',{style:{maxHeight:340,overflowY:'auto'}},detail.items.map(item=>
+          h('div',{key:item.id,className:'rt-kv'},h('div',null,h('b',null,item.name || '发现 #'+item.id),h('div',{className:'rt-foot'},'#'+item.id+' · '+item.severity+' · '+item.status+' · '+item.createdAt)),
+            btn(item.hasReport?'阅读报告':'查看发现',()=>openDetail('report',{findingId:item.id}))))):h('p',{className:'rt-foot'},'暂无可读取发现。'),
+        btn('返回第一页',()=>openDetail('findings',detail.taskId?{taskId:detail.taskId}:{})),
+        detail.nextBefore?btn('下一页',()=>openDetail('findings',{before:detail.nextBefore,...(detail.taskId?{taskId:detail.taskId}:{})})):null,
+        btn('关闭详情',()=>setDetail(null))) :
+      detail?.kind === 'report' ? h('div',{className:'rt-card'},
+        h('h4',null,detail.finding.name || '发现 #'+detail.finding.id),
+        h('p',{className:'rt-foot'},'#'+detail.finding.id+' · '+detail.finding.severity+' · '+detail.finding.status+' · '+detail.finding.createdAt),
+        h('p',{className:'rt-foot'},'ARTEX 已保存的原始报告文本；不执行其中的内容，也不自动改变核查状态。'),
+        detail.report?h('pre',{style:{whiteSpace:'pre-wrap',wordBreak:'break-word',maxHeight:480,overflowY:'auto',fontSize:12}},detail.report):h('p',{className:'rt-foot'},'此发现尚未生成报告。'),
+        btn('返回公司发现',()=>openDetail('findings')),
+        btn('关闭详情',()=>setDetail(null))) :
+      detail?.kind === 'assets' ? h('div', { className:'rt-card' },
         h('h4', null, 'ARTEX 公司资产'),
         h('p', { className:'rt-foot' }, '按公司归属读取每页最多 50 条，不读取认证信息或请求参数。'),
         detail.items.length ? h('div', { style:{maxHeight:340, overflowY:'auto'} }, detail.items.map(a =>
@@ -11600,10 +11625,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             [['关联任务', data.taskCount], ['归属资产', data.assetCount], ['资产关联发现', data.linkedFindingCount], ['历史情报快照', data.snapshotCount]].map(([label,value]) =>
               h('div', { key: label, className: 'rt-card', style: { flex: '1 1 120px', margin: 0 } }, h('b', null, String(value)), h('div', { className: 'rt-foot' }, label)))),
           btn('浏览公司资产',()=>openDetail('assets')),
+          btn('浏览公司发现',()=>openDetail('findings')),
           h('h4', null, '最近关联任务（最多 50 条）'),
           data.tasks.length ? h('div', { style: { maxHeight: 260, overflowY: 'auto' } }, data.tasks.map(t =>
             h('div', { key: t.id, className: 'rt-kv' }, h('b', null, '任务 #' + t.id),
-              h('span', null, t.queued ? '排队中' : t.paused ? '已暂停' : ({running:'运行中',done:'已完成',failed:'失败',timeout:'超时'}[t.status] || t.status))))) :
+              h('span', null, taskStatus(t)), btn('查看任务',()=>openDetail('task',{taskId:t.id}))))) :
             h('p', { className: 'rt-foot' }, '该公司暂无关联任务。'),
           h('h4', null, '最近历史情报快照（最多 20 条）'),
           data.snapshots.length ? h('div', { style: { maxHeight: 220, overflowY: 'auto' } }, data.snapshots.map(t =>
@@ -11612,7 +11638,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           detailBusy ? h('p',{className:'rt-foot'},'读取详情中…') : null,
           detailError ? h('p',{className:'rt-err',role:'alert'},detailError) : null,
           detailView,
-          h('p', { className: 'rt-foot' }, '资产与历史分析遵循现有资产遮蔽设置；不读取报告正文、任务描述或跨公司目标。')) : null)
+          h('p', { className: 'rt-foot' }, '详情遵循现有资产遮蔽设置；报告按公司归属读取，不读取任务描述、原始流量或跨公司目标。')) : null)
     }
 
     function ArtexTab(props) {
