@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "fc07a0887a052f0e";
+		const CLIENT_BUILD_ID = "6a9620f60666d895";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8269,6 +8269,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     let intelSourcesWriteQueue = Promise.resolve()
     function LocalAssetSearchTab(props) {
       const eng = props.engagement
+      const [surveyPage, setSurveyPage] = React.useState('platforms')
+      const surveyPages = [['platforms', '平台管理'], ['assets', '本地资产'], ['external', '外部情报与历史'], ['active', '本机测绘']]
+      const surveyCard = (id, attrs, ...children) => surveyPage === id ? h('div', attrs, ...children) : null
       const [draft, setDraft] = React.useState('domain="example.org" && port=443')
       const [query, setQuery] = React.useState('')
       const [sort, setSort] = React.useState('discovered')
@@ -8279,6 +8282,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [detail, setDetail] = React.useState(null)
       const [detailId, setDetailId] = React.useState(null)
       const [sources, setSources] = React.useState([])
+      const [sourceStatus, setSourceStatus] = React.useState({})
       const [chosen, setChosen] = React.useState({ selected: ['local'], preferred: 'local' })
       const [savedSources, setSavedSources] = React.useState(null)
       const [sourceBusy, setSourceBusy] = React.useState(false)
@@ -8393,6 +8397,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!live) return
           if (!r || r.ok !== true || !r.selection) { setSourceMsg((r && r.error) || '读取平台列表失败'); return }
           setSources(Array.isArray(r.intelSources) ? r.intelSources : [])
+          setSourceStatus(r.sourceStatus || {})
           setMaskAssets(!!r.maskAssets)
           setMaskSurvey(!!r.maskSurvey)
           if (revision !== sourceRevision.current) return
@@ -8415,6 +8420,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               throw new Error((r && r.error) || '保存回执不一致，请重试')
             }
             setSavedSources(r.selection)
+            setSourceStatus(r.sourceStatus || {})
             if (revision === sourceRevision.current) setSourceMsg('已保存平台选择；不会自动提交外部查询。')
           } catch (e) {
             if (revision === sourceRevision.current) setSourceMsg('保存失败：' + String((e && e.message) || e))
@@ -8457,6 +8463,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       ]
       const search = (value) => {
         const next = String(value === undefined ? draft : value).trim()
+        if (!eng) { setError('请先选择靶标'); return }
         if (!next) { setError('请输入搜索表达式'); return }
         setError('')
         setPage(0)
@@ -8489,19 +8496,25 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return h('div', { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
           h('b', null, '互联网资产测绘中心'),
+          !eng ? h('span', { className: 'rt-tag rt-tag-warn' }, '未选择靶标 · 可管理平台') : null,
           h('span', { className: 'rt-tag rt-tag-live' }, '离线 · SQLite'),
           h('div', { className: 'rt-spacer' }),
-          h('button', { className: 'rt-btn', onClick: () => search() }, '刷新'),
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng,
-            onClick: () => search() }, '搜索')),
+          surveyPage === 'assets' ? h('button', { className: 'rt-btn', disabled: !eng, onClick: () => search() }, '刷新资产') : null,
+          surveyPage === 'assets' ? h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng,
+            onClick: () => search() }, '搜索') : null),
+        h('div', { className: 'rt-toolbar', role: 'group', 'aria-label': '测绘中心子页面' },
+          surveyPages.map(([id, label]) => h('button', { key: id, type: 'button',
+            className: 'rt-btn' + (surveyPage === id ? ' rt-btn-primary' : ''),
+            'aria-pressed': surveyPage === id, onClick: () => setSurveyPage(id) }, label))),
         h('div', { className: 'rt-pane rt-survey-pane' },
-          h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.75 } },
+          !eng && surveyPage !== 'platforms' ? h('div', { className: 'rt-card' }, '请在顶部选择靶标，再查询或查看该项目的记录。平台管理不需要靶标。') : null,
+          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.75 } },
             h('h4', null, '网络空间测绘平台 · 总介绍'),
             h('div', null, '这类平台索引互联网上公开可见的主机、端口、服务、网页指纹和证书，适合与本地资产记录交叉核对。'
               + ' 各平台收录范围、查询语言、账号要求和额度不同。'),
             h('div', { style: { marginTop: 5 } },
-              '本地测绘已接通 SQLite 检索；FOFA 保留原有专项技能。下方可查询 InternetDB 与 Shodan 单 IP 情报；其余外部平台提供官网入口。')),
-          h('div', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
+              '本地资产支持 SQLite 检索；FOFA 保留原有专项技能。外部情报支持 InternetDB 与 Shodan 单 IP 查询；其余平台提供官网入口。')),
+          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
             h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
               h('h4', { style: { margin: 0 } }, '选择常用测绘平台'),
               h('span', { className: 'rt-tag' }, '已选 ' + chosen.selected.length + ' / ' + sources.length),
@@ -8509,7 +8522,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn rt-btn-primary', disabled: sourceBusy || !sources.length,
                 onClick: saveSources }, sourceBusy ? '保存中…' : '保存平台选择')),
             h('div', { style: { fontSize: 11, opacity: 0.8, margin: '5px 0 9px' } },
-              '勾选后自动保存；选择只决定本页展示偏好，不会自动提交外部查询。'),
+              '勾选后自动保存；选择只决定本页展示偏好，不会自动提交外部查询。免费起步优先本地库与 InternetDB；平台 Key 是否配置不代表额度或连接已验证。'),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 } },
               [['免费起步', ['local', 'shodan']], ['国内优先', ['local', 'fofa', 'zoomeye', 'quake', 'hunter']], ['全球参考', ['local', 'shodan', 'censys', 'netlas']]].map(([label, selected]) =>
                 h('button', { key: label, type: 'button', className: 'rt-btn', disabled: !sources.length,
@@ -8527,13 +8540,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     onChange: (e) => saveSelection({ ...sourceDraft.current, preferred: e.target.value }) },
                     activeSources.map((x) => h('option', { key: x.id, value: x.id }, x.name))))
               : h('div', { style: { fontSize: 11, opacity: 0.7, marginTop: 8 } },
-                  '当前没有选中平台；仍可使用下方的本地检索。'),
+                  '当前没有选中平台；仍可切换到本地资产进行检索。'),
             savedSources && sources.length ? h('div', { style: { opacity: 0.72, fontSize: 11, marginTop: 7 } },
               '已保存 ' + savedSources.selected.length + ' 家 · 首选 '
                 + ((sources.find((x) => x.id === savedSources.preferred) || {}).name || '本地资产库'))
               : null,
             sourceMsg ? h('div', { className: 'rt-foot', style: { marginTop: 8 } }, sourceMsg) : null),
-          activeSources.map((source) => h('div', { key: source.id, className: 'rt-card',
+          surveyPage === 'platforms' && activeSources.map((source) => h('div', { key: source.id, className: 'rt-card',
             style: { fontSize: 12, lineHeight: 1.7 } },
             h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } },
               h('b', null, source.name),
@@ -8543,10 +8556,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     : source.mode === 'scoped-api' ? '单 IP 被动查询 · 已接通' : '官网入口 · API 未接入'),
               h('span', { style: { opacity: 0.75 } }, source.language)),
             h('div', null, source.focus),
+            sourceStatus[source.id] ? h('div', { className: 'rt-foot' },
+              sourceStatus[source.id].label + ' · 额度：' + sourceStatus[source.id].quota) : null,
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '证书透明度 · 子域线索'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '免费 crt.sh 历史证书查询。需在项目登记 *.域名 授权范围；只保留范围内的具体子域，不访问目标、不验证存活。'),
@@ -8575,7 +8590,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     !maskAssets ? h('div', { style: { maxHeight: 280, overflowY: 'auto' } },
                       (ctResult.names || []).map(n => h('div', { key: n.name }, n.name + (n.not_after ? ' · 证书到期 ' + n.not_after : '')))) : null)
                   : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('assets', { className: 'rt-card' },
             h('h4', null, '统一资产关联 · 离线清单'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '关联已保存的 CT、subfinder、DNS 与 IP 被动情报；仅保留授权域名与明确授权 IP。不触网、不验证服务存活，不自动增加资产。'),
@@ -8598,7 +8613,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   !maskAssets ? h('details', null, h('summary', null, '结构化 JSON（可复制）'),
                     h('textarea', { className: 'rt-textarea', readOnly: true, value: JSON.stringify(inventory, null, 2),
                       style: { width: '100%', minHeight: 140, fontSize: 11 } })) : null) : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('assets', { className: 'rt-card' },
             h('h4', null, 'ARTEX 本机情报同步'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '仅发送当前项目的历史关联清单至本机 ARTEX，重新读取已保存证据并检查范围；不启动扫描。需要独立情报令牌和两端一致的公司 ID。'),
@@ -8617,7 +8632,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 syncResult.ok ? '已保存 ARTEX 历史快照 #' + syncResult.snapshotId + ' · 公司 #' + syncResult.companyId
                   + ' · 域名 ' + syncResult.names + ' · IP ' + syncResult.ips
                   : h('div', { className: 'rt-err' }, syncResult.error || '同步未确认')) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '统一子域线索 · CT + subfinder'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '合并已保存 CT 快照，或调用本机已安装的 subfinder 被动数据源。需登记 *.域名；不执行主动探测。点选子域可交给下方 DNS 查询，仍需单独确认。'),
@@ -8652,7 +8667,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                           setDnsTarget(n.name); setDnsConsent(false); setDnsResult(null)
                         } }, '填入 DNS 核验')))) : null)
                   : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '免费 DNS 情报 · 单域名'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               '使用系统配置的 DNS 解析器查询 A / AAAA / CNAME，不需要 FOFA Key。解析结果仅作为线索，不会自动扩大项目授权范围或主动扫描解析地址。'),
@@ -8679,7 +8694,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     (dnsResult.records || []).map(r => h('div', { key: r.type + r.value },
                       r.type + ' ' + (maskAssets ? '已隐藏' : r.value) + (r.ttl !== undefined ? ' · TTL ' + r.ttl : ''))),
                     (dnsResult.errors || []).map(e => h('div', { key: e.type }, e.type + ': ' + e.code)))) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('external', { className: 'rt-card' },
             h('h4', null, '外部被动情报 · 单 IP'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
               'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史线索不会修改实时端口状态；可保存全部观察并离线查询。'),
@@ -8711,7 +8726,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   h('div', null, '端口线索：' + ((intelResult.ports || []).map(p => p.port + '/' + p.proto + ' (' + p.sources.join(', ') + ')').join('、') || '无')),
                   !maskAssets ? h('div', null, '主机名线索：' + [...new Set((intelResult.results || []).flatMap(r => r.hostnames))].join('、')) : null)
                   : null) : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('active', { className: 'rt-card' },
             h('h4', null, '本机主动测绘 · 单目标'),
             h('div', { style: { fontSize: 12, opacity: 0.85, lineHeight: 1.65, marginBottom: 8 } },
               '直接使用本机 Nmap / httpx，不调用 FOFA、Shodan 等厂商。扫描前核对本项目授权范围；未登记范围时需要你明确确认。'
@@ -8752,7 +8767,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('div', { style: { opacity: 0.8 } },
                 '不会因为成功退出就宣称发现已验证；请在「作战 → 扫描记录」检查证据。'))
               : null),
-          h('div', { className: 'rt-card' },
+          surveyCard('assets', { className: 'rt-card' },
             h('h4', null, '本地资产组合查询 · 已接通'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7, marginBottom: 9 } },
               '以下查询始终只使用当前项目的 SQLite 资产库，不会对外部平台发起请求。'),
@@ -8776,6 +8791,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('option', { value: 'ports' }, '开放端口多优先'),
               h('option', { value: 'ip' }, '按 IP 排序'),
               h('option', { value: 'priority' }, '按已有优先级排序'))),
+          surveyPage === 'assets' ? h(React.Fragment, null,
           error ? h('div', { className: 'rt-err' }, error) : null,
           data ? h('div', { className: 'rt-card', style: { fontSize: 12 } },
             '当前项目命中 ' + data.total + ' 项 · 本页 ' + items.length + ' 项。搜索不触网、不触发扫描。')
@@ -8817,16 +8833,69 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               '第 ' + (page + 1) + ' 页 / 共 ' + Math.ceil(data.total / limit) + ' 页'),
             h('button', { className: 'rt-btn', disabled: (page + 1) * limit >= data.total,
               onClick: () => setPage((p) => p + 1) }, '下一页'))
-            : null))
+            : null) : null))
+    }
+
+    // Preserve local edits when refreshing or receiving a save acknowledgement.
+    function envDraftDelta(before, after) {
+      const patch = {}
+      for (const key of Object.keys(after || {})) {
+        const oldValue = before?.[key], value = after[key]
+        if (JSON.stringify(oldValue) === JSON.stringify(value)) continue
+        if (value && oldValue && typeof value === 'object' && typeof oldValue === 'object'
+            && !Array.isArray(value) && !Array.isArray(oldValue)) {
+          patch[key] = envDraftDelta(oldValue, value)
+        } else patch[key] = value
+      }
+      return patch
+    }
+    function envDraftMerge(base, patch) {
+      const next = { ...base }
+      for (const [key, value] of Object.entries(patch || {})) {
+        next[key] = value && typeof value === 'object' && !Array.isArray(value)
+          && next[key] && typeof next[key] === 'object' && !Array.isArray(next[key])
+          ? envDraftMerge(next[key], value) : value
+      }
+      return next
     }
 
     function EnvTab(props) {
       const refreshKey = props.refreshKey || 0
+      const [section, setSection] = React.useState(props.initialSection || 'summary')
+      const sections = [
+        ['summary', '环境总览'], ['execution', '执行环境'], ['tools', '工具管理'],
+        ['local-search', '测绘中心'], ['network', '网络配置'], ['diagnostics', '诊断与修复'],
+      ]
+      const sectionCard = (id, attrs, ...children) => section === id ? h('div', attrs, ...children) : null
       const [data, setData] = React.useState(null)
-      const [draft, setDraft] = React.useState(null)
+      const [draft, setDraftState] = React.useState(null)
+      const draftRef = React.useRef(null)
+      const savedDraftRef = React.useRef(null)
+      const configBusyRef = React.useRef(false)
+      const setDraft = (update) => {
+        const next = typeof update === 'function' ? update(draftRef.current) : update
+        draftRef.current = next
+        setDraftState(next)
+      }
+      const dirty = !!draft && Object.keys(envDraftDelta(savedDraftRef.current, draft)).length > 0
       const [err, setErr] = React.useState(null)
       const [msg, setMsg] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
+      const [networkCheck, setNetworkCheck] = React.useState({})
+      const [networkChecking, setNetworkChecking] = React.useState('')
+      const runNetworkCheck = async (kind) => {
+        if (networkChecking) return
+        setNetworkChecking(kind)
+        setNetworkCheck(prev => ({ ...prev, [kind]: null }))
+        try {
+          const result = await api(kind === 'proxy'
+            ? { op: 'proxyConfigTest' }
+            : { op: 'environmentNetworkProbe', kind })
+          setNetworkCheck(prev => ({ ...prev, [kind]: result || { ok: false, error: '未收到检测结果' } }))
+        } catch (e) {
+          setNetworkCheck(prev => ({ ...prev, [kind]: { ok: false, error: String(e?.message || e) } }))
+        } finally { setNetworkChecking('') }
+      }
       const [folderPath, setFolderPath] = React.useState('')
       const [toolSearch, setToolSearch] = React.useState('')
       const [toolGroup, setToolGroup] = React.useState('all')
@@ -8861,11 +8930,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [adminProbeResult, setAdminProbeResult] = React.useState(null)
       const adminProbeRevision = React.useRef(0)
 
-      const applyDraftFrom = (r) => {
+      const applyDraftFrom = (r, baseline = savedDraftRef.current) => {
         adminProbeRevision.current += 1
         setAdminProbeResult(null)
         const c = (r && r.config) || {}
-        setDraft({
+        const next = {
           platform: c.platform || 'auto',
           toolkitDir: c.toolkitDir || '',
           nucleiTemplatesDir: c.nucleiTemplatesDir || '',
@@ -8878,13 +8947,19 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           vpsAdminRoute: { target: c.vpsAdminRoute?.target || '', jumps: Array.isArray(c.vpsAdminRoute?.jumps) ? [...c.vpsAdminRoute.jumps] : [] },
           env: Object.assign({ FOFA_KEY: '', REDTEAM_VPS_HOST: '', REDTEAM_VPS_KEY: '' }, c.env || {}),
           notes: c.notes || '',
-        })
+        }
+        const edits = baseline && draftRef.current ? envDraftDelta(baseline, draftRef.current) : {}
+        savedDraftRef.current = next
+        setDraft(envDraftMerge(next, edits))
         if (c.toolkitDir) setFolderPath(c.toolkitDir)
       }
 
       const load = () => {
+        if (configBusyRef.current) return
+        configBusyRef.current = true
         setBusy(true); setMsg(null)
         api({ op: 'platformConfigGet' }).then((r) => {
+          configBusyRef.current = false
           setBusy(false)
           setToolChecks({})
           setCapabilityMatrix(null)
@@ -8893,14 +8968,16 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r || r.ok === false) { setErr((r && r.error) || '读取失败'); return }
           setErr(null); setData(r)
           applyDraftFrom(r)
-        }, (e) => { setBusy(false); setErr(String((e && e.message) || e)) })
+        }, (e) => { configBusyRef.current = false; setBusy(false); setErr(String((e && e.message) || e)) })
       }
       React.useEffect(load, [refreshKey])
 
       const save = () => {
-        if (!draft) return
+        if (!draftRef.current || configBusyRef.current) return
+        configBusyRef.current = true
         setBusy(true); setMsg(null)
-        const config = {
+        const submitted = draftRef.current
+        const toConfig = (draft) => ({
           platform: draft.platform,
           toolkitDir: draft.toolkitDir,
           nucleiTemplatesDir: draft.nucleiTemplatesDir,
@@ -8913,10 +8990,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           vpsAdminRoute: draft.vpsAdminRoute,
           env: draft.env,
           notes: draft.notes,
-          envAdaptConfigured: true,
-          envAdaptSkip: false,
-        }
+        })
+        const before = toConfig(savedDraftRef.current)
+        const after = toConfig(submitted)
+        const delta = envDraftDelta(before, after)
+        // Only tools/env are merged by key in savePlatformConfig. Other fields
+        // (including nested planning/SSH structures) are replaced as a whole.
+        const config = Object.fromEntries(Object.keys(delta).map(key =>
+          [key, key === 'tools' || key === 'env' ? delta[key] : after[key]]))
+        config.envAdaptConfigured = true
+        config.envAdaptSkip = false
         api({ op: 'platformConfigSave', config }).then((r) => {
+          configBusyRef.current = false
           setBusy(false)
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '保存失败' }); return }
           setData(r)
@@ -8925,15 +9010,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setKaliProbeResults({})
           setTaskPlan(null)
           setMsg({ ok: '已保存到 '  + ((r.config && r.config.path) || '$DSH_HOME/redteam/config.json') })
-          applyDraftFrom(r)
-        }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
+          applyDraftFrom(r, submitted)
+        }, (e) => { configBusyRef.current = false; setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
       }
 
       const assignFolder = () => {
         const dir = String(folderPath || (draft && draft.toolkitDir) || '').trim()
         if (!dir) { setMsg({ err: '请先填写工具所在文件夹路径' }); return }
+        if (configBusyRef.current) return
+        configBusyRef.current = true
         setBusy(true); setMsg(null)
         api({ op: 'platformAssignToolkit', dir }).then((r) => {
+          configBusyRef.current = false
           setBusy(false)
           if (!r || r.ok === false) { setMsg({ err: (r && r.error) || '自动分配失败' }); return }
           setData(r)
@@ -8946,7 +9034,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             ok: '已从文件夹分配 ' + (r.assignedCount || 0) + ' 个工具'
               + (r.nucleiTemplatesDir ? '，并识别 nuclei-templates' : ''),
           })
-        }, (e) => { setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
+        }, (e) => { configBusyRef.current = false; setBusy(false); setMsg({ err: String((e && e.message) || e) }) })
       }
 
       const planForTask = () => {
@@ -9199,6 +9287,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const adapt = (data && data.adapt) || {}
       const tools = (data && data.tools && data.tools.items) || []
       const found = tools.filter((t) => t.path).length
+      // Existing discovery stays authoritative; explicit paths are only pinned on request.
+      const suggestedPaths = tools.filter(t => t.path && ['toolkit', 'binDir', 'path', 'artex'].includes(t.source)
+        && !String(draft?.tools?.[t.id] || '').trim())
+      const fillDetectedPaths = () => {
+        setDraft(current => {
+          if (!current) return current
+          const next = { ...current.tools }
+          for (const t of suggestedPaths) {
+            if (!String(next[t.id] || '').trim()) next[t.id] = t.path
+          }
+          return { ...current, tools: next }
+        })
+        setMsg({ ok: '已填入发现的工具路径草稿；检查后点击保存。' })
+        setSection('tools')
+      }
+      const stalePaths = tools.filter(t => !t.path && t.configured && !String(t.id).startsWith('custom:')
+        && String(draft?.tools?.[t.id] || '').trim() === String(data?.config?.tools?.[t.id] || '').trim())
       const taskProfiles = (data && data.taskProfiles) || []
       const selectedCheck = taskPlan && taskPlan.selected ? toolChecks[taskPlan.selected.id] : null
       const toolGroups = [
@@ -9241,22 +9346,74 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
       return h('div', { className: 'rt-main rt-env-main' },
         h('div', { className: 'rt-toolbar' },
-          h('span', { style: { fontWeight: 600 } }, '环境适配'),
-          h('span', { className: 'rt-tag' }, runtime.effective === 'windows' ? 'Windows' : 'Linux/Kali'),
+          h('span', { style: { fontWeight: 600 } }, '环境中心'),
+          h('span', { className: 'rt-tag' }, !data ? '未检测' : runtime.effective === 'windows' ? 'Windows' : 'Linux/Kali'),
           adapt.kali ? h('span', { className: 'rt-tag rt-tag-live' }, 'Kali') : null,
           h('span', { className: 'rt-tag' + (adapt.ready ? ' rt-tag-live' : ' rt-tag-warn') },
             adapt.ready ? ('配置可继续 · ' + (adapt.reason || '')) : '待配置'),
-          h('span', { className: 'rt-tag' + (found ? ' rt-tag-live' : ' rt-tag-warn') }, '工具 ' + found + '/' + tools.length),
+          h('span', { className: 'rt-tag' + (found ? ' rt-tag-live' : ' rt-tag-warn') }, data ? '工具 ' + found + '/' + tools.length : '工具未检测'),
           h('div', { className: 'rt-spacer' }),
+          dirty ? h('span', { className: 'rt-tag rt-tag-warn' }, '未保存修改') : null,
           h('button', { className: 'rt-btn', disabled: busy, onClick: load }, busy ? '读取中…' : '刷新'),
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save }, '保存')),
+          dirty ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+            setDraft(savedDraftRef.current); setMsg({ ok: '已恢复上次保存的配置。' })
+          } }, '撤销修改') : null,
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save }, busy ? '处理中…' : '保存')),
+        h('div', { className: 'rt-toolbar', role: 'group', 'aria-label': '环境中心子页面' },
+          sections.map(([id, label]) => h('button', {
+            key: id, type: 'button', className: 'rt-btn' + (section === id ? ' rt-btn-primary' : ''),
+            'aria-pressed': section === id, onClick: () => setSection(id),
+          }, label))),
+        section === 'local-search' ? h(LocalAssetSearchTab, { engagement: props.engagement, refreshKey }) :
         h('div', { className: 'rt-pane', style: { minHeight: 0 } },
         err ? h('div', { className: 'rt-err' }, err) : null,
         msg ? h('div', { className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+        sectionCard('summary', { className: 'rt-card' },
+          h('h4', null, '环境能力概览'),
+          h('div', { className: 'rt-toolbar', style: { padding: '0 0 8px', border: 0 } },
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || matrixBusy || environmentBusy || !!wslChecking || !!dockerBusy || !!kaliBusy,
+              onClick: loadCapabilityMatrix }, matrixBusy ? '正在检测…' : '一键检测环境'),
+            h('span', { className: 'rt-foot' }, '只读发现环境和工具路径；不安装、不执行目标任务。')),
+          matrixError ? h('div', { className: 'rt-err' }, matrixError) : null,
+          h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8 } },
+            [['本机工具', data ? found + ' / ' + tools.length + ' 已定位' : '尚未读取', 'tools'],
+              ['执行环境', environmentSnapshot ? (environmentSnapshot.environments || []).length + ' 个已发现' : '尚未发现', 'execution'],
+              ['测绘平台', '查看已保存选择', 'local-search'],
+              ['网络状态', data && data.egress ? '已读取代理配置' : '尚未读取', 'network'],
+              ['配置诊断', adapt.ready ? '配置可继续' : data ? '待配置' : '尚未读取', 'diagnostics'],
+            ].map(([label, status, id]) => h('button', { key: id, type: 'button', className: 'rt-btn',
+              style: { textAlign: 'left', padding: 10, whiteSpace: 'normal' }, onClick: () => setSection(id) },
+              h('strong', { style: { display: 'block' } }, label), h('span', null, status))))),
+        sectionCard('summary', { className: 'rt-card' },
+          h('h4', null, '推荐配置与下一步'),
+          h('div', { className: 'rt-foot' }, '根据当前已读取的配置和检测结果推荐；不会覆盖手工设置。'),
+          suggestedPaths.length ? h('div', { className: 'rt-kv' },
+            h('span', null, '发现 ' + suggestedPaths.length + ' 个未手工配置的工具；默认动态查找即可，也可固定当前路径。'),
+            h('button', { className: 'rt-btn', disabled: busy || !draft, onClick: fillDetectedPaths }, '填入已发现路径')) : null,
+          stalePaths.map(t => h('div', { key: t.id, className: 'rt-kv' },
+            h('span', null, t.label + '：已配置的路径不存在'),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+              setTool(t.id, ''); setSection('tools'); setMsg({ ok: '已清空失效路径草稿；保存后恢复自动查找。' })
+            } }, '恢复自动查找'))),
+          !data ? h('p', null, '正在读取本机配置；失败时使用刷新重试。') : null,
+          data && draft && draft.platform !== 'auto' ? h('div', { className: 'rt-kv' },
+            h('span', null, '平台模式为 ' + draft.platform + '；跨平台使用时可考虑 auto。'),
+            h('button', { className: 'rt-btn', onClick: () => setSection('tools') }, '查看配置')) : null,
+          data && tools.some(t => !t.path) ? h('div', { className: 'rt-kv' },
+            h('span', null, '尚未定位 ' + tools.filter(t => !t.path).length + ' 个工具；只需补齐当前任务所需工具。'),
+            h('button', { className: 'rt-btn', onClick: () => { setToolGroup('all'); setToolSearch(''); setSection('tools') } }, '查看工具目录')) : null,
+          data && found === tools.length && tools.length > 0 ? h('p', null, '本机工具路径均已定位；可按需进行版本验证。') : null,
+          environmentSnapshot ? h('div', { className: 'rt-kv' },
+            h('span', null, '发现 ' + (environmentSnapshot.environments || []).length + ' 个执行环境；远端工具仍需显式验证。'),
+            h('button', { className: 'rt-btn', onClick: () => setSection('execution') }, '查看环境')) : null,
+          (environmentSnapshot?.localDiagnostics?.issues || []).map((item) =>
+            h('div', { key: item.code, className: 'rt-kv' },
+              h('span', null, item.message),
+              h('button', { className: 'rt-btn', onClick: () => setSection('diagnostics') }, '查看诊断')))),
+        sectionCard('summary', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           adapt.message
             || '均可选填：留空则用默认路径/自动查找。填了的覆盖默认。密钥类只在需要测绘/反弹时才填。'),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+        sectionCard('diagnostics', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '跨环境工具能力矩阵'),
           h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
             '对比本机、WSL、Kali SSH 与 Docker 的 23 项内置工具。本机仅定位路径；远端默认未检查。读取矩阵不会自动验证版本或执行任务。'),
@@ -9310,11 +9467,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                             ? h('div', { style: { opacity: 0.75, marginTop: 3 } }, 'ARTEX 来源') : null)
                       })))))),
             h('div', { style: { fontSize: 11, opacity: 0.75, marginTop: 8 } },
-              '可使用下方各环境已有的版本验证按钮；结果仅保留于当前页面。'
+              '请在执行环境或工具管理页按需验证版本；结果仅保留于当前环境中心。'
               + ' 已定位 ≠ 可运行；版本已验证 ≠ 依赖齐全或任务已执行。ARTEX 是本机来源，不是独立执行环境。'))
             : h('div', { style: { fontSize: 11.5, opacity: 0.7, marginTop: 7 } },
               '尚未生成矩阵；请点击上方按钮进行只读环境发现。')),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.65 } },
+        sectionCard('execution', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.65 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '执行环境发现 · Windows / WSL / Docker'),
           h('div', { style: { opacity: 0.85, marginBottom: 7 } },
             '只读发现 WSL 发行版和 Docker 当前 context 的运行中容器；不会启动环境或扫描目标。'),
@@ -9359,7 +9516,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 ? environmentSnapshot.providers.wsl.note : '')
               + ' 显式版本检测可能启动已停止的 WSL 发行版；成功也不代表执行过目标任务。'))
             : null),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+        sectionCard('diagnostics', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '跨环境状态 · 只读诊断'),
           environmentSnapshot?.topology
             ? h('div', null,
@@ -9375,8 +9532,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     h('span', null, provider.note || '未提供说明'))),
                 (environmentSnapshot.localDiagnostics?.issues || []).map((item) =>
                   h('p', { key: item.code, className: 'rt-foot' }, item.message)))
-            : h('p', { className: 'rt-foot' }, '点击上方发现按钮，读取本机路径与跨环境提供方状态。')),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+            : h('p', { className: 'rt-foot' }, '点击「生成 / 刷新能力矩阵」或环境总览的一键检测，读取本机路径与跨环境提供方状态。')),
+        sectionCard('tools', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'ARTEX · 本机工具来源'),
           environmentSnapshot?.providers?.artex
             ? h('div', null,
@@ -9390,9 +9547,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     h('span', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
                       item.path))),
                 h('p', { className: 'rt-foot' }, environmentSnapshot.providers.artex.note))
-            : h('p', { className: 'rt-foot' }, '点击上方环境发现后可查看 ARTEX 工具路径来源。'),
+            : h('p', { className: 'rt-foot' }, '在执行环境中发现环境，或使用环境总览的一键检测，即可查看 ARTEX 工具路径来源。'),
         ),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+        sectionCard('execution', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'Docker · 已运行容器'),
           h('p', { className: 'rt-foot' },
             '使用上方环境发现查看 Docker 当前 context 中的运行容器；只有点击「显式验证版本」才执行容器内的固定版本命令。'),
@@ -9424,7 +9581,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', { className: 'rt-foot' },
               (environmentSnapshot.providers?.docker?.note || 'Docker 状态未返回')))
             : h('p', { className: 'rt-foot' }, '尚未发现 Docker 环境，请先点击上方的发现按钮。')),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+        sectionCard('execution', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'VMware Kali · SSH 环境'),
           h('div', { style: { opacity: 0.85, marginBottom: 8 } },
             '填写 Kali 虚拟机的 SSH 地址，保存后才能检测。只保存地址、用户、端口与私钥文件路径；不保存密码或私钥内容。'),
@@ -9466,7 +9623,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               : '工具版本检测未通过：' + (kaliToolCheck.error || kaliToolCheck.status)) : null,
           h('div', { style: { opacity: 0.75, fontSize: 11.5, marginTop: 7 } },
             '连接检查只读取 /etc/os-release；工具检测仅执行内置版本参数，不运行目标扫描。')),
-        h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
+        sectionCard('tools', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '整包文件夹 → 自动分配工具'),
           h('div', { style: { marginBottom: 8, opacity: 0.9 } },
             '工具都在同一个文件夹（含子目录）时，填路径后点「自动分配」：会写入 toolkitDir，并按文件名匹配 nmap / nuclei / fscan 等填到下方。'),
@@ -9482,8 +9639,37 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               className: 'rt-btn rt-btn-primary', disabled: busy,
               onClick: assignFolder,
             }, busy ? '扫描中…' : '自动分配'))),
-        data && data.hint ? h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } }, data.hint) : null,
-        data && data.egress ? h('div', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.55 } },
+        data && data.hint ? sectionCard('summary', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } }, data.hint) : null,
+        sectionCard('network', { className: 'rt-card' },
+          h('h4', null, '网络配置诊断'),
+          h('div', { className: 'rt-foot' }, '以下为运行进程的代理环境变量快照，不代表代理、DNS 或公网连接已验证。'),
+          data?.egress ? h('div', null,
+            h('p', null, (data.egress.http_proxy || data.egress.https_proxy || data.egress.all_proxy)
+              ? '检测到代理环境变量；若外部查询失败，请核对代理地址、端口及系统实际路由。'
+              : '未检测到 HTTP(S)/ALL_PROXY；系统代理、VPN 或 TUN 仍可能生效。'),
+            h('p', null, 'DNS 解析异常时请核对系统 DNS、VPN 与代理 DNS 设置；本页不会更改系统配置。'))
+            : h('p', null, '代理配置尚未读取，请刷新。'),
+          h('button', { className: 'rt-btn', disabled: busy, onClick: load }, '刷新网络配置')),
+        sectionCard('network', { className: 'rt-card' },
+          h('h4', null, '真实网络检测'),
+          h('p', { className: 'rt-foot' }, '按需检测固定站点 api.github.com；DNS 查询发送到 Node 配置的 DNS 服务器，主机直连不使用插件代理（系统 VPN/TUN 仍可能接管）。插件代理测试沿用原有已保存配置。'),
+          [['dns', 'DNS 解析', '检测 DNS'], ['direct', '主机直连 HTTPS', '检测直连'], ['proxy', '插件代理配置', '检测代理']].map(([id, label, action]) => {
+            const result = networkCheck[id]
+            return h('div', { className: 'rt-kv', key: id },
+              h('div', null, h('b', null, label),
+                h('div', { className: 'rt-foot' }, networkChecking === id ? '检测中…' : !result ? '尚未检测' :
+                  (result.ok ? '成功' : '未通过') + (Number.isFinite(result.latencyMs) ? ' · ' + result.latencyMs + ' ms' : '')
+                    + (result.error ? ' · ' + result.error : '')
+                    + (result.records ? ' · A ' + result.records.A.count + ' / AAAA ' + result.records.AAAA.count : '')
+                    + (result.statusCode ? ' · HTTP ' + result.statusCode : '')),
+                result ? h('div', { className: 'rt-foot' },
+                  id === 'dns' ? (result.ok ? '至少一个地址族解析成功；不代表 HTTPS 可达。' : '核对系统 DNS、VPN/TUN 与 DNS 代理配置；可继续单独检测 HTTPS。')
+                    : id === 'direct' ? (result.ok ? '已收到 HTTPS 响应；HTTP 4xx/5xx 不代表服务健康。' : '核对网络路由、系统代理、TLS 证书与防火墙；若 DNS 正常，重点检查连接路径。')
+                    : (result.ok ? '已保存的插件代理通过连接测试；不代表系统代理或整个代理池可用。' : '检查插件代理是否启用、地址端口和认证，并核对直连列表。')) : null),
+              h('button', { className: 'rt-btn', disabled: !!networkChecking, onClick: () => runNetworkCheck(id) }, action))
+          })),
+
+        data && data.egress ? sectionCard('network', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.55 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '出网状态（借鉴 Z3r0 egress，只读）'),
           h('div', { className: 'rt-mono', style: { fontSize: 11 } }, 'HTTP_PROXY=' + (data.egress.http_proxy || '(空)')),
           h('div', { className: 'rt-mono', style: { fontSize: 11 } }, 'HTTPS_PROXY=' + (data.egress.https_proxy || '(空)')),
@@ -9491,7 +9677,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-mono', style: { fontSize: 11 } }, 'NO_PROXY=' + (data.egress.no_proxy || '(空)')),
           h('div', { style: { marginTop: 6, opacity: 0.85 } }, data.egress.note || '')) : null,
         !draft ? h('div', { className: 'rt-empty' }, '加载中…') : h('div', null,
-          h('div', { className: 'rt-card' },
+          sectionCard('tools', { className: 'rt-card' },
             h('h4', null, '平台与目录'),
             h('div', { style: { display: 'grid', gap: 8 } },
               h('label', { style: { fontSize: 12 } }, '平台模式',
@@ -9524,10 +9710,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   value: draft.binDirsText,
                   onChange: (e) => setDraft(Object.assign({}, draft, { binDirsText: e.target.value })),
                 })))),
-        h('div', { className: 'rt-card' },
+        sectionCard('network', { className: 'rt-card' },
           h('h4', null, '可选外部测绘资源与 VPS'),
           h('p', { className: 'rt-foot' },
-            'FOFA 只是可选来源之一。其他平台请在「资源 → 测绘中心」选择；不填写 API Key 也能使用本机工具。'),
+            'FOFA 只是可选来源之一。其他平台请在「管理 → 环境 → 测绘中心」选择；不填写 API Key 也能使用本机工具。'),
           h('label', { style: { display: 'block', fontSize: 12, marginBottom: 10 } },
             'FOFA API Key（仅 FOFA，可选）',
             h('input', { className: 'rt-input', type: 'password',
@@ -9567,8 +9753,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             '连接检查：PowerShell 运行 Test-Path "私钥路径"，再运行 ssh -i "私钥路径" 用户名@主机。'
             + ' IPv6 URL 格式为 http://[IPv6]:端口，不能把 user@host 直接用于 HTTP。'
             + ' 详见「操作指南 → 多环境作用与 VPS 配置」。')),
-          adminRouteCard(),
-          h('div', { className: 'rt-card' },
+          section === 'network' ? adminRouteCard() : null,
+          sectionCard('tools', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
               '按本机路径、可版本检测性和已保存的首选工具推荐；先点上方「保存」让新的偏好生效，计划不会运行任何任务。'),
@@ -9623,11 +9809,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   h('div', { style: { opacity: 0.75, fontSize: 11, marginTop: 4 } },
                     '版本验证只检测本机程序，不代表目标测试或任务执行成功。')))
               : null),
-          h('div', { className: 'rt-card' },
+          sectionCard('diagnostics', { className: 'rt-card' },
             h('h4', null, '跨环境候选 · 仅使用已观测结果'),
             h('p', { className: 'rt-foot' },
-              '先进行上方环境发现，再手动验证需要的工具版本。这里仅按真实发现、显式探针和首选环境排序，不会启动扫描或切换执行环境。'),
+              '先在环境总览一键检测，再按需验证工具版本。这里按实际观察与首选环境排序，不自动启动任务。'),
             h('div', { style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
+              h('select', { className: 'rt-input', 'aria-label': '跨环境任务类型',
+                value: taskId, onChange: (e) => { setTaskId(e.target.value); setEnvironmentTaskPlan(null) } },
+                taskProfiles.map(t => h('option', { key: t.id, value: t.id }, t.label || t.id))),
               h('select', { className: 'rt-input', 'aria-label': '跨环境首选来源',
                 value: preferredEnvironment, onChange: (e) => { setPreferredEnvironment(e.target.value); setEnvironmentTaskPlan(null) } },
                 h('option', { value: 'local' }, '首选当前主机'),
@@ -9653,10 +9842,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                       h('b', null, item.toolLabel),
                       h('span', null, item.environmentLabel + ' · ' + item.status + ' · ' + item.score)))),
                 h('p', { className: 'rt-foot' }, environmentTaskPlan.note))) : null),
-          h('div', { className: 'rt-card' },
+          sectionCard('tools', { className: 'rt-card' },
             h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 已找到）'),
             h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
               '顺序：自定义路径 → DSH 工具箱 → 搜索目录 → PATH → ARTEX。发现文件 ≠ 已验证可运行；版本检测只在你点击时执行，不扫描目标。'),
+            h('button', { className: 'rt-btn', disabled: busy || !suggestedPaths.length, onClick: fillDetectedPaths }, '填入已发现路径（' + suggestedPaths.length + '）'),
             h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 } },
               h('input', {
                 className: 'rt-input', style: { flex: '1 1 130px' }, value: toolSearch,
@@ -9706,7 +9896,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                         : null)
                 }))
             })),
-          h('div', { className: 'rt-card' },
+          sectionCard('tools', { className: 'rt-card' },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 } },
               h('h4', { style: { margin: 0 } }, '自定义工具'),
               h('div', { className: 'rt-spacer' }),
@@ -9724,7 +9914,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   onChange: (e) => editCustomTool(i, 'path', e.target.value) }),
                 h('button', { type: 'button', className: 'rt-btn', disabled: busy,
                   onClick: () => removeCustomTool(i) }, '移除')))),
-          h('div', { className: 'rt-card' },
+          sectionCard('summary', { className: 'rt-card' },
             h('h4', null, '备注'),
             h('textarea', {
               className: 'rt-input', rows: 3, style: { width: '100%' },
@@ -12018,10 +12208,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['overview', '概览'], ['assets', '资产'], ['scan-history', '扫描记录'], ['findings', '漏洞'],
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
-        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['local-search', '测绘中心'], ['artex', 'ARTEX']] },
+        { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['artex', 'ARTEX']] },
         { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '低干扰'], ['skills', '技能库'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
+      const activeTab = st.tab === 'local-search' || st.tab === 'knowledge' ? 'env' : st.tab
       const full = isFullWindow()
       const openFull = () => {
         // A browser popup is not necessarily maximized. Request the available
@@ -12059,7 +12250,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       let body
       if (err) body = h('div', { className: 'rt-err' }, err)
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
-      else if (st.tab === 'env' || st.tab === 'knowledge') body = h(EnvTab, { refreshKey: refreshKey })
+      else if (st.tab === 'env' || st.tab === 'knowledge' || st.tab === 'local-search') body = h(EnvTab, { engagement: eng, refreshKey, initialSection: st.tab === 'local-search' ? 'local-search' : 'summary' })
       else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey })
        else if (st.tab === 'skills') body = h(SkillsTab, { refreshKey: refreshKey })
       else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng,
@@ -12092,7 +12283,6 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn rt-btn-primary', disabled: creating, onClick: () => openEngagement() },
                 creating ? '创建中…' : '创建靶标'))))
       } else if (st.tab === 'intel') body = h(IntelTab, { engagement: eng, refreshKey: refreshKey })
-      else if (st.tab === 'local-search') body = h(LocalAssetSearchTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'overview') body = h(OverviewTab, { engagement: eng, snapshot: currentSnapshot, refreshKey: refreshKey, onGoto: (tab) => { markTabSeen(tab); setUI({ tab, focus: null }); setRefreshKey((k) => k + 1) } })
       else if (st.tab === 'scan-history') body = h(ScanHistoryTab, { engagement: eng, refreshKey: refreshKey })
       else if (st.tab === 'assets') body = h(AssetsTab, { engagement: eng, focusAssetId: st.focus && st.focus.engagement === eng && st.focus.kind === 'asset' ? st.focus.assetId : null, snapshot: currentSnapshot, refreshKey: refreshKey, onRefresh: refreshAll, onData: () => loadSnapshot(eng) })
@@ -12159,7 +12349,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         /* 原生按钮提供键盘与读屏语义；方向键 / Home / End 在页签间移动。 */
         h('label', { className: 'rt-compact-nav' },
           h('span', null, '前往页面'),
-          h('select', { className: 'rt-compact-nav-select', value: st.tab,
+          h('select', { className: 'rt-compact-nav-select', value: activeTab,
             'aria-label': '选择作战台页面',
             onChange: (e) => {
               const tab = e.target.value
@@ -12189,10 +12379,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               }
               const unread = unreadOf(t[0])
               return h('button', {
-                key: t[0], type: 'button', className: 'rt-tab' + (st.tab === t[0] ? ' on' : ''),
+                key: t[0], type: 'button', className: 'rt-tab' + (activeTab === t[0] ? ' on' : ''),
                 role: 'tab', 'data-tab': t[0],
-                tabIndex: st.tab === t[0] ? 0 : -1,
-                'aria-selected': st.tab === t[0],
+                tabIndex: activeTab === t[0] ? 0 : -1,
+                'aria-selected': activeTab === t[0],
                 'aria-label': t[1] + (unread ? '，有新内容' : ''),
                 title: unread ? t[1] + '：有新内容' : t[1],
                 onClick: () => activate(t[0]),
