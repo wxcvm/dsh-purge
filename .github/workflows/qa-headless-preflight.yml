@@ -102,7 +102,7 @@ jobs:
               const registry=pick(desktop,'agent-preset-registry')
               const sub=pick(desktop,'subagent')
               const purge=pick(desktop,'dsh-purge')
-              const names=['agent-default-model','agent-preset-registry','subagent','dsh-purge','dsh-purge-redteam','dsh-purge-redteam-store','credentials','authorization','deepseek-account']
+              const names=['agent-default-model','agent-preset-registry','subagent','permission','dsh-purge','dsh-purge-redteam','dsh-purge-redteam-store','credentials','authorization','deepseek-account']
               console.log(JSON.stringify({stage:'inventory',base:names.map(id=>describe(pick(base,id))).filter(Boolean),desktop:names.map(id=>describe(pick(desktop,id))).filter(Boolean),model:{provider:label(model?.config?.provider),model:label(model?.config?.model),reasoningEffort:label(model?.config?.reasoningEffort)},preset:{default:label(registry?.config?.default),selectedDefault:label(registry?.config?.selectedDefault)},subagent:{maxDepth:sub?.config?.maxDepth??null,maxActiveSubagents:sub?.config?.maxActiveSubagents??null}}))
               const specs=['dsh-purge','dsh-purge/redteam','dsh-purge/redteam/store','dsh-purge/redteam/tools']
               const paths=Object.fromEntries(specs.map(spec=>[spec,resolvePlugin(spec)]))
@@ -116,6 +116,11 @@ jobs:
                   else overlay.push({insert:[row]})
                 }
                 add({id:'agent-default-model',config:{provider:model.config.provider,model:model.config.model,reasoningEffort:'max'}})
+                const permission=base.find(row=>row.id==='permission'&&/dsh-permission-presets$/.test(row.name||''))
+                if(!permission)throw Error('Headless permission preset component is missing')
+                // Explicitly select the existing read-only preset; never relax sandbox policy.
+                add({id:permission.id,config:{...(permission.config||{}),defaultPreset:'read-only'}})
+                console.log(JSON.stringify({stage:'permission-overlay',id:permission.id,baseDefault:label(permission.config?.defaultPreset),requestedDefault:'read-only',configKeys:Object.keys(permission.config||{})}))
                 add({id:'agent-preset-registry',...(pick(base,'agent-preset-registry')?{}:{name:registry.name}),config:{...registry.config,selectedDefault:'redteam'}})
                 add({id:'subagent',...(pick(base,'subagent')?{}:{name:sub.name}),disabled:false,config:sub.config})
                 add({id:'dsh-purge',name:paths['dsh-purge'],inject:purge.inject,config:{...purge.config,autoApplyOnStart:false,autoUpdateOnStart:false,autoRevertOnMissing:false}})
@@ -186,10 +191,11 @@ jobs:
                   try{isolatedRows=collect(parse(boot.stdout||''))}catch{}
                   const isolatedModel=pick(isolatedRows,'agent-default-model')?.config||{}
                   const isolatedPreset=pick(isolatedRows,'agent-preset-registry')?.config?.selectedDefault
-                  const isolatedReady=boot.status===0&&isolatedModel.provider===model.config.provider&&isolatedModel.model===model.config.model&&isolatedModel.reasoningEffort==='max'&&isolatedPreset==='redteam'&&['subagent','dsh-purge','dsh-purge-redteam'].every(id=>!!pick(isolatedRows,id))
+                  const isolatedPermission=isolatedRows.find(row=>row.id===permission.id&&/dsh-permission-presets$/.test(row.name||''))
+                  const isolatedReady=boot.status===0&&isolatedModel.provider===model.config.provider&&isolatedModel.model===model.config.model&&isolatedModel.reasoningEffort==='max'&&isolatedPreset==='redteam'&&isolatedPermission?.config?.defaultPreset==='read-only'&&['subagent','dsh-purge','dsh-purge-redteam'].every(id=>!!pick(isolatedRows,id))
                   let purgeVersion=null
                   try{purgeVersion=label(JSON.parse(fs.readFileSync(desktopReq.resolve('dsh-purge/package.json'),'utf8')).version)}catch{}
-                  console.log(JSON.stringify({stage:'isolated-config',...classify(boot),ready:isolatedReady,model:{provider:label(isolatedModel.provider),model:label(isolatedModel.model),reasoningEffort:label(isolatedModel.reasoningEffort)},preset:label(isolatedPreset),purgeVersion,modelRequests:0,profileIsolated:true}))
+                  console.log(JSON.stringify({stage:'isolated-config',...classify(boot),ready:isolatedReady,model:{provider:label(isolatedModel.provider),model:label(isolatedModel.model),reasoningEffort:label(isolatedModel.reasoningEffort)},preset:label(isolatedPreset),permissionDefault:label(isolatedPermission?.config?.defaultPreset),purgeVersion,modelRequests:0,profileIsolated:true}))
                   if(!isolatedReady)process.exitCode=5
                   if(isolatedReady){
                     // Reuse only the local credential store, in the same user's
