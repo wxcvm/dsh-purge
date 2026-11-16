@@ -1,4 +1,4 @@
-name: Score DeepSeek native delegation from local archives
+name: Locate DeepSeek delegation with archive format diagnostics
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -45,13 +45,13 @@ jobs:
            const rows=x.reports.map(r=>({id:r.id,lifecycle:['completed','aborted','error','unknown'].includes(r.lifecycle)?r.lifecycle:'invalid',outcome:['verified','unverified','contradicted'].includes(r.outcome)?r.outcome:'invalid',correct:r.lifecycle==='completed'&&r.outcome===key[r.id]}))
            return {valid:rows.every(r=>r.lifecycle!=='invalid'&&r.outcome!=='invalid'),strict,passed:rows.filter(r=>r.correct).length,rows}
           }
-          let scanned=0,bytes=0,incomplete=0,matches=[],children=[],parentRefs=new Map()
+          let scanned=0,bytes=0,incomplete=0,matches=[],children=[],parentRefs=new Map(),recent=[],markerHits=[]
           const newRun=(started)=>({started,route:{provider:null,model:null},attempts:[],final:null,ended:null,toolStarts:0,subagentToolStarts:0,turnEnds:[],parseComplete:true,childIds:new Set(),descriptorEvents:0})
-          function scan(f,child=false){
+          function scan(f,child=false,rank=null){
            if(f.size>64*1024*1024||bytes+f.size>256*1024*1024)return
            let buf;try{buf=fs.readFileSync(f.f)}catch{return}
            scanned++;bytes+=f.size
-           let pending='',decoded=0,complete=true,active=child?newRun(null):null,seen=new Set(),found=[]
+           let pending='',decoded=0,complete=true,active=child?newRun(null):null,seen=new Set(),found=[],metadata={rank,events:0,userMessages:0,baselineHits:0,delegateHits:0,qaSignatures:0,assistantEvents:0,descriptors:0,turnEnds:0}
            const finish=()=>{if(active){active.id=f.id;found.push(active);active=null}}
            function inspect(e0){
 
@@ -59,15 +59,21 @@ jobs:
            if(typeof e?.type!=='string')return
            if(Number.isSafeInteger(e.seq)){if(seen.has(e.seq))return;seen.add(e.seq)}
            const d=e.data
+           metadata.events++;if(['assistant/message','assistant/attempt'].includes(e.type))metadata.assistantEvents++;if(['subagent/descriptor','subagent/catalog'].includes(e.type))metadata.descriptors++;if(e.type==='turn/end')metadata.turnEnds++
+           const raw=JSON.stringify(e);if(raw.includes(marker)){metadata.delegateHits++;if(!child)markerHits.push({rank,type:['user/message','assistant/message','assistant/attempt','request/header','request/context','subagent/descriptor','subagent/catalog','turn/start','turn/end'].includes(e.type)?e.type:'other'})}if(raw.includes('PURGE-DS41-BASELINE-01'))metadata.baselineHits++;
            if(!child){for(const h of [e0.header,e.header,d?.header,e0.meta,e.meta,d]){if(typeof h?.parentSession==='string')parentRefs.set(f.id,h.parentSession)}}
            if(child&&active&&active.started===null&&ts(e)!==null)active.started=ts(e)
            if(e.type==='user/message'){
              const m=msg(e),source=d?.source??m?.source,t=txt(m)
-             if(source?.kind&&!['user','human'].includes(source.kind))return
-             if(/^\s*(?:<(?:system-reminder|openviking-context|dsh-purge)|Current runtime context|Time sampled)/i.test(t))return
+             metadata.userMessages++
+             const exactMarker=raw.includes(marker)
+             const signature=t.includes('A1')&&t.includes('B2')&&t.includes('计算器')&&t.includes('R7')&&(/subagent|子智能体/.test(t))&&!t.includes('PURGE-DS41-BASELINE-01')&&!t.includes('不要调用工具或子智能体')
+             if(signature)metadata.qaSignatures++
              if(child)return
+             if(!exactMarker&&!signature&&source?.kind&&!['user','human'].includes(source.kind))return
+             if(!exactMarker&&!signature&&/^\s*(?:<(?:system-reminder|openviking-context|dsh-purge)|Current runtime context|Time sampled)/i.test(t))return
              finish()
-             if(t.includes(marker)&&t.includes('A1')&&t.includes('B2'))active=newRun(ts(e))
+             if(exactMarker||signature){active=newRun(ts(e));active.matchBasis=exactMarker?'exact-marker':'qa-delegation-signature'}
              return
            }
            if(!active)return
@@ -105,12 +111,13 @@ jobs:
            finish()
            for(const x of found){x.parseComplete=complete;(child?children:matches).push(x)}
            if(!complete)incomplete++
+           if(!child&&rank!==null&&rank<=8)recent.push(metadata)
           }
-          for(const f of files.slice(0,60))scan(f)
+          for(const [i,f] of files.slice(0,160).entries())scan(f,false,i+1)
           const parent=matches.length===1?matches[0]:null
           const ids=new Set(parent?[...parent.childIds,...Array.from(parentRefs).filter(([c,p])=>p===parent.id).map(([c])=>c)]:[])
           for(const f of files.filter(f=>ids.has(f.id)).slice(0,10))scan(f,true)
-          function view(x){return {parseComplete:x.parseComplete,turnEnds:x.turnEnds,wallMs:x.started!==null&&x.ended!==null?x.ended-x.started:null,toolStarts:x.toolStarts,subagentToolStarts:x.subagentToolStarts,descriptorEvents:x.descriptorEvents,linkedChildCount:x.childIds.size,attempts:x.attempts,final:x.final}}
-          out({status:matches.length?'matched':'not-found',archiveCount:files.length,scanned,incomplete,matchCount:matches.length,linkedChildCount:ids.size,childArchivesFound:children.length,parent:parent?view(parent):null,children:children.map(view)})
+          function view(x){return {matchBasis:x.matchBasis??null,parseComplete:x.parseComplete,turnEnds:x.turnEnds,wallMs:x.started!==null&&x.ended!==null?x.ended-x.started:null,toolStarts:x.toolStarts,subagentToolStarts:x.subagentToolStarts,descriptorEvents:x.descriptorEvents,linkedChildCount:x.childIds.size,attempts:x.attempts,final:x.final}}
+          out({status:matches.length?'matched':'not-found',archiveCount:files.length,scanned,incomplete,matchCount:matches.length,linkedChildCount:ids.size,childArchivesFound:children.length,parent:parent?view(parent):null,children:children.map(view),matchBases:matches.map(x=>x.matchBasis),recent,markerHits:markerHits.slice(0,30)})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
