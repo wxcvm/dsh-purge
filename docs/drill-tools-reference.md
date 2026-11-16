@@ -60,7 +60,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `child_writes_allowed=false` 表示子智能体不得直接修改事实库；主会话必须核对记录 ID、证据引用和推理依据。
 
 ### `redteam_agent_slot`
-【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑（可用 REDTEAM_MAX_AGENTS 配置）。action=status 看还剩几个名额与谁在跑；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
+【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑；当前 REDTEAM_MAX_AGENTS / settings.json 配置只能把有效上限调低，不能把红队调度器上限提高到 3 以上。action=status 返回有效 max、configured_max、used 和 free；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
 
 参数：
 - `action` — status 查看 / acquire 占用 / release 释放
