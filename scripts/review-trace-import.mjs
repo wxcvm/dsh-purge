@@ -308,6 +308,30 @@ export function importReviewRun({ runId, parent, children = [], settingsId }) {
       strictParentJson: batch.strictJson, childRoutes: traces.slice(1).map(trace => trace.route) } }
 }
 
+/**
+ * Generate an independent re-review packet for the fixed fictional fixture.
+ * Candidate reports are observed answers, never the answer key. Preserve
+ * missing or extra valid evidence so the review must find it independently.
+ */
+export function markedReviewPacket(runId, candidateReports) {
+  const marker = markerFor(runId)
+  if (!Array.isArray(candidateReports) || candidateReports.length !== ids.length) {
+    throw new Error('Expected one candidate report per fictional case')
+  }
+  const seen = new Set()
+  const reports = candidateReports.map(row => {
+    if (!caseById.has(row?.id) || seen.has(row.id) || !['a', 'b', 'c'].includes(row.answer)
+      || !Array.isArray(row.evidence)
+      || row.evidence.some(key => typeof key !== 'string' || !Object.hasOwn(caseById.get(row.id).records, key))) {
+      throw new Error('Invalid or duplicate fictional candidate report')
+    }
+    seen.add(row.id)
+    return { id: row.id, answer: row.answer, evidence: [...row.evidence] }
+  })
+  const instruction = 'This is a fictional record-review experiment. The candidate reports below are previously observed answers, not an answer key. Independently review each candidate against all original records. Decide the answer yourself, check whether every record required to justify the conclusion is present, remove redundant citations and correct any omission or mistake. Do not merely accept the candidate; do not delegate, call tools, read files or access external resources. Return exactly one bare JSON object with a reports array and no Markdown fences or extra text.'
+  return marker + '\n' + instruction + '\n' + JSON.stringify({ ...casePacket(), candidateReports: reports }, null, 2)
+}
+
 export function markedPacket(runId, mode) {
   const marker = markerFor(runId)
   if (!['direct', 'delegated'].includes(mode)) throw new Error('Expected direct or delegated')
@@ -321,6 +345,9 @@ export function markedPacket(runId, mode) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--packet') {
     console.log(markedPacket(process.argv[3], process.argv[4]))
+  } else if (process.argv[2] === '--review-packet' && process.argv[3] && process.argv[4]) {
+    const input = JSON.parse(readFileSync(resolve(process.argv[4]), 'utf8'))
+    console.log(markedReviewPacket(process.argv[3], input.reports))
   } else if (process.argv[2] === '--import' && process.argv[3]) {
     const manifestPath = resolve(process.argv[3]), manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     const load = spec => {
@@ -332,7 +359,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(JSON.stringify(importReviewRun({ ...manifest, parent: load(manifest.parent),
       children: (manifest.children ?? []).map(load) }), null, 2))
   } else {
-    console.error('Usage: node scripts/review-trace-import.mjs --packet RUN_ID direct|delegated | --import manifest.json')
+    console.error('Usage: node scripts/review-trace-import.mjs --packet RUN_ID direct|delegated | --review-packet RUN_ID candidates.json | --import manifest.json')
     process.exitCode = 1
   }
 }

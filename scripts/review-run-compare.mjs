@@ -139,11 +139,48 @@ export function compareReviewRuns({ direct, delegated }) {
   }
 }
 
+/**
+ * Compare a separate review of B's already-produced reports. The incremental
+ * replay cost is NOT the full delegated-plus-review cost.
+ */
+export function compareIndependentReview({ direct, delegated, review }) {
+  if (!present(review?.runId) || [direct?.runId, delegated?.runId].includes(review.runId)) {
+    throw new Error('Three distinct run IDs are required')
+  }
+  const ab = compareReviewRuns({ direct, delegated })
+  const bc = compareReviewRuns({ direct: delegated, delegated: review })
+  const arms = { direct, delegated, review }
+  const summary = Object.fromEntries(Object.entries(arms).map(([name, run]) => [name, {
+    strictAccepted: completeFixture(run.batch).summary.accepted,
+    strictParentJson: run.archiveCoverage?.strictParentJson ?? null,
+    content: run.contentDiagnostics?.parent?.score ?? null,
+    observedChildren: run.archiveCoverage?.observedChildren ?? null,
+  }]))
+  const changes = bc.contentComparison?.rows.map(row => ({
+    id: row.id,
+    requiredCoverageRecovered: row.direct?.requiredCovered === false && row.delegated?.requiredCovered === true,
+    requiredCoverageLost: row.direct?.requiredCovered === true && row.delegated?.requiredCovered === false,
+  })) ?? null
+  const cost = scope => Object.fromEntries(metrics.map(key => {
+    const value = run => run.usage?.scope === scope ? knownNumber(run.usage[key]) : null
+    const a = value(direct), b = value(delegated), c = value(review)
+    return [key, { direct: a, delegated: b, incrementalReview: c,
+      sequentialDelegatedPlusReview: b !== null && c !== null ? b + c : null }]
+  }))
+  return { runIds: { direct: direct.runId, delegated: delegated.runId, review: review.runId },
+    modelRouteMatch: { directDelegated: ab.modelRouteMatch, delegatedReview: bc.modelRouteMatch },
+    settingsMatch: { directDelegated: ab.settingsMatch, delegatedReview: bc.settingsMatch },
+    summary, changes, wholeRunUsage: cost('whole-run'), archiveUsage: cost('observed-archive'),
+    scope: 'fixed-fictional-record-review; sequential sum excludes external orchestration gaps and is not billing' }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--compare' && process.argv[3]) {
     console.log(JSON.stringify(compareReviewRuns(JSON.parse(readFileSync(process.argv[3], 'utf8'))), null, 2))
+  } else if (process.argv[2] === '--compare-review' && process.argv[3]) {
+    console.log(JSON.stringify(compareIndependentReview(JSON.parse(readFileSync(process.argv[3], 'utf8'))), null, 2))
   } else {
-    console.error('Usage: node scripts/review-run-compare.mjs --compare paired-runs.json')
+    console.error('Usage: node scripts/review-run-compare.mjs --compare paired-runs.json | --compare-review three-runs.json')
     process.exitCode = 1
   }
 }

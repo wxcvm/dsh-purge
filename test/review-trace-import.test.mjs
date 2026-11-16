@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as zlib from 'node:zlib'
 import { cases, answerKey } from '../scripts/agent-quality-eval.mjs'
-import { decodeArchive, extractMarkedTurn, importReviewRun, markedPacket, diagnoseReportContent } from '../scripts/review-trace-import.mjs'
-import { compareReviewRuns } from '../scripts/review-run-compare.mjs'
+import { decodeArchive, extractMarkedTurn, importReviewRun, markedPacket, diagnoseReportContent, markedReviewPacket } from '../scripts/review-trace-import.mjs'
+import { compareReviewRuns, compareIndependentReview } from '../scripts/review-run-compare.mjs'
 
 const ids = cases.map(row => row.id)
 const marker = 'PURGE-QA-RUN: example'
@@ -199,4 +199,55 @@ test('replay real observed A/B answer patterns without model calls; separate con
   assert.deepEqual(compared.contentComparison.child, compared.contentComparison.delegated)
   assert.equal(compared.contentComparison.sameEvidenceCount, 6)
   assert.deepEqual(compared.contentComparison.uncorrectedChildOmissions, [ids[5]])
+})
+
+
+test('independent review packet preserves observed candidate omissions without leaking the answer key', () => {
+  const reports = ids.map(answer)
+  reports[5] = { ...reports[5], evidence: ['delta', 'newRecord'], note: 'PRIVATE-RAW-TEXT' }
+  reports[3] = { ...reports[3], evidence: ['coverage', 'notes'] }
+  const text = markedReviewPacket('review', reports)
+  assert.ok(text.startsWith('PURGE-QA-RUN: review\n'))
+  assert.match(text, /Independently review/)
+  const packet = JSON.parse(text.slice(text.indexOf('\n{')))
+  assert.deepEqual(packet.cases, cases)
+  assert.deepEqual(packet.candidateReports[5].evidence, ['delta', 'newRecord'])
+  assert.deepEqual(packet.candidateReports[3].evidence, ['coverage', 'notes'])
+  assert.doesNotMatch(text, /PRIVATE-RAW-TEXT/)
+  assert.ok(packet.cases.every(row => !Object.hasOwn(row, 'answer')))
+  assert.throws(() => markedReviewPacket('review', reports.slice(1)), /one candidate report/)
+  assert.throws(() => markedReviewPacket('review', [...reports.slice(0, 5), reports[0]]), /duplicate/)
+  assert.throws(() => markedReviewPacket('review', reports.map((r,i) => i ? r : { ...r, evidence: ['PRIVATE'] })), /Invalid/)
+})
+
+test('C replay records repaired evidence, strict acceptance and incremental versus full sequential cost', () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const reportsA = ids.map(answer), reportsB = ids.map(answer), reportsC = ids.map(answer)
+  reportsA[0] = { ...reportsA[0], evidence: ['before','after','report'] }
+  reportsA[3] = reportsB[3] = reportsC[3] = { ...answer(ids[3]), evidence: ['coverage','notes'] }
+  reportsB[5] = { ...reportsB[5], evidence: ['delta','newRecord'] }
+  const make = (runId, reports, strict, elapsedMs, totalTokens) => {
+    const text = strict ? JSON.stringify({ reports }) : 'Done\n'+fence+'json\n'+JSON.stringify({ reports })+'\n'+fence
+    const records = [request(1, 'PURGE-QA-RUN: '+runId), ev(2, 'assistant/message', {
+      turn: 1, step: 1, message: { source: { provider:'fixture', model:'qa-model' }, content:text }, stream:stream()
+    }), end(3,1)]
+    const run = importReviewRun({ runId, parent:session(runId,records), settingsId:'same' })
+    run.usage = { scope:'observed-archive', elapsedMs, totalTokens }
+    return run
+  }
+  const direct = make('a', reportsA, false, 9884, 97318)
+  const delegated = make('b', reportsB, false, 48102, 945568)
+  const review = make('c', reportsC, true, 10481, 98049)
+  const result = compareIndependentReview({ direct, delegated, review })
+  assert.equal(result.summary.review.strictAccepted,5)
+  assert.equal(result.summary.review.content.requiredCoverage,6)
+  assert.equal(result.summary.review.content.exactEvidence,5)
+  assert.deepEqual(result.changes.filter(row=>row.requiredCoverageRecovered).map(row=>row.id),[ids[5]])
+  assert.equal(result.changes.some(row=>row.requiredCoverageLost),false)
+  assert.deepEqual(result.archiveUsage.elapsedMs,{direct:9884,delegated:48102,incrementalReview:10481,sequentialDelegatedPlusReview:58583})
+  assert.equal(result.archiveUsage.totalTokens.sequentialDelegatedPlusReview,1043617)
+  assert.equal(result.wholeRunUsage.totalTokens.sequentialDelegatedPlusReview,null)
+  assert.throws(()=>compareIndependentReview({direct,delegated,review:direct}),/distinct run IDs/)
+  review.usage.scope='whole-run'
+  assert.equal(compareIndependentReview({direct,delegated,review}).archiveUsage.totalTokens.sequentialDelegatedPlusReview,null)
 })
