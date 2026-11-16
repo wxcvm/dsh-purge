@@ -1,4 +1,4 @@
-name: QA Desktop Verified Focus Interaction
+name: QA Desktop Native Menu Selection
 on:
   pull_request:
     types: [synchronize]
@@ -147,72 +147,81 @@ jobs:
               [ordered]@{type=$v.ControlType.ProgrammaticName;class=$v.ClassName;label=($n -split '[\r\n]')[0].Substring(0,[Math]::Min(120,($n -split '[\r\n]')[0].Length));enabled=$v.IsEnabled;toggle=if($null -ne $toggle){[string]$toggle.Current.ToggleState}else{$null};selected=if($null -ne $selection){$selection.Current.IsSelected}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}
             })
           }
-          $modeSelected=$false
-          $pickers=@(Get-Controls | Where-Object {
-            try{(Is-Visible $_) -and $_.Current.ClassName -eq 'm2hUqa_seat' -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button}catch{$false}
-          })
+          function Wait-Labelled($pattern,[int]$attempts=16) {
+            for($i=0;$i -lt $attempts;$i++){
+              $items=@(Get-Labelled $pattern)
+              if($items.Count -gt 0){return $items}
+              Start-Sleep -Milliseconds 250
+            }
+            return @()
+          }
+          function Get-PresetSeat {
+            @(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.ClassName -eq 'm2hUqa_seat'}catch{$false}})
+          }
           $redPattern='(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?)(?:$|[\s：:，,（(—-])'
+          $modeSelected=$false
+          $pickers=@(Get-PresetSeat)
           if($pickers.Count -eq 1){
             $picker=$pickers[0]
             if($picker.Current.Name -match $redPattern){$modeSelected=$true}
             else{
               $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-              if($null -ne $exp){try{$exp.Expand()}catch{}}
-              Start-Sleep -Milliseconds 700
-              $red=@(Get-Labelled $redPattern)
-              if($red.Count -eq 0){
-                $clicked=Open-Verified $picker
-                if(-not $clicked){$clicked=Click-Verified $picker}
-                Start-Sleep -Milliseconds 700
-                $red=@(Get-Labelled $redPattern)
-                [ordered]@{stage='preset-menu-click';clicked=$clicked;redCandidates=$red.Count}|ConvertTo-Json -Compress
+              if($null -ne $exp){$exp.Expand()}
+              # The previous run exposed the real Red team mode item after
+              # several seconds. Wait for the native menu, then invoke it.
+              $red=@(Wait-Labelled $redPattern | Where-Object{try{$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem}catch{$false}})
+              [ordered]@{stage='preset-menu';options=(Describe-Labels $red 'preset')}|ConvertTo-Json -Depth 6 -Compress
+              if($red.Count -eq 1){
+                $inv=Get-Pattern $red[0] ([System.Windows.Automation.InvokePattern]::Pattern)
+                if($null -ne $inv){$inv.Invoke()}
+                for($i=0;$i -lt 20;$i++){
+                  $seat=@(Get-PresetSeat)
+                  $selected=@(Get-Labelled $redPattern|Where-Object{try{$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem -and ($_.Current.ClassName -match 'selected' -or (($sel=Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)) -and $sel.Current.IsSelected))}catch{$false}})
+                  if(($seat.Count -eq 1 -and $seat[0].Current.Name -match $redPattern) -or $selected.Count -eq 1){$modeSelected=$true;break}
+                  Start-Sleep -Milliseconds 250
+                }
               }
-              $menu=@(Get-Labelled '(?i)^(?:红队|red\s*team|标准模式|standard mode|多智能体|multi.agent)')
-              [ordered]@{stage='preset-menu';options=(Describe-Labels $menu 'preset')}|ConvertTo-Json -Depth 6 -Compress
-              $actionable=@($red|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType.ProgrammaticName -in @('ControlType.Button','ControlType.MenuItem','ControlType.ListItem','ControlType.RadioButton','ControlType.Custom','ControlType.DataItem') -and ($null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern)) -or $null -ne (Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)))}catch{$false}})
-              if($actionable.Count -eq 1){
-                $inv=Get-Pattern $actionable[0] ([System.Windows.Automation.InvokePattern]::Pattern)
-                if($null -ne $inv){$inv.Invoke()}else{(Get-Pattern $actionable[0] ([System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()}
-              }elseif($red.Count -eq 1 -and (Is-Visible $red[0])){
-                [void](Click-Verified $red[0])
-              }
-              Start-Sleep -Milliseconds 700
-              $current=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ClassName -eq 'm2hUqa_seat' -and $_.Current.Name -match $redPattern}catch{$false}})
-              $modeSelected=($current.Count -eq 1)
-              if(-not $modeSelected -and $null -ne $exp){try{$exp.Collapse()}catch{}}
+              $seat=@(Get-PresetSeat)
+              $modeCandidates=@(Get-Labelled '(?i)^(?:红队|red\s*team|标准模式|standard mode)')
+              [ordered]@{stage='preset-selection';redteamVerified=$modeSelected;seatLabels=@($seat|ForEach-Object{[string]$_.Current.Name});options=(Describe-Labels $modeCandidates 'preset')}|ConvertTo-Json -Depth 6 -Compress
+              # A selected redteam menu item is also evidence; close the menu
+              # only if the same current preset control remains expanded.
+              if($seat.Count -eq 1){try{$cur=Get-Pattern $seat[0] ([System.Windows.Automation.ExpandCollapsePattern]::Pattern);if($null -ne $cur -and $cur.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$cur.Collapse()}}catch{}}
             }
           }
           [ordered]@{stage='preset-picker';candidateCount=$pickers.Count;redteamVerified=$modeSelected}|ConvertTo-Json -Compress
-          # Model menu contains the native multi-agent collaboration toggle.
-          # Only observe it here; no change to the user's saved preferences.
+          if(-not $modeSelected){
+            [ordered]@{stage='direct-submit';status='redteam-not-verified';taskSubmitted=$false}|ConvertTo-Json -Compress
+            return
+          }
           $modelPicker=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ClassName -eq '_9r0rkG_trigger' -and $_.Current.Name -match '(?i)deepseek.*flash.*max'}catch{$false}})
           $collaborationVerified=$false
           if($modelPicker.Count -eq 1){
             $mp=$modelPicker[0]
             $mx=Get-Pattern $mp ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-            if($null -ne $mx){try{$mx.Expand()}catch{}}
-            Start-Sleep -Milliseconds 600
-            $collabPattern='(?i)^(?:多智能体|multi[\s-]*agent|协作模式|collaboration)'
+            if($null -ne $mx){$mx.Expand()}
+            $reasonPattern='(?i)^(?:推理等级|推理强度|reasoning(?:\s+(?:effort|level))?)'
+            $collabPattern='(?i)^(?:多.?智能体|智能体协作|multi[\s-]*agent|协作模式|collaboration)'
+            $reason=@(Wait-Labelled $reasonPattern|Where-Object{try{$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem}catch{$false}})
+            [ordered]@{stage='model-root-menu';reasoningOptions=(Describe-Labels $reason 'reasoning')}|ConvertTo-Json -Depth 6 -Compress
             $collab=@(Get-Labelled $collabPattern)
-            if($collab.Count -eq 0){
-              $clicked=Open-Verified $mp
-              if(-not $clicked){$clicked=Click-Verified $mp}
-              Start-Sleep -Milliseconds 600
-              $collab=@(Get-Labelled $collabPattern)
-              [ordered]@{stage='model-menu-click';clicked=$clicked;collaborationCandidates=$collab.Count}|ConvertTo-Json -Compress
+            if($collab.Count -eq 0 -and $reason.Count -eq 1){
+              $ri=Get-Pattern $reason[0] ([System.Windows.Automation.InvokePattern]::Pattern)
+              if($null -ne $ri){$ri.Invoke()}
+              $collab=@(Wait-Labelled $collabPattern)
             }
-            $menu=@(Get-Labelled '(?i)^(?:多智能体|multi[\s-]*agent|协作模式|collaboration|Max(?:$|\s|[（(])|High(?:$|\s|[（(])|推理等级|reasoning)')
+            $menu=@(Get-Labelled '(?i)^(?:多.?智能体|智能体协作|multi[\s-]*agent|协作模式|collaboration|Max(?:$|\s|[（(])|High(?:$|\s|[（(])|推理等级|reasoning)')
             $described=@(Describe-Labels $menu 'model')
             foreach($c in $collab){
               $toggle=Get-Pattern $c ([System.Windows.Automation.TogglePattern]::Pattern)
               $selection=Get-Pattern $c ([System.Windows.Automation.SelectionItemPattern]::Pattern)
               if(($null -ne $toggle -and $toggle.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) -or ($null -ne $selection -and $selection.Current.IsSelected) -or $c.Current.Name -match '(?i)(已开启|已启用|已打开|enabled|on$)'){$collaborationVerified=$true}
             }
-            [ordered]@{stage='model-menu';collaborationVerified=$collaborationVerified;options=$described}|ConvertTo-Json -Depth 6 -Compress
+            [ordered]@{stage='model-reasoning-menu';collaborationVerified=$collaborationVerified;options=$described}|ConvertTo-Json -Depth 6 -Compress
             if($null -ne $mx){try{$mx.Collapse()}catch{}}
           }
-          if(-not $modeSelected -or -not $collaborationVerified){
-            [ordered]@{stage='direct-submit';status='mode-or-collaboration-not-verified';redteamVerified=$modeSelected;collaborationVerified=$collaborationVerified;taskSubmitted=$false}|ConvertTo-Json -Compress
+          if(-not $collaborationVerified){
+            [ordered]@{stage='direct-submit';status='collaboration-not-verified';redteamVerified=$modeSelected;collaborationVerified=$collaborationVerified;taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           $editor=@(Get-Composer)
