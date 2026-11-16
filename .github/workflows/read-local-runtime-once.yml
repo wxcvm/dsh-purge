@@ -1,4 +1,4 @@
-name: Locate DeepSeek delegation with archive format diagnostics
+name: Score DeepSeek delegation follow-up 02
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -22,7 +22,7 @@ jobs:
           import path from 'node:path'
           import os from 'node:os'
           import zlib from 'node:zlib'
-          const marker='PURGE-DS41-DELEGATE-01'
+          const marker='PURGE-DS41-DELEGATE-02'
           const root=path.join(process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh'),'sessions')
           const out=x=>console.log('PURGE_DS41_RESULT='+JSON.stringify(x))
           const dirs=d=>{try{return fs.readdirSync(d,{withFileTypes:true}).filter(x=>x.isDirectory()&&!x.isSymbolicLink()).map(x=>x.name)}catch{return []}}
@@ -66,8 +66,8 @@ jobs:
            if(e.type==='user/message'){
              const m=msg(e),source=d?.source??m?.source,t=txt(m)
              metadata.userMessages++
-             const exactMarker=raw.includes(marker)
-             const signature=t.includes('A1')&&t.includes('B2')&&t.includes('计算器')&&t.includes('R7')&&(/subagent|子智能体/.test(t))&&!t.includes('PURGE-DS41-BASELINE-01')&&!t.includes('不要调用工具或子智能体')
+             const exactMarker=t.includes(marker)&&(/subagent|子智能体/.test(t))
+             const signature=false
              if(signature)metadata.qaSignatures++
              if(child)return
              if(!exactMarker&&!signature&&source?.kind&&!['user','human'].includes(source.kind))return
@@ -115,7 +115,7 @@ jobs:
           }
           for(const [i,f] of files.slice(0,160).entries())scan(f,false,i+1)
           const parent=matches.length===1?matches[0]:null
-          const ids=new Set(parent?[...parent.childIds,...Array.from(parentRefs).filter(([c,p])=>p===parent.id).map(([c])=>c)]:[])
+          const ids=new Set(parent?[...parent.childIds,...Array.from(parentRefs).filter(([c,p])=>p===parent.id&&files.some(f=>f.id===c&&f.mtime>=parent.started-5000)).map(([c])=>c)]:[])
           for(const f of files.filter(f=>ids.has(f.id)).slice(0,10))scan(f,true)
           function view(x){return {matchBasis:x.matchBasis??null,parseComplete:x.parseComplete,turnEnds:x.turnEnds,wallMs:x.started!==null&&x.ended!==null?x.ended-x.started:null,toolStarts:x.toolStarts,subagentToolStarts:x.subagentToolStarts,descriptorEvents:x.descriptorEvents,linkedChildCount:x.childIds.size,attempts:x.attempts,final:x.final}}
           out({status:matches.length?'matched':'not-found',archiveCount:files.length,scanned,incomplete,matchCount:matches.length,linkedChildCount:ids.size,childArchivesFound:children.length,parent:parent?view(parent):null,children:children.map(view),matchBases:matches.map(x=>x.matchBasis),recent,markerHits:markerHits.slice(0,30)})
