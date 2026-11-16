@@ -488,3 +488,40 @@ test('missing assistant tool content remains unknown; no tools is observed only 
     assert.equal(evidence===null?null:evidence.requested,expected);
   }
 });
+
+
+test('long session never reuses a completed human task, even with a stale snapshot', () => {
+  const o = createRuntimeObservations(), a = agent('long-session');
+  let seq = 0, revision = 0;
+  const events = [];
+  a.session.events = events;
+  for (let turn = 1; turn <= 100; turn++) {
+    const human = turn % 2 ? { seq: ++seq, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK ' + turn } } : null;
+    if (human) { events.push(human); o.event(a.session, human); }
+    if (turn % 10 === 0) o.event(a.session, { seq: ++seq, type: 'compaction/end', data: {} });
+    const attemptId = 'long:' + turn;
+    o.frame({ agent: a, frame: { type: 'start', attemptId, revision: ++revision, turn, step: 1 } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSeqAtStart, human?.seq ?? 0);
+    assert.equal(row.humanSourceAtStart, human ? 'session-event' : 'not-observed');
+    o.event(a.session, { seq: ++seq, type: 'turn/end', data: { turn, reason: { kind: 'completed' } } });
+    // Deliberately leave the completed human message in a stale snapshot.
+  }
+  assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE TASK/);
+});
+
+test('context-only route change does not inherit the previous output reservation', () => {
+  const o = createRuntimeObservations(), a = agent('context-only-route');
+  o.event(a.session, { seq: 1, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } });
+  o.event(a.session, { seq: 2, type: 'request/context', data: { provider: 'p', model: 'a', contextWindow: 32768 } });
+  start(o, a);
+  o.event(a.session, { seq: 3, type: 'request/context', data: { model: 'b', contextWindow: 16384 } });
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 2, turn: 2, step: 1 } });
+  const [next, old] = o.snapshot().items;
+  assert.equal(next.model, 'b');
+  assert.equal(next.contextWindow, 16384);
+  assert.equal(next.requestMaxTokens, null);
+  assert.equal(next.requestHeaderSeq, null);
+  assert.equal(next.contextBudget.messageBudgetTokens, null);
+  assert.equal(old.requestMaxTokens, 4096);
+});
