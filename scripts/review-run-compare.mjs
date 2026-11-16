@@ -12,7 +12,7 @@ const caseIds = cases.map(item => item.id)
 const present = value => typeof value === 'string' && value.trim() !== ''
 const knownNumber = value => Number.isFinite(value) && value >= 0 ? value : null
 const metrics = ['elapsedMs', 'uncachedInputTokens', 'cacheReadTokens',
-  'cacheWriteTokens', 'outputTokens', 'modelResponses', 'toolStarts']
+  'cacheWriteTokens', 'outputTokens', 'modelResponses', 'toolStarts', 'inputTokens', 'totalTokens', 'reasoningTokens']
 
 function completeFixture(batch) {
   const scored = reconcileReviewBatch(batch)
@@ -32,10 +32,10 @@ function compareRoute(a, b) {
   return fields.includes('different') ? 'different' : fields.includes('unknown') ? 'unknown' : 'same'
 }
 
-function compareUsage(a, b) {
+function compareUsage(a, b, scope = 'whole-run') {
   // A parent's usage alone is not comparable with an entire delegated run.
   // Missing values are not zeros; token components are not a billing estimate.
-  const values = (usage, key) => usage?.scope === 'whole-run' ? knownNumber(usage[key]) : null
+  const values = (usage, key) => usage?.scope === scope ? knownNumber(usage[key]) : null
   return Object.fromEntries(metrics.map(key => {
     const direct = values(a, key)
     const delegated = values(b, key)
@@ -79,6 +79,8 @@ export function compareReviewRuns({ direct, delegated }) {
       childTotal: children ? children.summary.total : null,
     },
     usage: compareUsage(direct.usage, delegated.usage),
+    // Archive observations may omit uncommitted streams or child sessions.
+    archiveUsage: compareUsage(direct.usage, delegated.usage, 'observed-archive'),
     results,
   }
 }
