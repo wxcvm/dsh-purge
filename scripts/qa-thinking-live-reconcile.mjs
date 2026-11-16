@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {decodeArchive,archiveEvents,extractMarkedTurn} from './review-trace-import.mjs';
-import {createRuntimeObservations,streamSummary} from '../lib/runtime-observations.js';
+import {createRuntimeObservations,installRuntimeObservations,streamSummary} from '../lib/runtime-observations.js';
+import {createRequire} from 'node:module';
+import {pathToFileURL} from 'node:url';
 const home=process.env.DSH_HOME||path.join(os.homedir(),'.dsh');
 const roots=path.join(home,'sessions');
 const cutoff=Date.now()-24*60*60*1000;
@@ -41,6 +43,49 @@ for(const port of [...new Set(ports)].filter(p=>Number.isInteger(p)&&p>0&&p<6553
  }catch{}
 }
 const valid=v=>Number.isFinite(v)&&v>=0?v:null;
+// Exercise the candidate listener on the installed official dispatcher, but in
+// a separate Context. Replay reconstructed archive chunks, not a model call.
+let Context=null;
+try{
+ const req=createRequire('D:\\dsh\\resources\\app\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\cli.js');
+ ({Context}=await import(pathToFileURL(req.resolve('@deepseek-ai/cordis')).href));
+}catch{}
+async function replayCandidate(event, liveRow){
+ if(typeof Context!=='function')return {status:'dispatcher-unavailable'};
+ const ctx=new Context();
+ let clock=0;
+ const observer=installRuntimeObservations(ctx,{now:()=>clock++});
+ const agent={id:'qa',session:{id:'qa'}};
+ const attemptId='qa:replay';
+ let revision=1,index=0;
+ try{
+  await ctx.emit('agent/assistant-stream',{agent,frame:{type:'start',revision,attemptId,turn:event.data.turn,step:event.data.step}});
+  for(const record of event.data.stream){
+   let chunks;
+   if(record?.type==='reasoning-chunks'||record?.type==='text-chunks'){
+    if(!Array.isArray(record.texts)||!record.texts.every(t=>typeof t==='string'))return {status:'invalid-batch'};
+    chunks=record.texts.map(text=>({type:record.type==='reasoning-chunks'?'reasoning-delta':'text-delta',index:record.index,text}));
+   }else if(record?.chunk)chunks=[record.chunk];
+   else return {status:'unknown-record'};
+   for(const chunk of chunks){
+    await ctx.emit('agent/assistant-stream',{agent,frame:{type:'chunk',revision:++revision,attemptId,index:index++,chunk}});
+   }
+  }
+  await ctx.emit('session/event',agent.session,event);
+  await ctx.emit('agent/assistant-stream',{agent,frame:{type:'end',revision:++revision,attemptId,index,outcome:{kind:'committed',eventType:event.type,seq:event.seq}}});
+  const row=observer.snapshot().items[0];
+  if(!row)return {status:'no-observed-row'};
+  const summary=streamSummary(event.data.stream);
+  const pass=row.observedChunks===index&&row.reasoningChunks===summary.compactReasoningChunks+summary.reasoningDeltaChunks&&
+   row.reasoningChars===summary.compactReasoningChars+summary.reasoningDeltaChars&&row.durableCompactReasoningChunks===summary.compactReasoningChunks&&
+   !row.streamGap&&row.streamEnded&&row.finish==='stop'&&row.settlement==='committed'&&row.firstReasoningMs!==null&&row.firstTextMs!==null;
+  return {status:pass?'pass':'mismatch',emittedChunks:index,observedChunks:row.observedChunks,reasoningChunks:row.reasoningChunks,reasoningChars:row.reasoningChars,
+   durableReasoningChunks:row.durableCompactReasoningChunks,firstReasoningObserved:row.firstReasoningMs!==null,firstTextObserved:row.firstTextMs!==null,
+   streamGap:row.streamGap,finish:row.finish,settlement:row.settlement,
+   matchesOriginalLiveCount:liveRow?liveRow.observedChunks===index:null,scope:'isolated-official-dispatcher-replay-not-live-model-timing'};
+ }catch(error){return {status:'replay-error',errorType:error?.name??'unknown'}}
+ finally{observer.dispose();await ctx.fiber.dispose();}
+}
 for(const group of ['A','B']){
  const arr=matches[group];
  if(arr.length!==1){console.log(JSON.stringify({stage:'marked-live-reconcile',group,status:arr.length?'ambiguous':'not-found'}));continue}
@@ -61,7 +106,7 @@ for(const group of ['A','B']){
  }
  // Candidate is exercised in an isolated in-memory observer using the genuine
  // archived assistant event; live start/end are fixture boundaries, not new model traffic.
- const candidate=[];
+ const candidate=[],replayed=[];
  for(const event of responses){
   const obs=createRuntimeObservations({now:()=>0});
   const agent={id:'qa',session:{id:'qa'}};
@@ -75,8 +120,10 @@ for(const group of ['A','B']){
     observerCompactTextChunks:row.durableCompactTextChunks,observerReasoningBlocks:row.durableReasoningBlocks,firstReasoningMs:row.firstReasoningMs,
     firstTextMs:row.firstTextMs,liveReasoningChunks:row.reasoningChunks,invalidBatches:row.durableCompactInvalidRecords});
   obs.dispose();
+  const original=runtime.flatMap(x=>x.rows).filter(r=>r.seq===event.seq&&r.step===event.data.step);
+  replayed.push(await replayCandidate(event,original.length===1?original[0]:null));
  }
- console.log(JSON.stringify({stage:'marked-live-reconcile',group,status:trace.lifecycle,endpointCount:endpoints.length,runtime,candidate,scope:'existing-live-metadata-vs-actual-archive-candidate-ingest-no-new-model'}));
+ console.log(JSON.stringify({stage:'marked-live-reconcile',group,status:trace.lifecycle,endpointCount:endpoints.length,runtime,candidate,replayed,scope:'existing-live-metadata-vs-actual-archive-candidate-ingest-no-new-model'}));
 }
 const root='D:\\dsh\\resources\\app\\dsh\\node_modules\\@deepseek-ai';
 for(const [file,term] of [['dsh-agent-loop/lib/index.js','agent/assistant-stream'],['dsh-llm/lib/types/assistant-stream.js','reasoning-chunks']]){
