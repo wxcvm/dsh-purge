@@ -36,7 +36,7 @@ test('business, CVE and methodology summaries are searchable through the existin
   assert.ok(grafana)
   assert.equal(grafana.review_status,'reference-available-not-fully-reviewed')
   assert.match(get(grafana.id).body,/8\.0\.7/)
-  assert.match(get('fujiang:triage:fingerprint-workflow').body,/反向代理/)
+  assert.match(get('fujiang:triage:fingerprint-workflow').body,/反代|网关/)
   assert.equal(listBundledKnowledge('', '富江 · 业务安全').length,60)
   assert.ok(listBundledKnowledge('支付回调').every(r=>!Object.hasOwn(r,'body')))
 })
