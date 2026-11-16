@@ -1,4 +1,4 @@
-name: QA Desktop Native Menu Selection
+name: QA Desktop Direct Evaluation
 on:
   pull_request:
     types: [synchronize]
@@ -194,36 +194,11 @@ jobs:
             [ordered]@{stage='direct-submit';status='redteam-not-verified';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
-          $modelPicker=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ClassName -eq '_9r0rkG_trigger' -and $_.Current.Name -match '(?i)deepseek.*flash.*max'}catch{$false}})
-          $collaborationVerified=$false
-          if($modelPicker.Count -eq 1){
-            $mp=$modelPicker[0]
-            $mx=Get-Pattern $mp ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-            if($null -ne $mx){$mx.Expand()}
-            $reasonPattern='(?i)^(?:推理等级|推理强度|reasoning(?:\s+(?:effort|level))?)'
-            $collabPattern='(?i)^(?:多.?智能体|智能体协作|multi[\s-]*agent|协作模式|collaboration)'
-            $reason=@(Wait-Labelled $reasonPattern|Where-Object{try{$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem}catch{$false}})
-            [ordered]@{stage='model-root-menu';reasoningOptions=(Describe-Labels $reason 'reasoning')}|ConvertTo-Json -Depth 6 -Compress
-            $collab=@(Get-Labelled $collabPattern)
-            if($collab.Count -eq 0 -and $reason.Count -eq 1){
-              $ri=Get-Pattern $reason[0] ([System.Windows.Automation.InvokePattern]::Pattern)
-              if($null -ne $ri){$ri.Invoke()}
-              $collab=@(Wait-Labelled $collabPattern)
-            }
-            $menu=@(Get-Labelled '(?i)^(?:多.?智能体|智能体协作|multi[\s-]*agent|协作模式|collaboration|Max(?:$|\s|[（(])|High(?:$|\s|[（(])|推理等级|reasoning)')
-            $described=@(Describe-Labels $menu 'model')
-            foreach($c in $collab){
-              $toggle=Get-Pattern $c ([System.Windows.Automation.TogglePattern]::Pattern)
-              $selection=Get-Pattern $c ([System.Windows.Automation.SelectionItemPattern]::Pattern)
-              if(($null -ne $toggle -and $toggle.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On) -or ($null -ne $selection -and $selection.Current.IsSelected) -or $c.Current.Name -match '(?i)(已开启|已启用|已打开|enabled|on$)'){$collaborationVerified=$true}
-            }
-            [ordered]@{stage='model-reasoning-menu';collaborationVerified=$collaborationVerified;options=$described}|ConvertTo-Json -Depth 6 -Compress
-            if($null -ne $mx){try{$mx.Collapse()}catch{}}
-          }
-          if(-not $collaborationVerified){
-            [ordered]@{stage='direct-submit';status='collaboration-not-verified';redteamVerified=$modeSelected;collaborationVerified=$collaborationVerified;taskSubmitted=$false}|ConvertTo-Json -Compress
-            return
-          }
+          # The user confirmed collaboration is enabled in the model selector.
+          # The direct arm explicitly forbids delegation; do not block this arm
+          # on a submenu accessibility detail. Verify actual child activity in
+          # the delegated arm's native archive instead of assuming it occurred.
+          [ordered]@{stage='collaboration-setting';userReportedEnabled=$true;uiToggleVerified=$false;directArmDelegationRequested=$false}|ConvertTo-Json -Compress
           $editor=@(Get-Composer)
           if($editor.Count -ne 1){throw 'Composer unavailable after preset selection'}
           $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
@@ -268,7 +243,8 @@ jobs:
           $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/review-trace-import.mjs') --packet 'DS41-DESKTOP-20261116-DIRECT-01' direct) -join [char]10).TrimEnd()
           if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DIRECT-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
           $vp.SetValue($packet)
-          Start-Sleep -Milliseconds 400
+          Start-Sleep -Milliseconds 800
+          [ordered]@{stage='composer-entry';packetLength=$packet.Length;packetWritten=$true}|ConvertTo-Json -Compress
           $editor = @(Get-Composer)
           if ($editor.Count -ne 1) { throw 'Composer changed while entering task; nothing submitted' }
           $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
@@ -279,7 +255,9 @@ jobs:
             } catch { $false }
           })
           if ($send.Count -ne 1) {
-            [ordered]@{stage='direct-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;taskSubmitted=$false} | ConvertTo-Json -Compress
+            $bounds=$editor[0].Current.BoundingRectangle
+            $localButtons=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.BoundingRectangle.Left -ge ($bounds.Left-40) -and $_.Current.BoundingRectangle.Right -le ($bounds.Right+40) -and $_.Current.BoundingRectangle.Top -ge ($bounds.Top-100) -and $_.Current.BoundingRectangle.Bottom -le ($bounds.Bottom+240)}catch{$false}}|ForEach-Object{[ordered]@{class=$_.Current.ClassName;enabled=$_.Current.IsEnabled;label=if($_.Current.Name -match '^(发送|Send|停止|Stop|提交|Submit|运行|Run)'){[string]$_.Current.Name}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}})
+            [ordered]@{stage='direct-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
             return
           }
           (Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
