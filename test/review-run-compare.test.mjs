@@ -90,3 +90,30 @@ test('correct text without a final lifecycle observation receives no completion 
   assert.equal(result.results[0].delegated.reportState, 'verified')
   assert.equal(result.results[0].delegated.lifecycle, 'unknown')
 })
+
+test('distinguishes incorrect conclusions, missing evidence, and unresolved lifecycle', () => {
+  const direct = run('direct')
+  const delegated = run('delegated')
+  const [a, b, c, d, e, f] = ids
+  delegated.childBatch = batch()
+  delegated.batch.reports.find(row => row.id === a).evidence = []
+  delegated.batch.observations.find(row => row.id === b).lifecycle = 'running'
+  const childC = delegated.childBatch.reports.find(row => row.id === c)
+  childC.answer = childC.answer === 'a' ? 'b' : 'a'
+  delegated.childBatch.reports = delegated.childBatch.reports.filter(row => row.id !== d)
+  delegated.childBatch.assignments = delegated.childBatch.assignments.filter(row => row.id !== e)
+  delegated.childBatch.observations = delegated.childBatch.observations.filter(row => row.id !== e)
+  delegated.childBatch.reports = delegated.childBatch.reports.filter(row => row.id !== e)
+  const result = compareReviewRuns({ direct, delegated })
+  assert.deepEqual(result.results.map(row => row.childParentOutcome), [
+    'accepted-child-parent-not-verified', 'parent-lifecycle-unresolved',
+    'unverified-child-accepted-parent', 'unresolved-child-accepted-parent',
+    'no-child-observation', 'both-accepted',
+  ])
+  assert.deepEqual(result.reportQuality.delegated.conclusion, { correct: 6, incorrect: 0, unknown: 0 })
+  assert.deepEqual(result.reportQuality.delegated.evidence, { correct: 5, incorrect: 1, unknown: 0 })
+  assert.deepEqual(result.reportQuality.child.conclusion, { correct: 3, incorrect: 1, unknown: 1 })
+  assert.deepEqual(result.reportQuality.child.evidence, { correct: 4, incorrect: 0, unknown: 1 })
+  assert.equal(result.childParentOutcomes['both-accepted'], 1)
+  assert.equal(result.childParentOutcomes['no-child-observation'], 1)
+})
