@@ -1,4 +1,4 @@
-name: Verify DeepSeek route for native QA
+name: Locate active Desktop QA interface
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Inspect supported options and non-secret route fields
+      - name: Read local interface and package metadata
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -22,23 +22,21 @@ jobs:
           import os from 'node:os'
           import {spawnSync} from 'node:child_process'
           const home=process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh')
-          const dir=path.join(home,'profiles','headless')
-          const exists=p=>{try{return fs.statSync(p).isFile()}catch{return false}}
-          const r=spawnSync('cmd.exe',['/d','/s','/c','dsh --profile headless --help'],{encoding:'utf8',timeout:12000,windowsHide:true,maxBuffer:2*1024*1024})
-          const lines=(r.stdout||'').split(/\r?\n/).filter(l=>/^\s*(?:Usage:|Options:|Examples:|-[\w-]|dsh --profile headless)/.test(l)).map(l=>l.slice(0,230)).slice(0,65)
-          const routeHints=[]
+          const check=async port=>{try{const r=await fetch('http://127.0.0.1:'+port+'/dsh-purge/runtime-observations?limit=1',{signal:AbortSignal.timeout(2500),redirect:'error'});let v=null;try{v=await r.json()}catch{};return {port,status:r.status,schema:v?.schemaVersion??null,rows:Array.isArray(v?.items)?v.items.length:null,latest:v?.items?.slice(0,1).map(x=>({provider:/^[\w.-]{1,80}$/.test(x.provider||'')?x.provider:null,model:/^[\w./:-]{1,100}$/.test(x.model||'')?x.model:null}))??null}}catch{return {port,reachable:false}}}
+          const ports=await Promise.all([43120,43121,3080].map(check))
+          const info=[]
           for(const profile of ['headless','desktop','default']){
            const d=path.join(home,'profiles',profile)
-           for(const name of ['cordis.yml','cordis.yaml','cordis.patch.yml','cordis.patch.yaml','config.json','settings.json']){
-            const p=path.join(d,name)
-            if(!exists(p))continue
-            const s=fs.readFileSync(p,'utf8')
-            // Report only explicit model/provider field matches, never config text or credentials.
-            const models=[...s.matchAll(/(?:^|\n)\s*["']?(?:model|defaultModel|modelId)["']?\s*:\s*["']?([a-zA-Z0-9_./:@+-]{1,100})/g)].map(m=>m[1]).filter(x=>/^(?:deepseek(?:[./:-][a-z0-9_.:-]+)?|qwen[a-z0-9_.:-]*|glm[a-z0-9_.:-]*)$/i.test(x))
-            const providers=[...s.matchAll(/(?:^|\n)\s*["']?(?:provider|defaultProvider|providerId)["']?\s*:\s*["']?([a-zA-Z0-9_./:@+-]{1,100})/g)].map(m=>m[1]).filter(x=>/^(?:deepseek|deepseek-ai|openai|zhipu|ollama|lm-studio|lmstudio)$/i.test(x))
-            routeHints.push({profile,file:name,models:[...new Set(models)],providers:[...new Set(providers)]})
+           for(const n of ['cordis.yml','cordis.patch.yml','package.json']){
+            try{const s=fs.readFileSync(path.join(d,n),'utf8')
+             const lines=s.split(/\r?\n/).filter(l=>/^\s*(?:- )?(?:name|id):\s*['"]?@deepseek-ai\/dsh-(?:headless|web-app|cli|model|llm|session|agent)[\w/-]*['"]?\s*$/.test(l)).map(l=>l.trim()).slice(0,30)
+             let pkg=[];if(n==='package.json'){const x=JSON.parse(s);pkg=Object.keys({...x.dependencies,...x.devDependencies}).filter(k=>/^@deepseek-ai\/dsh/.test(k))}
+             info.push({profile,file:n,plugins:lines,packages:pkg})
+            }catch{}
            }
           }
-          console.log('PURGE_ROUTE_PREFLIGHT='+JSON.stringify({helpExit:r.status,help:lines,routeHints,headlessProfilePresent:fs.existsSync(dir)}))
+          const base=path.join(home,'profiles','headless','node_modules','@deepseek-ai')
+          let packages=[];try{packages=fs.readdirSync(base).filter(n=>/^dsh(?:-headless|-cli|-web|-agent|-session|$)/.test(n))}catch{}
+          console.log('PURGE_DESKTOP_CHECK='+JSON.stringify({ports,profiles:info,headlessPackages:packages}))
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
