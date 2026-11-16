@@ -35,3 +35,13 @@ test('FortiOS and FortiProxy reference also includes FortiSwitchManager', () => 
   assert.match(row.advisory_note,/原包遗漏/)
   assert.equal(row.verified,false)
 })
+
+test('PAN-OS GlobalProtect version reference preserves vendor hotfix exceptions', () => {
+  const row=find('CVE-2024-3400')
+  assert.match(row.versions,/GlobalProtect 网关/)
+  assert.match(row.advisory_note,/遥测.*不需要启用/)
+  assert.match(row.advisory_note,/10\.2\.7-h8/)
+  assert.equal(row.version_reference,'https://security.paloaltonetworks.com/CVE-2024-3400')
+  assert.equal(matchCveCandidates({cve:'CVE-2024-3400',version:'10.2.7-h8'}).items[0].version_applicability.status,'unknown')
+  assert.equal(row.verified,false)
+})
