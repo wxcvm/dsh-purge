@@ -1,4 +1,4 @@
-name: QA Desktop Redteam Selection and Direct QA
+name: QA Desktop Redteam Direct
 on:
   pull_request:
     types: [synchronize]
@@ -43,6 +43,11 @@ jobs:
               try { (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Edit -and $_.Current.ClassName -eq 'GRgSLq_input' } catch { $false }
             })
           }
+          # Open a fresh conversation in this same invocation.
+          $new = @(Get-Controls | Where-Object {try {(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -in @('新建会话','新建对话','New Chat','New Conversation','New Session') -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))}catch{$false}})
+          if($new.Count -eq 0){throw 'New Chat unavailable'}
+          (Get-Pattern $new[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+          Start-Sleep -Milliseconds 1200
           $editor = @(Get-Composer)
           if ($editor.Count -ne 1) { throw 'Expected the identified Harness composer' }
           $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
@@ -51,111 +56,45 @@ jobs:
             [ordered]@{stage='composer';status='not-empty';taskSubmitted=$false} | ConvertTo-Json -Compress
             return
           }
-          # Find the preset picker by the observed toolbar class and semantic label.
-          # Do not read chat contents or unrelated workspace labels.
-          $pickerCandidates = @(Get-Controls | Where-Object {
+          $rect = $editor[0].Current.BoundingRectangle
+          $modeSelected=$false
+          $pickers=@(Get-Controls | Where-Object {
             try {
               (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and
-              ($_.Current.ClassName -eq 'BI5uFG_trigger' -or $_.Current.Name -match '(?i)(?:选择|切换|当前).{0,8}(?:预设|智能体|助手|角色|模式)|(?:select|choose|current).{0,12}(?:preset|agent|mode)') -and
+              ($_.Current.ClassName -eq 'BI5uFG_trigger' -or $_.Current.Name -match '(?i)(?:选择|切换|当前).{0,12}(?:预设|智能体|助手|角色|模式)|(?:select|choose|current).{0,12}(?:preset|agent|mode)') -and
               $null -ne (Get-Pattern $_ ([System.Windows.Automation.ExpandCollapsePattern]::Pattern))
-            } catch { $false }
+            }catch{$false}
           })
-          $modeSelected=$false
-          $probe=@()
-          foreach($picker in $pickerCandidates) {
-            try {
-              $beforeName=[string]$picker.Current.Name
-              if($beforeName -match '(?i)红队|red\s*team') {$modeSelected=$true;break}
+          $redPattern='(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?)(?:\s*[（(][^）)]{1,40}[）)])?$'
+          $probes=@()
+          foreach($picker in $pickers){
+            try{
+              $class=[string]$picker.Current.ClassName
+              $before=[string]$picker.Current.Name
+              if($before -match '(?i)红队|red\s*team'){$modeSelected=$true;break}
               $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
               $exp.Expand()
-              Start-Sleep -Milliseconds 350
-              $menu=@(Get-Controls | Where-Object {
-                try {
-                  (Is-Visible $_) -and $_.Current.ControlType.ProgrammaticName -in @('ControlType.MenuItem','ControlType.ListItem','ControlType.Button','ControlType.RadioButton','ControlType.Text') -and
-                  $_.Current.Name -match '(?i)红队|red\s*team|标准|standard|预设|preset|智能体|agent'
-                } catch {$false}
-              })
-              $safeOptions=@($menu | ForEach-Object {
-                $n=[string]$_.Current.Name
-                [ordered]@{type=$_.Current.ControlType.ProgrammaticName;name=$n.Substring(0,[Math]::Min($n.Length,80));class=$_.Current.ClassName;patterns=@($_.GetSupportedPatterns()|ForEach-Object {$_.ProgrammaticName})}
-              })
-              $probe += [ordered]@{class=$picker.Current.ClassName;semanticLabel=($beforeName -match '(?i)预设|preset|智能体|agent|助手|角色|模式|mode');options=$safeOptions}
-              $red=@($menu | Where-Object {
-                try {
-                  $_.Current.ControlType.ProgrammaticName -in @('ControlType.MenuItem','ControlType.ListItem','ControlType.Button','ControlType.RadioButton') -and
-                  $_.Current.Name -match '(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?)(?:\s*[（(][^）)]{1,40}[）)])?          $toolbar = @()
-          $labels = @()
-          $candidates = @()
-          $known = '(?i)deepseek|flash|红队|redteam|max|完全权限|full.access|danger.full.access|多智能体|multi.agent|standard|标准|模式|model|模型|权限|permission|发送|send|推理|reasoning|协作|attach|附件|停止|stop|工作区|workspace'
-          foreach ($c in (Get-Controls)) {
-            try {
-              if (-not (Is-Visible $c)) { continue }
-              $v=$c.Current
-              $t=$v.ControlType.ProgrammaticName
-              $b=$v.BoundingRectangle
-              if ($t -notin @('ControlType.Button','ControlType.ComboBox','ControlType.Text','ControlType.CheckBox','ControlType.MenuItem','ControlType.ToggleButton')) { continue }
-              if ($b.Left -lt ($rect.Left-90) -or $b.Right -gt ($rect.Right+90) -or $b.Top -lt ($rect.Top-150) -or $b.Bottom -gt ($rect.Bottom+230)) { continue }
-              $n=[string]$v.Name
-              if ($n -match $known) {
-                $safeName=($n -split '[\r\n]')[0]
-                if ($safeName.Length -gt 100) { $safeName=$safeName.Substring(0,100) }
-                $labels += $safeName
-                $candidates += [ordered]@{type=$t;name=$safeName;class=$v.ClassName;patterns=@($c.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})}
-              }
-              if ($t -ne 'ControlType.Text') {
-                $toolbar += [ordered]@{type=$t;class=$v.ClassName;knownName=($n -match $known);named=($n.Length -gt 0);x=[int]($b.Left-$rect.Left);y=[int]($b.Top-$rect.Top);width=[int]$b.Width;height=[int]$b.Height;patterns=@($c.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})}
-              }
-            } catch {}
-          }
-          $settings = [ordered]@{
-            model=(@($labels | Where-Object {$_ -match '(?i)deepseek.*flash|flash.*deepseek'}).Count -gt 0)
-            max=(@($labels | Where-Object {$_ -match '(?i)(?:^|[^a-z])max(?:$|[^a-z])'}).Count -gt 0)
-            redteam=(@($labels | Where-Object {$_ -match '(?i)红队|redteam'}).Count -gt 0)
-            fullAccess=(@($labels | Where-Object {$_ -match '(?i)完全权限|full.access|danger.full.access'}).Count -gt 0)
-            collaborationVisible=(@($labels | Where-Object {$_ -match '(?i)多智能体|multi.agent'}).Count -gt 0)
-          }
-          [ordered]@{stage='composer-settings';editorEmpty=$true;settings=$settings;settingsControls=$candidates;toolbar=$toolbar} | ConvertTo-Json -Depth 7 -Compress
-          if (-not ($settings.model -and $settings.max -and ($settings.redteam -or $modeSelected) -and $settings.fullAccess)) {
-            [ordered]@{stage='direct-submit';status='settings-not-yet-confirmed';taskSubmitted=$false} | ConvertTo-Json -Compress
-            return
-          }
-          $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/review-trace-import.mjs') --packet 'DS41-DESKTOP-20261116-DIRECT-01' direct) -join [char]10).TrimEnd()
-          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DIRECT-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
-          $vp.SetValue($packet)
-          Start-Sleep -Milliseconds 400
-          $editor = @(Get-Composer)
-          if ($editor.Count -ne 1) { throw 'Composer changed while entering task; nothing submitted' }
-          $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
-          if (($vp.Current.Value -replace '\r\n',[string][char]10).TrimEnd() -ne $packet) { throw 'Composer text did not match the QA packet; nothing submitted' }
-          $send = @(Get-Controls | Where-Object {
-            try {
-              (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -match '^(发送(?:消息)?|Send(?: message)?)(?:\s*\([^)]*\))?$' -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))
-            } catch { $false }
-          })
-          if ($send.Count -ne 1) {
-            [ordered]@{stage='direct-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;taskSubmitted=$false} | ConvertTo-Json -Compress
-            return
-          }
-          (Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
-          Start-Sleep -Milliseconds 1200
-          [ordered]@{stage='direct-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-DIRECT-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
- -and
-                  ($null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern)) -or $null -ne (Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)))
-                } catch {$false}
-              })
-              if($red.Count -eq 1) {
+              Start-Sleep -Milliseconds 500
+              $menu=@(Get-Controls | Where-Object {try{(Is-Visible $_) -and $_.Current.Name -match '(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?|标准(?:模式)?|standard(?:\s*mode)?|多智能体协作|multi.agent collaboration)$'}catch{$false}})
+              $probes+= [ordered]@{class=$class;currentIsStandard=($before -match '(?i)标准|standard');options=@($menu|ForEach-Object{[ordered]@{name=$_.Current.Name;type=$_.Current.ControlType.ProgrammaticName;class=$_.Current.ClassName;patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}})}
+              $red=@($menu|Where-Object{try{$_.Current.Name -match $redPattern -and ($null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern)) -or $null -ne (Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)))}catch{$false}})
+              if($red.Count -eq 1){
                 $invoke=Get-Pattern $red[0] ([System.Windows.Automation.InvokePattern]::Pattern)
                 if($null -ne $invoke){$invoke.Invoke()}else{(Get-Pattern $red[0] ([System.Windows.Automation.SelectionItemPattern]::Pattern)).Select()}
-                Start-Sleep -Milliseconds 600
-                $current=@(Get-Controls | Where-Object {try {(Is-Visible $_) -and $_.Current.ClassName -eq $picker.Current.ClassName -and $_.Current.Name -match '(?i)红队|red\s*team'}catch{$false}})
+                Start-Sleep -Milliseconds 700
+                $current=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ClassName -eq $class -and $_.Current.Name -match '(?i)红队|red\s*team'}catch{$false}})
                 $modeSelected=($current.Count -gt 0)
                 break
               }
               $exp.Collapse()
-            } catch {}
+            }catch{}
           }
-          [ordered]@{stage='preset-picker';candidateCount=$pickerCandidates.Count;redteamVerified=$modeSelected;probes=$probe} | ConvertTo-Json -Depth 7 -Compress
-          $rect = $editor[0].Current.BoundingRectangle
+          [ordered]@{stage='preset-picker';candidateCount=$pickers.Count;redteamVerified=$modeSelected;probes=$probes}|ConvertTo-Json -Depth 7 -Compress
+          $editor=@(Get-Composer)
+          if($editor.Count -ne 1){throw 'Composer unavailable after preset selection'}
+          $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
+          if($null -eq $vp -or $vp.Current.IsReadOnly -or -not [string]::IsNullOrWhiteSpace($vp.Current.Value)){throw 'Fresh composer is not empty and writable'}
+          $rect=$editor[0].Current.BoundingRectangle
           $toolbar = @()
           $labels = @()
           $candidates = @()
@@ -183,12 +122,12 @@ jobs:
           $settings = [ordered]@{
             model=(@($labels | Where-Object {$_ -match '(?i)deepseek.*flash|flash.*deepseek'}).Count -gt 0)
             max=(@($labels | Where-Object {$_ -match '(?i)(?:^|[^a-z])max(?:$|[^a-z])'}).Count -gt 0)
-            redteam=(@($labels | Where-Object {$_ -match '(?i)红队|redteam'}).Count -gt 0)
+            redteam=(@($labels | Where-Object {$_ -match '(?i)红队|red\s*team'}).Count -gt 0)
             fullAccess=(@($labels | Where-Object {$_ -match '(?i)完全权限|full.access|danger.full.access'}).Count -gt 0)
             collaborationVisible=(@($labels | Where-Object {$_ -match '(?i)多智能体|multi.agent'}).Count -gt 0)
           }
           [ordered]@{stage='composer-settings';editorEmpty=$true;settings=$settings;settingsControls=$candidates;toolbar=$toolbar} | ConvertTo-Json -Depth 7 -Compress
-          if (-not ($settings.model -and $settings.max -and $settings.redteam -and $settings.fullAccess)) {
+          if (-not ($settings.model -and $settings.max -and ($settings.redteam -or $modeSelected) -and $settings.fullAccess)) {
             [ordered]@{stage='direct-submit';status='settings-not-yet-confirmed';taskSubmitted=$false} | ConvertTo-Json -Compress
             return
           }
