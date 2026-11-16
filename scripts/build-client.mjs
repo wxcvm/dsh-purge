@@ -75,6 +75,7 @@ let generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.l
 const runtimeBegin = "/* __DSH_PURGE_RUNTIME_BEGIN__ */";
 const runtimeEnd = "/* __DSH_PURGE_RUNTIME_END__ */";
 const runtimeBody = readFileSync(join(root, "lib", "task-quality-report.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "thinking-experiment.js"), "utf8").replace(/^export /gm, "")
   + "\n" + readFileSync(join(root, "lib", "workspace", "runtime-panel.js"), "utf8");
 const runtimeAt = generated.indexOf(runtimeBegin), runtimeEndAt = generated.indexOf(runtimeEnd);
 if (runtimeAt < 0 || runtimeEndAt < runtimeAt) throw new Error("runtime panel markers missing");
