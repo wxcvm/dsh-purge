@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { parseDocument } from 'yaml';
 import { adaptPresetPlugins, detectPresetCompatibility } from '../lib/redteam/preset-compat.js';
 
 const control = { id:'control', name:'@deepseek-ai/dsh-tool-subagent-control', disabled:false };
@@ -44,4 +45,16 @@ test('host detection follows merged capability, including rc.2, not release numb
     assert.equal(detectPresetCompatibility([anchor]).combinedSubagentControl,false);
   }
   assert.equal(detectPresetCompatibility([]).combinedSubagentControl,false);
+});
+
+
+test('redteam preset parses and preserves the complete persona prefix', () => {
+  const raw = fs.readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8');
+  const doc = parseDocument(raw, { uniqueKeys: true });
+  assert.deepEqual(doc.errors.map(error => error.message), []);
+  const prefix = doc.getIn([0, 'config', 'prefix']);
+  assert.equal(typeof prefix, 'string');
+  for (const heading of ['## 任务批次与推进闭环', '## 武器库优先', '## 六个角色', '## 会话隔离', '## 子智能体回报的核对']) {
+    assert.ok(prefix.includes(heading), 'persona prefix must contain ' + heading);
+  }
 });
