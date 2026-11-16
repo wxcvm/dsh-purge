@@ -87,3 +87,15 @@ test('内建业务安全控制技能可检索且只提供防御性审查内容',
   assert.match(skill.content, /mock provider/)
   assert.match(skill.content, /verified: false/)
 })
+
+
+test('内建技能的 frontmatter 描述参与目录展示与检索', () => {
+  const rows = listLocalSkills()
+  const business = rows.find(row => row.key === 'redteam:business-security-controls')
+  assert.ok(business)
+  assert.match(business.description, /多租户隔离/)
+  const result = searchLocalSkills('多租户隔离')
+  assert.ok(result.items.some(row => row.key === 'redteam:business-security-controls'))
+  const api = rows.find(row => row.key === 'redteam:api-attack')
+  assert.ok(api.description.length > 0)
+})
