@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
 import { taskContext } from '../lib/redteam/task-context.js'
+import { getBundledKnowledge } from '../lib/redteam/knowledge-bundled.js'
 
 function fixture(path = ':memory:', initialize = true) {
   const db = new DatabaseSync(path)
@@ -435,4 +436,85 @@ test('business controls remain in the bounded skill hints alongside product and 
   } finally {
     db.close()
   }
+})
+
+
+test('task context links a product candidate to the actual bundled reference and excludes fixed versions', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    let version = '8.2.5'
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        ports: [{ port: 3000, state: 'open', product: 'Grafana', version }],
+        fingerprints: [{ product: 'Grafana', version }],
+      }
+    }
+    const id = 'fujiang:cloud-container:cve-2021-43798-grafana-file-read'
+    const context = taskContext(store, 'lab', 'asset #5')
+    const row = context.bundled_knowledge.items.find(item => item.id === id)
+    assert.ok(row)
+    assert.deepEqual(row.reference, { source: 'bundled', id })
+    assert.equal(row.match_reason, 'asset-product-candidate')
+    assert.equal(row.verified, false)
+    assert.equal(row.version_applicability.status, 'affected')
+    assert.equal(row.body, undefined)
+    assert.match(getBundledKnowledge(row.reference.id).body, /修复与缓解/)
+    version = '8.2.7'
+    const patched = taskContext(store, 'lab', 'asset #5')
+    assert.ok(!patched.bundled_knowledge.items.some(item => item.id === id))
+    assert.ok(!patched.knowledge_candidates.some(item => item.cve.includes('CVE-2021-43798')))
+    db.exec("UPDATE vuln SET cve = 'CVE-2021-43798' WHERE id = 11")
+    const explicit = taskContext(store, 'lab', 'vuln #11')
+    const reference = explicit.bundled_knowledge.items.find(item => item.id === id)
+    assert.ok(reference)
+    assert.equal(reference.match_reason, 'exact-cve')
+    assert.equal(reference.version_applicability.status, 'not_affected')
+    assert.equal(explicit.knowledge_candidates.length, 0)
+  } finally { db.close() }
+})
+
+test('task context recommends specific business references without a CVE or external knowledge service', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, state: 'open', service: 'https' }],
+        fingerprints: [],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const result = taskContext(store, 'lab', 'asset #5')
+    const ids = result.bundled_knowledge.items.map(row => row.id)
+    assert.ok(ids.includes('fujiang:gray-market:payment-notify-forgery'))
+    assert.ok(ids.includes('fujiang:gray-market:multi-tenant-cross-site'))
+    assert.equal(result.knowledge_candidates.length, 0)
+    assert.ok(result.bundled_knowledge.items.every(row => row.match_reason === 'business-context' && row.verified === false && !Object.hasOwn(row, 'body')))
+    assert.equal(new Set(ids).size, ids.length)
+    assert.ok(result.bundled_knowledge.items.length <= 5)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+    db.prepare('UPDATE vuln SET title = ? WHERE id = 13').run('API 对象级授权边界')
+    const orphan = taskContext(store, 'lab', 'vuln #13')
+    assert.ok(orphan.bundled_knowledge.items.some(row => row.id === 'fujiang:gray-market:api-idor-bola'))
+  } finally { db.close() }
+})
+
+test('hostnames and closed-port labels do not supply bundled task references', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset, primary_name: 'grafana.payment-callback.example.test',
+        test_surface: 'SSH and DNS service availability', test_notes: '',
+        ports: [{ port: 3000, state: 'closed', product: 'Grafana' }, { port: 22, state: 'open', service: 'ssh' }],
+        fingerprints: [],
+      }
+    }
+    assert.deepEqual(taskContext(store, 'lab', 'asset #5').bundled_knowledge.items, [])
+  } finally { db.close() }
 })
