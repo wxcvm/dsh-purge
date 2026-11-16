@@ -57,3 +57,34 @@ test('adding an unrelated CVE catalog entry does not break the Fujiang reference
   const catalog = [...loadCveCatalog(), { title:'Other advisory', category:'other', source_url:'https://example.com/other.md' }]
   assert.equal(loadFujiangReferences(catalog).length,176)
 })
+
+
+test('methodology preserves the source authorization, evidence, cleanup and report structure', () => {
+  const fingerprint=getBundledKnowledge('fujiang:triage:fingerprint-workflow').body
+  const safe=getBundledKnowledge('fujiang:triage:safe-verification').body
+  const report=getBundledKnowledge('fujiang:triage:report-template').body
+  assert.match(fingerprint,/反代|网关/)
+  assert.match(fingerprint,/CDN/)
+  assert.match(safe,/默认停在 L2/)
+  assert.match(safe,/授权/)
+  assert.match(safe,/清理与恢复/)
+  assert.doesNotMatch(safe,/\x60\x60\x60/)
+  for (const heading of ['摘要','资产与指纹','验证记录','证据','影响分析','修复建议','复测','附录']) assert.ok(report.includes(heading),heading)
+})
+
+test('category indexes preserve the source guide inventory without importing attack entry examples', () => {
+  const java=getBundledKnowledge('fujiang:java-web:SKILL').body
+  const business=getBundledKnowledge('fujiang:gray-market:SKILL').body
+  assert.match(java,/原始分类目录（22 条）/)
+  assert.match(java,/cve-2024-53677-struts2-s2-067\.md/)
+  assert.match(business,/原始分类目录（59 条）/)
+  assert.match(business,/payment-notify-forgery\.md/)
+  assert.doesNotMatch(java,/UploadFileName.*\.\./)
+})
+
+test('Apache path traversal repair summary keeps the two CVE fix boundaries separate', () => {
+  const item=getBundledKnowledge('fujiang:web-cms:cve-2021-41773-apache-path-traversal')
+  assert.match(item.body,/41773.*2\.4\.50/)
+  assert.match(item.body,/42013.*2\.4\.51/)
+  assert.doesNotMatch(item.body,/2\.4\.51 修复相关两项/)
+})
