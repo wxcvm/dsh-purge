@@ -1,4 +1,4 @@
-name: QA Desktop Direct Evaluation
+name: QA Desktop Direct Evaluation Focused Menu
 on:
   pull_request:
     types: [synchronize]
@@ -147,46 +147,63 @@ jobs:
               [ordered]@{type=$v.ControlType.ProgrammaticName;class=$v.ClassName;label=($n -split '[\r\n]')[0].Substring(0,[Math]::Min(120,($n -split '[\r\n]')[0].Length));enabled=$v.IsEnabled;toggle=if($null -ne $toggle){[string]$toggle.Current.ToggleState}else{$null};selected=if($null -ne $selection){$selection.Current.IsSelected}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}
             })
           }
-          function Wait-Labelled($pattern,[int]$attempts=16) {
-            for($i=0;$i -lt $attempts;$i++){
-              $items=@(Get-Labelled $pattern)
-              if($items.Count -gt 0){return $items}
-              Start-Sleep -Milliseconds 250
-            }
-            return @()
-          }
           function Get-PresetSeat {
             @(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.ClassName -eq 'm2hUqa_seat'}catch{$false}})
           }
           $redPattern='(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?)(?:$|[\s：:，,（(—-])'
+          function Get-RedMenuItem {
+            @(Get-Labelled $redPattern | Where-Object {
+              try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))}catch{$false}
+            })
+          }
+          function Wait-RedMenuItem([int]$attempts=12){
+            for($i=0;$i -lt $attempts;$i++){
+              $items=@(Get-RedMenuItem)
+              if($items.Count -eq 1){return $items[0]}
+              Start-Sleep -Milliseconds 250
+            }
+            return $null
+          }
           $modeSelected=$false
           $pickers=@(Get-PresetSeat)
           if($pickers.Count -eq 1){
             $picker=$pickers[0]
             if($picker.Current.Name -match $redPattern){$modeSelected=$true}
             else{
-              $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-              if($null -ne $exp){$exp.Expand()}
-              # The previous run exposed the real Red team mode item after
-              # several seconds. Wait for the native menu, then invoke it.
-              $red=@(Wait-Labelled $redPattern | Where-Object{try{$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem}catch{$false}})
-              [ordered]@{stage='preset-menu';options=(Describe-Labels $red 'preset')}|ConvertTo-Json -Depth 6 -Compress
-              if($red.Count -eq 1){
-                $inv=Get-Pattern $red[0] ([System.Windows.Automation.InvokePattern]::Pattern)
-                if($null -ne $inv){$inv.Invoke()}
-                for($i=0;$i -lt 20;$i++){
+              $red=$null
+              for($attempt=1;$attempt -le 2 -and $null -eq $red;$attempt++){
+                # The prior successful menu enumeration followed UIA focus.
+                # Use the same verified control, not global keyboard/mouse input.
+                $seat=@(Get-PresetSeat)
+                if($seat.Count -ne 1){break}
+                $picker=$seat[0]
+                try{$picker.SetFocus()}catch{}
+                $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+                $before=$null
+                if($null -ne $exp){
+                  try{$before=[string]$exp.Current.ExpandCollapseState;if($exp.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$exp.Collapse();Start-Sleep -Milliseconds 300};$exp.Expand()}catch{}
+                }
+                Start-Sleep -Milliseconds 450
+                try{$picker.SetFocus()}catch{}
+                $red=Wait-RedMenuItem 18
+                $after=$null
+                try{if($null -ne $exp){$after=[string]$exp.Current.ExpandCollapseState}}catch{}
+                [ordered]@{stage='preset-open-attempt';attempt=$attempt;stateBefore=$before;stateAfter=$after;redMenuFound=($null -ne $red);targetFocused=$picker.Current.HasKeyboardFocus}|ConvertTo-Json -Compress
+              }
+              if($null -ne $red){
+                [ordered]@{stage='preset-menu';options=(Describe-Labels @($red) 'preset')}|ConvertTo-Json -Depth 6 -Compress
+                (Get-Pattern $red ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+                for($i=0;$i -lt 24;$i++){
                   $seat=@(Get-PresetSeat)
-                  $selected=@(Get-Labelled $redPattern|Where-Object{try{$_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem -and ($_.Current.ClassName -match 'selected' -or (($sel=Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)) -and $sel.Current.IsSelected))}catch{$false}})
-                  if(($seat.Count -eq 1 -and $seat[0].Current.Name -match $redPattern) -or $selected.Count -eq 1){$modeSelected=$true;break}
+                  if($seat.Count -eq 1 -and $seat[0].Current.Name -match $redPattern){$modeSelected=$true;break}
+                  $selected=@(Get-RedMenuItem|Where-Object{try{$_.Current.ClassName -match 'selected' -or (($sel=Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)) -and $sel.Current.IsSelected)}catch{$false}})
+                  if($selected.Count -eq 1){$modeSelected=$true;break}
                   Start-Sleep -Milliseconds 250
                 }
               }
               $seat=@(Get-PresetSeat)
-              $modeCandidates=@(Get-Labelled '(?i)^(?:红队|red\s*team|标准模式|standard mode)')
-              [ordered]@{stage='preset-selection';redteamVerified=$modeSelected;seatLabels=@($seat|ForEach-Object{[string]$_.Current.Name});options=(Describe-Labels $modeCandidates 'preset')}|ConvertTo-Json -Depth 6 -Compress
-              # A selected redteam menu item is also evidence; close the menu
-              # only if the same current preset control remains expanded.
-              if($seat.Count -eq 1){try{$cur=Get-Pattern $seat[0] ([System.Windows.Automation.ExpandCollapsePattern]::Pattern);if($null -ne $cur -and $cur.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$cur.Collapse()}}catch{}}
+              [ordered]@{stage='preset-selection';redteamVerified=$modeSelected;seatLabels=@($seat|ForEach-Object{[string]$_.Current.Name})}|ConvertTo-Json -Compress
+              if($modeSelected -and $seat.Count -eq 1){try{$cur=Get-Pattern $seat[0] ([System.Windows.Automation.ExpandCollapsePattern]::Pattern);if($null -ne $cur -and $cur.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$cur.Collapse()}}catch{}}
             }
           }
           [ordered]@{stage='preset-picker';candidateCount=$pickers.Count;redteamVerified=$modeSelected}|ConvertTo-Json -Compress
