@@ -17,7 +17,7 @@ test('stream metadata is read-only; first text excludes reasoning; usage is a sn
   chunk(o, a, 4, { type: 'finish', reason: { kind: 'stop' }, replayState: { secret: 'PRIVATE' } });
   time = 30; end(o, a, 5);
   const r = o.snapshot().items[0];
-  assert.equal(r.firstTextMs, 15); assert.equal(r.elapsedMs, 20); assert.equal(r.usage.totalTokens, 12);
+  assert.equal(r.firstTextMs, 15); assert.equal(r.firstReasoningMs, 5); assert.equal(r.reasoningChunks, 1); assert.equal(r.reasoningChars, secret.text.length); assert.equal(r.elapsedMs, 20); assert.equal(r.usage.totalTokens, 12);
   assert.equal(r.provider, 'fixture'); assert.equal(r.finish, 'stop'); assert.equal(r.settlement, 'committed');
   assert.equal(r.turnOutcome, null); assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE/);
   r.usage.totalTokens = 999; assert.equal(o.snapshot().items[0].usage.totalTokens, 12);
@@ -487,6 +487,88 @@ test('missing assistant tool content remains unknown; no tools is observed only 
     const evidence=o.snapshot().items[0].toolEvidence;
     assert.equal(evidence===null?null:evidence.requested,expected);
   }
+});
+
+
+test('thinking timeline isolates attempts and preserves interleaved event evidence', () => {
+  let time=0; const o=createRuntimeObservations({now:()=>time}), a=agent('s'), b=agent('b');
+  start(o,a); time=2; chunk(o,a,0,{type:'reasoning-delta',text:'PRIVATE A'});
+  time=4; chunk(o,a,1,{type:'text-delta',text:'PRIVATE TEXT'});
+  time=7; chunk(o,a,2,{type:'reasoning-delta',text:'PRIVATE B'});
+  time=9; chunk(o,a,3,{type:'block-start',blockType:'tool-call'});
+  start(o,b); time=10; chunk(o,b,0,{type:'reasoning-delta',text:''});
+  const row=o.snapshot({sessionId:'s'}).items[0], other=o.snapshot({sessionId:'b'}).items[0];
+  assert.equal(row.firstReasoningMs,2); assert.equal(row.lastReasoningMs,7); assert.equal(row.firstTextMs,4);
+  assert.equal(row.reasoningAfterText,true); assert.equal(row.firstToolMs,9); assert.equal(row.reasoningChunks,2);
+  assert.equal(other.firstReasoningMs,null); assert.equal(other.lastReasoningMs,null); assert.equal(other.reasoningChunks,0);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
+});
+
+
+test('runtime snapshot reports bounded coverage and observed turn-end clock',()=>{
+  let time=10;const o=createRuntimeObservations({now:()=>time}),a=agent('s'),b=agent('b');
+  start(o,a);time=20;end(o,a,0);time=30;o.event(a.session,{seq:4,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
+  start(o,b);const snap=o.snapshot({limit:1});
+  assert.equal(snap.matchedCount,2);assert.equal(snap.returnedCount,1);
+  const one=o.snapshot({sessionId:'s'});assert.equal(one.matchedCount,1);assert.equal(one.items[0].turnEndedAt,30);
+});
+
+
+test('committed reasoning blocks are visible without live or durable reasoning deltas',()=>{
+  let time=10;const o=createRuntimeObservations({now:()=>time}),a=agent('s');
+  start(o,a);time=12;chunk(o,a,0,{type:'block-start',blockType:'reasoning'});
+  time=20;chunk(o,a,1,{type:'text-delta',text:'PRIVATE FINAL'});
+  const content=Object.freeze([Object.freeze({type:'reasoning',text:'PRIVATE THINK'}),Object.freeze({type:'text',text:'PRIVATE FINAL'})]);
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content},stream:[
+    {chunk:{type:'block-start',blockType:'reasoning'}},{chunk:{type:'block-end'}},
+    {chunk:{type:'block-start',blockType:'text'}},{chunk:{type:'finish',reason:{kind:'stop'}}}
+  ]}});
+  end(o,a,2);const r=o.snapshot().items[0];
+  assert.equal(r.reasoningBlockStarts,1);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);
+  assert.equal(r.durableReasoningBlockStarts,1);assert.equal(r.durableReasoningDeltaChunks,0);
+  assert.equal(r.durableReasoningBlocks,1);assert.equal(r.durableReasoningTextBlocks,1);assert.equal(r.durableReasoningChars,'PRIVATE THINK'.length);
+  assert.equal(r.firstTextMs,10);assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});
+test('reasoning content unknown differs from absent; a late commit only updates its matched row',()=>{
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:1}});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content:[{type:'reasoning',text:'PRIVATE'}]}}});
+  const [current,previous]=o.snapshot().items;
+  assert.equal(current.durableReasoningBlocks,null);assert.equal(previous.durableReasoningBlocks,1);
+  assert.equal(previous.durableReasoningDeltaChunks,null);assert.equal(previous.firstReasoningMs,null);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
+});
+
+
+test('native compact reasoning and text batches are counted separately without live timing',()=>{
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);
+  const batch=Object.freeze({type:'reasoning-chunks',index:1,time0:100,dt:[1,2,3],texts:Object.freeze(['PRIVATE A','','PRIVATE B'])});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content:[{type:'reasoning',text:'PRIVATE APRIVATE B'}]},stream:[
+    {chunk:{type:'block-start',blockType:'reasoning'}},batch,{chunk:{type:'block-end'}},
+    {type:'text-chunks',texts:['PRIVATE FINAL']},
+    {type:'reasoning-chunks',texts:['PRIVATE',null]},
+    {chunk:{type:'reasoning-delta',text:'PRIVATE EXPLICIT'}},
+    {chunk:{type:'finish',reason:{kind:'stop'}}}
+  ]}});
+  end(o,a,0);const r=o.snapshot().items[0];
+  assert.equal(r.durableCompactReasoningRecords,1);assert.equal(r.durableCompactReasoningChunks,2);
+  assert.equal(r.durableCompactReasoningChars,18);assert.equal(r.durableCompactTextChunks,1);assert.equal(r.durableCompactInvalidRecords,1);
+  assert.equal(r.durableReasoningDeltaChunks,1);assert.equal(r.durableReasoningBlocks,1);
+  assert.equal(r.durableTextObserved,true);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);assert.equal(r.firstTextMs,null);
+  assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});
+
+
+test('one turn/end event assigns one clock timestamp to all attempts in the turn',()=>{
+  let time=0;const o=createRuntimeObservations({now:()=>++time}),a=agent('s');
+  start(o,a);end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:2}});
+  o.frame({agent:a,frame:{type:'end',attemptId:'s:2',revision:4,index:0,outcome:{kind:'committed',eventType:'assistant/message',seq:4}}});
+  o.event(a.session,{seq:5,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
+  const [second,first]=o.snapshot().items;
+  assert.equal(second.turnEndedAt,first.turnEndedAt);
+  assert.equal(second.turnEndedAt>second.startedAt,true);
+  assert.equal(first.turnOutcome,'completed');assert.equal(second.turnOutcome,'completed');
 });
 
 

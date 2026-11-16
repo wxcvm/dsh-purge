@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+const runtimePanel = () => readFileSync(new URL('../lib/workspace/thinking-experiment.js', import.meta.url), 'utf8').replace(/^export /gm, '') + '\n' + readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+
 test('runtime panel polls only while visible, projects a report locally and cleans up', async () => {
   let cleanup, timer, count = 0, visible = true;
   const state = [], requests = [];
@@ -13,7 +15,7 @@ test('runtime panel polls only while visible, projects a report locally and clea
     fetch: async (url, init) => { requests.push({ url, init }); return { ok: true, json: async () => ({ items: [], streamSupport: 'not-observed' }) }; },
   };
   const projection = readFileSync(new URL('../lib/task-quality-report.js', import.meta.url), 'utf8').replace(/^export /gm, '');
-  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  const panel = runtimePanel();
   vm.createContext(ctx); vm.runInContext(projection + '\n' + panel + '\nRuntimeObservationsSection()', ctx);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(requests.length, 1); assert.equal(requests[0].init.credentials, 'same-origin');
@@ -37,7 +39,7 @@ test('native panel source renders abstention and missing delivery evidence indep
   const ctx = { useState: v => [index++ === 0 ? { items: [{ generation: 1, attemptId: 'a', assessment: { decision: 'uncertain', delivery: 'not-verified', reasonCodes: ['denied-object-uncertain'] } }] } : v, () => {}],
     useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) };
   vm.createContext(ctx);
-  const rendered = vm.runInContext(readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8') + '\nRuntimeObservationsSection()', ctx);
+  const rendered = vm.runInContext(runtimePanel() + '\nRuntimeObservationsSection()', ctx);
   const body = JSON.stringify(rendered);
   assert.match(body, /不确定（不触发动作） \/ 尚未验证/);
   assert.doesNotMatch(body, /明确拒答 \/ 有证据未交付/);
@@ -51,7 +53,7 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
     { generation: 1, attemptId: 'lost', settlement: 'unobserved-end', finishObserved: false },
     { generation: 1, attemptId: 'failed', finish: 'error', errorCode: 'ECONNRESET', httpStatus: 503, terminalConflict: true, reasonSource: 'host-stream' },
   ];
-  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  const panel = runtimePanel();
   const render = filter => {
     let i = 0;
     const updates = [];
@@ -83,7 +85,7 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
 });
 
 test('stream end without observed finish is not labelled an observed terminal', () => {
-  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const panel=runtimePanel()
   const ctx=vm.createContext({})
   const status=vm.runInContext(panel+'\nruntimeRowStatus',ctx)
   assert.equal(status({streamEnded:true,finishObserved:false}).key,'attention')
@@ -95,7 +97,7 @@ test('stream end without observed finish is not labelled an observed terminal', 
 
 
 test('runtime empty states distinguish loading, failed read and active filters', () => {
-  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url),'utf8');
+  const panel=runtimePanel();
   const render=(snapshot,error,session,filter) => {
     let i=0; const updates=[], nodes=[];
     const ctx=vm.createContext({useState:v=>{const at=i++;return [[snapshot,error,null,'',session,filter][at] ?? v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})});
@@ -114,7 +116,7 @@ test('runtime empty states distinguish loading, failed read and active filters',
 
 
 test('runtime route filter uses actual observed provider/model pairs and keeps unknown values distinct', () => {
-  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url),'utf8')
+  const panel=runtimePanel()
   const rows=[
     {generation:1,attemptId:'a',provider:'local',model:'model-a',finishObserved:true},
     {generation:1,attemptId:'b',provider:'local',model:'model-b',finishObserved:false},
@@ -139,7 +141,7 @@ test('runtime route filter uses actual observed provider/model pairs and keeps u
 
 
 test('inactive runtime pane preserves local state without scheduling requests', () => {
- const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8');
+ const panel=runtimePanel();
  let count=0,cleanup;
  const ctx=vm.createContext({useState:v=>[v,()=>{count++}],useRef:()=>({}),useEffect:f=>{cleanup=f()},h:(type,props,...children)=>({type,props,children}),fetch:()=>{count++},setTimeout:()=>{count++}});
  vm.runInContext(panel+'\nRuntimeObservationsSection({active:false})',ctx);
@@ -148,7 +150,7 @@ test('inactive runtime pane preserves local state without scheduling requests', 
 
 
 test('runtime cards distinguish configured route from assistant-observed route', () => {
-  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const panel = runtimePanel()
   const rows=[{generation:1,attemptId:'a',provider:'local',model:'actual',providerSource:'request-header',modelSource:'assistant-event',finishObserved:true}]
   let i=0;
   const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
@@ -158,7 +160,7 @@ test('runtime cards distinguish configured route from assistant-observed route',
 
 
 test('runtime cards show separate live and durable evidence and count a request only once', () => {
-  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const panel=runtimePanel()
   const rows=[{generation:1,attemptId:'a',provider:'local',model:'model',toolCalls:0,durableToolStarts:2,durableTextObserved:true,firstTextMs:null,observedChunks:1,chunks:3,streamGap:true,finishObserved:true}]
   let i=0
   const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
@@ -172,7 +174,7 @@ test('runtime cards show separate live and durable evidence and count a request 
 
 
 test('runtime display masks identifiers and report when shared privacy is enabled', () => {
-  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  const panel = runtimePanel();
   let i = 0;
   const ctx = vm.createContext({ __dshPurgeDrill: { api() {} },
     useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] }
@@ -192,7 +194,7 @@ test('runtime display masks identifiers and report when shared privacy is enable
 
 
 test('temporary runtime privacy overrides local reveal without changing routing', () => {
-  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8')
+  const panel = runtimePanel()
   let i = 0
   const ctx = vm.createContext({
     __dshPurgeDrill: { api() {}, useTemporaryPrivacy: () => ({ task: 'sharing', maskHistory: true }) },
@@ -210,7 +212,7 @@ test('temporary runtime privacy overrides local reveal without changing routing'
 })
 
 test('runtime card shows usage source and separates live and durable totals', () => {
-  const panel=readFileSync(new URL('../lib/workspace/runtime-panel.js',import.meta.url),'utf8')
+  const panel=runtimePanel()
   const rows=[{generation:1,attemptId:'a',usage:{totalTokens:20},usageSource:'host-stream',liveUsage:{totalTokens:20},durableUsage:{totalTokens:null},finishObserved:true}]
   let i=0
   const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
@@ -228,7 +230,7 @@ test('master cleaning workspace mounts runtime diagnostics only on its selected 
 });
 
 test('runtime panel shows observed child lifecycle without treating unmatched events as live concurrency', () => {
-  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  const panel = runtimePanel();
   const render = subagents => {
     let i = 0;
     const ctx = vm.createContext({
@@ -242,4 +244,12 @@ test('runtime panel shows observed child lifecycle without treating unmatched ev
   assert.match(result, /当前父会话.*启动 14.*结束 13.*配对区间峰值重叠 1/);
   assert.match(result, /不代表实时并发或任务完成/);
   assert.match(render({ observed: false }), /子智能体生命周期：未观测/);
+});
+
+test('thinking experiment is mounted with filtered real observations and no original reasoning payload', () => {
+  let i = 0; const row = { generation:1, attemptId:'a', model:'fixture', reasoningChunks:2, reasoningChars:10, firstReasoningMs:5 };
+  const ctx=vm.createContext({ useState:v=>[i++===0?{items:[row]}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children}) });
+  const tree=vm.runInContext(runtimePanel()+'\nRuntimeObservationsSection()',ctx);
+  const experiment=tree.children.find(n=>n?.type?.name==='ThinkingExperimentPanel');
+  assert.ok(experiment); assert.equal(experiment.props.rows[0],row); assert.equal(experiment.props.snapshotAvailable,true);
 });
