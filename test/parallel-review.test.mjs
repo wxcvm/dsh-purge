@@ -90,3 +90,38 @@ test('one eligible task stays on the sequential path', () => {
   assert.equal(plan.batch.length, 0)
   assert.equal(plan.sequential.length, 1)
 })
+
+test('lower-priority records never enter a higher-priority review batch', () => {
+  const plan = planParallelReviewBatch([
+    { ...task(1), priority: 1 },
+    { ...task(2), priority: 1 },
+    { ...task(3), priority: 2 },
+    { ...task(4), priority: 2 },
+  ], 9)
+  assert.equal(plan.status, 'ready')
+  assert.deepEqual(plan.batch.map(item => item.target), ['vuln #1', 'vuln #2'])
+  assert.deepEqual(plan.deferred, [])
+  assert.deepEqual(plan.sequential.map(item => item.target), ['vuln #3', 'vuln #4'])
+})
+
+test('a single higher-priority record is not bypassed by a lower-priority batch', () => {
+  const actions = [
+    { ...task(1), priority: 1 },
+    { ...task(2), priority: 2 },
+    { ...task(3), priority: 2 },
+  ]
+  const plan = planParallelReviewBatch(actions)
+  assert.equal(plan.status, 'sequential')
+  assert.deepEqual(plan.batch, [])
+  assert.deepEqual(plan.sequential, actions)
+})
+
+test('deferred batches contain only the current priority tier', () => {
+  const plan = planParallelReviewBatch([
+    ...[1, 2, 3, 4].map(id => ({ ...task(id), priority: 2 })),
+    { ...task(5), priority: 3 },
+  ], 2)
+  assert.deepEqual(plan.batch.map(item => item.target), ['vuln #1', 'vuln #2'])
+  assert.deepEqual(plan.deferred.map(item => item.target), ['vuln #3', 'vuln #4'])
+  assert.deepEqual(plan.sequential.map(item => item.target), ['vuln #5'])
+})
