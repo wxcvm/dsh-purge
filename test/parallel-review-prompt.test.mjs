@@ -28,7 +28,7 @@ test('redteam preset keeps active work sequential and reconciles read-only batch
   assert.match(preset, /只读记录核查/)
   assert.match(preset, /主会话统一核对/)
   assert.match(preset, /主动扫描、漏洞验证、登录\/凭据操作、利用/)
-  assert.match(preset, /按既有阶段依赖顺序推进/)
+  assert.match(preset, /按原有阶段依赖顺序推进/)
   assert.doesNotMatch(preset, /默认一个一个派/)
   assert.doesNotMatch(preset, /每次只拉起一个，跑完再派下一个/)
 })
