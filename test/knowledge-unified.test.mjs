@@ -99,7 +99,7 @@ test('bundled knowledge is readable offline before creating a personal database'
   try {
     const call = args => unifiedKnowledgeRequest(root, args)
     const result = call({ op:'knowledgeUnifiedSearch', source:'bundled', query:'' }).groups[0]
-    assert.equal(result.total, 30)
+    assert.equal(result.total, 206)
     assert.equal(result.items.length, 20)
     assert.equal(new Set(result.items.map(item => item.id)).size, 20)
     assert.ok(result.items.every(item => !Object.hasOwn(item, 'body')))
@@ -111,7 +111,7 @@ test('bundled knowledge is readable offline before creating a personal database'
     assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',category:'Purge 使用'}).groups[0].total,3)
     assert.throws(()=>call({op:'knowledgeUnifiedGet',source:'bundled',id:'unknown'}),/不存在/)
     assert.equal(knowledgeRequest(root,{op:'knowledgeList'}).total,0)
-    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0].total,30)
+    assert.equal(call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0].total,206)
   } finally { rmSync(root,{recursive:true,force:true}) }
 })
 
@@ -120,9 +120,13 @@ test('bundled pagination and related references are stable', () => {
   const call = args => unifiedKnowledgeRequest('/unused', args)
   const first = call({op:'knowledgeUnifiedSearch',source:'bundled',query:''}).groups[0]
   const second = call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',offset:20}).groups[0]
-  assert.equal(first.hasMore,true); assert.equal(second.hasMore,false)
-  assert.equal(second.items.length,10); assert.equal(second.offset,20)
-  assert.equal(new Set([...first.items,...second.items].map(row=>row.id)).size,30)
+  assert.equal(first.hasMore,true); assert.equal(second.hasMore,true)
+  assert.equal(second.items.length,20); assert.equal(second.offset,20)
+  const pages = []
+  for (let offset=0; offset<first.total; offset+=20) pages.push(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',offset}).groups[0])
+  assert.equal(pages.at(-1).hasMore,false)
+  assert.equal(pages.at(-1).items.length,6)
+  assert.equal(new Set(pages.flatMap(page=>page.items.map(row=>row.id))).size,206)
   assert.ok(first.categories.includes('AI 运行时'))
   const article = call({op:'knowledgeUnifiedGet',source:'bundled',id:'stream-sse'}).item
   assert.ok(article.related.length>0)
