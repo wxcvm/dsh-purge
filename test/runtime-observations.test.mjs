@@ -17,7 +17,7 @@ test('stream metadata is read-only; first text excludes reasoning; usage is a sn
   chunk(o, a, 4, { type: 'finish', reason: { kind: 'stop' }, replayState: { secret: 'PRIVATE' } });
   time = 30; end(o, a, 5);
   const r = o.snapshot().items[0];
-  assert.equal(r.firstTextMs, 15); assert.equal(r.elapsedMs, 20); assert.equal(r.usage.totalTokens, 12);
+  assert.equal(r.firstTextMs, 15); assert.equal(r.firstReasoningMs, 5); assert.equal(r.reasoningChunks, 1); assert.equal(r.reasoningChars, secret.text.length); assert.equal(r.elapsedMs, 20); assert.equal(r.usage.totalTokens, 12);
   assert.equal(r.provider, 'fixture'); assert.equal(r.finish, 'stop'); assert.equal(r.settlement, 'committed');
   assert.equal(r.turnOutcome, null); assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE/);
   r.usage.totalTokens = 999; assert.equal(o.snapshot().items[0].usage.totalTokens, 12);
