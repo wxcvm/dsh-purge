@@ -1,180 +1,67 @@
-name: Compare anonymized historical agent cohorts
+name: Run local QA model smoke once
 on:
   push:
     branches: [robin/read-runtime-usage-once]
 permissions:
   contents: read
 jobs:
-  read-summary:
+  compare:
     if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/robin/read-runtime-usage-once'
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Read only historical session metadata and emit anonymized numerical summary
+      - name: Check loaded local models and compare fictional QA answers
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           @'
-          import fs from 'node:fs'
-          import path from 'node:path'
-          import os from 'node:os'
-          import zlib from 'node:zlib'
-          const cohorts=[['vuln-scan-ztbeb','exploit-ztbeb','exploit-ztbeb-2','recon-ztbeb-pivot','vuln-scan-chaicp','vuln-scan-cniia','exploit-sitecode','vuln-scan-main3','exploit-3381','exploit-3381-admin','exploit-3381-admin2','exploit-3381-login','exploit-3381-browser','exploit-6377','exploit-ocs','exploit-3381-data','exploit-3381-v2'],['recon-kaiyuan','vulnscan-db-unauth','exploit-bucket-backstage','exploit-login-3381']]
-          const labels=new Set(cohorts.flat())
-          const links=new Map()
-          const parentLinks=new Map()
-          function attach(id,label,parent){if(typeof id!=='string'||!id||!labels.has(label))return;if(!links.has(id))links.set(id,new Set());links.get(id).add(label);if(parent){if(!parentLinks.has(parent))parentLinks.set(parent,new Set());parentLinks.get(parent).add(id)}}
-          const root = path.join(process.env.DSH_HOME || path.join(process.env.USERPROFILE || os.homedir(), '.dsh'), 'sessions')
-          const magic = Buffer.from([0x28,0xb5,0x2f,0xfd])
-          const fields = ['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens']
-          const reasons = new Set(['stop','tool-calls','max-tokens','error','aborted','content_filter'])
-          const codeGroups=new Map()
-          const hostCodes=new Set(['AUTH','UNAUTHORIZED','FORBIDDEN','INVALID','INVALID_REQUEST','QUOTA','ACCOUNT_QUOTA','BILLING','MODEL_NOT_FOUND','CONTEXT_OVERFLOW','CONTEXT_LENGTH','CONTEXT_WINDOW_EXCEEDED','NO_ADAPTER','MISSING_CREDENTIAL','INVALID_CREDENTIAL','RATE_LIMIT','TRANSPORT','UNKNOWN','INTERNAL','TIMEOUT','NETWORK','SERVER_ERROR','BAD_RESPONSE','OVERLOADED','PROVIDER','PROVIDER_ERROR','STREAM','STREAM_ERROR','PARSE','PARSE_ERROR','ABORTED','CANCELLED','HTTP','HTTP_ERROR','RESPONSE_ERROR','INVALID_RESPONSE','API_ERROR','REQUEST_ERROR','MODEL_ERROR','TOOL_ERROR','SERVICE_UNAVAILABLE'])
-          const allowedCodes = new Set(['ECONNRESET','ECONNREFUSED','ETIMEDOUT','ENOTFOUND','EAI_AGAIN','EPIPE','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','UND_ERR_SOCKET','ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_SSL_WRONG_VERSION_NUMBER','ABORT_ERR','ERR_ABORTED','AbortError','TimeoutError','rate_limit_exceeded','insufficient_quota','invalid_request_error','authentication_error','permission_error','overloaded_error','server_error','api_error','context_length_exceeded','invalid_api_key','network_error','timeout','connection_error','stream_error','provider_error','HTTP_ERROR','FETCH_ERROR'])
-          function safeError(reason){
-           const f=reason?.failure??reason?.error??reason
-           const raw=typeof f?.code==='string'?f.code:null
-           const normalized=raw?.toUpperCase()
-           const code=hostCodes.has(normalized)?normalized:allowedCodes.has(raw)?raw:null
-           let codeGroup=null;if(raw){if(!codeGroups.has(raw))codeGroups.set(raw,codeGroups.size+1);codeGroup=codeGroups.get(raw)}
-           const status=[f?.status,f?.statusCode,f?.httpStatus].find(x=>Number.isInteger(x)&&x>=100&&x<=599)??null
-           const message=typeof f?.message==='string'?f.message:''
-           let category='unclassified'
-           if(status===429||['rate_limit_exceeded','RATE_LIMIT'].includes(code))category='rate-limit'
-           else if(status===401||status===403||['AUTH','UNAUTHORIZED','FORBIDDEN','MISSING_CREDENTIAL','INVALID_CREDENTIAL'].includes(code))category='auth-or-permission'
-           else if(status!==null&&status>=500)category='server-http'
-           else if(status!==null&&status>=400)category='client-http'
-           else if(['ECONNRESET','ECONNREFUSED','EPIPE','UND_ERR_SOCKET','network_error','connection_error'].includes(code)||/socket hang up|connection reset|connection refused|unexpected eof|connection closed|fetch failed/i.test(message))category='connection'
-           else if(['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','TimeoutError','timeout'].includes(code)||/timed out|timeout/i.test(message))category='timeout'
-           else if(['ENOTFOUND','EAI_AGAIN'].includes(code))category='dns'
-           else if(['ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_SSL_WRONG_VERSION_NUMBER'].includes(code)||/certificate verify|tls handshake|ssl handshake/i.test(message))category='tls'
-           else if(['ABORT_ERR','ERR_ABORTED','AbortError'].includes(code))category='abort'
-           else if(['context_length_exceeded','CONTEXT_OVERFLOW','CONTEXT_LENGTH','CONTEXT_WINDOW_EXCEEDED'].includes(code))category='context-limit'
-           else if(['insufficient_quota','QUOTA','ACCOUNT_QUOTA','BILLING'].includes(code))category='quota'
-           else if(code==='TRANSPORT'||code==='NETWORK')category='transport'
-           else if(code==='TIMEOUT')category='timeout'
-           else if(['INVALID','INVALID_REQUEST','MODEL_NOT_FOUND','NO_ADAPTER'].includes(code))category='invalid-request-or-config'
-           else if(['STREAM','STREAM_ERROR','PARSE','PARSE_ERROR','BAD_RESPONSE','INVALID_RESPONSE','RESPONSE_ERROR'].includes(code))category='stream-or-response'
-           else if(['SERVER_ERROR','OVERLOADED','SERVICE_UNAVAILABLE'].includes(code))category='server'
-           else if(['PROVIDER','PROVIDER_ERROR','API_ERROR','REQUEST_ERROR','MODEL_ERROR','HTTP','HTTP_ERROR'].includes(code))category='provider-or-request'
-           else if(['ABORTED','CANCELLED'].includes(code))category='abort'
-           else if(code)category='other-known'
-           return {code,codeGroup,status,category,codePresent:!!raw,failurePresent:!!f,messagePresent:!!message}
+          import {performance} from 'node:perf_hooks'
+          import {spawnSync} from 'node:child_process'
+          const out=x=>console.log('PURGE_QA_RESULT='+JSON.stringify(x))
+          const get=async url=>{try{const r=await fetch(url,{signal:AbortSignal.timeout(3000),redirect:'error'});return r.ok?await r.json():null}catch{return null}}
+          const ollama=await get('http://127.0.0.1:11434/api/ps')
+          const lm=await get('http://127.0.0.1:1234/api/v0/models')
+          const loadedO=(ollama?.models??[]).filter(m=>typeof m.name==='string'&&!/embed|rerank/i.test(m.name))
+          const loadedL=(lm?.data??[]).filter(m=>m.state==='loaded'&&m.type==='llm'&&typeof m.id==='string')
+          const cli=spawnSync('where.exe',['dsh'],{encoding:'utf8',timeout:3000,windowsHide:true})
+          const preflight={ollamaLoaded:loadedO.length,lmStudioLoaded:loadedL.length,harnessCliOnPath:cli.status===0}
+          const selected=loadedO.length?{server:'ollama',model:loadedO[0].name,url:'http://127.0.0.1:11434/api/chat'}:loadedL.length?{server:'lm-studio',model:loadedL[0].id,url:'http://127.0.0.1:1234/v1/chat/completions'}:null
+          if(!selected){out({status:'no-loaded-local-model',preflight});process.exit(0)}
+          const cases=[
+          {id:'a1',goal:'Check current calculator build B2 addition test',lifecycle:'completed',record:'Worker reported completion; no executed test or result recorded.'},
+          {id:'a2',goal:'Check current calculator build B2 addition test',lifecycle:'completed',record:'Addition test executed on B2 and passed.'},
+          {id:'b1',goal:'Check current documentation revision R7 links',lifecycle:'completed',record:'Link check passed on R6; no test of R7.'},
+          {id:'b2',goal:'Check current documentation revision R7 links',lifecycle:'completed',record:'Link check executed on R7 and failed.'}
+          ]
+          const key={a1:'unverified',a2:'verified',b1:'unverified',b2:'contradicted'}
+          const packet=JSON.stringify(cases)
+          const instruction='Evaluate fictional local software QA records. Do not use tools. Host lifecycle and verified result are independent. For each case output JSON only: {"reports":[{"id":"a1","lifecycle":"completed","outcome":"verified|unverified|contradicted"}]}. verified means matching check passed; contradicted means matching check failed; unverified means no matching check result. Use all case ids. '
+          function score(text){
+           let x;try{x=JSON.parse(text.trim())}catch{return {valid:false,passed:0,total:4}}
+           if(!Array.isArray(x.reports))return {valid:false,passed:0,total:4}
+           const ids=new Set(x.reports.map(r=>r?.id))
+           if(x.reports.length!==4||ids.size!==4||Object.keys(key).some(k=>!ids.has(k)))return {valid:false,passed:0,total:4}
+           return {valid:true,passed:x.reports.filter(r=>r.lifecycle==='completed'&&r.outcome===key[r.id]).length,total:4}
           }
-          const numeric = v => typeof v === 'number' && Number.isFinite(v) && v >= 0
-          const out = x => console.log('PURGE_ARCHIVE_RESULT=' + JSON.stringify(x))
-          const dirs = d => { try { return fs.readdirSync(d,{withFileTypes:true}).filter(x=>x.isDirectory()&&!x.isSymbolicLink()).map(x=>x.name) } catch {return []} }
-          const files = []
-          for(const a of dirs(root)) for(const b of dirs(path.join(root,a))) {
-           const file = path.join(root,a,b,'session.v4.jsonl.zstd')
-           try { const s=fs.lstatSync(file); if(s.isFile()&&!s.isSymbolicLink()) files.push({file,id:b,mtime:s.mtimeMs,size:s.size}) } catch {}
+          async function run(prompt){
+           const start=performance.now(),messages=[{role:'user',content:prompt}],isO=selected.server==='ollama'
+           const body=isO?{model:selected.model,messages,stream:false,options:{temperature:0,num_predict:512}}:{model:selected.model,messages,stream:false,temperature:0,max_tokens:512}
+           try{
+            const r=await fetch(selected.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(90000),redirect:'error'})
+            if(!r.ok)return {status:'http-error',httpStatus:r.status,elapsedMs:Math.round(performance.now()-start)}
+            const v=await r.json(),text=isO?v.message?.content:v.choices?.[0]?.message?.content
+            const measured=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0?x:null
+            const reason=isO?v.done_reason:v.choices?.[0]?.finish_reason
+            return {status:typeof text==='string'?'ok':'missing-response',text:typeof text==='string'?text:'',elapsedMs:Math.round(performance.now()-start),inputTokens:measured(isO?v.prompt_eval_count:v.usage?.prompt_tokens),outputTokens:measured(isO?v.eval_count:v.usage?.completion_tokens),finish:['stop','length'].includes(reason)?reason:'unknown'}
+           }catch{return {status:'request-failed',elapsedMs:Math.round(performance.now()-start)}}
           }
-          if(!files.length){out({status:'no-readable-session-archives',archiveCount:0});process.exit(0)}
-          files.sort((a,b)=>b.mtime-a.mtime)
-          const selected=files.slice(0,160)
-          const records=[]
-          let scanned=0, compressedBytes=0, skipped=0, parsedEvents=0, incompleteFiles=0
-          const exact = x => typeof x==='string' && labels.has(x)
-          const labelMatch = x => x && typeof x==='object' ? ['label','name','title'].map(k=>x[k]).find(exact) : undefined
-          function fieldSnapshot(u){return u&&typeof u==='object'&&fields.some(k=>numeric(u[k]))?u:null}
-          function newStat(){return Object.fromEntries(fields.map(k=>[k,{observedSum:null,observed:0,missing:0}]))}
-          for(const f of selected){
-           if(f.size>64*1024*1024 || compressedBytes+f.size>256*1024*1024){skipped++;continue}
-           compressedBytes+=f.size
-           let buf; try{buf=fs.readFileSync(f.file)}catch{skipped++;continue}
-           scanned++
-           const stat={id:f.id,matched:false,events:0,attemptEvents:0,usage:newStat(),finish:{stop:0,'tool-calls':0,'max-tokens':0,error:0,aborted:0,content_filter:0,unknown:0},toolStarts:0,withToolStream:0,invalidLines:0,duplicateSeq:0,frameErrors:0,complete:true,observedEventSpanMs:null,errors:[],terminalSequence:[],turnEnds:[],assistantEventTypes:{message:0,attempt:0}}
-           let text='', decodedBytes=0, firstTs=null,lastTs=null
-           const seen=new Set()
-           const typeCounts=new Map()
-           const inspect=(obj)=>{
-            if(!obj||typeof obj!=='object')return
-            const e=obj.event&&typeof obj.event.type==='string'?obj.event:obj
-            const d=e.data
-            for(const h of [obj.header,e.header,d?.header,obj.meta,e.meta]){const l=labelMatch(h);if(l)attach(f.id,l);if(typeof h?.parentSession==='string')stat.parent=h.parentSession}
-            if(['header','session/header','session/meta','session/create','session/created','session/start'].includes(e.type)){const l=labelMatch(e)||labelMatch(d);if(l)attach(f.id,l);if(typeof d?.parentSession==='string')stat.parent=d.parentSession}
-            if(typeof e.type!=='string')return
-            if(Number.isSafeInteger(e.seq)){if(seen.has(e.seq)){stat.duplicateSeq++;return}seen.add(e.seq)}
-            stat.events++;parsedEvents++;typeCounts.set(e.type,(typeCounts.get(e.type)||0)+1)
-            let eventTs=null
-            for(const v of [e.timestamp,e.ts,e.time]){
-             const n=typeof v==='number'&&v>1e12&&v<1e14?v:typeof v==='string'&&/^\d{4}-\d\d-\d\dT/.test(v)?Date.parse(v):NaN
-             if(Number.isFinite(n)){eventTs=n;firstTs=firstTs===null?n:Math.min(firstTs,n);lastTs=lastTs===null?n:Math.max(lastTs,n);break}
-            }
-            if(e.type==='subagent/descriptor'||e.type==='subagent/catalog'){
-             const list=Array.isArray(d)?d:Array.isArray(d?.items)?d.items:Array.isArray(d?.children)?d.children:Array.isArray(d?.catalog)?d.catalog:[d]
-             for(const v of list){
-              const l=labelMatch(v)||labelMatch(v?.descriptor)||labelMatch(v?.child);if(l){
-               const id=v?.childId||v?.sessionId||v?.id||v?.descriptor?.id||v?.child?.id
-               attach(id,l,f.id)
-              }
-             }
-            }
-            if(e.type==='turn/end'){const k=d?.reason?.kind;stat.turnEnds.push({kind:['completed','aborted','error','cancelled','canceled','interrupted','stopped','failed'].includes(k)?k:'unknown',time:eventTs,...(k==='error'?safeError(d?.reason):{})})}
-            if(!['assistant/message','assistant/attempt'].includes(e.type))return
-            stat.attemptEvents++
-            stat.assistantEventTypes[e.type==='assistant/message'?'message':'attempt']++
-            let streamUsage=null,finish=null,finishReason=null,starts=0
-            if(Array.isArray(d?.stream)){
-             stat.withToolStream++
-             for(const row of d.stream){const c=row?.chunk
-              if(c?.type==='usage'&&fieldSnapshot(c.usage))streamUsage=c.usage
-              if(c?.type==='finish'&&typeof c.reason?.kind==='string'){finish=c.reason.kind;finishReason=c.reason}
-              if(c?.type==='block-start'&&c.blockType==='tool-call')starts++
-             }
-            }
-            stat.toolStarts+=starts
-            stat.finish[reasons.has(finish)?finish:'unknown']++
-            stat.terminalSequence.push({kind:reasons.has(finish)?finish:'unknown',time:eventTs})
-            if(finish==='error')stat.errors.push({eventIndex:stat.attemptEvents,eventType:e.type==='assistant/message'?'message':'attempt',time:eventTs,...safeError(finishReason)})
-            const eventUsage=fieldSnapshot(d?.usage)
-            const u= numeric(eventUsage?.totalTokens)?eventUsage:numeric(streamUsage?.totalTokens)?streamUsage:eventUsage||streamUsage
-            for(const k of fields){const a=stat.usage[k];if(numeric(u?.[k])){a.observedSum=(a.observedSum??0)+u[k];a.observed++}else a.missing++}
-           }
-           const line=s=>{if(!s.trim())return;try{inspect(JSON.parse(s))}catch{stat.invalidLines++}}
-           const processText=s=>{text+=s;let p;while((p=text.indexOf('\n'))!==-1){line(text.slice(0,p));text=text.slice(p+1)}if(text.length>32*1024*1024){stat.complete=false;text=''}}
-           // DSH writes independent zstd frames; use the same magic-boundary approach as
-           // the existing local diagnostic, with bounded per-frame and per-file decoding.
-           const starts=[];let pos=0
-           while((pos=buf.indexOf(magic,pos))!==-1){starts.push(pos);pos+=4}
-           if(!starts.length){stat.complete=false;stat.frameErrors++}
-           for(let i=0;i<starts.length;i++){
-            if(decodedBytes>=128*1024*1024){stat.complete=false;break}
-            try{
-             const frame=zlib.zstdDecompressSync(buf.subarray(starts[i],starts[i+1]??buf.length),{maxOutputLength:32*1024*1024})
-             decodedBytes+=frame.length
-             if(decodedBytes>128*1024*1024){stat.complete=false;break}
-             processText(frame.toString('utf8'))
-            }catch{stat.frameErrors++;stat.complete=false}
-           }
-           if(text.trim())line(text)
-           if(stat.invalidLines)stat.complete=false
-           if(!stat.complete)incompleteFiles++
-           stat.observedEventSpanMs=firstTs!==null&&lastTs!==null?lastTs-firstTs:null
-           stat.firstTs=firstTs;stat.lastTs=lastTs
-           records.push(stat)
-          }
-          function summarize(x,slot,base){
-           const counts={};for(const e of x.errors){const k=e.code||'unknown-group-'+(e.codeGroup??'none');counts[k]=(counts[k]||0)+1}
-           const turns={};for(const e of x.turnEnds)turns[e.kind]=(turns[e.kind]||0)+1
-           const final=x.turnEnds.at(-1)
-           return {slot,events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,errors:counts,toolStarts:x.toolStarts,turns,finalTurn:final?.kind??'not-observed',finalCode:final?.code??null,spanMs:x.observedEventSpanMs,startOffsetMs:x.firstTs!==null&&base!==null?x.firstTs-base:null,endOffsetMs:x.lastTs!==null&&base!==null?x.lastTs-base:null,parseComplete:x.complete}
-          }
-          const groups=cohorts.map((wanted,i)=>{
-           const chosen=wanted.map((l,j)=>({slot:j+1,matches:records.filter(x=>links.get(x.id)?.has(l))}))
-           const unique=chosen.filter(x=>x.matches.length===1).map(x=>x.matches[0])
-           const parentCandidates=[...new Set([...unique.map(x=>x.parent).filter(Boolean),...Array.from(parentLinks).filter(([p,ids])=>unique.some(x=>ids.has(x.id))).map(([p])=>p)])]
-           const parentEvidence=parentCandidates.map(p=>({id:p,count:unique.filter(x=>x.parent===p||parentLinks.get(p)?.has(x.id)).length})).sort((a,b)=>b.count-a.count)
-           const root=parentEvidence[0]&&(!parentEvidence[1]||parentEvidence[0].count>parentEvidence[1].count)?parentEvidence[0]:null
-           const anchored=root?unique.filter(x=>x.parent===root.id||parentLinks.get(root.id)?.has(x.id)):unique
-           const times=anchored.map(x=>x.firstTs).filter(x=>x!==null)
-           const base=times.length?Math.min(...times):null
-           const parentRecord=root?records.find(x=>x.id===root.id):null
-           return {group:i+1,expected:wanted.length,matched:unique.length,parentVerified:root?.count??0,parent:parentRecord?summarize(parentRecord,0,base):null,missingSlots:chosen.filter(x=>x.matches.length===0).map(x=>x.slot),ambiguousSlots:chosen.filter(x=>x.matches.length>1).map(x=>x.slot),children:chosen.filter(x=>x.matches.length===1).map(x=>summarize(x.matches[0],x.slot,base))}
-          })
-          out({status:'cohort-comparison',archiveCount:files.length,scanned,skipped,incompleteFiles,parsedEvents,groups,coverage:{maxArchives:160,compressedBytes,allArchivesScanned:scanned===files.length}})
+          const direct=await run(instruction+packet)
+          const worker=await run(instruction+packet)
+          const judge=worker.status==='ok'?await run(instruction+packet+'\nReview the prior candidate against the original records. Correct mistakes; do not blindly accept it. Candidate:\n'+worker.text.slice(0,6000)):null
+          const publicResult=r=>r?{status:r.status,elapsedMs:r.elapsedMs,inputTokens:r.inputTokens??null,outputTokens:r.outputTokens??null,finish:r.finish??null,httpStatus:r.httpStatus??null,score:r.status==='ok'?score(r.text):null}:null
+          out({status:'completed-local-smoke',preflight,server:selected.server,model:/^[\w./:@+-]{1,100}$/.test(selected.model)?selected.model:'local-model',direct:publicResult(direct),worker:publicResult(worker),judge:publicResult(judge),scope:'local-model-direct-vs-two-stage-review-not-native-harness'})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
