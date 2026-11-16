@@ -146,7 +146,7 @@ test('late durable event cannot borrow the next request provider or model', () =
   assert.equal(current.provider,'new-provider'); assert.equal(current.model,'new-model');
 });
 
-test('only a matched assistant source can refine a captured route and a new attempt without route evidence stays unknown', () => {
+test('only a matched assistant source refines one attempt; unchanged request inherits its logged route', () => {
   const o = createRuntimeObservations(), a = agent('s');
   o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'configured',model:'requested'}}}});
   start(o,a);
@@ -156,8 +156,8 @@ test('only a matched assistant source can refine a captured route and a new atte
   assert.equal(row.model,'requested'); assert.equal(row.modelSource,'request-header');
   end(o,a,0);
   o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:2,step:1}});
-  assert.equal(o.snapshot().items[0].provider,null);
-  assert.equal(o.snapshot().items[0].model,null);
+  assert.equal(o.snapshot().items[0].provider,'configured');
+  assert.equal(o.snapshot().items[0].model,'requested');
 });
 
 
@@ -234,4 +234,257 @@ test('empty usage and incomplete finish records do not erase earlier evidence', 
   const r=o.snapshot().items[0];assert.equal(r.usage.totalTokens,0);
   assert.equal(r.usageSource,'durable-stream');assert.equal(r.finish,'stop');
   assert.equal(r.reasonSource,'durable-stream');
+});
+
+function assessmentFixture({ task = 'Summarize this document.', text = 'I cannot assist with this request.', finish = 'stop', interrupted = false, lateFinish = false, captureHuman = true } = {}) {
+  const o = createRuntimeObservations(), a = agent('assessment');
+  const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: task } };
+  a.session.events = captureHuman ? [human] : [];
+  o.event(a.session, human); start(o, a);
+  if (finish && !lateFinish) chunk(o, a, 0, { type: 'finish', reason: { kind: finish } });
+  o.event(a.session, { seq: 2, type: 'assistant/message', data: { turn: 1, step: 1, interrupted, message: { content: text } } });
+  o.event(a.session, { seq: 3, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+  if (finish && lateFinish) chunk(o, a, 0, { type: 'finish', reason: { kind: finish } });
+  return { o, a };
+}
+
+test('complete observed response has a text assessment but no verified delivery', () => {
+  const { o } = assessmentFixture();
+  const row = o.snapshot().items[0];
+  assert.equal(row.assessment.decision, 'refusal');
+  assert.equal(row.assessment.delivery, 'not-verified');
+  assert.doesNotMatch(JSON.stringify(row), /Summarize this document|I cannot assist/);
+});
+
+test('a completed turn cannot turn failed, partial, or tool-call attempts into a refusal verdict', () => {
+  for (const finish of ['error', 'aborted', 'max-tokens', 'tool-calls', 'content_filter', 'unknown-kind', null]) {
+    const { o } = assessmentFixture({ finish });
+    const a = o.snapshot().items[0].assessment;
+    assert.equal(a.decision, 'uncertain', String(finish));
+    assert.equal(a.scope, 'none');
+    assert.equal(a.delivery, 'not-verified');
+  }
+  const { o } = assessmentFixture({ interrupted: true });
+  assert.equal(o.snapshot().items[0].assessment.decision, 'uncertain');
+});
+
+test('late terminal evidence updates the projection without changing the response or hiding the original finish', () => {
+  for (const finish of ['stop', 'error', 'content_filter']) {
+    const { o } = assessmentFixture({ finish, lateFinish: true });
+    const row = o.snapshot().items[0];
+    assert.equal(row.finish, finish);
+    assert.equal(row.assessment.decision, finish === 'stop' ? 'refusal' : 'uncertain');
+  }
+});
+
+test('conflicting live and durable evidence and missing task context remain unknown', () => {
+  const { o, a } = assessmentFixture();
+  chunk(o, a, 1, { type: 'finish', reason: { kind: 'error' } });
+  assert.equal(o.snapshot().items[0].terminalConflict, true);
+  assert.equal(o.snapshot().items[0].assessment.decision, 'uncertain');
+  const missing = assessmentFixture({ captureHuman: false }).o.snapshot().items[0];
+  assert.equal(missing.assessment.decision, 'uncertain');
+  assert.deepEqual(missing.assessment.reasonCodes, ['missing-task-context']);
+});
+
+test('older attempts in the same turn do not become final response assessments', () => {
+  const { o, a } = assessmentFixture();
+  o.frame({ agent: a, frame: { type: 'start', revision: 3, attemptId: 's:2', turn: 1, step: 2 } });
+  const previous = o.snapshot().items[1];
+  assert.equal(previous.assessment.decision, 'uncertain');
+  assert.deepEqual(previous.assessment.reasonCodes, ['superseded-attempt']);
+});
+
+test('late mount recovers a pending human request from an existing session snapshot', () => {
+  const o = createRuntimeObservations(), a = agent('late-mount');
+  const human = { seq: 10, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+  a.session.events = [{ seq: 9, type: 'turn/end', data: { reason: { kind: 'completed' } } }, human];
+  start(o, a);
+  chunk(o, a, 0, { type: 'finish', reason: { kind: 'stop' } });
+  o.event(a.session, { seq: 11, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Result.' } } });
+  o.event(a.session, { seq: 12, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.humanSeqAtStart, 10);
+  assert.equal(row.humanSourceAtStart, 'session-snapshot');
+  assert.equal(row.taskContextAtResponse, 'present');
+  assert.equal(row.assessment.decision, 'not-refusal');
+  assert.doesNotMatch(JSON.stringify(row), /PRIVATE TASK|Result\./);
+});
+
+test('late mount does not borrow a completed historical request or a plugin notice', () => {
+  const o = createRuntimeObservations(), a = agent('completed-history');
+  a.session.events = [
+    { seq: 10, type: 'user/message', data: { source: { kind: 'human' }, content: 'Old task.' } },
+    { seq: 11, type: 'turn/end', data: { reason: { kind: 'completed' } } },
+    { seq: 12, type: 'user/message', data: { source: { kind: 'plugin' }, content: 'Notice.' } },
+  ];
+  start(o, a);
+  const row = o.snapshot().items[0];
+  assert.equal(row.humanSeqAtStart, 0);
+  assert.equal(row.humanSourceAtStart, 'not-observed');
+});
+
+test('compaction evidence distinguishes present from missing task context without inferring model context loss', () => {
+  for (const keep of [true, false]) {
+    const o = createRuntimeObservations(), a = agent('compact');
+    const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+    a.session.events = [human];
+    o.event(a.session, human);
+    o.event(a.session, { seq: 2, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    start(o, a);
+    chunk(o, a, 0, { type: 'finish', reason: { kind: 'stop' } });
+    o.event(a.session, { seq: 3, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    if (!keep) a.session.events = [{ seq: 3, type: 'compaction/end', data: {} }];
+    o.event(a.session, { seq: 4, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done.' } } });
+    o.event(a.session, { seq: 5, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSourceAtStart, 'session-event');
+    assert.equal(row.compactionSeqAtStart, 2);
+    assert.equal(row.compactionSeqAtResponse, 3);
+    assert.equal(row.taskContextAtResponse, keep ? 'present' : 'missing');
+    assert.equal(row.assessment.decision, keep ? 'not-refusal' : 'uncertain');
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+  }
+});
+
+test('unavailable session snapshot and newer observed task never borrow older task text', () => {
+  for (const unavailable of [true, false]) {
+    const o = createRuntimeObservations(), a = agent('missing');
+    const previous = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'Previous.' } };
+    const current = { seq: 2, type: 'user/message', data: { source: { kind: 'human' }, content: 'Current.' } };
+    a.session.events = [previous];
+    if (unavailable) a.session.snapshotEvents = () => { throw new Error('Unavailable'); };
+    o.event(a.session, previous); o.event(a.session, current);
+    start(o, a);
+    chunk(o, a, 0, { type: 'finish', reason: { kind: 'stop' } });
+    o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done.' } } });
+    o.event(a.session, { seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSeqAtStart, 2);
+    assert.equal(row.taskContextAtResponse, unavailable ? 'unavailable' : 'missing');
+    assert.equal(row.assessment.decision, 'uncertain');
+  }
+});
+
+test('unchanged requests inherit official recorded capacity and output envelope', () => {
+  const o=createRuntimeObservations(), a=agent('budget');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'qwen',maxTokens:4096}}}});
+  o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'qwen',contextWindow:32768}});
+  start(o,a);
+  chunk(o,a,0,{type:'usage',usage:{inputTokens:20000,cacheReadTokens:3000,cacheWriteTokens:1000,outputTokens:999,totalTokens:24999}});
+  end(o,a,1);
+  const first=o.snapshot().items[0];
+  assert.equal(first.contextBudget.messageBudgetTokens,28672);
+  assert.equal(first.contextBudget.promptTokens,24000);
+  assert.equal(first.contextBudget.promptTokensSource,'host-stream');
+  assert.equal(first.contextBudget.status,'within-declared-budget');
+  assert.equal(first.requestHeaderSeq,1);assert.equal(first.requestContextSeq,2);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:4,turn:2,step:1}});
+  const next=o.snapshot().items[0];
+  assert.equal(next.provider,'local');assert.equal(next.model,'qwen');
+  assert.equal(next.contextBudget.contextWindow,32768);
+  assert.equal(next.contextBudget.requestMaxTokens,4096);
+  assert.equal(next.contextBudget.promptTokens,null);
+  assert.equal(next.contextBudget.status,'insufficient-evidence');
+});
+
+test('new envelope or route cannot leak previous capacity and prior rows stay unchanged', () => {
+  const o=createRuntimeObservations(),a=agent('route-change');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'a',maxTokens:1024}}}});
+  o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'a',contextWindow:32768}});
+  start(o,a);end(o,a,0);
+  o.event(a.session,{seq:3,type:'request/header',data:{header:{config:{provider:'local',model:'b',maxTokens:2048}}}});
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:2,step:1}});
+  const [next,previous]=o.snapshot().items;
+  assert.equal(next.contextWindow,null);assert.equal(next.requestMaxTokens,2048);
+  assert.equal(previous.contextWindow,32768);assert.equal(previous.model,'a');
+  o.event(a.session,{seq:4,type:'request/context',data:{provider:'local',model:'b',contextWindow:16384}});
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:3',revision:4,turn:3,step:1}});
+  assert.equal(o.snapshot().items[0].contextWindow,16384);
+  o.event(a.session,{seq:5,type:'request/context',data:{provider:'local',model:'b'}});
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:4',revision:5,turn:4,step:1}});
+  assert.equal(o.snapshot().items[0].contextWindow,null);
+});
+
+test('context budgets distinguish reservation errors, measured pressure, and unknown values', () => {
+  for (const [window,output,input,expected] of [
+    [32768,32768,100,'no-message-budget'],
+    [32768,4096,64393,'observed-prompt-over-window'],
+    [32768,4096,30000,'observed-prompt-over-budget'],
+    [32768,null,64393,'observed-prompt-over-window'],
+    [32768,null,100,'insufficient-evidence'],
+    [null,4096,100,'insufficient-evidence'],
+    [32768,4096,null,'insufficient-evidence'],
+  ]) {
+    const o=createRuntimeObservations(),a=agent('pressure');
+    o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'a',maxTokens:output}}}});
+    o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'a',contextWindow:window}});
+    start(o,a);
+    chunk(o,a,0,{type:'usage',usage:{inputTokens:input,totalTokens:999}});
+    assert.equal(o.snapshot().items[0].contextBudget.status,expected);
+  }
+});
+
+test('an observed assistant route conflict invalidates the capacity for that attempt only', () => {
+  const o=createRuntimeObservations(),a=agent('route-conflict');
+  o.event(a.session,{seq:1,type:'request/header',data:{header:{config:{provider:'local',model:'a',maxTokens:1024}}}});
+  o.event(a.session,{seq:2,type:'request/context',data:{provider:'local',model:'a',contextWindow:32768}});
+  start(o,a);
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{source:{provider:'other',model:'b'}}}});
+  const row=o.snapshot().items[0];
+  assert.equal(row.model,'b');assert.equal(row.contextBudget.contextWindow,null);
+  assert.equal(row.contextBudget.messageBudgetTokens,null);
+  assert.equal(row.contextBudget.status,'insufficient-evidence');
+});
+
+test('native tool results pair with committed requests and distinguish recovery outcomes', () => {
+  const o = createRuntimeObservations(), a = agent('tools');
+  start(o,a);
+  chunk(o,a,0,{type:'block-start',blockType:'tool-call'});
+  chunk(o,a,1,{type:'finish',reason:{kind:'tool-calls'}});
+  const ids=['private-a','private-b','private-c','private-d','private-e','private-f'];
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{content:ids.map(id=>({type:'tool-call',id,name:'PRIVATE NAME',arguments:'PRIVATE ARGS'}))}}});
+  const call=(seq,id)=>o.event(a.session,{seq,type:'tool/call',data:{turn:1,step:1,callId:id,arguments:'PRIVATE ARGS'}});
+  const result=(seq,id,code)=>o.event(a.session,{seq,type:'tool/result',data:{turn:1,step:1,message:{toolCallId:id,source:{kind:'tool',callId:id},isError:!!code,content:'PRIVATE RESULT'},...(code?{error:{code,reason:'PRIVATE REASON'}}:{})}});
+  call(3,ids[0]);call(4,ids[1]);call(5,ids[2]);call(6,ids[5]);
+  result(7,ids[1],'TOOL_OUTCOME_UNKNOWN');result(8,ids[0]);result(9,ids[3],'TOOL_NOT_STARTED');result(10,ids[2],'EXECUTION_ERROR');
+  result(11,ids[4],'ABORTED_BEFORE_DISPATCH');
+  const row=o.snapshot().items[0];
+  assert.deepEqual(row.toolEvidence,{requested:6,recorded:4,results:5,nonErrorResults:1,errors:1,notStarted:2,outcomeUnknown:1,unresolved:1,conflicts:0});
+  assert.equal(row.toolCalls,1);
+  assert.equal(row.assessment.delivery,'not-verified');
+  assert.doesNotMatch(JSON.stringify(row),/private-[a-f]|PRIVATE/);
+  row.toolEvidence.results=99;
+  assert.equal(o.snapshot().items[0].toolEvidence.results,5);
+});
+
+test('late tool results remain on their original request and ambiguous ids stay unassigned', () => {
+  const o=createRuntimeObservations(),a=agent('tools-late');
+  const request={type:'tool-call',id:'same',name:'fixture',arguments:'{}'};
+  start(o,a);
+  o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{content:[request]}}});
+  o.event(a.session,{seq:3,type:'tool/call',data:{turn:1,step:1,callId:'same'}});
+  end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:2}});
+  o.event(a.session,{seq:4,type:'assistant/message',data:{turn:1,step:2,message:{content:[request]}}});
+  o.event(a.session,{seq:5,type:'tool/result',data:{turn:1,step:1,message:{toolCallId:'same'}}});
+  let [next,previous]=o.snapshot().items;
+  assert.equal(previous.toolEvidence.results,1);
+  assert.equal(next.toolEvidence.results,0);
+  o.event(a.session,{seq:6,type:'tool/result',data:{turn:1,step:2,callId:'different',message:{toolCallId:'same'}}});
+  assert.equal(o.snapshot().items[0].toolEvidence.results,0);
+  o.event(a.session,{seq:7,type:'tool/result',data:{turn:1,step:1,message:{toolCallId:'same',isError:true},error:{code:'OTHER'}}});
+  previous=o.snapshot().items[1];
+  assert.equal(previous.toolEvidence.results,1);
+  assert.equal(previous.toolEvidence.conflicts,1);
+  assert.equal(previous.toolEvidence.nonErrorResults,0);
+});
+
+test('missing assistant tool content remains unknown; no tools is observed only for an actual block array', () => {
+  for (const [content,expected] of [[undefined,null],[[],0]]) {
+    const o=createRuntimeObservations(),a=agent('unknown-tools');start(o,a);
+    o.event(a.session,{seq:2,type:'assistant/message',data:{turn:1,step:1,message:{content}}});
+    const evidence=o.snapshot().items[0].toolEvidence;
+    assert.equal(evidence===null?null:evidence.requested,expected);
+  }
 });
