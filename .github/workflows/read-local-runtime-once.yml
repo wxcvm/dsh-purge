@@ -1,4 +1,4 @@
-name: DeepSeek native QA entrypoint preflight
+name: Verify DeepSeek route for native QA
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -7,12 +7,12 @@ permissions:
 jobs:
   preflight:
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 3
+    timeout-minutes: 2
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Check existing native CLI help without inference
+      - name: Inspect supported options and non-secret route fields
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -22,13 +22,23 @@ jobs:
           import os from 'node:os'
           import {spawnSync} from 'node:child_process'
           const home=process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh')
-          const profiles=['tui','desktop','web','default','codex-review','headless'].filter(p=>fs.existsSync(path.join(home,'profiles',p)))
-          const help=[]
-          for(const profile of profiles.filter(p=>['tui','desktop','default','codex-review','headless'].includes(p))){
-           const r=spawnSync('cmd.exe',['/d','/s','/c','dsh --profile '+profile+' --help'],{encoding:'utf8',timeout:12000,windowsHide:true,maxBuffer:2*1024*1024})
-           const lines=(r.stdout||'').split(/\r?\n/).filter(l=>/usage:|commands:|options:|--help|--model|--profile|--preset|--prompt|--json|--print|--output|--session|--agent|--cwd|--non-interactive|--headless|--message|--query|^\s+(?:run|chat|exec|agent|session|help)\b/i.test(l)).map(l=>l.slice(0,220)).slice(0,45)
-           help.push({profile,exit:r.status,help:lines})
+          const dir=path.join(home,'profiles','headless')
+          const exists=p=>{try{return fs.statSync(p).isFile()}catch{return false}}
+          const r=spawnSync('cmd.exe',['/d','/s','/c','dsh --profile headless --help'],{encoding:'utf8',timeout:12000,windowsHide:true,maxBuffer:2*1024*1024})
+          const lines=(r.stdout||'').split(/\r?\n/).filter(l=>/^\s*(?:Usage:|Options:|Examples:|-[\w-]|dsh --profile headless)/.test(l)).map(l=>l.slice(0,230)).slice(0,65)
+          const routeHints=[]
+          for(const profile of ['headless','desktop','default']){
+           const d=path.join(home,'profiles',profile)
+           for(const name of ['cordis.yml','cordis.yaml','cordis.patch.yml','cordis.patch.yaml','config.json','settings.json']){
+            const p=path.join(d,name)
+            if(!exists(p))continue
+            const s=fs.readFileSync(p,'utf8')
+            // Report only explicit model/provider field matches, never config text or credentials.
+            const models=[...s.matchAll(/(?:^|\n)\s*["']?(?:model|defaultModel|modelId)["']?\s*:\s*["']?([a-zA-Z0-9_./:@+-]{1,100})/g)].map(m=>m[1]).filter(x=>/^(?:deepseek(?:[./:-][a-z0-9_.:-]+)?|qwen[a-z0-9_.:-]*|glm[a-z0-9_.:-]*)$/i.test(x))
+            const providers=[...s.matchAll(/(?:^|\n)\s*["']?(?:provider|defaultProvider|providerId)["']?\s*:\s*["']?([a-zA-Z0-9_./:@+-]{1,100})/g)].map(m=>m[1]).filter(x=>/^(?:deepseek|deepseek-ai|openai|zhipu|ollama|lm-studio|lmstudio)$/i.test(x))
+            routeHints.push({profile,file:name,models:[...new Set(models)],providers:[...new Set(providers)]})
+           }
           }
-          console.log('PURGE_NATIVE_PREFLIGHT='+JSON.stringify({profiles,help}))
+          console.log('PURGE_ROUTE_PREFLIGHT='+JSON.stringify({helpExit:r.status,help:lines,routeHints,headlessProfilePresent:fs.existsSync(dir)}))
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
