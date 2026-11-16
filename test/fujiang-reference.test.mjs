@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadFujiangReferences } from '../lib/redteam/fujiang-reference.js'
-import { loadCveCatalog } from '../lib/redteam/cve-knowledge.js'
+import { loadCveCatalog, matchCveCandidates } from '../lib/redteam/cve-knowledge.js'
 import { listBundledKnowledge, getBundledKnowledge } from '../lib/redteam/knowledge-bundled.js'
 
 test('all original archive knowledge filenames are represented once, with nine reconstructed category guides', () => {
@@ -184,4 +184,32 @@ test('Confluence and ActiveMQ source claims do not override corrected branch bou
   const mq=getBundledKnowledge('fujiang:java-web:cve-2023-46604-activemq-openwire')
   assert.match(mq.body,/5\.15\.16 之前/)
   assert.match(mq.body,/Apache Software Foundation CNA 评分为 10\.0/)
+})
+
+
+test('Fortinet edge advisories retain original claims and corrected product-specific scope', () => {
+  const get = name => getBundledKnowledge('fujiang:edge-device:' + name)
+  const fortios = get('cve-2018-13379-fortinet-fortios')
+  assert.match(fortios.body, /5\.4\.6–5\.4\.12/)
+  assert.match(fortios.body, /原始版本声明.*5\.4\.0-5\.4\.12/)
+  assert.match(fortios.body, /FortiProxy/)
+  const mfa = get('cve-2020-12812-fortios-2fa-case-bypass')
+  assert.match(mfa.body, /LDAP/)
+  assert.match(mfa.body, /6\.0\.10/)
+  const ems = get('cve-2023-48788-forticlient-ems-sqli')
+  assert.match(ems.body, /7\.0\.11/)
+  assert.match(ems.body, /7\.2\.3/)
+  const manager = get('cve-2024-47575-fortimanager-fortijump')
+  assert.match(manager.body, /7\.2\.8/)
+  assert.match(manager.body, /7\.4\.5/)
+  assert.match(manager.body, /Cloud 7\.6 不受影响/)
+  assert.match(manager.body, /6\.2\.13/)
+  assert.ok([fortios, mfa, ems, manager].every(row => row.verified === false))
+  const versionStatus = (cve, version) => matchCveCandidates({cve, version}).items[0].version_applicability.status
+  assert.equal(versionStatus('CVE-2020-12812', '6.2.3'), 'affected')
+  assert.equal(versionStatus('CVE-2020-12812', '6.2.4'), 'not_affected')
+  assert.equal(versionStatus('CVE-2023-48788', '7.0.10'), 'affected')
+  assert.equal(versionStatus('CVE-2023-48788', '7.0.11'), 'not_affected')
+  assert.equal(versionStatus('CVE-2024-47575', '7.6.0'), 'unknown')
+  assert.equal(versionStatus('CVE-2018-13379', '5.4.12'), 'unknown')
 })
