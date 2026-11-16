@@ -123,7 +123,7 @@ test('bundled pagination and related references are stable', () => {
   assert.equal(first.hasMore,true); assert.equal(second.hasMore,true)
   assert.equal(second.items.length,20); assert.equal(second.offset,20)
   const pages = []
-  for (let offset=0; offset<first.total; offset+=20) pages.push(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',offset}))
+  for (let offset=0; offset<first.total; offset+=20) pages.push(call({op:'knowledgeUnifiedSearch',source:'bundled',query:'',offset}).groups[0])
   assert.equal(pages.at(-1).hasMore,false)
   assert.equal(pages.at(-1).items.length,6)
   assert.equal(new Set(pages.flatMap(page=>page.items.map(row=>row.id))).size,206)

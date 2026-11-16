@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { loadFujiangReferences } from '../lib/redteam/fujiang-reference.js'
 import { loadCveCatalog } from '../lib/redteam/cve-knowledge.js'
 import { listBundledKnowledge, getBundledKnowledge } from '../lib/redteam/knowledge-bundled.js'
@@ -9,6 +10,9 @@ test('all original archive knowledge filenames are represented once, with nine r
   assert.equal(rows.length, 176)
   assert.equal(new Set(rows.map(r=>r.id)).size,176)
   assert.equal(new Set(rows.map(r=>r.source_ref)).size,176)
+  const originalPaths = readFileSync(new URL('./fixtures/fujiang-source-paths.txt', import.meta.url), 'utf8').trim().split(/\r?\n/).sort()
+  assert.deepEqual(rows.map(r=>r.source_ref).sort(),originalPaths)
+  assert.equal(rows.filter(r=>r.body.includes('原包参考资料')).length,164)
   const counts = Object.fromEntries(['cloud-container','edge-device','exchange-ad','gray-market','java-deser','java-web','linux-priv','triage','web-cms'].map(category=>[category,rows.filter(r=>r.fujiang_category===category).length]))
   assert.deepEqual(counts,{'cloud-container':15,'edge-device':17,'exchange-ad':15,'gray-market':60,'java-deser':10,'java-web':23,'linux-priv':12,'triage':4,'web-cms':20})
   for (const row of loadCveCatalog()) {
