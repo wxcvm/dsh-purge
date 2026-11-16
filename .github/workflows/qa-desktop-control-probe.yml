@@ -1,4 +1,4 @@
-name: QA Desktop Direct Evaluation Focused Menu
+name: QA Desktop Direct Evaluation Foreground
 on:
   pull_request:
     types: [synchronize]
@@ -93,6 +93,19 @@ jobs:
             $fg=[QaDesktopMouse]::GetForegroundWindow()
             return ($fg -ne [IntPtr]::Zero -and [QaDesktopMouse]::GetAncestor($fg,2) -eq [QaDesktopMouse]::GetAncestor($handle,2))
           }
+          function Activate-Harness {
+            if(App-Foreground){return $true}
+            if([QaDesktopMouse]::IsIconic($handle)){[void][QaDesktopMouse]::ShowWindowAsync($handle,9);Start-Sleep -Milliseconds 300}
+            $activated=$false
+            try{
+              $shell=New-Object -ComObject WScript.Shell
+              $activated=[bool]$shell.AppActivate([int]$windows[0].Id)
+              Start-Sleep -Milliseconds 400
+            }catch{}
+            if(-not (App-Foreground)){[void][QaDesktopMouse]::SetForegroundWindow($handle);Start-Sleep -Milliseconds 350}
+            [ordered]@{stage='desktop-activation';appActivate=$activated;foreground=(App-Foreground);foregroundWindowPresent=([QaDesktopMouse]::GetForegroundWindow() -ne [IntPtr]::Zero)}|ConvertTo-Json -Compress|Write-Host
+            return (App-Foreground)
+          }
           function Focus-Verified($element) {
             if(-not (Is-Visible $element)){return $false}
             if([QaDesktopMouse]::IsIconic($handle)){[void][QaDesktopMouse]::ShowWindowAsync($handle,9);Start-Sleep -Milliseconds 300}
@@ -115,7 +128,7 @@ jobs:
           }
           function Click-Verified($element) {
             if (-not (Is-Visible $element)) { return $false }
-            if(-not (App-Foreground)){try{$element.SetFocus()}catch{};[void][QaDesktopMouse]::SetForegroundWindow($handle);Start-Sleep -Milliseconds 250}
+            if(-not (App-Foreground)){[void](Activate-Harness)}
             $b=$element.Current.BoundingRectangle
             $x=[int]($b.Left+$b.Width/2);$y=[int]($b.Top+$b.Height/2)
             $nativeHit=[QaDesktopMouse]::WindowFromPoint([QaDesktopMouse+Point]::new($x,$y))
@@ -165,6 +178,7 @@ jobs:
             return $null
           }
           $modeSelected=$false
+          $foregroundReady=Activate-Harness
           $pickers=@(Get-PresetSeat)
           if($pickers.Count -eq 1){
             $picker=$pickers[0]
@@ -181,8 +195,12 @@ jobs:
                 $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
                 $before=$null
                 if($null -ne $exp){
-                  try{$before=[string]$exp.Current.ExpandCollapseState;if($exp.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$exp.Collapse();Start-Sleep -Milliseconds 300};$exp.Expand()}catch{}
+                  try{$before=[string]$exp.Current.ExpandCollapseState;if($exp.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$exp.Collapse();Start-Sleep -Milliseconds 300}}catch{}
                 }
+                $nativeOpened=$false
+                if($foregroundReady){$nativeOpened=Click-Verified $picker}
+                if(-not $nativeOpened -and $null -ne $exp){try{$exp.Expand()}catch{}}
+                [ordered]@{stage='preset-open-method';nativeClick=$nativeOpened;foreground=(App-Foreground)}|ConvertTo-Json -Compress
                 Start-Sleep -Milliseconds 450
                 try{$picker.SetFocus()}catch{}
                 $red=Wait-RedMenuItem 18
@@ -192,7 +210,10 @@ jobs:
               }
               if($null -ne $red){
                 [ordered]@{stage='preset-menu';options=(Describe-Labels @($red) 'preset')}|ConvertTo-Json -Depth 6 -Compress
-                (Get-Pattern $red ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+                $nativeSelected=$false
+                if($foregroundReady){$nativeSelected=Click-Verified $red}
+                if(-not $nativeSelected){(Get-Pattern $red ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
+                [ordered]@{stage='preset-select-method';nativeClick=$nativeSelected;foreground=(App-Foreground)}|ConvertTo-Json -Compress
                 for($i=0;$i -lt 24;$i++){
                   $seat=@(Get-PresetSeat)
                   if($seat.Count -eq 1 -and $seat[0].Current.Name -match $redPattern){$modeSelected=$true;break}
