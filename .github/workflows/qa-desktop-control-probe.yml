@@ -1,0 +1,46 @@
+name: QA Desktop Direct Control Probe
+on:
+  pull_request:
+    types: [synchronize]
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 3
+    steps:
+      - name: Check interactive Desktop access without reading conversations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $self = Get-Process -Id $PID
+          $desktop = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like '*DeepSeek*Harness*' -or $_.ProcessName -eq 'DeepSeek Harness' })
+          $windows = @($desktop | Where-Object { $_.MainWindowHandle -ne 0 })
+          $report = [ordered]@{ runnerSession = $self.SessionId; interactive = [Environment]::UserInteractive; harnessProcesses = $desktop.Count; harnessSessions = @($desktop | Select-Object -ExpandProperty SessionId -Unique); visibleWindows = $windows.Count; sameSessionWindows = @($windows | Where-Object { $_.SessionId -eq $self.SessionId }).Count }
+          $report | ConvertTo-Json -Compress
+          if ($report.sameSessionWindows -eq 0) { return }
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          $window = $windows | Where-Object { $_.SessionId -eq $self.SessionId } | Select-Object -First 1
+          $root = [System.Windows.Automation.AutomationElement]::FromHandle($window.MainWindowHandle)
+          $controls = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+          $safe = @()
+          foreach($c in $controls) {
+            try {
+              $type = $c.Current.ControlType.ProgrammaticName
+              $name = $c.Current.Name
+              $id = $c.Current.AutomationId
+              if ($type -in @('ControlType.Button','ControlType.MenuItem','ControlType.TabItem','ControlType.Edit','ControlType.ComboBox') -and $name -match '^(新建(对话|会话|聊天)?|New (Chat|Conversation|Session)|发送|Send|Redteam|红队(模式)?|Max|完全权限|Full access|DeepSeek( V4\.1)? Flash|多智能体协作|打开工作区|Open workspace|Select workspace|选择工作区)([ .…:：]+.*)?$') {
+                $safe += [ordered]@{ type = $type; name = ($name -split '[\r\n]')[0].Substring(0,[Math]::Min($name.Length,80)); invoke = $c.IsInvokePatternAvailable; value = $c.IsValuePatternAvailable; enabled = $c.Current.IsEnabled }
+              }
+            } catch {}
+          }
+          [ordered]@{ stage='desktop-uia'; controlCount=$controls.Count; knownControls=$safe; noTaskSubmitted=$true } | ConvertTo-Json -Depth 5 -Compress
+          # Inspect only plugin names, never configuration values or credentials.
+          $homeDir = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $env:USERPROFILE '.dsh' }
+          $patch = Join-Path $homeDir 'profiles/desktop/cordis.patch.yml'
+          if (Test-Path $patch) {
+            $raw = Get-Content -LiteralPath $patch -Raw
+            [ordered]@{ stage='api-plugin-presence'; externalApiPlugin=($raw -match '(?im)^\s*(?:name|id):\s*[''"]?(?:dsh-api(?:-gateway)?|@[^/\s]+/dsh-api(?:-gateway)?)[''"]?\s*$'); remoteAccessDeclared=($raw -match '(?im)^\s*id:\s*remote-access\s*$') } | ConvertTo-Json -Compress
+          }
