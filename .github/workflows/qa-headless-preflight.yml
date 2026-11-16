@@ -1,7 +1,7 @@
 name: QA Desktop Native Archive Review
 on:
   pull_request:
-    types: [reopened]
+    types: [synchronize, reopened]
 permissions:
   contents: read
 jobs:
