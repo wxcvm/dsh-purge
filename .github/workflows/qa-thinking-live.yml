@@ -1,0 +1,27 @@
+name: QA Thinking Desktop One Pair
+on:
+  push:
+    branches: [robin/qa-thinking-live-20261116]
+permissions:
+  contents: read
+jobs:
+  one-pair:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run baseline in fresh Desktop conversation
+        env:
+          QA_GROUP: A
+        shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
+        run: ./scripts/qa-thinking-live.ps1
+      - name: Run checkpoint arm in another fresh Desktop conversation
+        env:
+          QA_GROUP: B
+        shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
+        run: ./scripts/qa-thinking-live.ps1
