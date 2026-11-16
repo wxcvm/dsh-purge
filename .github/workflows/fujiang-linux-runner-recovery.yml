@@ -12,58 +12,50 @@ jobs:
     runs-on: [self-hosted, Windows, X64, purge-ci]
     timeout-minutes: 5
     steps:
-      - name: Inspect WSL and resume the existing repository runner
+      - name: Inspect existing WSL runner connectivity
         shell: pwsh
         run: |
-          wsl.exe --list --verbose
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $script = @'
           set -eu
           dir="$HOME/actions-runner"
-          if [ ! -f "$dir/.runner" ] || [ ! -x "$dir/run.sh" ]; then
-            echo "No configured runner at the expected path in the default WSL distro."
-            exit 2
-          fi
-          # Read only the repository URL, never credentials or tokens.
-          python3 -c 'import json,sys; x=json.load(open(sys.argv[1], encoding="utf-8-sig")); sys.exit(0 if x.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge" else 1)' "$dir/.runner" || {
-            echo "Runner belongs to another repository or could not be identified; leaving it unchanged."
-            exit 3
-          }
           cd "$dir"
-          running() {
-            for pid in $(pgrep -x Runner.Listener || true); do
-              if [ "$(readlink "/proc/$pid/exe" 2>/dev/null || true)" = "$dir/bin/Runner.Listener" ]; then
-                return 0
-              fi
-            done
-            return 1
+          python3 - <<'PY'
+          import json, glob, os, re
+          d=json.load(open(".runner", encoding="utf-8-sig"))
+          print("Runner repo matches:", d.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge")
+          print("Runner name:", d.get("agentName","unknown"))
+          print("Pool name:", d.get("poolName","unknown"))
+          print("Local labels:", d.get("labels","not stored in local settings"))
+          logs=sorted(glob.glob("_diag/Runner_*.log"),key=os.path.getmtime)
+          patterns={
+            "listening":r"Listening for Jobs",
+            "connected":r"Connected to GitHub",
+            "session_conflict":r"already has an active session|session.*conflict",
+            "authentication_error":r"Unauthorized|401 Unauthorized|403 Forbidden|invalid.*credential",
+            "network_error":r"Name or service not known|Connection refused|connection reset|timed out|SSL connection|certificate verify|NameResolution|HttpRequestException",
+            "registration_error":r"runner.*not found|agent.*not found|runner.*removed|RunnerNotFound|AgentNotFound",
+            "job_received":r"Running job:|Job request received",
           }
-          if running; then
-            echo "The existing Linux runner is already running."
-            exit 0
-          fi
-          if [ -f .service ]; then
-            unit=$(cat .service)
-            case "$unit" in
-              actions.runner.wxcvm-dsh-purge.*.service) ;;
-              *) echo "Unexpected service name; no changes made."; exit 4 ;;
-            esac
-            if ! systemctl is-active --quiet "$unit"; then
-              sudo -n systemctl start "$unit"
-            fi
-          else
-            mkdir -p _diag
-            nohup setsid ./run.sh </dev/null >_diag/purge-ci-recovery.log 2>&1 &
-          fi
-          for i in $(seq 1 15); do
-            if running; then
-              echo "Existing Linux runner listener is running; GitHub connectivity is verified separately."
-              exit 0
-            fi
-            sleep 1
+          if logs:
+            p=logs[-1]
+            print("Latest runner log age seconds:",int(__import__("time").time()-os.path.getmtime(p)))
+            events=[]
+            for line in open(p,encoding="utf-8",errors="replace"):
+              for key,pattern in patterns.items():
+                if re.search(pattern,line,re.I):
+                  timestamp=re.search(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}",line)
+                  events.append((timestamp.group(0) if timestamp else "unknown-time",key))
+            for t,k in events[-20:]: print("Runner event:",t,k)
+          else: print("No runner diagnostic logs")
+          PY
+          echo "Listener PID(s):"
+          pgrep -x Runner.Listener || true
+          echo "GitHub connectivity:"
+          for url in https://github.com https://api.github.com https://pipelines.actions.githubusercontent.com; do
+            printf '%s ' "$url"
+            curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code}\n' "$url" || true
           done
-          echo "Runner listener not observed after startup; inspect its local diagnostic logs."
-          exit 5
+          exit 0
           '@
           $script = $script.Replace("`r", "")
           wsl.exe --exec bash -lc $script
