@@ -154,7 +154,7 @@ test("anchorText：交付优先但保留安全、授权与宿主边界", () => {
   assert.match(txt, /交付物/);
   assert.match(txt, /适用安全规则/);
   assert.match(txt, /审批/);
-  assert.match(txt, /不得推定授权/);
+  assert.match(txt, /不得从用户请求或占位符推定授权/);
   for (const bad of ["approval=never", "[TARGET_IP]", "目标归属与状态不改变计划", "不询问授权与范围"]) {
     assert.equal(txt.includes(bad), false, `锚点不应包含越权内容: ${bad}`);
   }
