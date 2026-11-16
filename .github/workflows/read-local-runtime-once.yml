@@ -1,4 +1,4 @@
-name: Locate active Desktop QA interface
+name: Locate actual Harness runtime listener
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -12,31 +12,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Read local interface and package metadata
+      - name: Inspect local Harness listeners without changing settings
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           @'
-          import fs from 'node:fs'
-          import path from 'node:path'
-          import os from 'node:os'
           import {spawnSync} from 'node:child_process'
-          const home=process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh')
-          const check=async port=>{try{const r=await fetch('http://127.0.0.1:'+port+'/dsh-purge/runtime-observations?limit=1',{signal:AbortSignal.timeout(2500),redirect:'error'});let v=null;try{v=await r.json()}catch{};return {port,status:r.status,schema:v?.schemaVersion??null,rows:Array.isArray(v?.items)?v.items.length:null,latest:v?.items?.slice(0,1).map(x=>({provider:/^[\w.-]{1,80}$/.test(x.provider||'')?x.provider:null,model:/^[\w./:-]{1,100}$/.test(x.model||'')?x.model:null}))??null}}catch{return {port,reachable:false}}}
-          const ports=await Promise.all([43120,43121,3080].map(check))
-          const info=[]
-          for(const profile of ['headless','desktop','default']){
-           const d=path.join(home,'profiles',profile)
-           for(const n of ['cordis.yml','cordis.patch.yml','package.json']){
-            try{const s=fs.readFileSync(path.join(d,n),'utf8')
-             const lines=s.split(/\r?\n/).filter(l=>/^\s*(?:- )?(?:name|id):\s*['"]?@deepseek-ai\/dsh-(?:headless|web-app|cli|model|llm|session|agent)[\w/-]*['"]?\s*$/.test(l)).map(l=>l.trim()).slice(0,30)
-             let pkg=[];if(n==='package.json'){const x=JSON.parse(s);pkg=Object.keys({...x.dependencies,...x.devDependencies}).filter(k=>/^@deepseek-ai\/dsh/.test(k))}
-             info.push({profile,file:n,plugins:lines,packages:pkg})
-            }catch{}
-           }
+          const ps=String.raw`
+          $ErrorActionPreference='SilentlyContinue'
+          $names=@{}
+          Get-Process | ForEach-Object {if($_.ProcessName -match '^(?:dsh(?:[._-].*)?|harness(?:[._-].*)?|deepseek(?:[._-].*)?|electron|node|nodejs|bun|ds-harness(?:[._-].*)?)$') {$names[[int]$_.Id]=$_.ProcessName}}
+          $rows=@(Get-NetTCPConnection -State Listen | Where-Object {$names.ContainsKey([int]$_.OwningProcess)} | ForEach-Object {
+           $family=if($_.LocalAddress -match ':'){'ipv6'}else{'ipv4'}
+           $name=$names[[int]$_.OwningProcess]
+           $kind=if($name -match 'node|bun'){'runtime'}elseif($name -eq 'electron'){'electron'}else{'harness'}
+           [pscustomobject]@{port=$_.LocalPort;family=$family;kind=$kind}
+          } | Sort-Object port,family,kind -Unique)
+          [pscustomobject]@{matchingProcesses=$names.Count;listeners=$rows} | ConvertTo-Json -Compress -Depth 4
+          `
+          const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',ps],{encoding:'utf8',timeout:12000,windowsHide:true,maxBuffer:1024*1024})
+          let state=null;try{state=JSON.parse(result.stdout||'')}catch{}
+          const rows=Array.isArray(state?.listeners)?state.listeners:[]
+          const candidates=rows.filter(x=>Number.isInteger(x.port)&&x.port>0&&x.port<=65535&&['ipv4','ipv6'].includes(x.family)).slice(0,40)
+          async function probe(x){
+           const origin='http://'+(x.family==='ipv6'?'[::1]':'127.0.0.1')+':'+x.port
+           try{
+           const r=await fetch(origin+'/dsh-purge/runtime-observations?limit=1',{signal:AbortSignal.timeout(1800),redirect:'error'})
+           const type=r.headers.get('content-type')||''
+           let v=null
+           if(type.includes('application/json')){try{v=await r.json()}catch{}}
+           const verified=v?.schemaVersion===1&&v?.readOnly===true&&Array.isArray(v?.items)
+           const latest=verified?v.items.slice(0,1).map(a=>({provider:/^deepseek(?:-ai)?$/i.test(a.provider||'')?a.provider:null,model:/^deepseek-(?:v4[.0-9-]*flash|flash|v4-pro)$/i.test(a.model||'')?a.model:null,providerSource:a.providerSource||null,modelSource:a.modelSource||null})):null
+           return {port:x.port,family:x.family,kind:x.kind,http:r.status,verifiedRuntimeEndpoint:verified,latest}
+           }catch{return {port:x.port,family:x.family,kind:x.kind,reachable:false}}
           }
-          const base=path.join(home,'profiles','headless','node_modules','@deepseek-ai')
-          let packages=[];try{packages=fs.readdirSync(base).filter(n=>/^dsh(?:-headless|-cli|-web|-agent|-session|$)/.test(n))}catch{}
-          console.log('PURGE_DESKTOP_CHECK='+JSON.stringify({ports,profiles:info,headlessPackages:packages}))
+          const probes=await Promise.all(candidates.map(probe))
+          console.log('PURGE_LISTENER_CHECK='+JSON.stringify({status:state?'ok':'enumeration-failed',processCount:state?.matchingProcesses??null,candidateCount:rows.length,probed:probes.length,results:probes}))
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
