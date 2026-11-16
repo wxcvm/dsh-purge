@@ -557,3 +557,16 @@ test('native compact reasoning and text batches are counted separately without l
   assert.equal(r.durableTextObserved,true);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);assert.equal(r.firstTextMs,null);
   assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
 });
+
+
+test('one turn/end event assigns one clock timestamp to all attempts in the turn',()=>{
+  let time=0;const o=createRuntimeObservations({now:()=>++time}),a=agent('s');
+  start(o,a);end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:2}});
+  o.frame({agent:a,frame:{type:'end',attemptId:'s:2',revision:4,index:0,outcome:{kind:'committed',eventType:'assistant/message',seq:4}}});
+  o.event(a.session,{seq:5,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
+  const [second,first]=o.snapshot().items;
+  assert.equal(second.turnEndedAt,first.turnEndedAt);
+  assert.equal(second.turnEndedAt>second.startedAt,true);
+  assert.equal(first.turnOutcome,'completed');assert.equal(second.turnOutcome,'completed');
+});
