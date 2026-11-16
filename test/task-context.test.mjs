@@ -314,3 +314,23 @@ test('stored testing progress survives database reopen without claiming current 
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+
+test('task context excludes candidates outside a structured fixed-version range', () => {
+  const { db, store } = fixture()
+  try {
+    const original = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = original(engagement, id)
+      return asset && id === 5 ? {
+        ...asset,
+        ports: [{ port: 3000, state: 'open', product: 'Grafana', version: '8.2.7' }],
+        fingerprints: [{ product: 'Grafana', version: '8.2.7' }],
+      } : asset
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.equal(context.knowledge_candidates.some(row => row.cve.includes('CVE-2021-43798')), false)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+  } finally { db.close() }
+})
