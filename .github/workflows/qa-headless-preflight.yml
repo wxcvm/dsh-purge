@@ -68,24 +68,38 @@ jobs:
             try { parse = req('yaml').parse } catch { console.log(JSON.stringify({yamlParser:false})); process.exitCode=3 }
             for (const profile of ['desktop','codex-review']) {
               if (!profiles.includes(profile)) { console.log(JSON.stringify({profile,exists:false})); continue }
+              const appHelp = call(['--profile',profile,'--help'])
+              const appHelpText=(appHelp.stdout||'')+'\n'+(appHelp.stderr||'')
+              const appFlags=[...new Set(appHelpText.match(/--[a-z][a-z0-9-]*/g)||[])]
+              console.log(JSON.stringify({profile,appHelpExit:appHelp.status,appFlags,appHelpLines:(appHelp.stdout||'').split(/\r?\n/).filter(l=>/Usage:|Commands:|--(?:agent|preset|model|reason|json|permission|approval|session|prompt|profile|patch)/i.test(l)).slice(0,50).map(l=>l.trim().slice(0,250))}))
               const res = call(['--profile',profile,'--dump-config'])
               let config
               try { config = parse?.(res.stdout || '') } catch {}
               const selection = [], presets = [], plugin = []
               const diagnostics = (res.stderr || '') + '\n' + (res.status === 0 ? '' : res.stdout || '')
+              const shortError = diagnostics.trim()
+              if (res.status!==0 && shortError.length<240 && /profile|desktop/i.test(shortError) && !/token|secret|password|credential|api.?key|bearer|https?:/i.test(shortError)) console.log(JSON.stringify({profile,shortError}))
               const classes = ['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','Cannot find module','Cannot find package','Cannot find','ENOENT','EACCES','EPERM','unknown','Unknown','invalid','Invalid','not found','not supported','profile','desktop','plugin','patch','schema','configuration','TypeError','ReferenceError','SyntaxError'].filter(k=>diagnostics.includes(k))
               console.log(JSON.stringify({profile,exit:res.status,diagnosticClasses:classes,stderrBytes:Buffer.byteLength(res.stderr||''),stdoutBytes:Buffer.byteLength(res.stdout||'')}))
               const patchFile = path.join(profileRoot,profile,'cordis.patch.yml')
               let localPatch
               try { localPatch=parse?.(fs.readFileSync(patchFile,'utf8')) } catch {}
-              const localIds=[]
+              const localIds=[], selectedEntries=[]
+              const selectedIds=new Set(['agent-default-model','agent-preset-registry','subagent','subagent-model-selection-settings','dsh-purge'])
+              const safeLabel=v=>typeof v==='string' && /^[\w./:@+ -]{1,100}$/.test(v) && !/token|secret|password|credential|api.?key|bearer/i.test(v) ? v : null
               const patchWalk=v=>{
                 if(!v || typeof v!=='object')return
                 if(typeof v.id==='string' && /^[\w./:@+-]{1,120}$/.test(v.id)) localIds.push(v.id)
+                if(selectedIds.has(v.id)){
+                  const c=v.config && typeof v.config==='object'?v.config:{}
+                  const selected={}
+                  for(const [k,x] of Object.entries(c)) if(/^(provider|model|reasoningEffort|agentPreset|defaultPreset|presetId|multiAgent|multiAgentEnabled|enabled|collaboration|subagentEnabled)$/i.test(k) && (typeof x==='boolean'||safeLabel(x))) selected[k]=x
+                  selectedEntries.push({id:v.id,entryKeys:Object.keys(v),configKeys:Object.keys(c),selected})
+                }
                 for(const x of Object.values(v)) if(x && typeof x==='object')patchWalk(x)
               }
               patchWalk(localPatch)
-              console.log(JSON.stringify({profile,patchExists:fs.existsSync(patchFile),patchParsed:!!localPatch,patchIds:[...new Set(localIds)].slice(0,70)}))
+              console.log(JSON.stringify({profile,patchExists:fs.existsSync(patchFile),patchParsed:!!localPatch,patchIds:[...new Set(localIds)].slice(0,70),selectedEntries}))
               const label = v => typeof v==='string' && /^[\w./:@+-]{1,120}$/.test(v) ? v : null
               const walk = v => {
                 if (!v || typeof v!=='object') return
