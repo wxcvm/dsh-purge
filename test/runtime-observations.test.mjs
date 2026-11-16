@@ -488,3 +488,18 @@ test('missing assistant tool content remains unknown; no tools is observed only 
     assert.equal(evidence===null?null:evidence.requested,expected);
   }
 });
+
+
+test('thinking timeline isolates attempts and preserves interleaved event evidence', () => {
+  let time=0; const o=createRuntimeObservations({now:()=>time}), a=agent('s'), b=agent('b');
+  start(o,a); time=2; chunk(o,a,0,{type:'reasoning-delta',text:'PRIVATE A'});
+  time=4; chunk(o,a,1,{type:'text-delta',text:'PRIVATE TEXT'});
+  time=7; chunk(o,a,2,{type:'reasoning-delta',text:'PRIVATE B'});
+  time=9; chunk(o,a,3,{type:'block-start',blockType:'tool-call'});
+  start(o,b); time=10; chunk(o,b,0,{type:'reasoning-delta',text:''});
+  const row=o.snapshot({sessionId:'s'}).items[0], other=o.snapshot({sessionId:'b'}).items[0];
+  assert.equal(row.firstReasoningMs,2); assert.equal(row.lastReasoningMs,7); assert.equal(row.firstTextMs,4);
+  assert.equal(row.reasoningAfterText,true); assert.equal(row.firstToolMs,9); assert.equal(row.reasoningChunks,2);
+  assert.equal(other.firstReasoningMs,null); assert.equal(other.lastReasoningMs,null); assert.equal(other.reasoningChunks,0);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
+});
