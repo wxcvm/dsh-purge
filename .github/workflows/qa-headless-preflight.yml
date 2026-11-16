@@ -1,12 +1,12 @@
 name: QA Desktop Native Archive Review
 on:
   pull_request:
-    types: [synchronize, reopened]
+    types: [labeled]
 permissions:
   contents: read
 jobs:
   desktop-review:
-    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-archive-read-only'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:

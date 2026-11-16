@@ -1,12 +1,12 @@
-name: QA Desktop Independent Review
+name: QA Desktop Fictional Office Records
 on:
   pull_request:
     types: [labeled]
 permissions:
   contents: read
 jobs:
-  review:
-    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-desktop-review-retry'
+  office-review:
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-office-direct'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
@@ -16,15 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Submit the designated fictional independent review in the actual Desktop
+      - name: Submit and score a fictional office-record review in Standard mode
         shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           # Prevent an accidental rerun of this exact model request. The marker
           # is local to the Runner and contains no credentials or transcript.
-          $sendMarker=Join-Path $env:RUNNER_TEMP 'purge-qa-DS41-DESKTOP-20261116-REVIEW-01.sent'
+          $sendMarker=Join-Path $env:RUNNER_TEMP 'purge-qa-DS41-DESKTOP-20261116-OFFICE-DIRECT-01.sent'
           if(Test-Path -LiteralPath $sendMarker){
-            [ordered]@{stage='review-submit';status='already-attempted-no-repeat';taskSubmitted=$false}|ConvertTo-Json -Compress
+            [ordered]@{stage='office-submit';status='already-attempted-no-repeat';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           Add-Type -AssemblyName UIAutomationClient
@@ -135,47 +135,14 @@ jobs:
             [QaDesktopMouse]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
             return $true
           }
-          function Get-Labelled($pattern) {
-            @(Get-Controls | Where-Object {
-              try {
-                -not $_.Current.IsOffscreen -and $_.Current.BoundingRectangle.Width -gt 0 -and
-                $_.Current.BoundingRectangle.Height -gt 0 -and $_.Current.Name -match $pattern -and
-                $_.Current.ControlType.ProgrammaticName -ne 'ControlType.Document'
-              }catch{$false}
-            })
-          }
-          function Describe-Labels($elements,$kind) {
-            @($elements | ForEach-Object {
-              $v=$_.Current
-              $n=[string]$v.Name
-              $toggle=Get-Pattern $_ ([System.Windows.Automation.TogglePattern]::Pattern)
-              $selection=Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)
-              [ordered]@{type=$v.ControlType.ProgrammaticName;class=$v.ClassName;label=($n -split '[\r\n]')[0].Substring(0,[Math]::Min(120,($n -split '[\r\n]')[0].Length));enabled=$v.IsEnabled;toggle=if($null -ne $toggle){[string]$toggle.Current.ToggleState}else{$null};selected=if($null -ne $selection){$selection.Current.IsSelected}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}
-            })
-          }
           function Get-PresetSeat {
             @(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.ClassName -eq 'm2hUqa_seat'}catch{$false}})
           }
-          $redPattern='(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?)(?:$|[\s：:，,（(—-])'
-          function Get-RedMenuItem {
-            @(Get-Labelled $redPattern | Where-Object {
-              try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::MenuItem -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))}catch{$false}
-            })
-          }
-          function Wait-RedMenuItem([int]$attempts=12){
-            for($i=0;$i -lt $attempts;$i++){
-              $items=@(Get-RedMenuItem)
-              if($items.Count -eq 1){return $items[0]}
-              Start-Sleep -Milliseconds 250
-            }
-            return $null
-          }
           # Bring Harness to the foreground before creating a conversation.
           # UIA Invoke can otherwise return while the old conversation is still visible.
-          $modeSelected=$false
           $foregroundReady=Activate-Harness
           if(-not $foregroundReady){
-            [ordered]@{stage='review-submit';status='desktop-not-foreground';taskSubmitted=$false}|ConvertTo-Json -Compress
+            [ordered]@{stage='office-submit';status='desktop-not-foreground';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           $new=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -in @('新建会话','新建对话','New Chat','New Conversation','New Session') -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))}catch{$false}})
@@ -192,113 +159,28 @@ jobs:
           }
           [ordered]@{stage='fresh-conversation';nativeClick=$opened;foreground=(App-Foreground);presetSeats=$pickers.Count;composers=$editor.Count}|ConvertTo-Json -Compress
           if($pickers.Count -ne 1 -or $editor.Count -ne 1){
-            [ordered]@{stage='review-submit';status='fresh-conversation-not-confirmed';taskSubmitted=$false}|ConvertTo-Json -Compress
+            [ordered]@{stage='office-submit';status='fresh-conversation-not-confirmed';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
           if($null -eq $vp -or $vp.Current.IsReadOnly -or -not [string]::IsNullOrWhiteSpace($vp.Current.Value)){
-            [ordered]@{stage='review-submit';status='fresh-composer-not-empty-or-writable';taskSubmitted=$false}|ConvertTo-Json -Compress
+            [ordered]@{stage='office-submit';status='fresh-composer-not-empty-or-writable';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           $rect=$editor[0].Current.BoundingRectangle
-          if($pickers.Count -eq 1){
-            $picker=$pickers[0]
-            if($picker.Current.Name -match $redPattern){$modeSelected=$true}
-            else{
-              $red=$null
-              for($attempt=1;$attempt -le 2 -and $null -eq $red;$attempt++){
-                # The prior successful menu enumeration followed UIA focus.
-                # Use the same verified control, not global keyboard/mouse input.
-                $seat=@(Get-PresetSeat)
-                if($seat.Count -ne 1){break}
-                $picker=$seat[0]
-                try{$picker.SetFocus()}catch{}
-                $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
-                $before=$null
-                if($null -ne $exp){
-                  try{$before=[string]$exp.Current.ExpandCollapseState;if($exp.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$exp.Collapse();Start-Sleep -Milliseconds 300}}catch{}
-                }
-                $nativeOpened=$false
-                if($foregroundReady){$nativeOpened=Click-Verified $picker}
-                if(-not $nativeOpened -and $null -ne $exp){try{$exp.Expand()}catch{}}
-                [ordered]@{stage='preset-open-method';nativeClick=$nativeOpened;foreground=(App-Foreground)}|ConvertTo-Json -Compress
-                Start-Sleep -Milliseconds 450
-                try{$picker.SetFocus()}catch{}
-                $red=Wait-RedMenuItem 18
-                $after=$null
-                try{if($null -ne $exp){$after=[string]$exp.Current.ExpandCollapseState}}catch{}
-                [ordered]@{stage='preset-open-attempt';attempt=$attempt;stateBefore=$before;stateAfter=$after;redMenuFound=($null -ne $red);targetFocused=$picker.Current.HasKeyboardFocus}|ConvertTo-Json -Compress
-              }
-              if($null -ne $red){
-                [ordered]@{stage='preset-menu';options=(Describe-Labels @($red) 'preset')}|ConvertTo-Json -Depth 6 -Compress
-                $nativeSelected=$false
-                if($foregroundReady){$nativeSelected=Click-Verified $red}
-                if(-not $nativeSelected){(Get-Pattern $red ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
-                [ordered]@{stage='preset-select-method';nativeClick=$nativeSelected;foreground=(App-Foreground)}|ConvertTo-Json -Compress
-                for($i=0;$i -lt 24;$i++){
-                  $seat=@(Get-PresetSeat)
-                  if($seat.Count -eq 1 -and $seat[0].Current.Name -match $redPattern){$modeSelected=$true;break}
-                  $selected=@(Get-RedMenuItem|Where-Object{try{$_.Current.ClassName -match 'selected' -or (($sel=Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)) -and $sel.Current.IsSelected)}catch{$false}})
-                  if($selected.Count -eq 1){$modeSelected=$true;break}
-                  Start-Sleep -Milliseconds 250
-                }
-              }
-              $seat=@(Get-PresetSeat)
-              [ordered]@{stage='preset-selection';redteamVerified=$modeSelected;seatLabels=@($seat|ForEach-Object{[string]$_.Current.Name})}|ConvertTo-Json -Compress
-              if($modeSelected -and $seat.Count -eq 1){try{$cur=Get-Pattern $seat[0] ([System.Windows.Automation.ExpandCollapsePattern]::Pattern);if($null -ne $cur -and $cur.Current.ExpandCollapseState -eq [System.Windows.Automation.ExpandCollapseState]::Expanded){$cur.Collapse()}}catch{}}
-            }
-          }
-          [ordered]@{stage='preset-picker';candidateCount=$pickers.Count;redteamVerified=$modeSelected}|ConvertTo-Json -Compress
-          if(-not $modeSelected){
-            [ordered]@{stage='review-submit';status='redteam-not-verified';taskSubmitted=$false}|ConvertTo-Json -Compress
+          # Read the fresh conversation's settings. Never open or change a
+          # preset, model, collaboration toggle or permission control.
+          $standard=([string]$pickers[0].Current.Name -match '^(标准模式|Standard(?: mode)?)$')
+          $models=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.ClassName -eq '_9r0rkG_trigger'}catch{$false}})
+          $modelOk=$false
+          if($models.Count -eq 1){$modelOk=([string]$models[0].Current.Name -match '(?i)DeepSeek[-\s]*V4\.1[-\s]*Flash' -and [string]$models[0].Current.Name -match '(?i)\bMax\b')}
+          [ordered]@{stage='office-settings';standard=$standard;modelMaxVerified=$modelOk;settingsChanged=$false}|ConvertTo-Json -Compress
+          if(-not ($standard -and $modelOk)){
+            [ordered]@{stage='office-submit';status='standard-or-model-not-confirmed';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
-          # Preserve the collaboration setting reported enabled by the user.
-          # This independent review requests no new delegation or tool calls.
-          [ordered]@{stage='collaboration-setting';userReportedEnabled=$true;uiToggleVerified=$false;reviewArmDelegationRequested=$false}|ConvertTo-Json -Compress
-          $editor=@(Get-Composer)
-          if($editor.Count -ne 1){throw 'Composer unavailable after preset selection'}
-          $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
-          if($null -eq $vp -or $vp.Current.IsReadOnly -or -not [string]::IsNullOrWhiteSpace($vp.Current.Value)){throw 'Fresh composer is not empty and writable'}
-          $rect=$editor[0].Current.BoundingRectangle
-          $toolbar = @()
-          $labels = @()
-          $candidates = @()
-          $known = '(?i)deepseek|flash|红队|redteam|max|完全权限|full.access|danger.full.access|多智能体|multi.agent|standard|标准|模式|model|模型|权限|permission|发送|send|推理|reasoning|协作|attach|附件|停止|stop|工作区|workspace'
-          foreach ($c in (Get-Controls)) {
-            try {
-              if (-not (Is-Visible $c)) { continue }
-              $v=$c.Current
-              $t=$v.ControlType.ProgrammaticName
-              $b=$v.BoundingRectangle
-              if ($t -notin @('ControlType.Button','ControlType.ComboBox','ControlType.Text','ControlType.CheckBox','ControlType.MenuItem','ControlType.ToggleButton')) { continue }
-              if ($b.Left -lt ($rect.Left-90) -or $b.Right -gt ($rect.Right+90) -or $b.Top -lt ($rect.Top-150) -or $b.Bottom -gt ($rect.Bottom+230)) { continue }
-              $n=[string]$v.Name
-              if ($n -match $known) {
-                $safeName=($n -split '[\r\n]')[0]
-                if ($safeName.Length -gt 100) { $safeName=$safeName.Substring(0,100) }
-                $labels += $safeName
-                $candidates += [ordered]@{type=$t;name=$safeName;class=$v.ClassName;patterns=@($c.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})}
-              }
-              if ($t -ne 'ControlType.Text') {
-                $toolbar += [ordered]@{type=$t;class=$v.ClassName;knownName=($n -match $known);named=($n.Length -gt 0);x=[int]($b.Left-$rect.Left);y=[int]($b.Top-$rect.Top);width=[int]$b.Width;height=[int]$b.Height;patterns=@($c.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})}
-              }
-            } catch {}
-          }
-          $settings = [ordered]@{
-            model=(@($labels | Where-Object {$_ -match '(?i)deepseek.*flash|flash.*deepseek'}).Count -gt 0)
-            max=(@($labels | Where-Object {$_ -match '(?i)(?:^|[^a-z])max(?:$|[^a-z])'}).Count -gt 0)
-            redteam=(@($labels | Where-Object {$_ -match '(?i)红队|red\s*team'}).Count -gt 0)
-            fullAccess=(@($labels | Where-Object {$_ -match '(?i)完全权限|full.access|danger.full.access'}).Count -gt 0)
-            collaborationVisible=(@($labels | Where-Object {$_ -match '(?i)多智能体|multi.agent'}).Count -gt 0)
-          }
-          [ordered]@{stage='composer-settings';editorEmpty=$true;settings=$settings;settingsControls=$candidates;toolbar=$toolbar} | ConvertTo-Json -Depth 7 -Compress
-          if (-not ($settings.model -and $settings.max -and ($settings.redteam -or $modeSelected) -and $settings.fullAccess)) {
-            [ordered]@{stage='review-submit';status='settings-not-yet-confirmed';taskSubmitted=$false} | ConvertTo-Json -Compress
-            return
-          }
-          $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-desktop-review-replay.mjs')) -join [char]10).TrimEnd()
-          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-REVIEW-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
+          $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-document-desktop.mjs') --packet) -join [char]10).TrimEnd()
+          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
           function Normalize-ComposerText($text) {
             if($null -eq $text){return ''}
             return (([string]$text).Replace(([string][char]13+[string][char]10),[string][char]10).Replace([string][char]13,[string][char]10)).TrimEnd()
@@ -311,8 +193,8 @@ jobs:
             return [ordered]@{
               valueLength=$value.Length;textLength=$text.Length
               valueMatches=($value -ceq $expected);textMatches=($text -ceq $expected)
-              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-REVIEW-01')
-              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-REVIEW-01')
+              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01')
+              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01')
             }
           }
           $packet=Normalize-ComposerText $packet
@@ -350,7 +232,7 @@ jobs:
           }
           [ordered]@{stage='composer-entry';method='verified-paste';packetLength=$packet.Length;verified=$verified;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
           if(-not $verified){
-            [ordered]@{stage='review-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
+            [ordered]@{stage='office-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
             return
           }
           $send = @(Get-Controls | Where-Object {
@@ -361,14 +243,18 @@ jobs:
           if ($send.Count -ne 1) {
             $bounds=$editor[0].Current.BoundingRectangle
             $localButtons=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.BoundingRectangle.Left -ge ($bounds.Left-40) -and $_.Current.BoundingRectangle.Right -le ($bounds.Right+40) -and $_.Current.BoundingRectangle.Top -ge ($bounds.Top-100) -and $_.Current.BoundingRectangle.Bottom -le ($bounds.Bottom+240)}catch{$false}}|ForEach-Object{[ordered]@{class=$_.Current.ClassName;enabled=$_.Current.IsEnabled;label=if($_.Current.Name -match '^(发送|Send|停止|Stop|提交|Submit|运行|Run)'){[string]$_.Current.Name}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}})
-            [ordered]@{stage='review-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
+            [ordered]@{stage='office-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
             return
           }
           # Reserve the unique run marker before sending. A retry after an
           # ambiguous click must inspect the archive rather than resend.
+          $currentSeat=@(Get-PresetSeat)
+          if($currentSeat.Count -ne 1 -or [string]$currentSeat[0].Current.Name -notmatch '^(标准模式|Standard(?: mode)?)$'){throw 'Standard mode changed; no submission'}
           $reservation=[System.IO.File]::Open($sendMarker,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write)
           $reservation.Dispose()
           $clicked=Click-Verified $send[0]
           if(-not $clicked){(Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
           Start-Sleep -Milliseconds 1200
-          [ordered]@{stage='review-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-REVIEW-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
+          [ordered]@{stage='office-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-OFFICE-DIRECT-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
+          & node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-document-desktop.mjs') --collect
+          if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
