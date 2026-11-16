@@ -1,4 +1,4 @@
-name: Diagnose archived Purge request failures once
+name: Classify host error codes from archived runtime
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -27,15 +27,20 @@ jobs:
           const magic = Buffer.from([0x28,0xb5,0x2f,0xfd])
           const fields = ['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens']
           const reasons = new Set(['stop','tool-calls','max-tokens','error','aborted','content_filter'])
+          const codeGroups=new Map()
+          const hostCodes=new Set(['AUTH','UNAUTHORIZED','FORBIDDEN','INVALID','INVALID_REQUEST','QUOTA','ACCOUNT_QUOTA','BILLING','MODEL_NOT_FOUND','CONTEXT_OVERFLOW','CONTEXT_LENGTH','CONTEXT_WINDOW_EXCEEDED','NO_ADAPTER','MISSING_CREDENTIAL','INVALID_CREDENTIAL','RATE_LIMIT','TRANSPORT','UNKNOWN','INTERNAL','TIMEOUT','NETWORK','SERVER_ERROR','BAD_RESPONSE','OVERLOADED','PROVIDER','PROVIDER_ERROR','STREAM','STREAM_ERROR','PARSE','PARSE_ERROR','ABORTED','CANCELLED','HTTP','HTTP_ERROR','RESPONSE_ERROR','INVALID_RESPONSE','API_ERROR','REQUEST_ERROR','MODEL_ERROR','TOOL_ERROR','SERVICE_UNAVAILABLE'])
           const allowedCodes = new Set(['ECONNRESET','ECONNREFUSED','ETIMEDOUT','ENOTFOUND','EAI_AGAIN','EPIPE','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','UND_ERR_SOCKET','ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_SSL_WRONG_VERSION_NUMBER','ABORT_ERR','ERR_ABORTED','AbortError','TimeoutError','rate_limit_exceeded','insufficient_quota','invalid_request_error','authentication_error','permission_error','overloaded_error','server_error','api_error','context_length_exceeded','invalid_api_key','network_error','timeout','connection_error','stream_error','provider_error','HTTP_ERROR','FETCH_ERROR'])
           function safeError(reason){
-           const f=reason?.failure
-           const code=typeof f?.code==='string'&&allowedCodes.has(f.code)?f.code:null
-           const status=Number.isInteger(f?.status)&&f.status>=100&&f.status<=599?f.status:null
+           const f=reason?.failure??reason?.error??reason
+           const raw=typeof f?.code==='string'?f.code:null
+           const normalized=raw?.toUpperCase()
+           const code=hostCodes.has(normalized)?normalized:allowedCodes.has(raw)?raw:null
+           let codeGroup=null;if(raw){if(!codeGroups.has(raw))codeGroups.set(raw,codeGroups.size+1);codeGroup=codeGroups.get(raw)}
+           const status=[f?.status,f?.statusCode,f?.httpStatus].find(x=>Number.isInteger(x)&&x>=100&&x<=599)??null
            const message=typeof f?.message==='string'?f.message:''
            let category='unclassified'
-           if(status===429||code==='rate_limit_exceeded')category='rate-limit'
-           else if(status===401||status===403)category='auth-or-permission'
+           if(status===429||['rate_limit_exceeded','RATE_LIMIT'].includes(code))category='rate-limit'
+           else if(status===401||status===403||['AUTH','UNAUTHORIZED','FORBIDDEN','MISSING_CREDENTIAL','INVALID_CREDENTIAL'].includes(code))category='auth-or-permission'
            else if(status!==null&&status>=500)category='server-http'
            else if(status!==null&&status>=400)category='client-http'
            else if(['ECONNRESET','ECONNREFUSED','EPIPE','UND_ERR_SOCKET','network_error','connection_error'].includes(code)||/socket hang up|connection reset|connection refused|unexpected eof|connection closed|fetch failed/i.test(message))category='connection'
@@ -43,10 +48,17 @@ jobs:
            else if(['ENOTFOUND','EAI_AGAIN'].includes(code))category='dns'
            else if(['ERR_TLS_CERT_ALTNAME_INVALID','CERT_HAS_EXPIRED','UNABLE_TO_VERIFY_LEAF_SIGNATURE','DEPTH_ZERO_SELF_SIGNED_CERT','ERR_SSL_WRONG_VERSION_NUMBER'].includes(code)||/certificate verify|tls handshake|ssl handshake/i.test(message))category='tls'
            else if(['ABORT_ERR','ERR_ABORTED','AbortError'].includes(code))category='abort'
-           else if(code==='context_length_exceeded')category='context-limit'
-           else if(code==='insufficient_quota')category='quota'
+           else if(['context_length_exceeded','CONTEXT_OVERFLOW','CONTEXT_LENGTH','CONTEXT_WINDOW_EXCEEDED'].includes(code))category='context-limit'
+           else if(['insufficient_quota','QUOTA','ACCOUNT_QUOTA','BILLING'].includes(code))category='quota'
+           else if(code==='TRANSPORT'||code==='NETWORK')category='transport'
+           else if(code==='TIMEOUT')category='timeout'
+           else if(['INVALID','INVALID_REQUEST','MODEL_NOT_FOUND','NO_ADAPTER'].includes(code))category='invalid-request-or-config'
+           else if(['STREAM','STREAM_ERROR','PARSE','PARSE_ERROR','BAD_RESPONSE','INVALID_RESPONSE','RESPONSE_ERROR'].includes(code))category='stream-or-response'
+           else if(['SERVER_ERROR','OVERLOADED','SERVICE_UNAVAILABLE'].includes(code))category='server'
+           else if(['PROVIDER','PROVIDER_ERROR','API_ERROR','REQUEST_ERROR','MODEL_ERROR','HTTP','HTTP_ERROR'].includes(code))category='provider-or-request'
+           else if(['ABORTED','CANCELLED'].includes(code))category='abort'
            else if(code)category='other-known'
-           return {code,status,category,codePresent:typeof f?.code==='string',failurePresent:!!f,messagePresent:!!message}
+           return {code,codeGroup,status,category,codePresent:!!raw,failurePresent:!!f,messagePresent:!!message}
           }
           const numeric = v => typeof v === 'number' && Number.isFinite(v) && v >= 0
           const out = x => console.log('PURGE_ARCHIVE_RESULT=' + JSON.stringify(x))
@@ -97,7 +109,7 @@ jobs:
               }
              }
             }
-            if(e.type==='turn/end'){const k=d?.reason?.kind;stat.turnEnds.push({kind:['completed','aborted','error','cancelled','canceled','interrupted','stopped','failed'].includes(k)?k:'unknown',time:eventTs})}
+            if(e.type==='turn/end'){const k=d?.reason?.kind;stat.turnEnds.push({kind:['completed','aborted','error','cancelled','canceled','interrupted','stopped','failed'].includes(k)?k:'unknown',time:eventTs,...(k==='error'?safeError(d?.reason):{})})}
             if(!['assistant/message','assistant/attempt'].includes(e.type))return
             stat.attemptEvents++
             stat.assistantEventTypes[e.type==='assistant/message'?'message':'attempt']++
@@ -143,7 +155,7 @@ jobs:
           }
           const matches=records.filter(x=>x.matched||matchingIds.has(x.id))
           const candidateMatches=matches.length?matches:records.filter(x=>numeric(x.usage.totalTokens.observedSum)&&x.usage.totalTokens.observedSum>=14.05e6&&x.usage.totalTokens.observedSum<14.15e6)
-          const anonymize=(x,i)=>({sample:i+1,selection:matches.length?'exact-label-or-parent-descriptor':'rounded-total-candidate-unconfirmed',events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,toolStarts:x.toolStarts,assistantEventsWithStream:x.withToolStream,observedEventSpanMs:x.observedEventSpanMs,completeArchiveParse:x.complete,frameErrors:x.frameErrors,invalidLines:x.invalidLines,duplicateSeq:x.duplicateSeq,assistantEventTypes:x.assistantEventTypes,errors:x.errors.map(({time,...e})=>({...e,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),terminalSequence:x.terminalSequence.map(({kind,time})=>({kind,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),turnEnds:x.turnEnds.map(({kind,time})=>({kind,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null}))})
+          const anonymize=(x,i)=>({sample:i+1,selection:matches.length?'exact-label-or-parent-descriptor':'rounded-total-candidate-unconfirmed',events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,toolStarts:x.toolStarts,assistantEventsWithStream:x.withToolStream,observedEventSpanMs:x.observedEventSpanMs,completeArchiveParse:x.complete,frameErrors:x.frameErrors,invalidLines:x.invalidLines,duplicateSeq:x.duplicateSeq,assistantEventTypes:x.assistantEventTypes,errors:x.errors.map(({time,...e})=>({...e,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),terminalSequence:x.terminalSequence.map(({kind,time})=>({kind,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),turnEnds:x.turnEnds.map(({time,...e})=>({...e,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null}))})
           out({status:matches.length?'matched':candidateMatches.length?'candidate-unconfirmed':'no-matching-archive',archiveCount:files.length,scanned,skipped,incompleteFiles,parsedEvents,matchedByLabel:matches.length,matchedCandidates:candidateMatches.slice(0,5).map(anonymize),coverage:{maxArchives:80,compressedBytes,allArchivesScanned:scanned===files.length}})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
