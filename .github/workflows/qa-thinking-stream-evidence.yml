@@ -1,0 +1,19 @@
+name: QA Thinking Stream Evidence
+on:
+  push:
+    branches: [robin/qa-thinking-stream-evidence-20261116]
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read only the two marked QA turns and their runtime summaries
+        run: node scripts/qa-thinking-stream-evidence.mjs
