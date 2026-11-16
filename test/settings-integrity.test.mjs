@@ -3,13 +3,21 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readSettings, settingsPathOf, writeSettings } from '../lib/redteam/settings.js'
+import { readSettings, settingsPathOf, writeSettings, redteamAgentSlotCap } from '../lib/redteam/settings.js'
 
 function temporary(t) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-settings-integrity-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   return root
 }
+
+test('red-team slot gate caps this dispatcher at three without changing stored settings', () => {
+  assert.equal(redteamAgentSlotCap(1), 1)
+  assert.equal(redteamAgentSlotCap(2), 2)
+  assert.equal(redteamAgentSlotCap(3), 3)
+  assert.equal(redteamAgentSlotCap(9), 3)
+  assert.equal(redteamAgentSlotCap(Number.NaN), 3)
+})
 
 test('settings merge preserves unrelated nested keys and own __proto__ values', t => {
   const root = temporary(t)
