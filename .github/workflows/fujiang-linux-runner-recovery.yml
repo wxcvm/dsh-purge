@@ -12,49 +12,51 @@ jobs:
     runs-on: [self-hosted, Windows, X64, purge-ci]
     timeout-minutes: 5
     steps:
-      - name: Inspect existing WSL runner connectivity
+      - name: Reconnect existing idle WSL runner
         shell: pwsh
         run: |
           $script = @'
           set -eu
           dir="$HOME/actions-runner"
           cd "$dir"
-          python3 - <<'PY'
-          import json, glob, os, re
-          d=json.load(open(".runner", encoding="utf-8-sig"))
-          print("Runner repo matches:", d.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge")
-          print("Runner name:", d.get("agentName","unknown"))
-          print("Pool name:", d.get("poolName","unknown"))
-          print("Local labels:", d.get("labels","not stored in local settings"))
-          logs=sorted(glob.glob("_diag/Runner_*.log"),key=os.path.getmtime)
-          patterns={
-            "listening":r"Listening for Jobs",
-            "connected":r"Connected to GitHub",
-            "session_conflict":r"already has an active session|session.*conflict",
-            "authentication_error":r"Unauthorized|401 Unauthorized|403 Forbidden|invalid.*credential",
-            "network_error":r"Name or service not known|Connection refused|connection reset|timed out|SSL connection|certificate verify|NameResolution|HttpRequestException",
-            "registration_error":r"runner.*not found|agent.*not found|runner.*removed|RunnerNotFound|AgentNotFound",
-            "job_received":r"Running job:|Job request received",
-          }
-          if logs:
-            p=logs[-1]
-            print("Latest runner log age seconds:",int(__import__("time").time()-os.path.getmtime(p)))
-            events=[]
-            for line in open(p,encoding="utf-8",errors="replace"):
-              for key,pattern in patterns.items():
-                if re.search(pattern,line,re.I):
-                  timestamp=re.search(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}",line)
-                  events.append((timestamp.group(0) if timestamp else "unknown-time",key))
-            for t,k in events[-20:]: print("Runner event:",t,k)
-          else: print("No runner diagnostic logs")
-          PY
-          echo "Listener PID(s):"
+          python3 -c 'import json,sys; x=json.load(open(sys.argv[1], encoding="utf-8-sig")); sys.exit(0 if x.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge" else 1)' .runner
+          # Do not interrupt an active job.
+          if pgrep -x Runner.Worker >/dev/null; then
+            echo "A runner worker is active; no restart performed."
+            exit 0
+          fi
+          if [ -f .service ]; then
+            unit=$(tr -d '\r\n' < .service)
+            case "$unit" in
+              actions.runner.wxcvm-dsh-purge.*.service) ;;
+              *) echo "Unexpected service name; no changes made."; exit 4 ;;
+            esac
+            echo "Existing service state:"
+            systemctl is-active "$unit" || true
+            sudo -n systemctl restart "$unit"
+            systemctl is-active "$unit"
+          else
+            # Only stop the listener belonging to this exact runner installation.
+            for pid in $(pgrep -x Runner.Listener || true); do
+              if [ "$(readlink "/proc/$pid/exe" 2>/dev/null || true)" = "$dir/bin/Runner.Listener" ]; then
+                kill -TERM "$pid"
+                for i in $(seq 1 10); do
+                  kill -0 "$pid" 2>/dev/null || break
+                  sleep 1
+                done
+                if kill -0 "$pid" 2>/dev/null; then
+                  echo "Listener did not stop gracefully; no forced termination."
+                  exit 5
+                fi
+              fi
+            done
+            mkdir -p _diag
+            env -u RUNNER_TRACKING_ID nohup setsid ./run.sh </dev/null >_diag/purge-ci-recovery.log 2>&1 &
+          fi
+          echo "Restart requested for the existing idle runner."
+          sleep 3
           pgrep -x Runner.Listener || true
-          echo "GitHub connectivity:"
-          for url in https://github.com https://api.github.com https://pipelines.actions.githubusercontent.com; do
-            printf '%s ' "$url"
-            curl -sS --connect-timeout 5 --max-time 10 -o /dev/null -w '%{http_code}\n' "$url" || true
-          done
+          echo "Actual GitHub connectivity will be verified by queued jobs."
           exit 0
           '@
           $script = $script.Replace("`r", "")
