@@ -238,6 +238,35 @@ function summarizeSubagentSnapshots(snapshots) {
   }
 }
 
+// Compare independently captured runs without inventing missing observations.
+export function compareRuns(baseline, candidate) {
+  const before = evaluate(baseline)
+  const after = evaluate(candidate)
+  const metricFields = ['checks', 'distinctSuccessfulChecks', 'repeatAfterSuccess', 'retryBeforeSuccess', 'recoveredChecks', 'toolErrors']
+  const beforeTrace = new Map((before.summary.traceAnalysis?.byCase ?? []).map(row => [row.id, row]))
+  const afterTrace = new Map((after.summary.traceAnalysis?.byCase ?? []).map(row => [row.id, row]))
+  const beforeAgents = new Map((before.summary.subagentAnalysis?.byCase ?? []).map(row => [row.id, row]))
+  const afterAgents = new Map((after.summary.subagentAnalysis?.byCase ?? []).map(row => [row.id, row]))
+  const byCase = before.results.map((left, i) => {
+    const right = after.results[i], id = left.id
+    const lt = beforeTrace.get(id), rt = afterTrace.get(id)
+    const la = beforeAgents.get(id), ra = afterAgents.get(id)
+    const trace = lt && rt ? Object.fromEntries(metricFields.map(key => [key, rt[key] - lt[key]])) : null
+    const agents = la?.observed && ra?.observed && la.evicted === 0 && ra.evicted === 0
+      ? { pairedRuns: ra.pairedRuns - la.pairedRuns,
+        peakPairedOverlap: la.peakPairedOverlap !== null && ra.peakPairedOverlap !== null
+          ? ra.peakPairedOverlap - la.peakPairedOverlap : null } : null
+    return { id, baseline: left, candidate: right, traceDelta: trace, subagentDelta: agents }
+  })
+  return {
+    baseline: before.summary, candidate: after.summary,
+    qualityDelta: Object.fromEntries(['completed', 'correctConclusions', 'correctEvidence', 'passed']
+      .map(key => [key, after.summary[key] - before.summary[key]])),
+    byCase,
+    interpretation: 'candidate-minus-baseline; observational deltas are not proof of improved scheduling or task success',
+  }
+}
+
 export function casePacket() {
   return {
     instruction: 'Answer each fictional case using only its supplied records. Return one JSON object with a reports array. Each report has id, answer (a/b/c) and evidence (the exact record keys supporting the answer). Do not run network or external tools; do not include the answer key.',
@@ -251,8 +280,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(JSON.stringify(casePacket(), null, 2))
   } else if (process.argv[2] === '--score' && process.argv[3]) {
     console.log(JSON.stringify(evaluate(JSON.parse(readFileSync(process.argv[3], 'utf8'))), null, 2))
+  } else if (process.argv[2] === '--compare' && process.argv[3] && process.argv[4]) {
+    const read = path => JSON.parse(readFileSync(path, 'utf8'))
+    console.log(JSON.stringify(compareRuns(read(process.argv[3]), read(process.argv[4])), null, 2))
   } else {
-    console.error('Usage: node scripts/agent-quality-eval.mjs --cases | --score report.json')
+    console.error('Usage: node scripts/agent-quality-eval.mjs --cases | --score report.json | --compare baseline.json candidate.json')
     process.exitCode = 1
   }
 }
