@@ -51,6 +51,14 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 后续 `redteam_next_action` **自动读取**所有持久阻塞键；`previous_task` 与临时 `blocked_task_key(s)` 保持只读、不会自动落库。条件发生变化后要明确 `unblock`，不把暂时故障永久封禁。
 
+### `redteam_next_action`
+只读生成下一步任务卡，返回 `focus`、候选 `actions` 与 `parallel_review`。
+- `parallel_review.status=ready` 时，`batch` 只包含明确标记的独立只读记录核查任务（目前是候选漏洞的证据缺口/授权范围关联核对）。
+- 同一批最多 3 项；必须是不同记录 ID，且无依赖、共享可变状态或证据前置关系。其余任务进入 `sequential` 或 `deferred`，不因候选列表靠前就自动并行。
+- 子任务只读本地记录与现有证据索引，不访问目标、不扫描、不登录、不验证漏洞、不写库、不再委派。由主会话等待本批返回后统一核对并决定是否更新记录。
+- 需要主动探测、漏洞验证、凭据操作、利用、隧道或内网操作的任务不属于此只读批次，仍按既有依赖顺序推进。
+- `child_writes_allowed=false` 表示子智能体不得直接修改事实库；主会话必须核对记录 ID、证据引用和推理依据。
+
 ### `redteam_agent_slot`
 【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑（可用 REDTEAM_MAX_AGENTS 配置）。action=status 看还剩几个名额与谁在跑；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
 
