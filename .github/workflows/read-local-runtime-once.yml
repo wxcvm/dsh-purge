@@ -1,52 +1,100 @@
-name: Locate actual Harness runtime listener
+name: Score completed DeepSeek baseline from local archive
 on:
   push:
     branches: [robin/read-runtime-usage-once]
 permissions:
   contents: read
 jobs:
-  preflight:
+  read:
+    if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/robin/read-runtime-usage-once'
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Inspect local Harness listeners without changing settings
+      - name: Score only uniquely marked synthetic QA session
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           @'
-          import {spawnSync} from 'node:child_process'
-          const ps=String.raw`
-          $ErrorActionPreference='SilentlyContinue'
-          $names=@{}
-          Get-Process | ForEach-Object {if($_.ProcessName -match '^(?:dsh(?:[._-].*)?|harness(?:[._-].*)?|deepseek(?:[._-].*)?|electron|node|nodejs|bun|ds-harness(?:[._-].*)?)$') {$names[[int]$_.Id]=$_.ProcessName}}
-          $rows=@(Get-NetTCPConnection -State Listen | Where-Object {$names.ContainsKey([int]$_.OwningProcess)} | ForEach-Object {
-           $family=if($_.LocalAddress -match ':'){'ipv6'}else{'ipv4'}
-           $name=$names[[int]$_.OwningProcess]
-           $kind=if($name -match 'node|bun'){'runtime'}elseif($name -eq 'electron'){'electron'}else{'harness'}
-           [pscustomobject]@{port=$_.LocalPort;family=$family;kind=$kind}
-          } | Sort-Object port,family,kind -Unique)
-          [pscustomobject]@{matchingProcesses=$names.Count;listeners=$rows} | ConvertTo-Json -Compress -Depth 4
-          `
-          const result=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command',ps],{encoding:'utf8',timeout:12000,windowsHide:true,maxBuffer:1024*1024})
-          let state=null;try{state=JSON.parse(result.stdout||'')}catch{}
-          const rows=Array.isArray(state?.listeners)?state.listeners:[]
-          const candidates=rows.filter(x=>Number.isInteger(x.port)&&x.port>0&&x.port<=65535&&['ipv4','ipv6'].includes(x.family)).slice(0,40)
-          async function probe(x){
-           const origin='http://'+(x.family==='ipv6'?'[::1]':'127.0.0.1')+':'+x.port
-           try{
-           const r=await fetch(origin+'/dsh-purge/runtime-observations?limit=1',{signal:AbortSignal.timeout(1800),redirect:'error'})
-           const type=r.headers.get('content-type')||''
-           let v=null
-           if(type.includes('application/json')){try{v=await r.json()}catch{}}
-           const verified=v?.schemaVersion===1&&v?.readOnly===true&&Array.isArray(v?.items)
-           const latest=verified?v.items.slice(0,1).map(a=>({provider:/^deepseek(?:-ai)?$/i.test(a.provider||'')?a.provider:null,model:/^deepseek-(?:v4[.0-9-]*flash|flash|v4-pro)$/i.test(a.model||'')?a.model:null,providerSource:a.providerSource||null,modelSource:a.modelSource||null})):null
-           return {port:x.port,family:x.family,kind:x.kind,http:r.status,verifiedRuntimeEndpoint:verified,latest}
-           }catch{return {port:x.port,family:x.family,kind:x.kind,reachable:false}}
+          import fs from 'node:fs'
+          import path from 'node:path'
+          import os from 'node:os'
+          import zlib from 'node:zlib'
+          const marker='PURGE-DS41-BASELINE-01'
+          const root=path.join(process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh'),'sessions')
+          const out=x=>console.log('PURGE_DS41_RESULT='+JSON.stringify(x))
+          const dirs=d=>{try{return fs.readdirSync(d,{withFileTypes:true}).filter(x=>x.isDirectory()&&!x.isSymbolicLink()).map(x=>x.name)}catch{return []}}
+          const files=[]
+          for(const a of dirs(root))for(const b of dirs(path.join(root,a))){const f=path.join(root,a,b,'session.v4.jsonl.zstd');try{const s=fs.lstatSync(f);if(s.isFile()&&!s.isSymbolicLink())files.push({f,mtime:s.mtimeMs,size:s.size})}catch{}}
+          files.sort((a,b)=>b.mtime-a.mtime)
+          const magic=Buffer.from([0x28,0xb5,0x2f,0xfd])
+          const msg=e=>e?.data?.message??e?.data
+          const txt=m=>typeof m?.content==='string'?m.content:(Array.isArray(m?.content)?m.content:[]).map(b=>typeof b==='string'?b:b?.type==='text'?b.text||'':'').join('\n')
+          const num=v=>typeof v==='number'&&Number.isFinite(v)&&v>=0
+          const fields=['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens']
+          const knownModel=v=>typeof v==='string'&&/^deepseek(?:[-./:][a-z0-9_.:/-]+)?$/i.test(v)&&v.length<=100?v:null
+          const knownProvider=v=>typeof v==='string'&&/^(deepseek|deepseek-ai|openai|deepseek-official|deepseek_official)$/i.test(v)?v:null
+          const key={A1:'unverified',A2:'verified',B1:'unverified',B2:'contradicted'}
+          const ts=e=>{for(const v of [e?.timestamp,e?.ts,e?.time]){const n=typeof v==='number'&&v>1e12&&v<1e14?v:typeof v==='string'&&/^\d{4}-\d\d-\d\dT/.test(v)?Date.parse(v):NaN;if(Number.isFinite(n))return n}return null}
+          function score(t){
+           let raw=t.trim(),strict=true,x
+           try{x=JSON.parse(raw)}catch{strict=false;try{x=JSON.parse(raw.replace(/^\x60{3}(?:json)?\s*|\s*\x60{3}$/gi,''))}catch{return {valid:false,strict:false,passed:null,rows:[]}}}
+           if(!Array.isArray(x?.reports)||x.reports.length!==4||new Set(x.reports.map(r=>r?.id)).size!==4||x.reports.some(r=>!Object.hasOwn(key,r?.id)))return {valid:false,strict,passed:null,rows:[]}
+           const rows=x.reports.map(r=>({id:r.id,lifecycle:['completed','aborted','error','unknown'].includes(r.lifecycle)?r.lifecycle:'invalid',outcome:['verified','unverified','contradicted'].includes(r.outcome)?r.outcome:'invalid',correct:r.lifecycle==='completed'&&r.outcome===key[r.id]}))
+           return {valid:rows.every(r=>r.lifecycle!=='invalid'&&r.outcome!=='invalid'),strict,passed:rows.filter(r=>r.correct).length,rows}
           }
-          const probes=await Promise.all(candidates.map(probe))
-          console.log('PURGE_LISTENER_CHECK='+JSON.stringify({status:state?'ok':'enumeration-failed',processCount:state?.matchingProcesses??null,candidateCount:rows.length,probed:probes.length,results:probes}))
+          let scanned=0,bytes=0,incomplete=0,matches=[]
+          for(const f of files.slice(0,60)){
+           if(f.size>64*1024*1024||bytes+f.size>256*1024*1024)continue
+           let buf;try{buf=fs.readFileSync(f.f)}catch{continue}
+           scanned++;bytes+=f.size
+           let pending='',decoded=0,complete=true,active=null,seen=new Set()
+           const finish=()=>{if(active){matches.push(active);active=null}}
+           function inspect(e0){
+           const e=e0?.event&&typeof e0.event.type==='string'?e0.event:e0
+           if(typeof e?.type!=='string')return
+           if(Number.isSafeInteger(e.seq)){if(seen.has(e.seq))return;seen.add(e.seq)}
+           const d=e.data
+           if(e.type==='user/message'){
+             const m=msg(e),source=d?.source??m?.source,t=txt(m)
+             if(source?.kind&&!['user','human'].includes(source.kind))return
+             if(/^\s*(?:<(?:system-reminder|openviking-context|dsh-purge)|Current runtime context|Time sampled)/i.test(t))return
+             finish()
+             if(t.includes(marker)&&t.includes('A1')&&t.includes('B2'))active={started:ts(e),route:{provider:null,model:null},attempts:[],final:null,ended:null,toolStarts:0,turnEnds:[],parseComplete:true}
+             return
+           }
+           if(!active)return
+           if(e.type==='request/header')active.route={provider:knownProvider(d?.header?.config?.provider),model:knownModel(d?.header?.config?.model),source:'request-header'}
+           if(e.type==='request/context'){const p=knownProvider(d?.provider),m=knownModel(d?.model);if(p)active.route.provider=p;if(m)active.route.model=m;if(p||m)active.route.source='request-context'}
+           if(e.type==='assistant/message'||e.type==='assistant/attempt'){
+             const u0=d?.usage,stream=Array.isArray(d?.stream)?d.stream:[]
+             let u1=null,reason=null,text=''
+             for(const r of stream){const c=r?.chunk;if(c?.type==='usage'&&fields.some(k=>num(c.usage?.[k])))u1=c.usage;if(c?.type==='finish')reason=c.reason?.kind;if(c?.type==='block-start'&&c.blockType==='tool-call')active.toolStarts++;if(c?.type==='text-delta'&&typeof c.text==='string')text+=c.text}
+             const u=num(u0?.totalTokens)?u0:num(u1?.totalTokens)?u1:fields.some(k=>num(u0?.[k]))?u0:u1
+             const route={...active.route}
+             const mp=knownProvider(d?.message?.source?.provider),mm=knownModel(d?.message?.source?.model)
+             if(mp)route.provider=mp;if(mm)route.model=mm;if(mp||mm)route.source='assistant-event'
+             const a={event:e.type,finish:['stop','tool-calls','max-tokens','error','aborted','content_filter'].includes(reason)?reason:'unknown',route,usage:Object.fromEntries(fields.map(k=>[k,num(u?.[k])?u[k]:null]))}
+             active.attempts.push(a)
+             if(e.type==='assistant/message'){const response=txt(msg(e))||text;active.final={...a,score:score(response),responseLength:response.length}}
+           }
+           if(e.type==='turn/end'){
+             const k=d?.reason?.kind
+             active.turnEnds.push(['completed','aborted','error','cancelled','canceled','interrupted','stopped','failed'].includes(k)?k:'unknown')
+             active.ended=ts(e)
+           }
+           }
+           function line(s){if(!s.trim())return;try{inspect(JSON.parse(s))}catch{complete=false}}
+           function feed(s){pending+=s;let p;while((p=pending.indexOf('\n'))>=0){line(pending.slice(0,p));pending=pending.slice(p+1)}if(pending.length>32*1024*1024){complete=false;pending=''}}
+           const starts=[];let pos=0;while((pos=buf.indexOf(magic,pos))>=0){starts.push(pos);pos+=4}
+           if(!starts.length)complete=false
+           for(let i=0;i<starts.length;i++){try{const frame=zlib.zstdDecompressSync(buf.subarray(starts[i],starts[i+1]??buf.length),{maxOutputLength:32*1024*1024});decoded+=frame.length;if(decoded>128*1024*1024){complete=false;break}feed(frame.toString('utf8'))}catch{complete=false}}
+           if(pending.trim())line(pending)
+           if(active){active.parseComplete=complete;finish()}
+           if(!complete)incomplete++
+          }
+          out({status:matches.length?'matched':'not-found',archiveCount:files.length,scanned,incomplete,matchCount:matches.length,matches:matches.slice(0,5).map(x=>({parseComplete:x.parseComplete,turnEnds:x.turnEnds,wallMs:x.started!==null&&x.ended!==null?x.ended-x.started:null,toolStarts:x.toolStarts,attempts:x.attempts,final:x.final}))})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
