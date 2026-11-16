@@ -655,3 +655,43 @@ test('first live event bounds historical replay and later requests retain live r
   assert.equal(next.requestMaxTokens, null);
   assert.equal(old.model, 'b');
 });
+
+
+test('long-session task visibility compares exact task before and after compaction without claiming causation', () => {
+  for (const [before, after, compact, expected] of [
+    [true, true, true, 'present-at-both'],
+    [true, false, true, 'missing-at-response'],
+    [false, false, true, 'missing-at-both'],
+    [false, true, false, 'visible-at-response'],
+    [true, false, false, 'missing-at-response'],
+  ]) {
+    const o = createRuntimeObservations(), a = agent('continuity');
+    const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+    a.session.events = before ? [human] : [];
+    o.event(a.session, human);
+    start(o, a);
+    if (compact) o.event(a.session, { seq: 2, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    a.session.events = after ? [human] : [];
+    o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'PRIVATE RESPONSE' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.taskContinuity.status, expected);
+    assert.equal(row.taskContinuity.compactionObservedBetween, compact);
+    assert.equal(row.taskContinuity.start, before ? 'present' : 'missing');
+    assert.equal(row.taskContinuity.response, after ? 'present' : 'missing');
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+  }
+});
+
+test('unavailable task snapshot is not reported as context loss', () => {
+  const o = createRuntimeObservations(), a = agent('unavailable-continuity');
+  const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'Task' } };
+  a.session.events = [human];
+  o.event(a.session, human);
+  start(o, a);
+  assert.equal(o.snapshot().items[0].taskContinuity.compactionObservedBetween, null);
+  a.session.snapshotEvents = () => { throw new Error('unavailable'); };
+  o.event(a.session, { seq: 2, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done' } } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.taskContinuity.status, 'insufficient-evidence');
+  assert.equal(row.taskContinuity.response, 'unavailable');
+});
