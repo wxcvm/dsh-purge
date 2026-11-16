@@ -15,6 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Inspect Harness listeners and installed protocol without model calls
+      - name: Reconcile existing QA runtime rows and candidate archive ingestion
         shell: pwsh
-        run: ./scripts/qa-thinking-live-inspect.ps1
+        run: ./scripts/qa-thinking-live-reconcile.ps1
