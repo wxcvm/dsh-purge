@@ -34,7 +34,7 @@ test('business, CVE and methodology summaries are searchable through the existin
   assert.match(get(payment.id).body,/幂等|唯一事件键/)
   const grafana=listBundledKnowledge('CVE-2021-43798').find(r=>r.id==='fujiang:cloud-container:cve-2021-43798-grafana-file-read')
   assert.ok(grafana)
-  assert.equal(grafana.review_status,'vendor-reference-reviewed')
+  assert.equal(grafana.review_status,'reference-available-not-fully-reviewed')
   assert.match(get(grafana.id).body,/8\.0\.7/)
   assert.match(get('fujiang:triage:fingerprint-workflow').body,/反向代理/)
   assert.equal(listBundledKnowledge('', '富江 · 业务安全').length,60)
