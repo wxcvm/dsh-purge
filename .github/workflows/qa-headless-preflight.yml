@@ -1,0 +1,72 @@
+name: QA Headless Preflight
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+jobs:
+  preflight:
+    if: github.head_ref == 'robin/qa-headless-preflight-20261116'
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check installed CLI and effective model without model requests
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = Join-Path $env:RUNNER_TEMP 'purge-qa-preflight.mjs'
+          @'
+          import fs from 'node:fs'
+          import os from 'node:os'
+          import path from 'node:path'
+          import { pathToFileURL } from 'node:url'
+          import { createRequire } from 'node:module'
+          import { spawnSync } from 'node:child_process'
+          const root = 'D:\\dsh'
+          const exe = path.join(root, 'DeepSeek Harness.exe')
+          const cli = path.join(root, 'resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')
+          const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+          const support = path.join(root, 'resources/runtime')
+          const found = { executable: fs.existsSync(exe), cli: fs.existsSync(cli), home: fs.existsSync(home), runtime: fs.existsSync(support) }
+          console.log(JSON.stringify({ found }))
+          if (!found.executable || !found.cli || !found.home || !found.runtime) process.exit(2)
+          const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-qa-cli-'))
+          try {
+            const entry = path.join(temp, 'entry.mjs')
+            fs.writeFileSync(entry, 'import {runDesktopCli} from ' + JSON.stringify(pathToFileURL(cli).href) + ';\nawait runDesktopCli(' + JSON.stringify(support) + ');\n')
+            const env = {...process.env, ELECTRON_RUN_AS_NODE: '1', DSH_HOME: home}
+            const call = args => spawnSync(exe, ['--expose-internals', entry, ...args], {env, cwd: temp, encoding:'utf8', timeout:20000, windowsHide:true, maxBuffer:8*1024*1024})
+            const help = call(['--help'])
+            const flags = [...new Set((help.stdout || '').match(/--[a-z][a-z0-9-]*/g) || [])]
+            console.log(JSON.stringify({helpExit: help.status, flags:flags.filter(f=>/preset|agent|profile|patch|model|reason|json|permission|approval|config|help/.test(f))}))
+            const profileRoot = path.join(home,'profiles')
+            const profiles = fs.existsSync(profileRoot) ? fs.readdirSync(profileRoot,{withFileTypes:true}).filter(e=>e.isDirectory()).map(e=>e.name) : []
+            const req = createRequire(cli)
+            let parse
+            try { parse = req('yaml').parse } catch { console.log(JSON.stringify({yamlParser:false})); process.exitCode=3 }
+            for (const profile of ['desktop','codex-review']) {
+              if (!profiles.includes(profile)) { console.log(JSON.stringify({profile,exists:false})); continue }
+              const res = call(['--profile',profile,'--dump-config'])
+              let config
+              try { config = parse?.(res.stdout || '') } catch {}
+              const selection = [], presets = [], plugin = []
+              const label = v => typeof v==='string' && /^[\w./:@+-]{1,120}$/.test(v) ? v : null
+              const walk = v => {
+                if (!v || typeof v!=='object') return
+                if (v.id==='agent-default-model') selection.push({provider:label(v.config?.provider),model:label(v.config?.model),reasoningEffort:label(v.config?.reasoningEffort)})
+                if (typeof v.name==='string' && /dsh-purge/i.test(v.name)) plugin.push({present:true})
+                for (const [k,x] of Object.entries(v)) {
+                  if (/^(agentPreset|defaultPreset|presetId|reasoningEffort|multiAgent|multiAgentEnabled|subagentEnabled)$/i.test(k) && (typeof x==='boolean'||label(x))) presets.push({key:k,value:x})
+                  if (x && typeof x==='object') walk(x)
+                }
+              }
+              walk(config)
+              console.log(JSON.stringify({profile,exists:true,dumpExit:res.status,parsed:!!config,selection,purgePresent:plugin.length>0,settings:presets.slice(0,20)}))
+            }
+          } finally { fs.rmSync(temp,{recursive:true,force:true}) }
+          '@ | Set-Content -Path $script -Encoding UTF8
+          node $script
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
