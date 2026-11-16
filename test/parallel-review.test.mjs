@@ -72,6 +72,13 @@ test('duplicate target keys are not dispatched together', () => {
   assert.equal(plan.sequential[0].target, 'vuln #1')
 })
 
+test('one available slot keeps eligible work sequential', () => {
+  const plan = planParallelReviewBatch([task(1), task(2), task(3)], 1)
+  assert.equal(plan.status, 'sequential')
+  assert.equal(plan.batch.length, 0)
+  assert.equal(plan.sequential.length, 3)
+})
+
 test('one eligible task stays on the sequential path', () => {
   const plan = planParallelReviewBatch([task(1)])
   assert.equal(plan.status, 'sequential')
