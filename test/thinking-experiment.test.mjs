@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderThinkingExperiment, thinkingEventValues, parseThinkingExperiment, thinkingTimeline, compareThinkingTemplates, THINKING_TASK_CASES, thinkingTaskPrompt, scoreThinkingTask } from '../lib/workspace/thinking-experiment.js';
+import { renderThinkingExperiment, thinkingEventValues, parseThinkingExperiment, thinkingTimeline, compareThinkingTemplates, THINKING_TASK_CASES, thinkingTaskPrompt, scoreThinkingTask, thinkingEvidenceKey, thinkingEvidenceRow, thinkingEvidencePair, thinkingEvidenceMetrics } from '../lib/workspace/thinking-experiment.js';
 
 test('template converts display only and does not reinterpret inserted text', () => {
   const row = Object.freeze({ model:'fixture', reasoningChunks:2, reasoningChars:9, firstReasoningMs:0, reasoning:'PRIVATE' });
@@ -46,4 +46,26 @@ test('continuity scoring separates missing and invalid answers from actual wrong
   assert.equal(scoreThinkingTask('config','{"port":9000,"mode":"prod","portSource":"env","modeSource":"cli","extra":1}').status,'wrong');
   assert.equal(scoreThinkingTask('dependency','{"ready":["D","B"],"blocked":["C"],"done":["A"]}').status,'wrong');
   assert.equal(scoreThinkingTask('inventory','{"total":10,"C":0,"B":5,"A":5}').status,'correct');
+});
+
+test('runtime evidence pairs require exact identity, distinct sessions and complete matching routes',()=>{
+  const a={sessionId:'a',generation:1,attemptId:'1',startedAt:10,provider:'p',model:'m',streamEnded:true,finishObserved:true,finish:'stop',settlement:'committed',turnOutcome:'completed'};
+  const b={...a,sessionId:'b',startedAt:11};
+  assert.equal(thinkingEvidenceRow([a,b],thinkingEvidenceKey(a)),a);
+  assert.equal(thinkingEvidenceRow([a,a],thinkingEvidenceKey(a)),null);
+  assert.equal(thinkingEvidenceRow([{...a,startedAt:99}],thinkingEvidenceKey(a)),null);
+  assert.equal(thinkingEvidencePair(a,b),'comparable-attempts');
+  assert.equal(thinkingEvidencePair(a,{...b,sessionId:'a'}),'same-session');
+  assert.equal(thinkingEvidencePair(a,{...b,model:'x'}),'different-route');
+  assert.equal(thinkingEvidencePair(a,{...b,model:null}),'unknown-route');
+  assert.equal(thinkingEvidencePair(a,{...b,streamGap:true}),'incomplete');
+  assert.equal(thinkingEvidencePair(a,{...b,finish:'tool-calls'}),'incomplete');
+  assert.equal(thinkingEvidencePair(a,null),'missing');
+});
+test('runtime evidence keeps missing metrics unknown and does not combine stream tool counts',()=>{
+  const r=thinkingEvidenceMetrics({elapsedMs:0,usage:{totalTokens:10},toolCalls:2,durableToolStarts:2,toolEvidence:{results:1,errors:0,nonErrorResults:1,conflicts:0}});
+  assert.equal(r.elapsedMs,0);assert.equal(r.totalTokens,10);assert.equal(r.reasoningTokens,null);
+  assert.equal(r.liveToolStarts,2);assert.equal(r.durableToolStarts,2);assert.equal(r.toolResults,1);
+  assert.equal(r.toolErrors,0);assert.equal(r.firstTextMs,null);
+  assert.equal(thinkingEvidenceMetrics(null),null);
 });
