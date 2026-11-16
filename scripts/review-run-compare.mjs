@@ -45,6 +45,29 @@ function compareUsage(a, b, scope = 'whole-run') {
   }))
 }
 
+// Compare observed report outcomes, not causal influence or actual adoption.
+function childParentOutcome(child, parent) {
+  if (!child) return 'no-child-observation'
+  if (child.state === 'accepted') {
+    if (parent.state === 'accepted') return 'both-accepted'
+    if (parent.reportState === 'verified') return 'parent-lifecycle-unresolved'
+    return 'accepted-child-parent-not-verified'
+  }
+  if (child.lifecycle === 'completed' && child.reportState === 'unverified') {
+    return parent.state === 'accepted' ? 'unverified-child-accepted-parent' : 'neither-accepted'
+  }
+  return parent.state === 'accepted' ? 'unresolved-child-accepted-parent' : 'child-outcome-unresolved'
+}
+
+function qualitySummary(rows) {
+  const counts = key => ({
+    correct: rows.filter(row => row[key] === true).length,
+    incorrect: rows.filter(row => row[key] === false).length,
+    unknown: rows.filter(row => row[key] == null).length,
+  })
+  return { conclusion: counts('conclusionCorrect'), evidence: counts('evidenceCorrect') }
+}
+
 export function compareReviewRuns({ direct, delegated }) {
   if (!present(direct?.runId) || !present(delegated?.runId) || direct.runId === delegated.runId) {
     throw new Error('Two distinct run IDs are required')
@@ -61,6 +84,7 @@ export function compareReviewRuns({ direct, delegated }) {
     const directAccepted = first.state === 'accepted'
     const delegatedAccepted = second.state === 'accepted'
     return { id, direct: first, delegated: second, child: child || null,
+      childParentOutcome: childParentOutcome(child, second),
       change: directAccepted === delegatedAccepted ? 'unchanged'
         : delegatedAccepted ? 'improved' : 'regressed' }
   })
@@ -78,6 +102,10 @@ export function compareReviewRuns({ direct, delegated }) {
       childAccepted: children ? children.summary.accepted : null,
       childTotal: children ? children.summary.total : null,
     },
+    reportQuality: { direct: qualitySummary(baseline.results), delegated: qualitySummary(candidate.results),
+      child: children ? qualitySummary(children.results) : null },
+    childParentOutcomes: Object.fromEntries([...new Set(results.map(row => row.childParentOutcome))]
+      .map(outcome => [outcome, results.filter(row => row.childParentOutcome === outcome).length])),
     usage: compareUsage(direct.usage, delegated.usage),
     // Archive observations may omit uncommitted streams or child sessions.
     archiveUsage: compareUsage(direct.usage, delegated.usage, 'observed-archive'),
