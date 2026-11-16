@@ -220,3 +220,18 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(embedded, /formatArtexReviewAssets/)
   assert.match(embedded, /refs: sourceRefs/)
 })
+
+
+test('ARTEX report availability and all native triage states remain distinct', () => {
+  const statuses = ['resolved', 'risk_accepted', 'ignored', 'duplicate', 'in_progress', 'confirmed', 'pending'];
+  const input = structuredClone(sample);
+  input.runs[0].results = statuses.map((status, i) => ({ properties: {
+    findingId: i + 1, status, severity: 'high', reportAvailable: i === 0 ? true : i === 1 ? false : undefined,
+  }}));
+  const out = reviewArtexSarif(input);
+  assert.deepEqual(out.report_availability, { available: 1, absent: 1, unknown: 5 });
+  assert.deepEqual(out.items.slice(0, 3).map(x => x.report_available), [true, false, null]);
+  assert.deepEqual(out.review_queue.map(x => x.reported_status), ['in_progress', 'pending', 'confirmed', 'resolved', 'risk_accepted', 'ignored', 'duplicate']);
+  assert.equal(out.review_queue[3].report_available, true);
+  assert.equal(out.independently_confirmed_by_dsh, 0);
+});
