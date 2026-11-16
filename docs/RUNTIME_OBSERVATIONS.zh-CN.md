@@ -88,3 +88,7 @@ node scripts/evaluate-task-quality.mjs --matrix matrix.json > report.json
 - subagentSnapshots 可选数组，每项为 `{id, snapshot}`，snapshot 取该案例对应直接父会话的运行诊断响应中的 `subagents` 对象。必须由测试者或采集器确认案例与会话的对应关系，不根据模型文字推测。只接受 direct-parent 范围，保留配对区间峰值、未配对/乱序、全局窗口淘汰数及是否观测；缺失快照为 null，不将空快照解释为没有运行。请使用独立案例会话，不把同一全局快照分摊到多个案例。
 
 评分、trace 与子智能体证据分别报告；没有足够真实采集数据时，不宣称串行或空转已修复。
+
+### 两轮质量与观测对照
+
+使用 `node scripts/agent-quality-eval.mjs --compare baseline.json candidate.json` 读取两份独立采集的原始输入。输出逐案例结论、证据、完成情况与质量差值。只有同一案例两侧均存在 trace 时才计算检查计数差值；只有两侧均实际观测且窗口未发生淘汰时才比较子智能体配对和峰值重叠。缺失观测保持 null，差值方向为候选减基线。报告保留两侧原有用量与诊断摘要，不把观测计数变化视为任务成功或调度优化已证实。无需额外依赖，不改变运行时派活和请求。
