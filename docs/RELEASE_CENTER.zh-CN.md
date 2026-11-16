@@ -4,16 +4,19 @@
 
 > 本页为私有仓库的维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前版本快照 · 2026-11-15
+## 当前版本快照 · 2026-11-16
 
 | 渠道 | 源码版本 | Git 标签 | 状态 |
 | --- | --- | --- | --- |
 | Stable 历史标签 | 1.1.92-wxcvm.6 | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | 保留旧标签 |
-| Stable 已发布 | 1.1.92-wxcvm.7 | [v1.1.92-wxcvm.7](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.7) | 双端 CI、发行 ZIP 下载及 SHA256 校验通过；已发现 ARTEX 注入问题 |
-| Stable 补丁候选 | [1.1.92-wxcvm.8](../package.json) | 尚未创建 | #274、#275 修复 ARTEX 宿主注入及聊天靶标绑定，均已通过双端 CI；候选联合 CI、发行与实机复验待完成 |
-| Beta | [1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 发布资产与标签待独立核验 | beta 源码版本已核对；不整体覆盖 master |
+| Stable 已发布 | 1.1.92-wxcvm.7 | [v1.1.92-wxcvm.7](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.7) | Release 资产与 SHA256 已核验 |
+| Stable 已发布 | 1.1.92-wxcvm.8 | [v1.1.92-wxcvm.8](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.8) | Release 资产与 SHA256 已核验；真实 Desktop 验收仍需单独记录 |
+| Stable 联合候选 | [1.1.92-wxcvm.9](../package.json) | 尚未创建 | #282、#295 已合并；Windows + WSL PR CI 通过；候选联合 CI、Release 资产及实机验收待完成 |
+| Beta | [1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 资产与标签状态待独立核验 | 不整体覆盖 master，也不自动提升为 Stable |
 
-**注意：** Git 标签存在不等于 Release 已发布、资产齐全、校验通过或实机验收完成。.7 的发行任务 [43709689128](https://github.com/wxcvm/dsh-purge/actions/runs/43709689128) 已下载并核验资产；.8 尚未发行。
+**版本边界：** .8 标签指向提交 `9704f745`，保持不可变；当前 .9 候选基于其后的 master 改进，使用新版本号，不移动或覆盖历史标签。PR #277 记录了 .8 Release 发布成功、ZIP 下载及 SHA256 核验。
+
+**验收边界：** #278–#281、#283–#290、#296–#297 及 #282、#295 的对应 Windows + WSL PR CI 均已通过；本次 .9 候选提交的联合 CI、Release 工作流与真实 Windows Desktop 安装/升级/运行验收仍须分别确认。
 
 ## 如何判断版本状态
 
