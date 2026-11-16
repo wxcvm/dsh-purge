@@ -1,6 +1,35 @@
-# 1.1.92-wxcvm.8
+# 1.1.92-wxcvm.9
 
 ## 中文
+
+本次联合稳定版基于已发布的 .8，整合其后 master 中已合并并通过 Windows + WSL 兼容性 CI 的清洗、运行时、Agent、知识库与 ARTEX 改进。
+
+- **清洗与响应判定**：减少引用内容造成的拒答误判，保留明确的授权范围与权限拒绝、安全边界；普通任务指导按任务需要调整，并减少无效的中性重复检查。此项改善判定精度，不承诺绕过模型自身的安全策略。
+- **Provider 与流式运行时**：区分最终响应与失败的流式尝试；保留宿主请求决策和 Provider 自身重试语义，识别永久性失败，取消过期重试，并改进原生工具结果、任务上下文和 token 预算的证据归因；清理陈旧后续请求并遮蔽运行诊断中的敏感内容。
+- **Agent 协作**：支持按依赖关系组织独立只读审查批次，保留任务优先级和顺序，并按可用执行槽位调度；不将该能力扩大为活动攻击任务的自动并发调度。
+- **富江知识库与技能索引**：完成 167 条结构化防御参考条目（105 条 CVE、59 条企业安全控制、3 条方法类），另有 164 条参考说明；补充产品/版本适用性判断、厂商公告校正，以及依据任务证据推荐技能。
+- **ARTEX 与预设修复**：报告审查区分原生分诊状态与报告证据可用性，不把外部状态误写为 DSH 独立确认；修复红队预设 YAML persona 前缀缩进，确保角色与操作章节保留在预期提示词块中。
+- **离线质量评估**：整合离线 Agent 推理基线和虚构记录审查评估工具，用于回归与证据质量分析；这些数据不代表真实目标测试结果，也不构成对实战得分或模型能力的保证。
+
+主要整合：#278–#281、#283–#290、#296–#297，以及本次补入的 #282、#295。此前 .8 的 ARTEX 宿主注入与会话靶标绑定修复保持不变。
+
+## English
+
+- Refines cleaning guidance and refusal classification while preserving explicit scope, permission and safety boundaries.
+- Improves provider/stream evidence attribution, retry and cancellation handling, task-context correlation, and privacy-safe runtime diagnostics.
+- Adds dependency-aware batches for independent read-only reviews while preserving task priority and order.
+- Integrates 167 structured Fujiang defensive entries: 105 CVEs, 59 business-security controls and 3 method entries, plus 164 reference notes; improves version applicability and skill retrieval.
+- Distinguishes ARTEX report availability from native triage status and fixes redteam persona-prefix YAML indentation.
+- Adds offline quality and evidence-review regression suites; synthetic results are not claims about live-target performance.
+
+The .8 tag and release remain immutable. This candidate uses the new version .9. Real Windows Desktop acceptance remains a separate step and is not implied by CI.
+
+---
+
+## 历史发布说明：1.1.92-wxcvm.8
+
+
+### 中文
 
 本补丁修复 .7 正式版在真实 Harness Desktop 的两个问题：ARTEX 本机联动出现 `cannot get property "redteam" without inject`（#274），以及聊天输入框缺少靶标选择指令（#275）。
 
@@ -10,7 +39,7 @@
 - 恢复原生 `/bind` 靶标选择与绑定、解除绑定、当前对话隔离及显式绑定持久化；复用同一份本地绑定记录（#275）。
 - 不修改 ARTEX 公司 ID、令牌、项目数据或外部连接配置。真实 Desktop 复验仍需在安装补丁后进行。
 
-## English
+### English
 
 - Fixes the ARTEX local-status endpoint on strict Cordis hosts by declaring the store dependency in its own lifecycle scope (#274).
 - Uses the actual store root, reports temporary service unavailability clearly, and handles service reload without changing unrelated routes.
