@@ -334,3 +334,105 @@ test('task context excludes candidates outside a structured fixed-version range'
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
   } finally { db.close() }
 })
+
+
+test('product-related skills are suggested even when no CVE candidate matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: 'REST API inventory service',
+        ports: [{ port: 8080, proto: 'tcp', state: 'open', service: 'http', product: 'Inventory API', version: '1.0' }],
+        fingerprints: [],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.equal(context.knowledge_candidates.length, 0)
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+  } finally {
+    db.close()
+  }
+})
+
+test('business security controls are suggested from observed workflow evidence without CVE matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, proto: 'tcp', state: 'open', service: 'https' }],
+        fingerprints: [],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.equal(context.knowledge_candidates.length, 0)
+    const skill = context.related_skills.find(item => item.key === 'redteam:business-security-controls')
+    assert.ok(skill)
+    assert.match(skill.description, /多租户隔离/)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+  } finally {
+    db.close()
+  }
+})
+
+test('generic infrastructure observations do not receive business-workflow skill hints', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: 'SSH and DNS service availability',
+        ports: [{ port: 22, proto: 'tcp', state: 'open', service: 'ssh' }, { port: 53, proto: 'udp', state: 'open', service: 'dns' }],
+        fingerprints: [],
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.ok(!context.related_skills.some(item => item.key === 'redteam:business-security-controls'))
+  } finally {
+    db.close()
+  }
+})
+
+
+test('orphan vulnerability title can supply API and authorization context for skill hints', () => {
+  const { db, store } = fixture()
+  try {
+    db.prepare('UPDATE vuln SET title = ? WHERE id = 13').run('API 对象级授权边界')
+    const context = taskContext(store, 'lab', 'vuln #13')
+    assert.equal(context.asset_link_status, 'missing')
+    assert.equal(context.knowledge_candidates.length, 0)
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:business-security-controls'))
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+  } finally {
+    db.close()
+  }
+})
+
+test('business controls remain in the bounded skill hints alongside product and API matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, proto: 'tcp', state: 'open', service: 'https', product: 'Inventory API' }],
+        fingerprints: [],
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:business-security-controls'))
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+    assert.ok(context.related_skills.length <= 5)
+  } finally {
+    db.close()
+  }
+})
