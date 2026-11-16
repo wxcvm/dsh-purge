@@ -79,3 +79,12 @@ node scripts/evaluate-task-quality.mjs --matrix matrix.json > report.json
 ```
 
 `--cases` 列出十项普通 JSON 任务。`--raw` 对已有 baseline/candidate 样本评分；`--matrix` 对已有 host/current/candidate 三组同条件样本评分。两种模式均只读取本地 JSON 并输出报告，不调用模型，不补造缺失指标。采集来源与环境由输入声明，不能代替真实验收。清洗台可直接导入 report.json。
+
+## 智能体离线质量与运行证据对照
+
+`node scripts/agent-quality-eval.mjs --cases` 输出原有六个虚构记录解读案例；`--score report.json` 读取答案、可选 trace 与可选 subagentSnapshots。此评估不调用模型或网络，不改变正常任务评分规则。
+
+- trace 中每条记录由宿主或测试者独立采集，包含 `id`（案例 ID）、`check`（稳定的检查标识）、`status`（ok/error）。原有 trace 汇总保持兼容；新增 traceAnalysis 按案例区分已成功检查后的重复、首次成功前的重试、失败后恢复成功的不同检查，以及成功检查的去重数量。重复并不必然无效，成功检查也不证明交付正确。没有记录的案例不进入 byCase；没有提供 trace 时为 null。
+- subagentSnapshots 可选数组，每项为 `{id, snapshot}`，snapshot 取该案例对应直接父会话的运行诊断响应中的 `subagents` 对象。必须由测试者或采集器确认案例与会话的对应关系，不根据模型文字推测。只接受 direct-parent 范围，保留配对区间峰值、未配对/乱序、全局窗口淘汰数及是否观测；缺失快照为 null，不将空快照解释为没有运行。请使用独立案例会话，不把同一全局快照分摊到多个案例。
+
+评分、trace 与子智能体证据分别报告；没有足够真实采集数据时，不宣称串行或空转已修复。
