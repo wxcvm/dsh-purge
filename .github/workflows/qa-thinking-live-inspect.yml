@@ -27,7 +27,8 @@ jobs:
           try {
             git archive --format=tar --output=$archive HEAD
             if ($LASTEXITCODE -ne 0) { throw 'Could not archive exact candidate' }
-            $linuxArchive = ((& wsl.exe -d $distro -- wslpath -a $archive) -join '').Trim()
+            $windowsArchive = $archive.Replace([char]92, [char]47)
+            $linuxArchive = ((& wsl.exe -d $distro -- wslpath -a -u $windowsArchive) -join '').Trim()
             if ($LASTEXITCODE -ne 0 -or -not $linuxArchive.StartsWith('/')) { throw 'Could not resolve candidate archive in WSL' }
             $script = @'
           set -euo pipefail
