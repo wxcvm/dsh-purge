@@ -157,7 +157,8 @@ $rect=$editor[0].Current.BoundingRectangle
 # Read the fresh conversation's settings. Never open or change a
 # preset, model, collaboration toggle or permission control.
 $mode=[string]$pickers[0].Current.Name
-$standard=($mode -match '^(标准模式|Standard(?: mode)?|红队模式|Red[ -]?team(?: mode)?)
+$standard=($mode -match '^(标准模式|Standard(?: mode)?|红队模式|Red[ -]?team(?: mode)?)$')
+if($env:QA_GROUP -eq 'B' -and (!(Test-Path -LiteralPath $modeFile) -or (Get-Content -LiteralPath $modeFile -Raw).Trim() -cne $mode)){throw 'A/B mode changed; no submission'}
 $models=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.ClassName -eq '_9r0rkG_trigger'}catch{$false}})
 $modelOk=$false
 if($models.Count -eq 1){$modelOk=([string]$models[0].Current.Name -match '(?i)DeepSeek[-\s]*V4\.1[-\s]*Flash' -and [string]$models[0].Current.Name -match '(?i)\bMax\b')}
@@ -243,92 +244,3 @@ Start-Sleep -Milliseconds 1200
 [ordered]@{stage='thinking-submit';status='send-invoked';runId=$runId;taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
 & node $collector --collect $env:QA_GROUP
 if($LASTEXITCODE -ne 0){throw 'No completed verified result; no automatic resend'}
-)
-if($env:QA_GROUP -eq 'B' -and (!(Test-Path -LiteralPath $modeFile) -or (Get-Content -LiteralPath $modeFile -Raw).Trim() -cne $mode)){throw 'A/B mode changed; no submission'}
-$models=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.ClassName -eq '_9r0rkG_trigger'}catch{$false}})
-$modelOk=$false
-if($models.Count -eq 1){$modelOk=([string]$models[0].Current.Name -match '(?i)DeepSeek[-\s]*V4\.1[-\s]*Flash' -and [string]$models[0].Current.Name -match '(?i)\bMax\b')}
-[ordered]@{stage='thinking-settings';standard=$standard;modelMaxVerified=$modelOk;settingsChanged=$false}|ConvertTo-Json -Compress
-if(-not ($standard -and $modelOk)){
-  [ordered]@{stage='thinking-submit';status='standard-or-model-not-confirmed';taskSubmitted=$false}|ConvertTo-Json -Compress
-  return
-}
-$packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-document-desktop.mjs') --packet) -join [char]10).TrimEnd()
-if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith($marker) -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
-function Normalize-ComposerText($text) {
-  if($null -eq $text){return ''}
-  return (([string]$text).Replace(([string][char]13+[string][char]10),[string][char]10).Replace([string][char]13,[string][char]10)).TrimEnd()
-}
-function Read-Composer($element,$expected) {
-  $value=''
-  $text=''
-  try{$p=Get-Pattern $element ([System.Windows.Automation.ValuePattern]::Pattern);if($null -ne $p){$value=Normalize-ComposerText $p.Current.Value}}catch{}
-  try{$p=Get-Pattern $element ([System.Windows.Automation.TextPattern]::Pattern);if($null -ne $p){$text=Normalize-ComposerText ($p.DocumentRange.GetText(-1))}}catch{}
-  return [ordered]@{
-    valueLength=$value.Length;textLength=$text.Length
-    valueMatches=($value -ceq $expected);textMatches=($text -ceq $expected)
-    valueMarker=$value.StartsWith($marker)
-    textMarker=$text.StartsWith($marker)
-  }
-}
-$packet=Normalize-ComposerText $packet
-$verified=$false
-$readback=$null
-# Use the real Chromium paste event. Preserve the user's clipboard as
-# an opaque data object; do not inspect or log its contents.
-Add-Type -AssemblyName System.Windows.Forms
-$editor=@(Get-Composer)
-if($editor.Count -ne 1){throw 'Expected one fresh composer'}
-if(-not (Click-Verified $editor[0])){[void](Activate-Harness)}
-if(-not (Focus-Verified $editor[0])){throw 'Cannot confirm Harness composer focus; no paste performed'}
-if([Threading.Thread]::CurrentThread.GetApartmentState() -ne [Threading.ApartmentState]::STA){throw 'Clipboard requires STA; no paste performed'}
-$oldClipboard=[System.Windows.Forms.Clipboard]::GetDataObject()
-try{
-  [System.Windows.Forms.Clipboard]::SetText($packet,[System.Windows.Forms.TextDataFormat]::UnicodeText)
-  if(-not (Focus-Verified $editor[0])){throw 'Composer lost focus; no paste performed'}
-  [QaDesktopMouse]::keybd_event(17,0,0,[UIntPtr]::Zero)
-  try{
-    [QaDesktopMouse]::keybd_event(86,0,0,[UIntPtr]::Zero)
-    [QaDesktopMouse]::keybd_event(86,0,2,[UIntPtr]::Zero)
-  }finally{[QaDesktopMouse]::keybd_event(17,0,2,[UIntPtr]::Zero)}
-  for($i=0;$i -lt 12;$i++){
-    Start-Sleep -Milliseconds 300
-    $editor=@(Get-Composer)
-    if($editor.Count -ne 1){break}
-    $readback=Read-Composer $editor[0] $packet
-    if($readback.valueMatches -or $readback.textMatches){$verified=$true;break}
-  }
-}finally{
-  try{
-    if($null -ne $oldClipboard){[System.Windows.Forms.Clipboard]::SetDataObject($oldClipboard,$true,5,100)}
-    else{[System.Windows.Forms.Clipboard]::Clear()}
-  }catch{Write-Warning 'Clipboard restoration failed; clipboard may contain the fictional QA packet.'}
-}
-[ordered]@{stage='composer-entry';method='verified-paste';packetLength=$packet.Length;verified=$verified;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
-if(-not $verified){
-  [ordered]@{stage='thinking-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
-  return
-}
-$send = @(Get-Controls | Where-Object {
-  try {
-    (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -match '^(发送(?:消息)?|Send(?: message)?)(?:\s*\([^)]*\))?$' -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))
-  } catch { $false }
-})
-if ($send.Count -ne 1) {
-  $bounds=$editor[0].Current.BoundingRectangle
-  $localButtons=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.BoundingRectangle.Left -ge ($bounds.Left-40) -and $_.Current.BoundingRectangle.Right -le ($bounds.Right+40) -and $_.Current.BoundingRectangle.Top -ge ($bounds.Top-100) -and $_.Current.BoundingRectangle.Bottom -le ($bounds.Bottom+240)}catch{$false}}|ForEach-Object{[ordered]@{class=$_.Current.ClassName;enabled=$_.Current.IsEnabled;label=if($_.Current.Name -match '^(发送|Send|停止|Stop|提交|Submit|运行|Run)'){[string]$_.Current.Name}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}})
-  [ordered]@{stage='thinking-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
-  return
-}
-# Reserve the unique run marker before sending. A retry after an
-# ambiguous click must inspect the archive rather than resend.
-$currentSeat=@(Get-PresetSeat)
-if($currentSeat.Count -ne 1 -or [string]$currentSeat[0].Current.Name -notmatch '^(标准模式|Standard(?: mode)?)$'){throw 'Standard mode changed; no submission'}
-$reservation=[System.IO.File]::Open($sendMarker,[System.IO.FileMode]::CreateNew,[System.IO.FileAccess]::Write)
-$reservation.Dispose()
-$clicked=Click-Verified $send[0]
-if(-not $clicked){(Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
-Start-Sleep -Milliseconds 1200
-[ordered]@{stage='thinking-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-OFFICE-REVIEW-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
-& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-document-desktop.mjs') --collect
-if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
