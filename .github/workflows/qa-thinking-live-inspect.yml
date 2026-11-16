@@ -11,8 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 9ccb7e36437084a999479121e3fe11f1895d591b
+          ref: 69bede64d826dd1a85c23ded31fe4e09721a130e
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Run final candidate observer regression on Windows
+        run: node --test test/runtime-observations.test.mjs test/thinking-experiment.test.mjs
       - name: Run exact candidate Linux regression in existing Ubuntu WSL
         shell: pwsh
         run: |
