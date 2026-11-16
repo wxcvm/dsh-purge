@@ -41,10 +41,15 @@ for(const g of ['A','B']){
   const end=events.find(e=>e.seq>trace.humanSeq&&e.type==='turn/end'&&e.data?.turn===trace.turn);
   const within=events.filter(e=>e.seq>trace.humanSeq&&(!end||e.seq<=end.seq));
   const responses=within.filter(e=>['assistant/message','assistant/attempt'].includes(e.type)&&e.data?.turn===trace.turn);
-  const durable={responses:responses.length,streamRecords:0,chunkTypes:{},blockTypes:{},messageBlockTypes:{},reasoningDeltaText:0,reasoningDeltaOther:0,reasoningBlockText:0,reasoningBlockRawText:0};
+  const durable={responses:responses.length,streamRecords:0,chunkTypes:{},blockTypes:{},messageBlockTypes:{},reasoningDeltaText:0,reasoningDeltaOther:0,reasoningBlockText:0,reasoningBlockRawText:0,unrecognizedRecordShapes:[]};
   for(const e of responses){
     for(const r of Array.isArray(e.data?.stream)?e.data.stream:[]){
       durable.streamRecords++;const c=r?.chunk;add(durable.chunkTypes,c?.type);
+      if(safeType(c?.type)==='unknown'){
+        const keys=v=>v&&typeof v==='object'?Object.keys(v).filter(k=>/^[a-zA-Z][a-zA-Z0-9_-]{0,48}$/.test(k)).sort():[];
+        const shape={recordKeys:keys(r),recordType:safeType(r?.type),chunkKeys:keys(c),chunkType:safeType(c?.type),dataKeys:keys(r?.data),deltaKeys:keys(r?.delta)};
+        if(durable.unrecognizedRecordShapes.length<8)durable.unrecognizedRecordShapes.push(shape);
+      }
       if(c?.type==='block-start'||c?.type==='block-end')add(durable.blockTypes,c.blockType);
       if(c?.type==='reasoning-delta'){
         if(typeof c.text==='string'&&c.text.length)durable.reasoningDeltaText++;
