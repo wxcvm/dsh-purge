@@ -110,3 +110,35 @@ test('marked packets include identical fixture records and do not expose the ans
   const packet = JSON.parse(direct.slice(direct.indexOf('\n{')))
   for (const row of packet.cases) assert.equal(Object.hasOwn(row, 'answer'), false)
 })
+
+
+test('native child intervals distinguish overlap, sequential boundaries, and missing timing', () => {
+  const parent = session('p', [request(), ev(2, 'subagent/catalog', { items: [{ childId: 'a' }, { childId: 'b' }, { childId: 'missing' }] }),
+    reply(40, 1, ids.map(answer)), end(41, 1)])
+  const child = (id, start, finish, caseId, linked = true) => session(id,
+    [...(linked ? [{ header: { parentSession: 'p' } }] : []),
+      ev(start, 'user/message', { source: { kind: 'user' }, content: marker }),
+      reply(finish - 1, 1, [answer(caseId)]), end(finish, 1)],
+    { caseIds: [caseId] })
+  const a = child('a', 3, 15, ids[0])
+  const b = child('b', 8, 20, ids[1], false)
+  const overlapping = importReviewRun({ runId: 'example', parent, children: [a, b] }).delegationTimeline
+  assert.equal(overlapping.observedPeakConcurrentTurns, 2)
+  assert.equal(overlapping.observedOverlapMs, 7)
+  assert.equal(overlapping.timingCoverage, 'partial')
+  assert.equal(overlapping.missingOrUntimedChildren, 1)
+  assert.equal(overlapping.observedChildTurns[1].parentDescriptor, true)
+  assert.equal(overlapping.observedChildTurns[1].childParentRef, false)
+  assert.equal(overlapping.observedChildTurns[0].startOffsetMs, 2)
+  const sequential = importReviewRun({ runId: 'example', parent, children: [a, child('b', 15, 25, ids[1])] }).delegationTimeline
+  assert.equal(sequential.observedPeakConcurrentTurns, 1)
+  assert.equal(sequential.observedOverlapMs, 0)
+  const untimed = { ...b, records: b.records.map(({ timestamp, ...record }) => record) }
+  const partial = importReviewRun({ runId: 'example', parent, children: [a, untimed] }).delegationTimeline
+  assert.equal(partial.timedChildTurns, 1)
+  assert.equal(partial.missingOrUntimedChildren, 2)
+  assert.equal(partial.observedChildTurns[1].startOffsetMs, null)
+  const none = importReviewRun({ runId: 'example', parent, children: [] }).delegationTimeline
+  assert.equal(none.observedPeakConcurrentTurns, null)
+  assert.equal(none.observedOverlapMs, null)
+})
