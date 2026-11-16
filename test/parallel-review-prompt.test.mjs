@@ -9,7 +9,7 @@ const runtime = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url)
 test('main planner dispatches only explicit independent read-only batches', () => {
   assert.match(planner, /parallel_review\.status=ready/)
   assert.match(planner, /只读记录核查任务/)
-  assert.match(planner, /parallel_review\\.max_parallel/)
+  assert.match(planner, /parallel_review\.max_parallel/)
   assert.match(planner, /没有依赖、没有共享可变状态、没有证据前置关系/)
   assert.match(planner, /不访问目标、不扫描、不登录/)
   assert.match(planner, /主会话等待本批所有子任务返回或明确失败/)
@@ -17,7 +17,7 @@ test('main planner dispatches only explicit independent read-only batches', () =
   assert.doesNotMatch(planner, /每次只拉起一个智能体，跑完再派下一个/)
 })
 
-test('runtime gates batches on the highest-priority focus and enforces the three-slot ceiling', () => {
+test('runtime gates batches on the highest-priority focus and uses the configured slot ceiling', () => {
   assert.match(runtime, /planParallelReviewBatch\(focusAction\?\.parallelReview \? available : \[\], maxAgentsNow\(ctx\)\)/)
   assert.doesNotMatch(runtime, /redteamAgentSlotCap/)
   assert.match(runtime, /const cap = maxAgentsNow\(ctx\)/)
