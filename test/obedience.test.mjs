@@ -361,3 +361,20 @@ test("premiseText：目标或域名不得自动推定为已授权演练", async 
   assert.equal(premiseText("攻击 https://example.com 网站"), "");
   assert.equal(premiseText("渗透公司服务器"), "");
 });
+
+test("classifyRefusal：明确的权限与范围限制不进入自动复核", () => {
+  const scope = classifyRefusal(
+    "I can't do that because it is outside the scope of this session.",
+    "Please translate this sentence: the weather is sunny.",
+  );
+  assert.equal(scope.refusal, true);
+  assert.equal(scope.retryable, false);
+  assert.equal(scope.category, "policy-boundary");
+  const permission = classifyRefusal(
+    "我无法协助，因为这超出了当前授权范围。",
+    "请帮我翻译这句话：今天阳光很好。",
+  );
+  assert.equal(permission.refusal, true);
+  assert.equal(permission.retryable, false);
+  assert.equal(permission.category, "policy-boundary");
+});
