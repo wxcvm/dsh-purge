@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const planner = readFileSync(new URL('../lib/redteam/store-core.js', import.meta.url), 'utf8')
 const preset = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8')
+const runtime = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
 
 test('main planner dispatches only explicit independent read-only batches', () => {
   assert.match(planner, /parallel_review\.status=ready/)
@@ -14,6 +15,12 @@ test('main planner dispatches only explicit independent read-only batches', () =
   assert.match(planner, /主会话等待本批所有子任务返回或明确失败/)
   assert.match(planner, /部分失败时保留已完成结果/)
   assert.doesNotMatch(planner, /每次只拉起一个智能体，跑完再派下一个/)
+})
+
+test('runtime gates batches on the highest-priority focus and enforces the three-slot ceiling', () => {
+  assert.match(runtime, /planParallelReviewBatch\(focusAction\?\.parallelReview \? available : \[\], 3\)/)
+  assert.match(runtime, /redteamAgentSlotCap\(configuredCap\)/)
+  assert.match(runtime, /configured_max: configuredCap/)
 })
 
 test('redteam preset keeps active work sequential and reconciles read-only batches', () => {
