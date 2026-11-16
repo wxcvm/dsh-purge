@@ -150,8 +150,37 @@ export function extractMarkedTurn(records, marker, { userSeq, child = false } = 
   return { humanSeq: human.seq, turn, parentRefs, childIds: [...childIds(within)],
     lifecycle, finalText: finalUsable ? messageText(messageOf(final.event)) : null,
     route: final?.route ?? { provider: null, model: null },
+    startedAt: started, endedAt: ended,
     elapsedMs: started !== null && ended !== null && ended >= started ? ended - started : null,
     attempts }
+}
+
+// Counts observed native child-turn intervals, not scheduler slots.
+export function observedDelegationTimeline(parent, children, missingChildren) {
+  const rows = children.map(({ trace, caseIds, parentDescriptor, childParentRef }) => {
+    const relative = value => parent.startedAt === null || value === null ? null : value - parent.startedAt
+    return { caseIds, lifecycle: trace.lifecycle, parentDescriptor, childParentRef,
+      startOffsetMs: relative(trace.startedAt), endOffsetMs: relative(trace.endedAt),
+      elapsedMs: trace.elapsedMs, modelResponses: trace.attempts.length,
+      toolStarts: addObserved(trace.attempts, 'toolStarts') }
+  })
+  const intervals = children.map(({ trace }) => [trace.startedAt, trace.endedAt])
+    .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end) && end > start)
+  const points = intervals.flatMap(([start, end]) => [[start, 1], [end, -1]])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  let active = 0, peak = 0, overlapMs = 0, last = null
+  for (const [at, delta] of points) {
+    if (last !== null && active >= 2) overlapMs += at - last
+    active += delta
+    peak = Math.max(peak, active)
+    last = at
+  }
+  return { observedChildTurns: rows, timedChildTurns: intervals.length,
+    missingOrUntimedChildren: missingChildren + rows.length - intervals.length,
+    observedPeakConcurrentTurns: intervals.length ? peak : null,
+    observedOverlapMs: intervals.length ? overlapMs : null,
+    timingCoverage: !rows.length ? 'unknown'
+      : missingChildren || intervals.length !== rows.length ? 'partial' : 'observed-children-only' }
 }
 
 function sanitizedBatch(trace, caseIds, attempt) {
@@ -184,17 +213,20 @@ export function importReviewRun({ runId, parent, children = [], settingsId }) {
   const main = extractMarkedTurn(parent.records, marker, { userSeq: parent.userSeq })
   const batch = sanitizedBatch(main, ids, 'parent:' + main.humanSeq + ':' + main.turn)
   const claimedCases = new Set(), sessions = new Set([parent.sessionId])
-  const traces = [main], childBatches = []
+  const traces = [main], childBatches = [], childTraces = []
   for (const child of children) {
     if (!present(child?.sessionId) || sessions.has(child.sessionId)) throw new Error('Duplicate or missing child session')
     const assigned = validCases(child.caseIds)
     if (assigned.some(id => claimedCases.has(id))) throw new Error('Duplicate child case assignment')
     const trace = extractMarkedTurn(child.records, marker, { userSeq: child.userSeq, child: true })
-    const linked = main.childIds.includes(child.sessionId) || trace.parentRefs.includes(parent.sessionId)
+    const parentDescriptor = main.childIds.includes(child.sessionId)
+    const childParentRef = trace.parentRefs.includes(parent.sessionId)
+    const linked = parentDescriptor || childParentRef
     if (!linked || trace.parentRefs.some(id => id !== parent.sessionId)) throw new Error('Child archive is not linked to this parent')
     sessions.add(child.sessionId)
     assigned.forEach(id => claimedCases.add(id))
     traces.push(trace)
+    childTraces.push({ trace, caseIds: assigned, parentDescriptor, childParentRef })
     childBatches.push(sanitizedBatch(trace, assigned, 'child:' + childBatches.length + ':' + trace.humanSeq + ':' + trace.turn))
   }
   const attempts = traces.flatMap(trace => trace.attempts)
@@ -211,6 +243,7 @@ export function importReviewRun({ runId, parent, children = [], settingsId }) {
     reports: childBatches.flatMap(row => row.reports),
   } : null
   return { runId, route: main.route, settingsId: label(settingsId), batch, childBatch, usage,
+    delegationTimeline: observedDelegationTimeline(main, childTraces, missingChildren),
     archiveCoverage: { observedChildren: children.length, listedButMissingChildren: missingChildren,
       strictParentJson: batch.strictJson, childRoutes: traces.slice(1).map(trace => trace.route) } }
 }
