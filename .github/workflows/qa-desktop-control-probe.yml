@@ -1,4 +1,4 @@
-name: QA Desktop Verified Composer Entry
+name: QA Desktop Direct Evaluation Paste
 on:
   pull_request:
     types: [synchronize]
@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '24'
       - name: Verify fresh Desktop composer and submit direct QA only when confirmed
-        shell: pwsh
+        shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           Add-Type -AssemblyName UIAutomationClient
@@ -299,25 +299,37 @@ jobs:
           $packet=Normalize-ComposerText $packet
           $verified=$false
           $readback=$null
-          for($attempt=1;$attempt -le 2 -and -not $verified;$attempt++){
-            $editor=@(Get-Composer)
-            if($editor.Count -ne 1){throw 'Composer changed while entering QA task'}
-            $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
-            if($null -eq $vp -or $vp.Current.IsReadOnly){throw 'Composer is not writable'}
-            # Read the same fresh editor through both independent accessibility
-            # representations. Never submit a packet that cannot be verified.
-            $inputText=$packet
-            if($attempt -eq 2){$inputText=$packet.Replace([string][char]10,([string][char]13+[string][char]10))}
-            $vp.SetValue($inputText)
-            for($i=0;$i -lt 10;$i++){
+          # Use the real Chromium paste event. Preserve the user's clipboard as
+          # an opaque data object; do not inspect or log its contents.
+          Add-Type -AssemblyName System.Windows.Forms
+          $editor=@(Get-Composer)
+          if($editor.Count -ne 1){throw 'Expected one fresh composer'}
+          if(-not (Click-Verified $editor[0])){[void](Activate-Harness)}
+          if(-not (Focus-Verified $editor[0])){throw 'Cannot confirm Harness composer focus; no paste performed'}
+          if([Threading.Thread]::CurrentThread.GetApartmentState() -ne [Threading.ApartmentState]::STA){throw 'Clipboard requires STA; no paste performed'}
+          $oldClipboard=[System.Windows.Forms.Clipboard]::GetDataObject()
+          try{
+            [System.Windows.Forms.Clipboard]::SetText($packet,[System.Windows.Forms.TextDataFormat]::UnicodeText)
+            if(-not (Focus-Verified $editor[0])){throw 'Composer lost focus; no paste performed'}
+            [QaDesktopMouse]::keybd_event(17,0,0,[UIntPtr]::Zero)
+            try{
+              [QaDesktopMouse]::keybd_event(86,0,0,[UIntPtr]::Zero)
+              [QaDesktopMouse]::keybd_event(86,0,2,[UIntPtr]::Zero)
+            }finally{[QaDesktopMouse]::keybd_event(17,0,2,[UIntPtr]::Zero)}
+            for($i=0;$i -lt 12;$i++){
               Start-Sleep -Milliseconds 300
               $editor=@(Get-Composer)
               if($editor.Count -ne 1){break}
               $readback=Read-Composer $editor[0] $packet
               if($readback.valueMatches -or $readback.textMatches){$verified=$true;break}
             }
-            [ordered]@{stage='composer-entry';attempt=$attempt;packetLength=$packet.Length;verified=$verified;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
+          }finally{
+            try{
+              if($null -ne $oldClipboard){[System.Windows.Forms.Clipboard]::SetDataObject($oldClipboard,$true,5,100)}
+              else{[System.Windows.Forms.Clipboard]::Clear()}
+            }catch{Write-Warning 'Clipboard restoration failed; clipboard may contain the fictional QA packet.'}
           }
+          [ordered]@{stage='composer-entry';method='verified-paste';packetLength=$packet.Length;verified=$verified;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
           if(-not $verified){
             [ordered]@{stage='direct-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
             return
@@ -333,6 +345,7 @@ jobs:
             [ordered]@{stage='direct-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
             return
           }
-          (Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+          $clicked=Click-Verified $send[0]
+          if(-not $clicked){(Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
           Start-Sleep -Milliseconds 1200
           [ordered]@{stage='direct-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-DIRECT-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
