@@ -50,6 +50,7 @@ export function reconcileReviewBatch({ assignments, observations = [], reports =
     const currentReports = received.groups.get(id) || []
     const signatures = new Set(currentReports.map(reportSignature))
     let reportState = 'missing'
+    let conclusionCorrect = null, evidenceCorrect = null
     if (currentReports.length) {
       if (signatures.has(null)) reportState = 'invalid'
       else if (signatures.size > 1) reportState = 'conflicting'
@@ -57,12 +58,15 @@ export function reconcileReviewBatch({ assignments, observations = [], reports =
         const report = currentReports[0]
         const result = evaluate({ reports: [{ id, answer: report.answer, evidence: report.evidence }] })
           .results.find(item => item.id === id)
+        conclusionCorrect = result.conclusionCorrect
+        evidenceCorrect = result.evidenceCorrect
         reportState = result.passed ? 'verified' : 'unverified'
       }
     }
     const state = lifecycle === 'completed' && reportState === 'verified' ? 'accepted'
       : ['failed', 'aborted'].includes(lifecycle) ? 'failed' : 'unresolved'
     return { id, attempt, lifecycle, lifecycleConflict, reportState, state,
+      conclusionCorrect, evidenceCorrect,
       duplicateReports: currentReports.length - signatures.size }
   })
   const count = state => results.filter(row => row.state === state).length
