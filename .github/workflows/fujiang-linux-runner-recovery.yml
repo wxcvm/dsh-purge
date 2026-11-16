@@ -1,4 +1,4 @@
-name: One-time Linux runner recovery
+name: Prioritize Fujiang integration acceptance
 
 on:
   push:
@@ -6,59 +6,40 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
-  recover:
+  prioritize:
     runs-on: [self-hosted, Windows, X64, purge-ci]
     timeout-minutes: 5
     steps:
-      - name: Reconnect existing idle WSL runner
+      - name: Cancel redundant queued source-branch runs only
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $script = @'
-          set -eu
-          dir="$HOME/actions-runner"
-          cd "$dir"
-          python3 -c 'import json,sys; x=json.load(open(sys.argv[1], encoding="utf-8-sig")); sys.exit(0 if x.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge" else 1)' .runner
-          # Do not interrupt an active job.
-          if pgrep -x Runner.Worker >/dev/null; then
-            echo "A runner worker is active; no restart performed."
-            exit 0
-          fi
-          if [ -f .service ]; then
-            unit=$(tr -d '\r\n' < .service)
-            case "$unit" in
-              actions.runner.wxcvm-dsh-purge.*.service) ;;
-              *) echo "Unexpected service name; no changes made."; exit 4 ;;
-            esac
-            echo "Existing service state:"
-            systemctl is-active "$unit" || true
-            sudo -n systemctl restart "$unit"
-            systemctl is-active "$unit"
-          else
-            # Only stop the listener belonging to this exact runner installation.
-            for pid in $(pgrep -x Runner.Listener || true); do
-              if [ "$(readlink "/proc/$pid/exe" 2>/dev/null || true)" = "$dir/bin/Runner.Listener" ]; then
-                kill -TERM "$pid"
-                for i in $(seq 1 10); do
-                  kill -0 "$pid" 2>/dev/null || break
-                  sleep 1
-                done
-                if kill -0 "$pid" 2>/dev/null; then
-                  echo "Listener did not stop gracefully; no forced termination."
-                  exit 5
-                fi
-              fi
-            done
-            mkdir -p _diag
-            env -u RUNNER_TRACKING_ID nohup setsid ./run.sh </dev/null >_diag/purge-ci-recovery.log 2>&1 &
-          fi
-          echo "Restart requested for the existing idle runner."
-          sleep 3
-          pgrep -x Runner.Listener || true
-          echo "Actual GitHub connectivity will be verified by queued jobs."
-          exit 0
-          '@
-          $script = $script.Replace("`r", "")
-          wsl.exe --exec bash -lc $script
-          exit $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
+          $base = "https://api.github.com/repos/wxcvm/dsh-purge"
+          $integration = Invoke-RestMethod "$base/pulls/316" -Headers $headers
+          if ($integration.state -ne 'open' -or $integration.head.sha -ne '1b3e8a8e9ebf28ee3e4aa72cce97f0b33911e8a0') { throw 'Integration head changed; no cancellation' }
+          $runs = @{
+            '43883062664' = 'fecda98071771611a081f765407fc794f757e786'
+            '43880859702' = '0d5be2f07628f53c9a3a394fe2a62256d776f414'
+            '43882938256' = '834f7fe8a8e81c65792b963cd4ba52bfa28aa1e1'
+            '43883573815' = '766a16b079673dbc77f9b360a7d513d77d17517d'
+            '43884565755' = 'a331253411560d90f3b76bc0120c8cf81ae3407d'
+          }
+          foreach ($id in $runs.Keys) {
+            $run = Invoke-RestMethod "$base/actions/runs/$id" -Headers $headers
+            if ($run.head_sha -ne $runs[$id] -or $run.event -ne 'pull_request' -or $run.status -notin @('queued','pending')) { Write-Host "Skip ${id}: changed or not queued"; continue }
+            $jobs = (Invoke-RestMethod "$base/actions/runs/$id/jobs" -Headers $headers).jobs
+            $linux = @($jobs | Where-Object { $_.name -eq 'api-contracts (ubuntu-latest)' })
+            $windows = @($jobs | Where-Object { $_.name -eq 'api-contracts (windows-latest)' })
+            if ($linux.Count -ne 1 -or $linux[0].status -ne 'queued' -or $windows.Count -ne 1 -or $windows[0].conclusion -ne 'success' -or @($jobs | Where-Object { $_.status -eq 'in_progress' }).Count -gt 0) {
+              Write-Host "Skip ${id}: not a redundant queued Linux job"; continue
+            }
+            Invoke-RestMethod "$base/actions/runs/$id/cancel" -Method Post -Headers $headers | Out-Null
+            Write-Host "Cancellation requested for redundant source run $id"
+          }
+          Write-Host 'Integrated run 43885877177 and active source runs were not cancelled.'
