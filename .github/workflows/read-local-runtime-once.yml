@@ -1,67 +1,30 @@
-name: Run local QA model smoke once
+name: Inspect local model and Harness QA entrypoints
 on:
   push:
     branches: [robin/read-runtime-usage-once]
 permissions:
   contents: read
 jobs:
-  compare:
-    if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/robin/read-runtime-usage-once'
+  preflight:
     runs-on: [self-hosted, Windows, X64, purge-ci]
-    timeout-minutes: 6
+    timeout-minutes: 2
     steps:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Check loaded local models and compare fictional QA answers
+      - name: Inspect available local models and CLI help without inference
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           @'
-          import {performance} from 'node:perf_hooks'
           import {spawnSync} from 'node:child_process'
-          const out=x=>console.log('PURGE_QA_RESULT='+JSON.stringify(x))
-          const get=async url=>{try{const r=await fetch(url,{signal:AbortSignal.timeout(3000),redirect:'error'});return r.ok?await r.json():null}catch{return null}}
-          const ollama=await get('http://127.0.0.1:11434/api/ps')
-          const lm=await get('http://127.0.0.1:1234/api/v0/models')
-          const loadedO=(ollama?.models??[]).filter(m=>typeof m.name==='string'&&!/embed|rerank/i.test(m.name))
-          const loadedL=(lm?.data??[]).filter(m=>m.state==='loaded'&&m.type==='llm'&&typeof m.id==='string')
-          const cli=spawnSync('where.exe',['dsh'],{encoding:'utf8',timeout:3000,windowsHide:true})
-          const preflight={ollamaLoaded:loadedO.length,lmStudioLoaded:loadedL.length,harnessCliOnPath:cli.status===0}
-          const selected=loadedO.length?{server:'ollama',model:loadedO[0].name,url:'http://127.0.0.1:11434/api/chat'}:loadedL.length?{server:'lm-studio',model:loadedL[0].id,url:'http://127.0.0.1:1234/v1/chat/completions'}:null
-          if(!selected){out({status:'no-loaded-local-model',preflight});process.exit(0)}
-          const cases=[
-          {id:'a1',goal:'Check current calculator build B2 addition test',lifecycle:'completed',record:'Worker reported completion; no executed test or result recorded.'},
-          {id:'a2',goal:'Check current calculator build B2 addition test',lifecycle:'completed',record:'Addition test executed on B2 and passed.'},
-          {id:'b1',goal:'Check current documentation revision R7 links',lifecycle:'completed',record:'Link check passed on R6; no test of R7.'},
-          {id:'b2',goal:'Check current documentation revision R7 links',lifecycle:'completed',record:'Link check executed on R7 and failed.'}
-          ]
-          const key={a1:'unverified',a2:'verified',b1:'unverified',b2:'contradicted'}
-          const packet=JSON.stringify(cases)
-          const instruction='Evaluate fictional local software QA records. Do not use tools. Host lifecycle and verified result are independent. For each case output JSON only: {"reports":[{"id":"a1","lifecycle":"completed","outcome":"verified|unverified|contradicted"}]}. verified means matching check passed; contradicted means matching check failed; unverified means no matching check result. Use all case ids. '
-          function score(text){
-           let x;try{x=JSON.parse(text.trim())}catch{return {valid:false,passed:0,total:4}}
-           if(!Array.isArray(x.reports))return {valid:false,passed:0,total:4}
-           const ids=new Set(x.reports.map(r=>r?.id))
-           if(x.reports.length!==4||ids.size!==4||Object.keys(key).some(k=>!ids.has(k)))return {valid:false,passed:0,total:4}
-           return {valid:true,passed:x.reports.filter(r=>r.lifecycle==='completed'&&r.outcome===key[r.id]).length,total:4}
-          }
-          async function run(prompt){
-           const start=performance.now(),messages=[{role:'user',content:prompt}],isO=selected.server==='ollama'
-           const body=isO?{model:selected.model,messages,stream:false,options:{temperature:0,num_predict:512}}:{model:selected.model,messages,stream:false,temperature:0,max_tokens:512}
-           try{
-            const r=await fetch(selected.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(90000),redirect:'error'})
-            if(!r.ok)return {status:'http-error',httpStatus:r.status,elapsedMs:Math.round(performance.now()-start)}
-            const v=await r.json(),text=isO?v.message?.content:v.choices?.[0]?.message?.content
-            const measured=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0?x:null
-            const reason=isO?v.done_reason:v.choices?.[0]?.finish_reason
-            return {status:typeof text==='string'?'ok':'missing-response',text:typeof text==='string'?text:'',elapsedMs:Math.round(performance.now()-start),inputTokens:measured(isO?v.prompt_eval_count:v.usage?.prompt_tokens),outputTokens:measured(isO?v.eval_count:v.usage?.completion_tokens),finish:['stop','length'].includes(reason)?reason:'unknown'}
-           }catch{return {status:'request-failed',elapsedMs:Math.round(performance.now()-start)}}
-          }
-          const direct=await run(instruction+packet)
-          const worker=await run(instruction+packet)
-          const judge=worker.status==='ok'?await run(instruction+packet+'\nReview the prior candidate against the original records. Correct mistakes; do not blindly accept it. Candidate:\n'+worker.text.slice(0,6000)):null
-          const publicResult=r=>r?{status:r.status,elapsedMs:r.elapsedMs,inputTokens:r.inputTokens??null,outputTokens:r.outputTokens??null,finish:r.finish??null,httpStatus:r.httpStatus??null,score:r.status==='ok'?score(r.text):null}:null
-          out({status:'completed-local-smoke',preflight,server:selected.server,model:/^[\w./:@+-]{1,100}$/.test(selected.model)?selected.model:'local-model',direct:publicResult(direct),worker:publicResult(worker),judge:publicResult(judge),scope:'local-model-direct-vs-two-stage-review-not-native-harness'})
+          const check=async url=>{try{const r=await fetch(url,{signal:AbortSignal.timeout(3500),redirect:'error'});return {reachable:true,status:r.status,data:r.ok?await r.json():null}}catch{return {reachable:false,status:null,data:null}}}
+          const [ps,tags,lm]=await Promise.all([check('http://127.0.0.1:11434/api/ps'),check('http://127.0.0.1:11434/api/tags'),check('http://127.0.0.1:1234/api/v0/models')])
+          const valid=n=>typeof n==='string'&&/^[\w./:@+-]{1,100}$/.test(n)
+          const models=(tags.data?.models??[]).filter(m=>valid(m.name)&&!/(?:cloud|embed|rerank)/i.test(m.name)).map(m=>({name:m.name,bytes:Number.isFinite(m.size)?m.size:null}))
+          const lms=(lm.data?.data??[]).filter(m=>m.type==='llm'&&valid(m.id)).map(m=>({name:m.id,state:['loaded','not-loaded','unloaded'].includes(m.state)?m.state:'unknown'}))
+          const cli=spawnSync('cmd.exe',['/d','/s','/c','dsh --help'],{encoding:'utf8',timeout:12000,windowsHide:true})
+          const help=(cli.stdout||'').split(/\r?\n/).filter(l=>/usage:|commands:|options:|--help|--model|--profile|--preset|--prompt|--json|--print|--output|--session|--agent|--cwd|--non-interactive|^\s+(?:run|chat|exec|agent|session|help)\b/i.test(l)).map(l=>l.slice(0,250)).slice(0,35)
+          console.log('PURGE_PREFLIGHT_RESULT='+JSON.stringify({ollama:{ps:ps.reachable,status:ps.status,tags:tags.reachable,tagsStatus:tags.status,installed:models},lmStudio:{reachable:lm.reachable,status:lm.status,installed:lms},harness:{helpExit:cli.status,help}}))
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
