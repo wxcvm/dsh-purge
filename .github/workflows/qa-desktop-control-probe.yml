@@ -61,7 +61,7 @@ jobs:
           $pickers=@(Get-Controls | Where-Object {
             try {
               (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and
-              ($_.Current.ClassName -eq 'BI5uFG_trigger' -or $_.Current.Name -match '(?i)(?:选择|切换|当前).{0,12}(?:预设|智能体|助手|角色|模式)|(?:select|choose|current).{0,12}(?:preset|agent|mode)') -and
+              ($_.Current.ClassName -in @('BI5uFG_trigger','m2hUqa_seat') -or $_.Current.Name -match '(?i)^(?:标准模式|standard mode|红队模式|red\s*team mode)$' -or $_.Current.Name -match '(?i)(?:选择|切换|当前).{0,12}(?:预设|智能体|助手|角色|模式)|(?:select|choose|current).{0,12}(?:preset|agent|mode)') -and
               $null -ne (Get-Pattern $_ ([System.Windows.Automation.ExpandCollapsePattern]::Pattern))
             }catch{$false}
           })
@@ -75,7 +75,7 @@ jobs:
               $exp=Get-Pattern $picker ([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
               $exp.Expand()
               Start-Sleep -Milliseconds 500
-              $menu=@(Get-Controls | Where-Object {try{(Is-Visible $_) -and $_.Current.Name -match '(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?|标准(?:模式)?|standard(?:\s*mode)?|多智能体协作|multi.agent collaboration)$'}catch{$false}})
+              $menu=@(Get-Controls | Where-Object {try{(Is-Visible $_) -and $_.Current.Name -match '(?i)^(?:红队(?:模式)?|red\s*team(?:\s*mode)?|标准(?:模式)?|standard(?:\s*mode)?|多智能体协作|multi.agent collaboration)(?:\s*[（(][^）)]{1,40}[）)])?$'}catch{$false}})
               $probes+= [ordered]@{class=$class;currentIsStandard=($before -match '(?i)标准|standard');options=@($menu|ForEach-Object{[ordered]@{name=$_.Current.Name;type=$_.Current.ControlType.ProgrammaticName;class=$_.Current.ClassName;patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}})}
               $red=@($menu|Where-Object{try{$_.Current.Name -match $redPattern -and ($null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern)) -or $null -ne (Get-Pattern $_ ([System.Windows.Automation.SelectionItemPattern]::Pattern)))}catch{$false}})
               if($red.Count -eq 1){
