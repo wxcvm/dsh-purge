@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rewritePromptAssembly, installAssembleGuard } from '../lib/identity.js';
+import { capabilityProtocolText } from '../lib/capability-protocol.js';
 
 test('latest presentation preserves provider-owned fields without inventing tools', () => {
   const variables = { provider: 'fixture', model: 'fixture' };
@@ -33,4 +34,14 @@ test('native assembly failure remains a visible failure, never fake empty succes
   const prompt = { assemble: async () => { throw failure; } };
   installAssembleGuard(prompt, (value) => value);
   await assert.rejects(prompt.assemble({}), (error) => error === failure);
+});
+
+
+test('capability guidance prefers conversation context and self-contained delegation', () => {
+  const text = capabilityProtocolText();
+  assert.match(text, /current conversation and supplied task text/i);
+  assert.match(text, /local session archives/i);
+  assert.match(text, /current task ID, complete task, constraints, and acceptance criteria/i);
+  assert.match(text, /preserve the requested output format/i);
+  assert.equal(capabilityProtocolText({ enabled: false }), '');
 });
