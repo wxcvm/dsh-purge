@@ -13,11 +13,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Check installed CLI and effective model without model requests
+      - name: Compose isolated redteam Max headless profile
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $script = Join-Path $env:RUNNER_TEMP 'purge-qa-preflight.mjs'
+          $script = Join-Path $env:RUNNER_TEMP 'purge-qa-compose.mjs'
           @'
           import fs from 'node:fs'
           import os from 'node:os'
@@ -30,90 +30,92 @@ jobs:
           const cli = path.join(root, 'resources/app/dsh/node_modules/@deepseek-ai/dsh-desktop-host/lib/cli.js')
           const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
           const support = path.join(root, 'resources/runtime')
-          const found = { executable: fs.existsSync(exe), cli: fs.existsSync(cli), home: fs.existsSync(home), runtime: fs.existsSync(support) }
-          console.log(JSON.stringify({ found }))
-          if (!found.executable || !found.cli || !found.home || !found.runtime) process.exit(2)
-          const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-qa-cli-'))
+          const profileRoot = path.join(home, 'profiles')
+          const req = createRequire(cli)
+          const parse = req('yaml').parse
+          const desktopReq = createRequire(path.join(profileRoot, 'desktop', 'package.json'))
+          const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-qa-compose-'))
+          const label = v => typeof v === 'string' && /^[\w./:@+-]{1,120}$/.test(v) ? v : null
+          const collect = (v, out = []) => {
+            if (!v || typeof v !== 'object') return out
+            if (typeof v.id === 'string') out.push(v)
+            for (const x of Object.values(v)) if (x && typeof x === 'object') collect(x, out)
+            return out
+          }
+          const pick = (rows, id) => rows.find(row => row.id === id)
+          const resolvePlugin = spec => {
+            for (const resolver of [desktopReq, req]) {
+              try { return resolver.resolve(spec) } catch {}
+            }
+            return null
+          }
+          const describe = row => row ? {id:row.id,name:label(row.name),disabled:row.disabled===true,keys:Object.keys(row.config||{})} : null
+          const classify = res => {
+            const msg=(res.stderr||'')+'\n'+(res.status===0?'':res.stdout||'')
+            return {exit:res.status,timeout:res.error?.code==='ETIMEDOUT',classes:['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','Cannot find','ENOENT','EACCES','EPERM','unknown','Unknown','invalid','Invalid','already queued','not found','profile','plugin','schema','TypeError','ReferenceError','SyntaxError'].filter(s=>msg.includes(s)),stderrBytes:Buffer.byteLength(res.stderr||'')}
+          }
           try {
-            const entry = path.join(temp, 'entry.mjs')
-            fs.writeFileSync(entry, 'import {runDesktopCli} from ' + JSON.stringify(pathToFileURL(cli).href) + ';\nawait runDesktopCli(' + JSON.stringify(support) + ');\n')
-            const env = {...process.env, ELECTRON_RUN_AS_NODE: '1', DSH_HOME: home}
-            const call = args => spawnSync(exe, ['--expose-internals', entry, ...args], {env, cwd: temp, encoding:'utf8', timeout:20000, windowsHide:true, maxBuffer:8*1024*1024})
-            const help = call(['--help'])
-            const flags = [...new Set((help.stdout || '').match(/--[a-z][a-z0-9-]*/g) || [])]
-            console.log(JSON.stringify({helpExit: help.status, flags:flags.filter(f=>/preset|agent|profile|patch|model|reason|json|permission|approval|config|help/.test(f))}))
-            const helpLines = (help.stdout || '').split(/\r?\n/).filter(line => /(^\s*(Usage:|Commands:)|^\s+[-\w]+\s{2,}|--(?:profile|patch|dump-config|agent|preset|json|reason|permission|model))/.test(line))
-            console.log(JSON.stringify({cliHelp: helpLines.slice(0,60).map(line=>line.trim().slice(0,240))}))
-            const sourceFlags = new Set()
-            const sourceFiles = []
-            const scan = (dir, depth=0) => {
-              if (depth>3 || sourceFiles.length>=120) return
-              for (const entry of fs.readdirSync(dir,{withFileTypes:true})) {
-                if (entry.isSymbolicLink()) continue
-                const file = path.join(dir,entry.name)
-                if (entry.isDirectory()) scan(file,depth+1)
-                else if (/\.(?:js|mjs|cjs)$/.test(entry.name) && fs.statSync(file).size<2*1024*1024) {
-                  const src=fs.readFileSync(file,'utf8')
-                  const found=[...new Set(src.match(/--(?:agent[a-z0-9-]*|preset[a-z0-9-]*|reasoning[a-z0-9-]*|model[a-z0-9-]*|json|permission-mode|approval-policy|headless|profile|patch)/g)||[])]
-                  if(found.length) { sourceFiles.push({file:path.relative(path.dirname(cli),file),flags:found}); for(const f of found) sourceFlags.add(f) }
+            const entry=path.join(tmp,'entry.mjs')
+            fs.writeFileSync(entry,'import {runDesktopCli} from '+JSON.stringify(pathToFileURL(cli).href)+';\nawait runDesktopCli('+JSON.stringify(support)+');\n')
+            const call=(args,dshHome=home)=>spawnSync(exe,['--expose-internals',entry,...args],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',DSH_HOME:dshHome},cwd:tmp,encoding:'utf8',timeout:30000,windowsHide:true,maxBuffer:16*1024*1024})
+            const baseRes=call(['--profile','codex-review','--dump-config'])
+            if(baseRes.status!==0){console.log(JSON.stringify({stage:'base',...classify(baseRes)}));process.exitCode=2}
+            else {
+              const base=collect(parse(baseRes.stdout))
+              const desktop=collect(parse(fs.readFileSync(path.join(profileRoot,'desktop','cordis.patch.yml'),'utf8')))
+              const model=pick(desktop,'agent-default-model')
+              const registry=pick(desktop,'agent-preset-registry')
+              const sub=pick(desktop,'subagent')
+              const purge=pick(desktop,'dsh-purge')
+              const names=['agent-default-model','agent-preset-registry','subagent','dsh-purge','dsh-purge-redteam','dsh-purge-redteam-store','credentials','authorization','deepseek-account']
+              console.log(JSON.stringify({stage:'inventory',base:names.map(id=>describe(pick(base,id))).filter(Boolean),desktop:names.map(id=>describe(pick(desktop,id))).filter(Boolean),model:{provider:label(model?.config?.provider),model:label(model?.config?.model),reasoningEffort:label(model?.config?.reasoningEffort)},preset:{default:label(registry?.config?.default),selectedDefault:label(registry?.config?.selectedDefault)},subagent:{maxDepth:sub?.config?.maxDepth??null,maxActiveSubagents:sub?.config?.maxActiveSubagents??null}}))
+              const specs=['dsh-purge','dsh-purge/redteam','dsh-purge/redteam/store','dsh-purge/redteam/tools']
+              const paths=Object.fromEntries(specs.map(spec=>[spec,resolvePlugin(spec)]))
+              console.log(JSON.stringify({stage:'resolve',plugins:Object.fromEntries(specs.map(spec=>[spec,!!paths[spec]])),profileFiles:fs.readdirSync(path.join(profileRoot,'codex-review'),{withFileTypes:true}).filter(x=>x.isFile()).map(x=>x.name).filter(x=>/^(cordis|profile|package)\./.test(x))}))
+              if(!model||!registry||!sub||!purge||!paths['dsh-purge']||!paths['dsh-purge/redteam']||!paths['dsh-purge/redteam/store']||!paths['dsh-purge/redteam/tools']){
+                console.log(JSON.stringify({stage:'compose',ready:false,reason:'missing-required-installed-components'}));process.exitCode=3
+              } else {
+                const overlay=[]
+                const add=row=>{
+                  if(pick(base,row.id)) overlay.push(row)
+                  else overlay.push({insert:[row]})
+                }
+                add({id:'agent-default-model',config:{provider:model.config.provider,model:model.config.model,reasoningEffort:'max'}})
+                add({id:'agent-preset-registry',...(pick(base,'agent-preset-registry')?{}:{name:registry.name}),config:{...registry.config,selectedDefault:'redteam'}})
+                add({id:'subagent',...(pick(base,'subagent')?{}:{name:sub.name}),disabled:false,config:sub.config})
+                add({id:'dsh-purge',name:paths['dsh-purge'],inject:purge.inject,config:{...purge.config,autoApplyOnStart:false,autoUpdateOnStart:false,autoRevertOnMissing:false}})
+                add({id:'dsh-purge-redteam',name:paths['dsh-purge/redteam']})
+                add({id:'dsh-purge-redteam-store',name:paths['dsh-purge/redteam/store'],config:{root:path.join(tmp,'redteam-records')}})
+                const patch=path.join(tmp,'qa-overlay.json')
+                fs.writeFileSync(patch,JSON.stringify(overlay))
+                const result=call(['--profile','codex-review','--patch',patch,'--dump-config'])
+                let effective=[]
+                try{effective=collect(parse(result.stdout||''))}catch{}
+                const m=pick(effective,'agent-default-model'),p=pick(effective,'agent-preset-registry'),s=pick(effective,'subagent')
+                const effectiveModel=m?.config||{}
+                const ready=result.status===0&&effectiveModel.provider===model.config.provider&&effectiveModel.model===model.config.model&&effectiveModel.reasoningEffort==='max'&&p?.config?.selectedDefault==='redteam'&&!!s&&s.disabled!==true&&['dsh-purge','dsh-purge-redteam','dsh-purge-redteam-store'].every(id=>!!pick(effective,id))
+                console.log(JSON.stringify({stage:'compose',...classify(result),ready,model:{provider:label(effectiveModel.provider),model:label(effectiveModel.model),reasoningEffort:label(effectiveModel.reasoningEffort)},preset:label(p?.config?.selectedDefault),subagentEnabled:!!s&&s.disabled!==true,pluginIds:names.filter(id=>!!pick(effective,id))}))
+                if(!ready){process.exitCode=4}
+                else {
+                  // Boot only an isolated copy of the profile. Purge's normal preset
+                  // installation and cleanup must never touch the production DSH_HOME.
+                  const isolated=path.join(tmp,'home')
+                  const target=path.join(isolated,'profiles','codex-review')
+                  fs.mkdirSync(target,{recursive:true})
+                  for(const item of fs.readdirSync(path.join(profileRoot,'codex-review'),{withFileTypes:true})){
+                    if(item.isFile()&&/^(cordis|profile|package)\.(?:yml|yaml|json|mjs|js|cjs)$/.test(item.name))fs.copyFileSync(path.join(profileRoot,'codex-review',item.name),path.join(target,item.name))
+                  }
+                  const presetSource=path.join(home,'.agent-presets','redteam')
+                  if(fs.existsSync(presetSource))fs.cpSync(presetSource,path.join(isolated,'.agent-presets','redteam'),{recursive:true})
+                  const desktopModules=path.join(profileRoot,'desktop','node_modules')
+                  if(fs.existsSync(desktopModules))fs.symlinkSync(desktopModules,path.join(target,'node_modules'),'junction')
+                  const boot=call(['--profile','codex-review','--patch',patch,'--help'],isolated)
+                  console.log(JSON.stringify({stage:'isolated-boot',...classify(boot),help:/(?:Usage:|--json)/.test(boot.stdout||''),modelRequests:0,profileIsolated:true}))
+                  if(boot.status!==0)process.exitCode=5
                 }
               }
             }
-            scan(path.dirname(cli))
-            console.log(JSON.stringify({sourceFlags:[...sourceFlags], sourceFiles:sourceFiles.slice(0,24)}))
-            const profileRoot = path.join(home,'profiles')
-            const profiles = fs.existsSync(profileRoot) ? fs.readdirSync(profileRoot,{withFileTypes:true}).filter(e=>e.isDirectory()).map(e=>e.name) : []
-            const req = createRequire(cli)
-            let parse
-            try { parse = req('yaml').parse } catch { console.log(JSON.stringify({yamlParser:false})); process.exitCode=3 }
-            for (const profile of ['desktop','codex-review']) {
-              if (!profiles.includes(profile)) { console.log(JSON.stringify({profile,exists:false})); continue }
-              const appHelp = call(['--profile',profile,'--help'])
-              const appHelpText=(appHelp.stdout||'')+'\n'+(appHelp.stderr||'')
-              const appFlags=[...new Set(appHelpText.match(/--[a-z][a-z0-9-]*/g)||[])]
-              console.log(JSON.stringify({profile,appHelpExit:appHelp.status,appFlags,appHelpLines:(appHelp.stdout||'').split(/\r?\n/).filter(l=>/Usage:|Commands:|--(?:agent|preset|model|reason|json|permission|approval|session|prompt|profile|patch)/i.test(l)).slice(0,50).map(l=>l.trim().slice(0,250))}))
-              const res = call(['--profile',profile,'--dump-config'])
-              let config
-              try { config = parse?.(res.stdout || '') } catch {}
-              const selection = [], presets = [], plugin = []
-              const diagnostics = (res.stderr || '') + '\n' + (res.status === 0 ? '' : res.stdout || '')
-              const shortError = diagnostics.trim()
-              if (res.status!==0 && shortError.length<240 && /profile|desktop/i.test(shortError) && !/token|secret|password|credential|api.?key|bearer|https?:/i.test(shortError)) console.log(JSON.stringify({profile,shortError}))
-              const classes = ['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','Cannot find module','Cannot find package','Cannot find','ENOENT','EACCES','EPERM','unknown','Unknown','invalid','Invalid','not found','not supported','profile','desktop','plugin','patch','schema','configuration','TypeError','ReferenceError','SyntaxError'].filter(k=>diagnostics.includes(k))
-              console.log(JSON.stringify({profile,exit:res.status,diagnosticClasses:classes,stderrBytes:Buffer.byteLength(res.stderr||''),stdoutBytes:Buffer.byteLength(res.stdout||'')}))
-              const patchFile = path.join(profileRoot,profile,'cordis.patch.yml')
-              let localPatch
-              try { localPatch=parse?.(fs.readFileSync(patchFile,'utf8')) } catch {}
-              const localIds=[], selectedEntries=[]
-              const selectedIds=new Set(['agent-default-model','agent-preset-registry','subagent','subagent-model-selection-settings','dsh-purge'])
-              const safeLabel=v=>typeof v==='string' && /^[\w./:@+ -]{1,100}$/.test(v) && !/token|secret|password|credential|api.?key|bearer/i.test(v) ? v : null
-              const patchWalk=v=>{
-                if(!v || typeof v!=='object')return
-                if(typeof v.id==='string' && /^[\w./:@+-]{1,120}$/.test(v.id)) localIds.push(v.id)
-                if(selectedIds.has(v.id)){
-                  const c=v.config && typeof v.config==='object'?v.config:{}
-                  const selected={}
-                  for(const [k,x] of Object.entries(c)) if(/^(provider|model|reasoningEffort|agentPreset|defaultPreset|presetId|multiAgent|multiAgentEnabled|enabled|collaboration|subagentEnabled)$/i.test(k) && (typeof x==='boolean'||safeLabel(x))) selected[k]=x
-                  selectedEntries.push({id:v.id,entryKeys:Object.keys(v),configKeys:Object.keys(c),selected})
-                }
-                for(const x of Object.values(v)) if(x && typeof x==='object')patchWalk(x)
-              }
-              patchWalk(localPatch)
-              console.log(JSON.stringify({profile,patchExists:fs.existsSync(patchFile),patchParsed:!!localPatch,patchIds:[...new Set(localIds)].slice(0,70),selectedEntries}))
-              const label = v => typeof v==='string' && /^[\w./:@+-]{1,120}$/.test(v) ? v : null
-              const walk = v => {
-                if (!v || typeof v!=='object') return
-                if (v.id==='agent-default-model') selection.push({provider:label(v.config?.provider),model:label(v.config?.model),reasoningEffort:label(v.config?.reasoningEffort)})
-                if (typeof v.name==='string' && /dsh-purge/i.test(v.name)) plugin.push({present:true})
-                for (const [k,x] of Object.entries(v)) {
-                  if (/^(agentPreset|defaultPreset|presetId|reasoningEffort|multiAgent|multiAgentEnabled|subagentEnabled)$/i.test(k) && (typeof x==='boolean'||label(x))) presets.push({key:k,value:x})
-                  if (x && typeof x==='object') walk(x)
-                }
-              }
-              walk(config)
-              console.log(JSON.stringify({profile,exists:true,dumpExit:res.status,parsed:!!config,selection,purgePresent:plugin.length>0,settings:presets.slice(0,20)}))
-            }
-          } finally { fs.rmSync(temp,{recursive:true,force:true}) }
+          } finally { fs.rmSync(tmp,{recursive:true,force:true}) }
           '@ | Set-Content -Path $script -Encoding UTF8
           node $script
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
