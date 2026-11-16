@@ -400,3 +400,39 @@ test('generic infrastructure observations do not receive business-workflow skill
     db.close()
   }
 })
+
+
+test('orphan vulnerability title can supply API and authorization context for skill hints', () => {
+  const { db, store } = fixture()
+  try {
+    db.prepare('UPDATE vuln SET title = ? WHERE id = 13').run('API 对象级授权边界')
+    const context = taskContext(store, 'lab', 'vuln #13')
+    assert.equal(context.asset_link_status, 'missing')
+    assert.equal(context.knowledge_candidates.length, 0)
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:business-security-controls'))
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+  } finally {
+    db.close()
+  }
+})
+
+test('business controls remain in the bounded skill hints alongside product and API matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, proto: 'tcp', state: 'open', service: 'https', product: 'Inventory API' }],
+        fingerprints: [],
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:business-security-controls'))
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+    assert.ok(context.related_skills.length <= 5)
+  } finally {
+    db.close()
+  }
+})
