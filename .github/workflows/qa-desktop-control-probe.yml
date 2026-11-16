@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   review:
-    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-desktop-review'
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-desktop-review-retry'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
@@ -50,20 +50,6 @@ jobs:
               try { (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Edit -and $_.Current.ClassName -eq 'GRgSLq_input' } catch { $false }
             })
           }
-          # Open a fresh conversation in this same invocation.
-          $new = @(Get-Controls | Where-Object {try {(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -in @('新建会话','新建对话','New Chat','New Conversation','New Session') -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))}catch{$false}})
-          if($new.Count -eq 0){throw 'New Chat unavailable'}
-          (Get-Pattern $new[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
-          Start-Sleep -Milliseconds 1200
-          $editor = @(Get-Composer)
-          if ($editor.Count -ne 1) { throw 'Expected the identified Harness composer' }
-          $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
-          if ($null -eq $vp -or $vp.Current.IsReadOnly) { throw 'Composer cannot be written via ValuePattern' }
-          if (-not [string]::IsNullOrWhiteSpace($vp.Current.Value)) {
-            [ordered]@{stage='composer';status='not-empty';taskSubmitted=$false} | ConvertTo-Json -Compress
-            return
-          }
-          $rect = $editor[0].Current.BoundingRectangle
           # Chromium's accessibility ExpandCollapse may report success without
           # making the DOM menu visible. Inspect the actual labelled control;
           # click only its verified hit point if Expand did not expose options.
@@ -184,9 +170,37 @@ jobs:
             }
             return $null
           }
+          # Bring Harness to the foreground before creating a conversation.
+          # UIA Invoke can otherwise return while the old conversation is still visible.
           $modeSelected=$false
           $foregroundReady=Activate-Harness
-          $pickers=@(Get-PresetSeat)
+          if(-not $foregroundReady){
+            [ordered]@{stage='review-submit';status='desktop-not-foreground';taskSubmitted=$false}|ConvertTo-Json -Compress
+            return
+          }
+          $new=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -in @('新建会话','新建对话','New Chat','New Conversation','New Session') -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))}catch{$false}})
+          if($new.Count -eq 0){throw 'New Chat unavailable'}
+          $opened=Click-Verified $new[0]
+          if(-not $opened){(Get-Pattern $new[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
+          $pickers=@()
+          $editor=@()
+          for($i=0;$i -lt 24;$i++){
+            Start-Sleep -Milliseconds 250
+            $pickers=@(Get-PresetSeat)
+            $editor=@(Get-Composer)
+            if($pickers.Count -eq 1 -and $editor.Count -eq 1){break}
+          }
+          [ordered]@{stage='fresh-conversation';nativeClick=$opened;foreground=(App-Foreground);presetSeats=$pickers.Count;composers=$editor.Count}|ConvertTo-Json -Compress
+          if($pickers.Count -ne 1 -or $editor.Count -ne 1){
+            [ordered]@{stage='review-submit';status='fresh-conversation-not-confirmed';taskSubmitted=$false}|ConvertTo-Json -Compress
+            return
+          }
+          $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
+          if($null -eq $vp -or $vp.Current.IsReadOnly -or -not [string]::IsNullOrWhiteSpace($vp.Current.Value)){
+            [ordered]@{stage='review-submit';status='fresh-composer-not-empty-or-writable';taskSubmitted=$false}|ConvertTo-Json -Compress
+            return
+          }
+          $rect=$editor[0].Current.BoundingRectangle
           if($pickers.Count -eq 1){
             $picker=$pickers[0]
             if($picker.Current.Name -match $redPattern){$modeSelected=$true}
