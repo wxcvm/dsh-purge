@@ -1,14 +1,14 @@
-name: QA Headless Paired Model Evaluation One Shot
+name: QA Headless Account Configuration Diagnosis
 on:
   pull_request:
-    types: [reopened]
+    types: [synchronize]
 permissions:
   contents: read
 jobs:
   preflight:
     if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Run one isolated six-case direct and delegated Max pair
+      - name: Compare account configuration without reading credentials or invoking models
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -214,148 +214,45 @@ jobs:
                   console.log(JSON.stringify({stage:'isolated-config',...classify(boot),ready:isolatedReady,model:{provider:label(isolatedModel.provider),model:label(isolatedModel.model),reasoningEffort:label(isolatedModel.reasoningEffort)},preset:label(isolatedPreset),permissionDefault:label(isolatedPermission?.config?.defaultPreset),purgeVersion,modelRequests:0,profileIsolated:true}))
                   if(!isolatedReady)process.exitCode=5
                   if(isolatedReady){
-                    // Reuse only the local credential store, in the same user's
-                    // temporary directory. Never print its contents or upload it.
-                    const authCandidates=fs.readdirSync(home,{withFileTypes:true}).filter(x=>!x.isSymbolicLink()&&/^(?:\.?credentials?(?:\.(?:json|ya?ml|db|sqlite|bin))?|\.?auth(?:orization)?(?:\.(?:json|ya?ml|db|sqlite|bin))?|deepseek-account(?:\.json)?|accounts?\.json)$/i.test(x.name))
-                    const authNames=[]
-                    for(const item of authCandidates){
-                      const src=path.join(home,item.name),dst=path.join(isolated,item.name)
-                      if(fs.existsSync(dst))fs.rmSync(dst,{recursive:true,force:true})
-                      fs.cpSync(src,dst,{recursive:item.isDirectory(),filter:p=>!fs.lstatSync(p).isSymbolicLink()})
-                      authNames.push(item.name)
+                    // Compare only non-secret configuration metadata. Never
+                    // open, copy, print or parse a credential document.
+                    const relevant=row=>row&&(/deepseek|credential|authorization/i.test(String(row.id)+' '+String(row.name))||row.id==='agent-default-model')
+                    const safeOrigin=value=>{
+                      if(typeof value!=='string')return null
+                      try{const u=new URL(value);return u.protocol==='https:'||u.protocol==='http:'?u.origin:null}catch{return null}
                     }
-                    console.log(JSON.stringify({stage:'local-auth',copiedStoreEntries:authNames.length,rawCredentialsLogged:false}))
-                    const workspace=process.env.GITHUB_WORKSPACE
-                    const evalModule=await import(pathToFileURL(path.join(workspace,'scripts','review-trace-import.mjs')).href)
-                    const {cases}=await import(pathToFileURL(path.join(workspace,'scripts','agent-quality-eval.mjs')).href)
-                    const {compareReviewRuns}=await import(pathToFileURL(path.join(workspace,'scripts','review-run-compare.mjs')).href)
-                    const {reconcileReviewBatch}=await import(pathToFileURL(path.join(workspace,'scripts','review-batch-eval.mjs')).href)
-                    const {evaluate}=await import(pathToFileURL(path.join(workspace,'scripts','agent-quality-eval.mjs')).href)
-                    const {messageText,messageOf}=await import(pathToFileURL(path.join(workspace,'lib','response-context.js')).href)
-                    const {markedPacket,decodeArchive,extractMarkedTurn,archiveEvents,importReviewRun}=evalModule
-                    const sessionRoot=path.join(isolated,'sessions')
-                    const scanMarked=runId=>{
-                      const marker='PURGE-QA-RUN: '+runId, found=[]
-                      if(!fs.existsSync(sessionRoot))return found
-                      for(const dir of fs.readdirSync(sessionRoot,{withFileTypes:true})){
-                        if(!dir.isDirectory()||dir.isSymbolicLink())continue
-                        const folder=path.join(sessionRoot,dir.name)
-                        const files=['session.v4.jsonl.zstd','session.v4.jsonl'].map(n=>path.join(folder,n)).filter(p=>fs.existsSync(p)&&fs.lstatSync(p).isFile())
-                        for(const file of files){
-                          try{
-                            const records=decodeArchive(fs.readFileSync(file))
-                            const trace=extractMarkedTurn(records,marker,{child:true})
-                            let human=false
-                            try{extractMarkedTurn(records,marker);human=true}catch{}
-                            const user=archiveEvents(records).events.find(e=>e.seq===trace.humanSeq)
-                            const task=messageText(messageOf(user))
-                            const caseIds=cases.filter(c=>task.includes(c.id)).map(c=>c.id)
-                            found.push({sessionId:dir.name,records,trace,human,caseIds})
-                            break
-                          }catch{}
-                        }
+                    const collectOrigins=(value,prefix='',out={})=>{
+                      if(!value||typeof value!=='object')return out
+                      for(const [key,v] of Object.entries(value)){
+                        const p=prefix?prefix+'.'+key:key
+                        if(/^(?:baseURL|baseUrl|inferenceOrigin|platformOrigin|apiOrigin)$/i.test(key)){
+                          out[p]={origin:safeOrigin(v),expression:typeof v==='string'&&!safeOrigin(v),present:v!==undefined&&v!==null}
+                        }else if(v&&typeof v==='object')collectOrigins(v,p,out)
                       }
-                      return found
+                      return out
                     }
-                    const observeConfig=spec=>{
-                      const {events}=archiveEvents(spec.records)
-                      const routes=[]
-                      const presets=[]
-                      for(const e of events){
-                        if(e.type==='agent-preset/selected'){
-                          const v=e.data?.agentPreset||e.data?.preset||e.data?.name
-                          if(label(v))presets.push(v)
-                        }
-                        if(e.type==='request/header'&&e.seq>spec.trace.humanSeq){
-                          const c=e.data?.header?.config
-                          if(c)routes.push({provider:label(c.provider),model:label(c.model),reasoningEffort:label(c.reasoningEffort)})
-                        }
-                      }
-                      return {presets:[...new Set(presets)],requestRoutes:[...new Set(routes.map(x=>JSON.stringify(x)))].map(JSON.parse)}
+                    const summarize=(rows)=>rows.filter(relevant).map(row=>({id:label(row.id),name:label(row.name),disabled:row.disabled===true,keys:Object.keys(row.config||{}).sort(),origins:collectOrigins(row.config||{})}))
+                    const original=summarize(base),isolatedSummary=summarize(isolatedRows)
+                    const index=rows=>new Map(rows.map(r=>[r.id+'|'+r.name,r]))
+                    const origById=index(original),isoById=index(isolatedSummary)
+                    const rows=[...new Set([...origById.keys(),...isoById.keys()])].map(key=>{
+                      const a=origById.get(key),b=isoById.get(key)
+                      const origins=[...new Set([...Object.keys(a?.origins||{}),...Object.keys(b?.origins||{})])].map(k=>{
+                        const x=a?.origins[k],y=b?.origins[k]
+                        const classifyOrigin=o=>!o?.present?'absent':o.origin==='https://api.deepseek.com'?'official-inference':o.origin==='https://platform.deepseek.com'?'official-platform':o.origin?'other-http-origin':o.expression?'expression-or-non-url':'other'
+                        return {field:k,original:classifyOrigin(x),isolated:classifyOrigin(y),sameLiteralOrigin:x?.origin&&y?.origin?x.origin===y.origin:null}
+                      })
+                      return {id:a?.id||b?.id,name:a?.name||b?.name,originalPresent:!!a,isolatedPresent:!!b,originalDisabled:a?.disabled??null,isolatedDisabled:b?.disabled??null,originalConfigKeys:a?.keys??[],isolatedConfigKeys:b?.keys??[],origins}
+                    })
+                    const credentialMetadata=(root,entries)=>{
+                      const c=entries.find(row=>row.id==='credentials')
+                      const configured=c?.config?.path
+                      const filename=typeof configured==='string'&&path.isAbsolute(configured)?configured:path.join(root,'.credentials.yaml')
+                      let exists=false,kind=null
+                      try{const st=fs.lstatSync(filename);exists=st.isFile();kind=st.isSymbolicLink()?'symlink':st.isFile()?'file':'other'}catch{}
+                      return {configuredPath:typeof configured==='string',usesDefaultPath:!configured,exists,kind}
                     }
-                    const outcomes={}
-                    for(const mode of ['direct','delegated']){
-                      const runId='DS41-20261116-'+mode.toUpperCase()+'-'+process.env.GITHUB_RUN_ID
-                      const cwd=path.join(tmp,'case-'+mode)
-                      fs.mkdirSync(cwd,{recursive:true})
-                      const task=markedPacket(runId,mode)
-                      console.log(JSON.stringify({stage:'model-run-start',mode,runId,scope:'fictional-record-review-only'}))
-                      const start=Date.now()
-                      const run=call(['--profile','codex-review','--patch',patch,'--permission-mode','read-only','--approval-policy','never','--json',task],isolated,420000,cwd)
-                      const elapsed=Date.now()-start
-                      const entries=(run.stdout||'').split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line)}catch{return null}}).filter(Boolean)
-                      const last=entries.findLast(x=>x.type==='final')
-                      const finalReason=label(last?.reason?.kind)
-                      // Preserve the CLI-only quality result if native persistence
-                      // fails; it is not evidence of native lifecycle or linkage.
-                      let cliScore=null
-                      try{
-                        const value=JSON.parse(typeof last?.text==='string'?last.text:'')
-                        if(Array.isArray(value?.reports)){
-                          const validIds=new Set(cases.map(row=>row.id))
-                          const reports=value.reports.filter(row=>validIds.has(row?.id)).map(row=>({id:row.id,answer:['a','b','c'].includes(row.answer)?row.answer:null,evidence:Array.isArray(row.evidence)?row.evidence.filter(x=>typeof x==='string'):null}))
-                          const result=evaluate({reports})
-                          cliScore={summary:result.summary,results:result.results.map(({id,completed,conclusionCorrect,evidenceCorrect,passed})=>({id,completed,conclusionCorrect,evidenceCorrect,passed}))}
-                        }
-                      }catch{}
-                      const archived=scanMarked(runId)
-                      const roots=archived.filter(row=>row.human&&!archived.some(other=>other!==row&&other.trace.childIds.includes(row.sessionId))&&!row.trace.parentRefs.some(id=>archived.some(other=>other.sessionId===id)))
-                      const execution={stage:'model-run',mode,runId,elapsedMs:elapsed,...classify(run),finalReason,cliEvents:entries.length,markedArchives:archived.length,parentCandidates:roots.length,cliOnlyScore:cliScore}
-                      console.log(JSON.stringify(execution))
-                      if(run.status!==0)console.log(JSON.stringify({stage:'startup-diagnostic',mode,...failureDetails(run,entries)}))
-                      if(roots.length!==1){
-                        const rootsToCheck=[sessionRoot,path.join(isolated,'session'),path.join(home,'sessions')]
-                        const archiveLocations=rootsToCheck.map((root,index)=>{
-                          let count=0,matching=0
-                          try{
-                            for(const dir of fs.readdirSync(root,{withFileTypes:true})){
-                              if(!dir.isDirectory()||dir.isSymbolicLink())continue
-                              for(const name of ['session.v4.jsonl','session.v4.jsonl.zstd']){
-                                const file=path.join(root,dir.name,name)
-                                try{
-                                  const st=fs.lstatSync(file)
-                                  if(!st.isFile()||st.isSymbolicLink())continue
-                                  if(st.mtimeMs>=start-2000){count++
-                                    // Never decode or inspect other user sessions.
-                                    if(index<2)try{extractMarkedTurn(decodeArchive(fs.readFileSync(file)),'PURGE-QA-RUN: '+runId,{child:true});matching++}catch{}
-                                  }
-                                }catch{}
-                              }
-                            }
-                          }catch{}
-                          return {location:['isolated-sessions','isolated-session','production-session-metadata-only'][index],recentNativeFiles:count,markedFiles:index<2?matching:null}
-                        })
-                        console.log(JSON.stringify({stage:'archive-location',mode,archiveLocations}))
-
-                        console.log(JSON.stringify({stage:'result',mode,valid:false,reason:'missing-or-ambiguous-parent-archive'}))
-                        process.exitCode=6
-                        break
-                      }
-                      const parent=roots[0]
-                      const linked=archived.filter(row=>row!==parent&&(parent.trace.childIds.includes(row.sessionId)||row.trace.parentRefs.includes(parent.sessionId)))
-                      const claims=new Map()
-                      for(const child of linked)for(const id of child.caseIds)claims.set(id,(claims.get(id)||0)+1)
-                      // Only unambiguous case briefs enter scoring. An observed
-                      // child session is not automatically a verified result.
-                      const children=linked.filter(row=>row.caseIds.length>0&&row.caseIds.every(id=>claims.get(id)===1))
-                      let scored
-                      try{
-                        scored=importReviewRun({runId,parent,children,settingsId:'deepseek-flash-redteam-max'})
-                      }catch{
-                        scored=importReviewRun({runId,parent,children:[],settingsId:'deepseek-flash-redteam-max'})
-                      }
-                      outcomes[mode]=scored
-                      console.log(JSON.stringify({stage:'result',mode,observedConfig:observeConfig(parent),lifecycle:parent.trace.lifecycle,route:scored.route,usage:scored.usage,archiveCoverage:scored.archiveCoverage,delegationTimeline:scored.delegationTimeline,linkedMarkedChildren:linked.length,scoredChildren:children.length,strictParentJson:scored.batch.strictJson,score:reconcileReviewBatch(scored.batch).summary}))
-                      if(run.status!==0||parent.trace.lifecycle!=='completed'||parent.trace.route.provider!==model.config.provider||parent.trace.route.model!==model.config.model){
-                        console.log(JSON.stringify({stage:'pair',status:'stopped',reason:'parent-run-not-completed-or-route-mismatch'}))
-                        process.exitCode=7
-                        break
-                      }
-                    }
-                    if(outcomes.direct&&outcomes.delegated){
-                      const comparison=compareReviewRuns(outcomes)
-                      console.log(JSON.stringify({stage:'pair',status:'completed',comparison,directCoverage:outcomes.direct.archiveCoverage,delegatedCoverage:outcomes.delegated.archiveCoverage,delegationTimeline:outcomes.delegated.delegationTimeline,scope:'fictional-record-review-only',billing:'not-observed'}))
-                    }
+                    console.log(JSON.stringify({stage:'account-config-comparison',rows,homePatchPresent:fs.existsSync(path.join(home,'cordis.patch.yml')),isolatedHomePatchPresent:fs.existsSync(path.join(isolated,'cordis.patch.yml')),originalCredentials:credentialMetadata(home,base),isolatedCredentials:credentialMetadata(isolated,isolatedRows),credentialsRead:false,modelRequests:0}))
                   }
 
                 }
