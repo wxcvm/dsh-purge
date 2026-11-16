@@ -140,6 +140,58 @@ export function compareReviewRuns({ direct, delegated }) {
 }
 
 /**
+ * Describe measured trade-offs, not a production router. No fixed quality
+ * threshold or preference is imposed: the caller can choose quality or cost.
+ * Unknown costs, incomplete runs and incomparable settings are not ranked.
+ */
+function reviewDecisionEvidence(arms, summary, ab, bc, usage) {
+  const total = caseIds.length
+  const matches = [ab.modelRouteMatch, ab.settingsMatch, bc.modelRouteMatch, bc.settingsMatch]
+  const comparable = matches.every(value => value === 'same')
+  const quality = name => {
+    const run = arms[name], s = summary[name], c = s.content
+    if (!completeFixture(run.batch).results.every(row => row.lifecycle === 'completed')
+      || c?.parsed !== total || c?.total !== total
+      || typeof s.strictParentJson !== 'boolean') return null
+    const values = [c.correctConclusions, c.requiredCoverage, c.exactEvidence,
+      s.strictAccepted, Number(s.strictParentJson)]
+    return values.every(n => Number.isInteger(n) && n >= 0 && n <= total) ? values : null
+  }
+  const option = (id, source, costKey) => ({
+    id, quality: quality(source), elapsedMs: usage.elapsedMs[costKey],
+    totalTokens: usage.totalTokens[costKey],
+  })
+  const fresh = [option('direct', 'direct', 'direct'),
+    option('delegated', 'delegated', 'delegated'),
+    option('delegated-plus-review', 'review', 'sequentialDelegatedPlusReview')]
+  // Once B's reports exist, its generation cost is sunk, not a cost of retaining
+  // them. C is an incremental replay; it is not a standalone replacement for B.
+  const existing = [{ id: 'retain-candidates', quality: quality('delegated'), elapsedMs: 0, totalTokens: 0 },
+    option('independent-review', 'review', 'incrementalReview')]
+  const describe = (options, settingsComparable) => {
+    if (!settingsComparable) return { status: 'incomparable-settings', options, dominated: [], frontier: null }
+    if (options.some(o => o.quality === null || o.elapsedMs === null || o.totalTokens === null)) {
+      return { status: 'incomplete-observation', options, dominated: [], frontier: null }
+    }
+    const dominates = (a, b) => a.quality.every((n,i) => n >= b.quality[i])
+      && a.elapsedMs <= b.elapsedMs && a.totalTokens <= b.totalTokens
+      && (a.quality.some((n,i) => n > b.quality[i]) || a.elapsedMs < b.elapsedMs || a.totalTokens < b.totalTokens)
+    const dominated = options.flatMap(b => {
+      const by = options.filter(a => a !== b && dominates(a, b)).map(a => a.id)
+      return by.length ? [{ id: b.id, by }] : []
+    })
+    return { status: 'observed', options, dominated,
+      frontier: options.filter(o => !dominated.some(d => d.id === o.id)).map(o => o.id) }
+  }
+  return {
+    qualityDimensions: ['correctConclusions','requiredCoverage','exactEvidence','strictAccepted','strictParentJson'],
+    freshTask: describe(fresh, comparable),
+    existingCandidates: describe(existing, bc.modelRouteMatch === 'same' && bc.settingsMatch === 'same'),
+    scope: 'descriptive fixed-fixture comparison; not a production routing rule or billing estimate',
+  }
+}
+
+/**
  * Compare a separate review of B's already-produced reports. The incremental
  * replay cost is NOT the full delegated-plus-review cost.
  */
@@ -167,10 +219,15 @@ export function compareIndependentReview({ direct, delegated, review }) {
     return [key, { direct: a, delegated: b, incrementalReview: c,
       sequentialDelegatedPlusReview: b !== null && c !== null ? b + c : null }]
   }))
+  const wholeRunUsage = cost('whole-run'), archiveUsage = cost('observed-archive')
   return { runIds: { direct: direct.runId, delegated: delegated.runId, review: review.runId },
     modelRouteMatch: { directDelegated: ab.modelRouteMatch, delegatedReview: bc.modelRouteMatch },
     settingsMatch: { directDelegated: ab.settingsMatch, delegatedReview: bc.settingsMatch },
-    summary, changes, wholeRunUsage: cost('whole-run'), archiveUsage: cost('observed-archive'),
+    summary, changes, wholeRunUsage, archiveUsage,
+    decisionEvidence: {
+      wholeRun: reviewDecisionEvidence(arms, summary, ab, bc, wholeRunUsage),
+      observedArchive: reviewDecisionEvidence(arms, summary, ab, bc, archiveUsage),
+    },
     scope: 'fixed-fictional-record-review; sequential sum excludes external orchestration gaps and is not billing' }
 }
 
