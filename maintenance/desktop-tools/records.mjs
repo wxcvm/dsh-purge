@@ -52,6 +52,22 @@ export function replayRecords(input) {
     Date.parse(a.r.updatedAt)-Date.parse(b.r.updatedAt) || a.index-b.index
   ).map(({r})=>r);
 }
+// Resume only explicit records. Status is not inferred from conversation text,
+// and recorded "done" is not independent verification of task completion.
+export function resumeRecords(input) {
+  const {records}=parseRecords(input);
+  const pending=records.filter(r=>r.status==='doing'||r.status==='todo');
+  const blocked=records.filter(r=>r.status==='blocked');
+  const done=records.filter(r=>r.status==='done');
+  const current=pending.filter(r=>r.status==='doing');
+  const todo=pending.filter(r=>r.status==='todo');
+  return {
+    schemaVersion:1,
+    counts:{todo:todo.length,doing:current.length,done:done.length,blocked:blocked.length},
+    current, todo, blocked, done,
+    interpretation:'explicit-recorded-progress-not-execution-or-verification',
+  };
+}
 function literalBlock(text) {
   // Fences always longer than any supplied tilde run. No interpolation or live links.
   const len=Math.max(3,1+Math.max(0,...(text.match(/~+/gu)??[]).map(x=>x.length)));

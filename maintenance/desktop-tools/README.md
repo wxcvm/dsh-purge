@@ -8,7 +8,7 @@
 |---|---|
 | maintenance_validate_records | 校验显式传入的 JSON 记录，返回状态计数 |
 | maintenance_export_report | 将同一记录渲染为 Markdown / JSON 文本；不会自行写文件 |
-| maintenance_replay_records | 按时间查看记录；同时间保持输入顺序，不执行记录内容 |
+| maintenance_replay_records | 按时间查看记录，并返回可用于续接的当前任务、待办、阻塞及已完成记录；同时间保持输入顺序，不执行记录内容 |
 | maintenance_template_catalog | 列出六类普通任务模板，或按 ID 取一个模板 |
 
 记录结构为 schemaVersion: 1、records 数组；每条包含 id、title、status、updatedAt，以及可选 summary。状态是 todo、doing、done、blocked。时间使用 UTC 的 ISO 8601，摘要多行请用 LF。只处理显式提供的普通记录，不要传入凭据或私密原文。单次最多 128 KiB、100 条。
@@ -17,7 +17,11 @@ JSON 示例：
 
     {"schemaVersion":1,"records":[{"id":"case-1","title":"示例","status":"done","updatedAt":"2026-11-04T12:00:00Z","summary":"合成数据"}]}
 
-本地 CLI 可运行 catalog / template ID / validate / replay / report markdown|json。记录通过 stdin 传入，结果写 stdout。可由用户自行将输出保存为文件。CLI 不装入 Harness，也不创建额外 profile。
+本地 CLI 可运行 catalog / template ID / validate / replay / resume / report markdown|json。记录通过 stdin 传入，结果写 stdout。可由用户自行将输出保存为文件。CLI 不装入 Harness，也不创建额外 profile。
+
+## 长任务续接
+
+将明确记录的任务 JSON 保留在你自己的工作区。后续会话可以使用 `maintenance_replay_records` 读取同一份 JSON，或通过本地 CLI 的 `resume` 输出当前进行中、待办、受阻和已完成列表。续接结果保留记录 ID、标题、摘要和更新时间，使用显式状态，不推断任务完成、不自动选择或执行下一步，也不改写宿主上下文。已完成记录不会进入待办列表。记录保存与更新由用户或其正常工作流负责，本包不自动读取会话历史。
 
 ## 对照口径
 

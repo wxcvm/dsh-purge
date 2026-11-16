@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { apply, definitions } from './index.mjs';
-import { parseRecords, validateRecords, renderReport, replayRecords } from './records.mjs';
+import { parseRecords, validateRecords, renderReport, replayRecords, resumeRecords } from './records.mjs';
 import { listTemplates, getTemplate } from './catalog.mjs';
 
 const row={id:'B-01',title:'合成记录',status:'done',summary:'示例',updatedAt:'2026-11-04T10:00:00Z'};
@@ -79,4 +79,36 @@ test('collision is rejected before any registry change',()=>{
 test('registration failure rolls back successful earlier registrations',()=>{
   const f=fixture(3);assert.throws(()=>apply(f.ctx),/fixture registration failure/u);
   assert.equal(f.entries.size,0);
+});
+
+test('resume view preserves explicit ongoing, todo, blocked and done work across replay', async()=>{
+  const json=make(
+    {...row,id:'done-1',status:'done'},
+    {...row,id:'todo-1',status:'todo',title:'待复核'},
+    {...row,id:'blocked-1',status:'blocked',summary:'等待用户提供样本'},
+    {...row,id:'doing-1',status:'doing',summary:'已完成第一步'},
+    {...row,id:'todo-2',status:'todo'},
+    {...row,id:'doing-2',status:'doing'},
+  );
+  const result=resumeRecords(json);
+  assert.deepEqual(result.counts,{todo:2,doing:2,done:1,blocked:1});
+  assert.deepEqual(result.current.map(r=>r.id),['doing-1','doing-2']);
+  assert.deepEqual(result.todo.map(r=>r.id),['todo-1','todo-2']);
+  assert.deepEqual(result.blocked.map(r=>r.id),['blocked-1']);
+  assert.deepEqual(result.done.map(r=>r.id),['done-1']);
+  assert.equal(result.current[0].summary,'已完成第一步');
+  const tool=definitions().find(d=>d.name==='maintenance_replay_records');
+  const replay=JSON.parse((await tool.execute({json})).text);
+  assert.deepEqual(replay.resume,result);
+  assert.equal(replay.records.length,6);
+  assert.equal(resumeRecords(make()).current.length,0);
+});
+
+test('resume does not invent completion or choose a task when nothing is ready',()=>{
+  const data=resumeRecords(make({...row,status:'blocked'}));
+  assert.deepEqual(data.current,[]);
+  assert.deepEqual(data.todo,[]);
+  assert.deepEqual(data.done,[]);
+  assert.equal(data.blocked.length,1);
+  assert.throws(()=>resumeRecords(make({...row,status:'unknown'})),/invalid status/);
 });
