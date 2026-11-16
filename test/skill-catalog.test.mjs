@@ -76,3 +76,26 @@ test('块标量 description（| 与 >）要读成正文，而不是字面量管�
   assert.equal(xss.description, '跨站脚本检测， 含上下文与绕过。', '折叠标量按 YAML 语义用空格连接各行')
   assert.ok(!xss.description.includes('|'), '折叠标量不能残留标记')
 })
+
+test('内建业务安全控制技能可检索且只提供防御性审查内容', () => {
+  const result = searchLocalSkills('business-security-controls')
+  assert.ok(result.items.some(item => item.key === 'redteam:business-security-controls'))
+  const skill = readLocalSkill('redteam:business-security-controls')
+  assert.equal(skill.truncated, false)
+  assert.match(skill.content, /合成账户、合成订单和虚拟余额/)
+  assert.match(skill.content, /对象级授权/)
+  assert.match(skill.content, /mock provider/)
+  assert.match(skill.content, /verified: false/)
+})
+
+
+test('内建技能的 frontmatter 描述参与目录展示与检索', () => {
+  const rows = listLocalSkills()
+  const business = rows.find(row => row.key === 'redteam:business-security-controls')
+  assert.ok(business)
+  assert.match(business.description, /多租户隔离/)
+  const result = searchLocalSkills('多租户隔离')
+  assert.ok(result.items.some(row => row.key === 'redteam:business-security-controls'))
+  const api = rows.find(row => row.key === 'redteam:api-attack')
+  assert.ok(api.description.length > 0)
+})

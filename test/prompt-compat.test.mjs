@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rewritePromptAssembly, installAssembleGuard } from '../lib/identity.js';
+import { capabilityProtocolText } from '../lib/capability-protocol.js';
 
 test('latest presentation preserves provider-owned fields without inventing tools', () => {
   const variables = { provider: 'fixture', model: 'fixture' };
@@ -105,4 +106,13 @@ test('GLM guidance coexists with preserved project instructions and real provide
   assert.equal(out.sections.find(s => s.name === 'workspace-instructions').text, original.sections[0].text);
   assert.equal(out.contexts, original.contexts);
   assert.equal(out.tools, original.tools);
+});
+
+test('capability guidance prefers conversation context and self-contained delegation', () => {
+  const text = capabilityProtocolText();
+  assert.match(text, /current conversation and supplied task text/i);
+  assert.match(text, /local session archives/i);
+  assert.match(text, /current task ID, complete task, constraints, and acceptance criteria/i);
+  assert.match(text, /preserve the requested output format/i);
+  assert.equal(capabilityProtocolText({ enabled: false }), '');
 });
