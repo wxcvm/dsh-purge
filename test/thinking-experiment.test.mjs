@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderThinkingExperiment, thinkingEventValues, parseThinkingExperiment, thinkingTimeline, compareThinkingTemplates, THINKING_TASK_CASES, thinkingTaskPrompt, scoreThinkingTask, thinkingEvidenceKey, thinkingEvidenceRow, thinkingEvidencePair, thinkingEvidenceMetrics, thinkingTurnEvidence, thinkingComparisonReport } from '../lib/workspace/thinking-experiment.js';
+import { renderThinkingExperiment, thinkingEventValues, parseThinkingExperiment, thinkingTimeline, compareThinkingTemplates, THINKING_TASK_CASES, thinkingTaskPrompt, scoreThinkingTask, thinkingEvidenceKey, thinkingEvidenceRow, thinkingEvidencePair, thinkingEvidenceMetrics, thinkingTurnEvidence, thinkingComparisonReport, hasThinkingEvidence } from '../lib/workspace/thinking-experiment.js';
 
 test('template converts display only and does not reinterpret inserted text', () => {
   const row = Object.freeze({ model:'fixture', reasoningChunks:2, reasoningChars:9, firstReasoningMs:0, reasoning:'PRIVATE' });
@@ -89,4 +89,15 @@ test('parent turn evidence separates retries, missing totals and session-scoped 
 test('comparison report contains scores and projected metrics but no raw answers or identifiers',()=>{
   const r=thinkingComparisonReport({id:'config',results:{a:{status:'correct',answer:'PRIVATE'},b:{status:'wrong'}},pairState:'comparable-attempts',turnA:{attempts:1},confirmed:true});
   assert.deepEqual(r.scores,{a:'correct',b:'wrong'});assert.equal(r.environmentConfirmed,true);assert.equal(JSON.stringify(r).includes('PRIVATE'),false);
+});
+
+
+test('thinking preview includes durable-only reasoning blocks without inventing live timing',()=>{
+  const row={reasoningChunks:0,reasoningChars:0,durableReasoningBlocks:1,durableReasoningTextBlocks:1,durableReasoningChars:12,firstReasoningMs:null};
+  assert.equal(hasThinkingEvidence(row),true);
+  assert.equal(hasThinkingEvidence({reasoningChunks:0}),false);
+  assert.equal(hasThinkingEvidence({reasoningBlockStarts:1}),true);
+  const v=thinkingEventValues(row);
+  assert.equal(renderThinkingExperiment('{{reasoning_chunks}}/{{durable_reasoning_blocks}}/{{durable_reasoning_chars}}/{{first_reasoning_ms}}',v),'0/1/12/未观测');
+  assert.equal(v.reasoning,null);assert.equal(thinkingTimeline(row).span,null);
 });

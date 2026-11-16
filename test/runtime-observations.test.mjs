@@ -512,3 +512,29 @@ test('runtime snapshot reports bounded coverage and observed turn-end clock',()=
   assert.equal(snap.matchedCount,2);assert.equal(snap.returnedCount,1);
   const one=o.snapshot({sessionId:'s'});assert.equal(one.matchedCount,1);assert.equal(one.items[0].turnEndedAt,30);
 });
+
+
+test('committed reasoning blocks are visible without live or durable reasoning deltas',()=>{
+  let time=10;const o=createRuntimeObservations({now:()=>time}),a=agent('s');
+  start(o,a);time=12;chunk(o,a,0,{type:'block-start',blockType:'reasoning'});
+  time=20;chunk(o,a,1,{type:'text-delta',text:'PRIVATE FINAL'});
+  const content=Object.freeze([Object.freeze({type:'reasoning',text:'PRIVATE THINK'}),Object.freeze({type:'text',text:'PRIVATE FINAL'})]);
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content},stream:[
+    {chunk:{type:'block-start',blockType:'reasoning'}},{chunk:{type:'block-end'}},
+    {chunk:{type:'block-start',blockType:'text'}},{chunk:{type:'finish',reason:{kind:'stop'}}}
+  ]}});
+  end(o,a,2);const r=o.snapshot().items[0];
+  assert.equal(r.reasoningBlockStarts,1);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);
+  assert.equal(r.durableReasoningBlockStarts,1);assert.equal(r.durableReasoningDeltaChunks,0);
+  assert.equal(r.durableReasoningBlocks,1);assert.equal(r.durableReasoningTextBlocks,1);assert.equal(r.durableReasoningChars,'PRIVATE THINK'.length);
+  assert.equal(r.firstTextMs,10);assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});
+test('reasoning content unknown differs from absent; a late commit only updates its matched row',()=>{
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:1}});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content:[{type:'reasoning',text:'PRIVATE'}]}}});
+  const [current,previous]=o.snapshot().items;
+  assert.equal(current.durableReasoningBlocks,null);assert.equal(previous.durableReasoningBlocks,1);
+  assert.equal(previous.durableReasoningDeltaChunks,null);assert.equal(previous.firstReasoningMs,null);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
+});

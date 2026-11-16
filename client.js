@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "023e448dd34a756b";
+		const CLIENT_BUILD_ID = "a544efdc6b0b901f";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3917,7 +3917,7 @@ function qualityReportSummary(report) {
 const THINKING_EXPERIMENT_KEY = 'dshp.thinking-experiment.v1';
 const THINKING_DEFAULT_TEMPLATE = '模型：{{model}}\n思考事件：{{reasoning_chunks}}\n首思考延迟：{{first_reasoning_ms}} ms\n{{reasoning}}';
 function renderThinkingExperiment(template, values = {}) {
-  return String(template ?? '').replace(/\{\{(model|provider|reasoning_chunks|reasoning_chars|first_reasoning_ms|last_reasoning_ms|first_text_ms|first_tool_ms|reasoning_span_ms|reasoning)\}\}/g,
+  return String(template ?? '').replace(/\{\{(model|provider|reasoning_chunks|reasoning_chars|reasoning_block_starts|durable_reasoning_block_starts|durable_reasoning_delta_chunks|durable_reasoning_delta_chars|durable_reasoning_blocks|durable_reasoning_text_blocks|durable_reasoning_chars|first_reasoning_ms|last_reasoning_ms|first_text_ms|first_tool_ms|reasoning_span_ms|reasoning)\}\}/g,
     (_, key) => values[key] == null ? '未观测' : String(values[key]));
 }
 function thinkingEventValues(row) {
@@ -3925,7 +3925,10 @@ function thinkingEventValues(row) {
     reasoning_chunks: row?.reasoningChunks ?? null, reasoning_chars: row?.reasoningChars ?? null,
     first_reasoning_ms: row?.firstReasoningMs ?? null, last_reasoning_ms: row?.lastReasoningMs ?? null,
     first_text_ms: row?.firstTextMs ?? null, first_tool_ms: row?.firstToolMs ?? null,
-    reasoning_span_ms: thinkingTimeline(row).span, reasoning: null };
+    reasoning_span_ms: thinkingTimeline(row).span, reasoning_block_starts: row?.reasoningBlockStarts ?? null,
+    durable_reasoning_block_starts: row?.durableReasoningBlockStarts ?? null, durable_reasoning_delta_chunks: row?.durableReasoningDeltaChunks ?? null,
+    durable_reasoning_delta_chars: row?.durableReasoningDeltaChars ?? null, durable_reasoning_blocks: row?.durableReasoningBlocks ?? null,
+    durable_reasoning_text_blocks: row?.durableReasoningTextBlocks ?? null, durable_reasoning_chars: row?.durableReasoningChars ?? null, reasoning: null };
 }
 // These are client-observed offsets, not model-side compute duration.
 function thinkingTimeline(row) {
@@ -3951,6 +3954,9 @@ function parseThinkingExperiment(raw) {
   } catch {}
   return { profiles: [{ name: '默认实验', template: THINKING_DEFAULT_TEMPLATE }], selected: 0, enabled: true };
 }
+function hasThinkingEvidence(row) {
+  return [row?.reasoningChunks,row?.reasoningBlockStarts,row?.durableReasoningBlockStarts,row?.durableReasoningDeltaChunks,row?.durableReasoningBlocks].some(n=>n>0);
+}
 function ThinkingExperimentPanel({ rows = [], mask = false, snapshotAvailable = false } = {}) {
   const [config, setConfig] = useState(() => {
     try { return parseThinkingExperiment(localStorage.getItem(THINKING_EXPERIMENT_KEY)); }
@@ -3969,14 +3975,15 @@ function ThinkingExperimentPanel({ rows = [], mask = false, snapshotAvailable = 
     try { localStorage.setItem(THINKING_EXPERIMENT_KEY, JSON.stringify(config)); setMessage('已保存到当前客户端'); }
     catch { setMessage('保存失败：当前客户端存储不可用'); }
   };
-  const candidates = rows.filter(r => r.reasoningChunks > 0);
-  const rowKey = r => JSON.stringify([r.generation, r.attemptId]);
+  const candidates = rows.filter(hasThinkingEvidence);
+  const rowKey = r => thinkingEvidenceKey(r) || JSON.stringify([r.sessionId, r.generation, r.attemptId]);
   const row = selectedRow ? candidates.find(r => rowKey(r) === selectedRow) : candidates[0];
   const timeline = thinkingTimeline(row);
   const sampleValues = { model: '示例模型', provider: 'fixture', reasoning_chunks: 2, reasoning_chars: sample.length, first_reasoning_ms: 150, last_reasoning_ms: 250, first_text_ms: 300, first_tool_ms: null, reasoning_span_ms: 100, reasoning: sample };
   const compareProfile = comparison === '' ? null : config.profiles[Number(comparison)];
   const pair = compareThinkingTemplates(config.enabled, profile.template, compareProfile?.template ?? THINKING_DEFAULT_TEMPLATE, sampleValues, sample);
   const displayMs = v => v == null ? '未观测' : v + ' ms';
+  const displayCount = v => v == null ? '未观测' : String(v);
   const fieldStyle = { width: '100%', boxSizing: 'border-box' };
   const preStyle = { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' };
   return h('section', { className: 'dshp-runtime-card', 'aria-label': '思维流 Hook 实验' },
@@ -3993,7 +4000,7 @@ function ThinkingExperimentPanel({ rows = [], mask = false, snapshotAvailable = 
     h('label', null, '配置名称', h('input', { style:fieldStyle, value:profile.name, onChange:e=>change({name:e.target.value}) })),
     h('label', null, '自定义 Hook 内容', h('textarea', { style:fieldStyle, rows:5, value:profile.template, onChange:e=>change({template:e.target.value}) })),
     h('p', { className:'dshp-runtime-meta' }, '点击插入变量：'),
-    h('div', { className:'dshp-runtime-toolbar' }, ['model','provider','reasoning_chunks','reasoning_chars','first_reasoning_ms','last_reasoning_ms','first_text_ms','first_tool_ms','reasoning_span_ms','reasoning'].map(key =>
+    h('div', { className:'dshp-runtime-toolbar' }, ['model','provider','reasoning_chunks','reasoning_chars','reasoning_block_starts','durable_reasoning_block_starts','durable_reasoning_delta_chunks','durable_reasoning_delta_chars','durable_reasoning_blocks','durable_reasoning_text_blocks','durable_reasoning_chars','first_reasoning_ms','last_reasoning_ms','first_text_ms','first_tool_ms','reasoning_span_ms','reasoning'].map(key =>
       h('button', { key, type:'button', className:'dshp-runtime-action', onClick:()=>change({template:profile.template+'{{'+key+'}}'}) }, '{{'+key+'}}'))),
     h('h4', null, '真实 Hook 事件预览'),
     h('label', null, '选择请求 ', h('select', { value:selectedRow, onChange:e=>setSelectedRow(e.target.value) },
@@ -4002,7 +4009,9 @@ function ThinkingExperimentPanel({ rows = [], mask = false, snapshotAvailable = 
       candidates.map((r,i)=>h('option',{key:rowKey(r),value:rowKey(r)},'请求 '+(i+1)+(mask?'':' · '+(r.model??'未知模型')))))),
     !snapshotAvailable ? h('p', null, '运行记录尚未读取。') : !row ? h('p', null, '当前筛选范围尚未观察到所选思考事件；请发起正常模型任务或选择其他请求。') :
       h('div', null,
-        h('p', null, '原始元数据（所选请求）：' + row.reasoningChunks + ' 个事件 / ' + row.reasoningChars + ' 字符；首思考 ' + row.firstReasoningMs + ' ms'),
+        h('p', null, '实时推理增量：' + displayCount(row.reasoningChunks) + ' 个 / ' + displayCount(row.reasoningChars) + ' 字符；实时 reasoning 块开始 ' + displayCount(row.reasoningBlockStarts) + '；首非空增量 ' + displayMs(timeline.first)),
+        h('p', null, '持久流 reasoning 块开始 '+displayCount(row.durableReasoningBlockStarts)+' · 非空增量 '+displayCount(row.durableReasoningDeltaChunks)+' / '+displayCount(row.durableReasoningDeltaChars)+' 字符；提交消息 reasoning 块 '+displayCount(row.durableReasoningBlocks)+' · 非空文本块 '+displayCount(row.durableReasoningTextBlocks)+' / '+displayCount(row.durableReasoningChars)+' 字符。'),
+        h('p', null, '实时与持久证据分别展示，不相加；提交块存在不代表实时增量存在，也不用于补算延迟。'),
         h('p', null, '事件时间线（相对流开始）：首思考 '+displayMs(timeline.first)+' · 最后思考 '+displayMs(timeline.last)+' · 首正文 '+displayMs(timeline.text)+' · 首工具 '+displayMs(timeline.tool)+' · 流结束 '+displayMs(timeline.end)),
         h('p', null, '观测思考跨度 '+displayMs(timeline.span)+'；最后思考至首正文 '+displayMs(timeline.textGap)+(timeline.interleaved?'；思考与正文交错，间隔不适用':'')+(timeline.gap?'；流存在缺口，时间线不完整':'')+'。不是模型内部计算耗时。'),
         config.enabled ? h('pre', { style:preStyle }, renderThinkingExperiment(profile.template, thinkingEventValues(mask ? { ...row, model:null, provider:null } : row))) : h('p',null,'转换已关闭；原始事件统计仍保留。')),
