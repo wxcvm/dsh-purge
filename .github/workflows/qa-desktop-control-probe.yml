@@ -1,12 +1,12 @@
-name: QA Desktop Delegated Evaluation
+name: QA Desktop Independent Review
 on:
   pull_request:
     types: [labeled]
 permissions:
   contents: read
 jobs:
-  delegated:
-    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-desktop-delegated'
+  review:
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-desktop-review'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
@@ -16,15 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Submit the designated fictional delegated QA in the actual Desktop
+      - name: Submit the designated fictional independent review in the actual Desktop
         shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           # Prevent an accidental rerun of this exact model request. The marker
           # is local to the Runner and contains no credentials or transcript.
-          $sendMarker=Join-Path $env:RUNNER_TEMP 'purge-qa-DS41-DESKTOP-20261116-DELEGATED-01.sent'
+          $sendMarker=Join-Path $env:RUNNER_TEMP 'purge-qa-DS41-DESKTOP-20261116-REVIEW-01.sent'
           if(Test-Path -LiteralPath $sendMarker){
-            [ordered]@{stage='delegated-submit';status='already-attempted-no-repeat';taskSubmitted=$false}|ConvertTo-Json -Compress
+            [ordered]@{stage='review-submit';status='already-attempted-no-repeat';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           Add-Type -AssemblyName UIAutomationClient
@@ -236,12 +236,12 @@ jobs:
           }
           [ordered]@{stage='preset-picker';candidateCount=$pickers.Count;redteamVerified=$modeSelected}|ConvertTo-Json -Compress
           if(-not $modeSelected){
-            [ordered]@{stage='delegated-submit';status='redteam-not-verified';taskSubmitted=$false}|ConvertTo-Json -Compress
+            [ordered]@{stage='review-submit';status='redteam-not-verified';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
           }
           # Preserve the collaboration setting reported enabled by the user.
-          # The actual native child activity will be measured from the archives.
-          [ordered]@{stage='collaboration-setting';userReportedEnabled=$true;uiToggleVerified=$false;delegatedArmDelegationRequested=$true}|ConvertTo-Json -Compress
+          # This independent review requests no new delegation or tool calls.
+          [ordered]@{stage='collaboration-setting';userReportedEnabled=$true;uiToggleVerified=$false;reviewArmDelegationRequested=$false}|ConvertTo-Json -Compress
           $editor=@(Get-Composer)
           if($editor.Count -ne 1){throw 'Composer unavailable after preset selection'}
           $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
@@ -280,11 +280,11 @@ jobs:
           }
           [ordered]@{stage='composer-settings';editorEmpty=$true;settings=$settings;settingsControls=$candidates;toolbar=$toolbar} | ConvertTo-Json -Depth 7 -Compress
           if (-not ($settings.model -and $settings.max -and ($settings.redteam -or $modeSelected) -and $settings.fullAccess)) {
-            [ordered]@{stage='delegated-submit';status='settings-not-yet-confirmed';taskSubmitted=$false} | ConvertTo-Json -Compress
+            [ordered]@{stage='review-submit';status='settings-not-yet-confirmed';taskSubmitted=$false} | ConvertTo-Json -Compress
             return
           }
-          $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/review-trace-import.mjs') --packet 'DS41-DESKTOP-20261116-DELEGATED-01' delegated) -join [char]10).TrimEnd()
-          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DELEGATED-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
+          $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-desktop-review-replay.mjs')) -join [char]10).TrimEnd()
+          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-REVIEW-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
           function Normalize-ComposerText($text) {
             if($null -eq $text){return ''}
             return (([string]$text).Replace(([string][char]13+[string][char]10),[string][char]10).Replace([string][char]13,[string][char]10)).TrimEnd()
@@ -297,8 +297,8 @@ jobs:
             return [ordered]@{
               valueLength=$value.Length;textLength=$text.Length
               valueMatches=($value -ceq $expected);textMatches=($text -ceq $expected)
-              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DELEGATED-01')
-              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DELEGATED-01')
+              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-REVIEW-01')
+              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-REVIEW-01')
             }
           }
           $packet=Normalize-ComposerText $packet
@@ -336,7 +336,7 @@ jobs:
           }
           [ordered]@{stage='composer-entry';method='verified-paste';packetLength=$packet.Length;verified=$verified;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
           if(-not $verified){
-            [ordered]@{stage='delegated-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
+            [ordered]@{stage='review-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
             return
           }
           $send = @(Get-Controls | Where-Object {
@@ -347,7 +347,7 @@ jobs:
           if ($send.Count -ne 1) {
             $bounds=$editor[0].Current.BoundingRectangle
             $localButtons=@(Get-Controls|Where-Object{try{(Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.BoundingRectangle.Left -ge ($bounds.Left-40) -and $_.Current.BoundingRectangle.Right -le ($bounds.Right+40) -and $_.Current.BoundingRectangle.Top -ge ($bounds.Top-100) -and $_.Current.BoundingRectangle.Bottom -le ($bounds.Bottom+240)}catch{$false}}|ForEach-Object{[ordered]@{class=$_.Current.ClassName;enabled=$_.Current.IsEnabled;label=if($_.Current.Name -match '^(发送|Send|停止|Stop|提交|Submit|运行|Run)'){[string]$_.Current.Name}else{$null};patterns=@($_.GetSupportedPatterns()|ForEach-Object{$_.ProgrammaticName})}})
-            [ordered]@{stage='delegated-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
+            [ordered]@{stage='review-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;localButtons=$localButtons;taskSubmitted=$false} | ConvertTo-Json -Depth 6 -Compress
             return
           }
           # Reserve the unique run marker before sending. A retry after an
@@ -357,4 +357,4 @@ jobs:
           $clicked=Click-Verified $send[0]
           if(-not $clicked){(Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
           Start-Sleep -Milliseconds 1200
-          [ordered]@{stage='delegated-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-DELEGATED-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
+          [ordered]@{stage='review-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-REVIEW-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
