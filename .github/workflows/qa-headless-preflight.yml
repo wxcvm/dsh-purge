@@ -82,8 +82,24 @@ jobs:
           }
           const failureDetails = (run,events) => {
             const lines=(run.stderr||'').split(/\r?\n/).filter(x=>/\b(?:error|failed|fatal|invalid|unknown|missing|cannot|unsupported|preset|profile|plugin|credential)\b/i.test(x)&&! /^\s*at\s/.test(x))
-            const errorEvents=events.filter(e=>['error','final','fatal'].includes(e?.type)).map(e=>({type:e.type,code:label(e.code||e.error?.code),message:safeError(typeof e.error==='string'?e.error:e.error?.message||e.message||e.reason?.message),reason:label(e.reason?.kind)}))
-            return {stderr:lines.slice(0,5).map(safeError).filter(Boolean),eventTypes:[...new Set(events.map(e=>label(e?.type)).filter(Boolean))],errorEvents:errorEvents.slice(0,3)}
+            const reasonDetails=(root,depth=0)=>{
+              if(!root||typeof root!=='object'||depth>4)return null
+              const out={keys:Object.keys(root).slice(0,20)}
+              for(const key of ['kind','type','code','name','status','statusCode','httpStatus','provider','model','reasoningEffort']){
+                const value=root[key]
+                if(typeof value==='number'||typeof value==='boolean'||label(value))out[key]=value
+              }
+              for(const key of ['message','error','detail','description','reason','cause','details']){
+                const value=root[key]
+                if(typeof value==='string'){
+                  // Print only a bounded host error, not any request or response body.
+                  out[key]=safeError(value)
+                }else if(value&&typeof value==='object'&&!Array.isArray(value))out[key]=reasonDetails(value,depth+1)
+              }
+              return out
+            }
+            const errorEvents=events.filter(e=>['error','final','fatal'].includes(e?.type)).map(e=>({type:e.type,code:label(e.code||e.error?.code),message:safeError(typeof e.error==='string'?e.error:e.error?.message||e.message||e.reason?.message),reason:reasonDetails(e.reason),error:reasonDetails(e.error),eventKeys:Object.keys(e).slice(0,20)}))
+            return {stderr:lines.slice(0,5).map(safeError).filter(Boolean),eventTypes:[...new Set(events.map(e=>label(e?.type)).filter(Boolean))],errorEvents:errorEvents.slice(0,3),statusEvents:events.filter(e=>e.type==='status').slice(-6).map(e=>({keys:Object.keys(e),status:label(e.status),phase:label(e.phase),kind:label(e.kind),usageObserved:!!e.usage,error:reasonDetails(e.error),reason:reasonDetails(e.reason)})),sessionEvents:events.filter(e=>e.type==='session').slice(0,3).map(e=>({keys:Object.keys(e),sessionIdPresent:!!(e.sessionId||e.id||e.session?.id),sessionKeys:e.session&&typeof e.session==='object'?Object.keys(e.session).slice(0,20):[]}))}
           }
           const classify = res => {
             const msg=(res.stderr||'')+'\n'+(res.status===0?'':res.stdout||'')
@@ -288,6 +304,29 @@ jobs:
                       console.log(JSON.stringify(execution))
                       if(run.status!==0)console.log(JSON.stringify({stage:'startup-diagnostic',mode,...failureDetails(run,entries)}))
                       if(roots.length!==1){
+                        const rootsToCheck=[sessionRoot,path.join(isolated,'session'),path.join(home,'sessions')]
+                        const archiveLocations=rootsToCheck.map((root,index)=>{
+                          let count=0,matching=0
+                          try{
+                            for(const dir of fs.readdirSync(root,{withFileTypes:true})){
+                              if(!dir.isDirectory()||dir.isSymbolicLink())continue
+                              for(const name of ['session.v4.jsonl','session.v4.jsonl.zstd']){
+                                const file=path.join(root,dir.name,name)
+                                try{
+                                  const st=fs.lstatSync(file)
+                                  if(!st.isFile()||st.isSymbolicLink())continue
+                                  if(st.mtimeMs>=start-2000){count++
+                                    // Never decode or inspect other user sessions.
+                                    if(index<2)try{extractMarkedTurn(decodeArchive(fs.readFileSync(file)),'PURGE-QA-RUN: '+runId,{child:true});matching++}catch{}
+                                  }
+                                }catch{}
+                              }
+                            }
+                          }catch{}
+                          return {location:['isolated-sessions','isolated-session','production-session-metadata-only'][index],recentNativeFiles:count,markedFiles:index<2?matching:null}
+                        })
+                        console.log(JSON.stringify({stage:'archive-location',mode,archiveLocations}))
+
                         console.log(JSON.stringify({stage:'result',mode,valid:false,reason:'missing-or-ambiguous-parent-archive'}))
                         process.exitCode=6
                         break
