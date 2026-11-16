@@ -9,7 +9,7 @@ const runtime = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url)
 test('main planner dispatches only explicit independent read-only batches', () => {
   assert.match(planner, /parallel_review\.status=ready/)
   assert.match(planner, /只读记录核查任务/)
-  assert.match(planner, /同批最多 3 个/)
+  assert.match(planner, /同一批最多 3 个/)
   assert.match(planner, /没有依赖、没有共享可变状态、没有证据前置关系/)
   assert.match(planner, /不访问目标、不扫描、不登录/)
   assert.match(planner, /主会话等待本批所有子任务返回或明确失败/)
