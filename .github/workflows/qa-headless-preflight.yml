@@ -79,6 +79,39 @@ jobs:
               }catch{}
             }
           }
+          // Output compliance and answer accuracy are separate observations.
+          // Score an exact, unique JSON code block if the native final has one;
+          // never emit arbitrary prose, raw answer text or tool arguments.
+          const {evaluate}=await load('scripts/agent-quality-eval.mjs')
+          function finalReportDiagnostic(trace){
+            const raw=trace.finalText
+            if(typeof raw!=='string'||!raw.trim())return {shape:'missing-final-text',textLength:raw?.length??0,contentScore:null}
+            const text=raw.trim()
+            let value=null,shape='unrecognized'
+            try{value=JSON.parse(text);shape='strict-json'}catch{}
+            if(!Array.isArray(value?.reports)){
+              const fence=String.fromCharCode(96).repeat(3)
+              const pattern=new RegExp(fence+'(?:json)?[\\t ]*\\r?\\n([\\s\\S]*?)\\r?\\n'+fence,'gi')
+              const blocks=[...text.matchAll(pattern)]
+              if(blocks.length===1){
+                try{const v=JSON.parse(blocks[0][1]);if(Array.isArray(v?.reports)){value=v;shape=blocks[0][0]===text?'single-json-fence':'json-fence-with-prose'}}catch{}
+              }
+            }
+            const result={shape,textLength:text.length,hasReportsKey:/"reports"\s*:/.test(text),mentionedFixtureIds:cases.filter(c=>text.includes(c.id)).length,contentScore:null}
+            if(!Array.isArray(value?.reports))return result
+            const ids=new Set(cases.map(c=>c.id))
+            const known=value.reports.filter(row=>ids.has(row?.id))
+            result.reportCount=value.reports.length
+            result.knownCaseCount=new Set(known.map(row=>row.id)).size
+            result.foreignReports=value.reports.length-known.length
+            result.duplicateCaseReports=known.length-result.knownCaseCount
+            if(result.duplicateCaseReports||result.foreignReports)return result
+            const byId=new Map(cases.map(c=>[c.id,c]))
+            const reports=known.map(row=>({id:row.id,answer:['a','b','c'].includes(row.answer)?row.answer:null,evidence:Array.isArray(row.evidence)?row.evidence.map(key=>typeof key==='string'&&Object.hasOwn(byId.get(row.id).records,key)?key:'__invalid_evidence__'):null}))
+            const score=evaluate({reports})
+            result.contentScore={summary:score.summary,results:score.results.map(({id,completed,conclusionCorrect,evidenceCorrect,passed})=>({id,completed,conclusionCorrect,evidenceCorrect,passed}))}
+            return result
+          }
           const outcomes={}
           for(const mode of modes){
             const observed=observations[mode]
@@ -101,7 +134,7 @@ jobs:
             }).filter(Boolean)
             const presetEvidence=events.filter(e=>e.type==='agent-preset/selected').map(e=>label(e.data?.agentPreset||e.data?.preset||e.data?.name)).filter(Boolean)
             const permissionEvidence=events.filter(e=>e.type==='permission/preset').map(e=>label(e.data?.preset||e.data?.permissionPreset)).filter(Boolean)
-            console.log(JSON.stringify({stage:'desktop-review',mode,status:parent.trace.lifecycle,route:score.route,requestRoutes:[...new Set(routeEvidence.map(JSON.stringify))].map(JSON.parse),presetEvidence:[...new Set(presetEvidence)],permissionEvidence:[...new Set(permissionEvidence)],score:reconcileReviewBatch(score.batch).summary,archiveCoverage:score.archiveCoverage,usage:score.usage,delegationTimeline:score.delegationTimeline,linkedMarkedChildren:linked.length,scoredChildren:children.length}))
+            console.log(JSON.stringify({stage:'desktop-review',mode,status:parent.trace.lifecycle,route:score.route,requestRoutes:[...new Set(routeEvidence.map(JSON.stringify))].map(JSON.parse),presetEvidence:[...new Set(presetEvidence)],permissionEvidence:[...new Set(permissionEvidence)],score:reconcileReviewBatch(score.batch).summary,finalReport:finalReportDiagnostic(parent.trace),archiveCoverage:score.archiveCoverage,usage:score.usage,delegationTimeline:score.delegationTimeline,linkedMarkedChildren:linked.length,scoredChildren:children.length}))
           }
           if(outcomes.direct&&outcomes.delegated)console.log(JSON.stringify({stage:'desktop-pair',status:'observed',comparison:compareReviewRuns(outcomes),scope:'native-desktop-archives',billing:'not-observed'}))
           else console.log(JSON.stringify({stage:'desktop-pair',status:'incomplete',missing:modes.filter(mode=>!outcomes[mode]),recentArchiveCandidates:candidates.length,unreadableArchives:unreadable}))
