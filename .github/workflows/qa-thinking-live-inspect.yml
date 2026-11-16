@@ -1,19 +1,56 @@
-name: QA Thinking Candidate Online
+name: QA Thinking Candidate Linux WSL
 on:
   push:
     branches: [robin/qa-thinking-live-inspect-20261116]
 permissions:
   contents: read
 jobs:
-  inspect:
+  linux-wsl:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: 9ccb7e36437084a999479121e3fe11f1895d591b
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: One normal task through official CLI with candidate read-only observer
-        run: node scripts/qa-thinking-candidate-online.mjs
+      - name: Run exact candidate Linux regression in existing Ubuntu WSL
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $distros = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ($_ -replace [char]0,'').Trim() } | Where-Object { $_ -match '^Ubuntu(?:[-.0-9A-Za-z]*)$' })
+          if ($LASTEXITCODE -ne 0 -or $distros.Count -eq 0) { throw 'Existing Ubuntu WSL distro not found; no installation attempted' }
+          $running = @(& wsl.exe --list --running --quiet 2>$null | ForEach-Object { ($_ -replace [char]0,'').Trim() })
+          $distro = @($distros | Where-Object { $running -contains $_ } | Select-Object -First 1)
+          if ($distro.Count -eq 0) { $distro = @($distros | Select-Object -First 1) }
+          $distro = [string]$distro[0]
+          $archive = Join-Path $env:RUNNER_TEMP ('purge-thinking-linux-' + $env:GITHUB_RUN_ID + '.tar')
+          try {
+            git archive --format=tar --output=$archive HEAD
+            if ($LASTEXITCODE -ne 0) { throw 'Could not archive exact candidate' }
+            $linuxArchive = ((& wsl.exe -d $distro -- wslpath -a $archive) -join '').Trim()
+            if ($LASTEXITCODE -ne 0 -or -not $linuxArchive.StartsWith('/')) { throw 'Could not resolve candidate archive in WSL' }
+            $script = @'
+          set -euo pipefail
+          archive="$1"
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          tar -xf "$archive" -C "$work"
+          cd "$work"
+          if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
+            echo 'Existing WSL Node/npm unavailable; no installation attempted'
+            exit 2
+          fi
+          node -e 'if(Number(process.versions.node.split(".")[0])<24)process.exit(2);console.log("Node "+process.version+" / "+process.platform+" / "+process.arch)'
+          npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional --package-lock=false
+          export DSH_COMPAT_HOST_ROOT="$(node scripts/prepare-host-fixture.mjs)"
+          npm install --prefix "$DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+          node scripts/build-client.mjs --check
+          node scripts/check-syntax.mjs
+          node -e 'const n=require("node:os").availableParallelism();const r=require("node:child_process").spawnSync(process.execPath,["--test","--test-concurrency="+n,"test/*.test.*","maintenance/*.test.mjs","maintenance/desktop-tools/*.test.mjs"],{stdio:"inherit"});process.exitCode=r.status??1'
+          '@
+            $script = $script -replace "`r", ''
+            $script | & wsl.exe -d $distro -- bash -s -- $linuxArchive
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+          }
