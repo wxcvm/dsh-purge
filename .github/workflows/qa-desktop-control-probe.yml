@@ -1,16 +1,22 @@
-name: QA Desktop Open New Conversation
+name: QA Desktop Composer Configuration
 on:
   pull_request:
     types: [synchronize]
 permissions:
   contents: read
 jobs:
-  open:
+  direct:
     if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
-      - name: Open a fresh Harness conversation and identify its composer
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify fresh Desktop composer and submit direct QA only when confirmed
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -18,7 +24,7 @@ jobs:
           Add-Type -AssemblyName UIAutomationTypes
           $session = (Get-Process -Id $PID).SessionId
           $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like '*DeepSeek*Harness*' -and $_.SessionId -eq $session -and $_.MainWindowHandle -ne 0 })
-          if ($windows.Count -ne 1) { throw "Expected one Harness window in the Runner desktop" }
+          if ($windows.Count -ne 1) { throw 'Expected exactly one accessible Harness window' }
           $handle = $windows[0].MainWindowHandle
           function Get-Controls {
             $root = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
@@ -29,35 +35,76 @@ jobs:
             if ($element.TryGetCurrentPattern($pattern,[ref]$obj)) { return $obj }
             return $null
           }
-          $before = @(Get-Controls)
-          $buttons = @($before | Where-Object {
-            try { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -in @('新建会话','新建对话','New Chat','New Conversation','New Session') -and $_.Current.IsEnabled -and -not $_.Current.IsOffscreen -and $_.Current.BoundingRectangle.Width -gt 0 -and $_.Current.BoundingRectangle.Height -gt 0 } catch { $false }
-          })
-          $invokable = @($buttons | Where-Object { $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern)) })
-          [ordered]@{ stage='new-chat-control'; visibleButtons=$buttons.Count; invokableButtons=$invokable.Count } | ConvertTo-Json -Compress
-          if ($invokable.Count -eq 0) { throw 'No accessible New Chat InvokePattern; no UI action taken' }
-          # Both matching buttons are labelled exactly New Chat; either opens a fresh conversation.
-          $action = Get-Pattern $invokable[0] ([System.Windows.Automation.InvokePattern]::Pattern)
-          $action.Invoke()
-          Start-Sleep -Milliseconds 1800
-          $after = @(Get-Controls)
-          $known = @()
-          $editors = @()
-          foreach ($c in $after) {
+          function Is-Visible($c) {
+            try { return ($c.Current.IsEnabled -and -not $c.Current.IsOffscreen -and $c.Current.BoundingRectangle.Width -gt 0 -and $c.Current.BoundingRectangle.Height -gt 0) } catch { return $false }
+          }
+          function Get-Composer {
+            @(Get-Controls | Where-Object {
+              try { (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Edit -and $_.Current.ClassName -eq 'GRgSLq_input' } catch { $false }
+            })
+          }
+          $editor = @(Get-Composer)
+          if ($editor.Count -ne 1) { throw 'Expected the identified Harness composer' }
+          $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
+          if ($null -eq $vp -or $vp.Current.IsReadOnly) { throw 'Composer cannot be written via ValuePattern' }
+          if (-not [string]::IsNullOrWhiteSpace($vp.Current.Value)) {
+            [ordered]@{stage='composer';status='not-empty';taskSubmitted=$false} | ConvertTo-Json -Compress
+            return
+          }
+          $rect = $editor[0].Current.BoundingRectangle
+          $toolbar = @()
+          $labels = @()
+          $candidates = @()
+          $known = '(?i)deepseek|flash|红队|redteam|max|完全权限|full.access|danger.full.access|多智能体|multi.agent|standard|标准|模式|model|模型|权限|permission|发送|send|推理|reasoning|协作|attach|附件|停止|stop|工作区|workspace'
+          foreach ($c in (Get-Controls)) {
             try {
-              $v = $c.Current
-              if ($v.IsOffscreen -or -not $v.IsEnabled -or $v.BoundingRectangle.Width -le 0 -or $v.BoundingRectangle.Height -le 0) { continue }
-              $type = $v.ControlType.ProgrammaticName
-              $name = $v.Name
-              $rect = $v.BoundingRectangle
-              $patterns = @($c.GetSupportedPatterns() | ForEach-Object { $_.ProgrammaticName })
-              if ($type -in @('ControlType.Edit','ControlType.Document') -and $v.IsKeyboardFocusable) {
-                # Do not read editable text or document contents.
-                $editors += [ordered]@{ type=$type; automationId=$v.AutomationId; class=$v.ClassName; focused=$v.HasKeyboardFocus; patterns=$patterns; width=[int]$rect.Width; height=[int]$rect.Height }
+              if (-not (Is-Visible $c)) { continue }
+              $v=$c.Current
+              $t=$v.ControlType.ProgrammaticName
+              $b=$v.BoundingRectangle
+              if ($t -notin @('ControlType.Button','ControlType.ComboBox','ControlType.Text','ControlType.CheckBox','ControlType.MenuItem','ControlType.ToggleButton')) { continue }
+              if ($b.Left -lt ($rect.Left-90) -or $b.Right -gt ($rect.Right+90) -or $b.Top -lt ($rect.Top-150) -or $b.Bottom -gt ($rect.Bottom+230)) { continue }
+              $n=[string]$v.Name
+              if ($n -match $known) {
+                $safeName=($n -split '[\r\n]')[0]
+                if ($safeName.Length -gt 100) { $safeName=$safeName.Substring(0,100) }
+                $labels += $safeName
+                $candidates += [ordered]@{type=$t;name=$safeName;class=$v.ClassName;patterns=@($c.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})}
               }
-              if ($name -match '^(新建(对话|会话|聊天)?|New (Chat|Conversation|Session)|发送|Send|Redteam|红队(模式)?|Max|完全权限|Full access|DeepSeek( V4\.1)? Flash|多智能体协作|标准|Standard|打开工作区|Open workspace|Select workspace|选择工作区|开始对话|Ask anything|停止|Stop|停止生成)([ .…:：]+.*)?$' -and $type -in @('ControlType.Button','ControlType.MenuItem','ControlType.TabItem','ControlType.ComboBox','ControlType.Text')) {
-                $known += [ordered]@{ type=$type; name=($name -split '[\r\n]')[0].Substring(0,[Math]::Min($name.Length,80)); patterns=$patterns; enabled=$v.IsEnabled }
+              if ($t -ne 'ControlType.Text') {
+                $toolbar += [ordered]@{type=$t;class=$v.ClassName;knownName=($n -match $known);named=($n.Length -gt 0);x=[int]($b.Left-$rect.Left);y=[int]($b.Top-$rect.Top);width=[int]$b.Width;height=[int]$b.Height;patterns=@($c.GetSupportedPatterns() | ForEach-Object {$_.ProgrammaticName})}
               }
             } catch {}
           }
-          [ordered]@{ stage='new-conversation-opened'; controls=$after.Count; editorCandidates=$editors; knownControls=$known; modelRequests=0; taskSubmitted=$false } | ConvertTo-Json -Depth 6 -Compress
+          $settings = [ordered]@{
+            model=(@($labels | Where-Object {$_ -match '(?i)deepseek.*flash|flash.*deepseek'}).Count -gt 0)
+            max=(@($labels | Where-Object {$_ -match '(?i)(?:^|[^a-z])max(?:$|[^a-z])'}).Count -gt 0)
+            redteam=(@($labels | Where-Object {$_ -match '(?i)红队|redteam'}).Count -gt 0)
+            fullAccess=(@($labels | Where-Object {$_ -match '(?i)完全权限|full.access|danger.full.access'}).Count -gt 0)
+            collaborationVisible=(@($labels | Where-Object {$_ -match '(?i)多智能体|multi.agent'}).Count -gt 0)
+          }
+          [ordered]@{stage='composer-settings';editorEmpty=$true;settings=$settings;settingsControls=$candidates;toolbar=$toolbar} | ConvertTo-Json -Depth 7 -Compress
+          if (-not ($settings.model -and $settings.max -and $settings.redteam -and $settings.fullAccess)) {
+            [ordered]@{stage='direct-submit';status='settings-not-yet-confirmed';taskSubmitted=$false} | ConvertTo-Json -Compress
+            return
+          }
+          $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/review-trace-import.mjs') --packet 'DS41-DESKTOP-20261116-DIRECT-01' direct) -join [char]10).TrimEnd()
+          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DIRECT-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
+          $vp.SetValue($packet)
+          Start-Sleep -Milliseconds 400
+          $editor = @(Get-Composer)
+          if ($editor.Count -ne 1) { throw 'Composer changed while entering task; nothing submitted' }
+          $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
+          if (($vp.Current.Value -replace '\r\n',[string][char]10).TrimEnd() -ne $packet) { throw 'Composer text did not match the QA packet; nothing submitted' }
+          $send = @(Get-Controls | Where-Object {
+            try {
+              (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -match '^(发送(?:消息)?|Send(?: message)?)(?:\s*\([^)]*\))?$' -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))
+            } catch { $false }
+          })
+          if ($send.Count -ne 1) {
+            [ordered]@{stage='direct-submit';status='draft-entered-send-control-not-unique';sendCandidates=$send.Count;taskSubmitted=$false} | ConvertTo-Json -Compress
+            return
+          }
+          (Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()
+          Start-Sleep -Milliseconds 1200
+          [ordered]@{stage='direct-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-DIRECT-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
