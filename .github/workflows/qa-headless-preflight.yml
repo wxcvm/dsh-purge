@@ -1,19 +1,22 @@
-name: QA Headless Preflight
+name: QA Headless Paired Model Evaluation
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened]
 permissions:
   contents: read
 jobs:
   preflight:
-    if: github.head_ref == 'robin/qa-headless-preflight-20261116'
+    if: github.head_ref == 'robin/qa-headless-paired-20261116'
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Compose isolated redteam Max headless profile
+      - name: Run one isolated six-case direct and delegated Max pair
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -34,7 +37,7 @@ jobs:
           const req = createRequire(cli)
           const parse = req('yaml').parse
           const desktopReq = createRequire(path.join(profileRoot, 'desktop', 'package.json'))
-          const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-qa-compose-'))
+          const tmp = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'purge-qa-paired-'))
           const label = v => typeof v === 'string' && /^[\w./:@+-]{1,120}$/.test(v) ? v : null
           const collect = (v, out = []) => {
             if (!v || typeof v !== 'object') return out
@@ -57,7 +60,7 @@ jobs:
           try {
             const entry=path.join(tmp,'entry.mjs')
             fs.writeFileSync(entry,'import {runDesktopCli} from '+JSON.stringify(pathToFileURL(cli).href)+';\nawait runDesktopCli('+JSON.stringify(support)+');\n')
-            const call=(args,dshHome=home)=>spawnSync(exe,['--expose-internals',entry,...args],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',DSH_HOME:dshHome},cwd:tmp,encoding:'utf8',timeout:30000,windowsHide:true,maxBuffer:16*1024*1024})
+            const call=(args,dshHome=home,timeout=30000,cwd=tmp)=>spawnSync(exe,['--expose-internals',entry,...args],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',DSH_HOME:dshHome},cwd,encoding:'utf8',timeout,windowsHide:true,maxBuffer:64*1024*1024})
             const baseRes=call(['--profile','codex-review','--dump-config'])
             if(baseRes.status!==0){console.log(JSON.stringify({stage:'base',...classify(baseRes)}));process.exitCode=2}
             else {
@@ -112,6 +115,112 @@ jobs:
                   const boot=call(['--profile','codex-review','--patch',patch,'--help'],isolated)
                   console.log(JSON.stringify({stage:'isolated-boot',...classify(boot),help:/(?:Usage:|--json)/.test(boot.stdout||''),modelRequests:0,profileIsolated:true}))
                   if(boot.status!==0)process.exitCode=5
+                  if(boot.status===0){
+                    // Reuse only the local credential store, in the same user's
+                    // temporary directory. Never print its contents or upload it.
+                    const authCandidates=fs.readdirSync(home,{withFileTypes:true}).filter(x=>!x.isSymbolicLink()&&/^(?:\.?credentials?(?:\.(?:json|ya?ml|db|sqlite|bin))?|\.?auth(?:orization)?(?:\.(?:json|ya?ml|db|sqlite|bin))?|deepseek-account(?:\.json)?|accounts?\.json)$/i.test(x.name))
+                    const authNames=[]
+                    for(const item of authCandidates){
+                      const src=path.join(home,item.name),dst=path.join(isolated,item.name)
+                      if(fs.existsSync(dst))fs.rmSync(dst,{recursive:true,force:true})
+                      fs.cpSync(src,dst,{recursive:item.isDirectory(),filter:p=>!fs.lstatSync(p).isSymbolicLink()})
+                      authNames.push(item.name)
+                    }
+                    console.log(JSON.stringify({stage:'local-auth',copiedStoreEntries:authNames.length,rawCredentialsLogged:false}))
+                    const workspace=process.env.GITHUB_WORKSPACE
+                    const evalModule=await import(pathToFileURL(path.join(workspace,'scripts','review-trace-import.mjs')).href)
+                    const {cases}=await import(pathToFileURL(path.join(workspace,'scripts','agent-quality-eval.mjs')).href)
+                    const {compareReviewRuns}=await import(pathToFileURL(path.join(workspace,'scripts','review-run-compare.mjs')).href)
+                    const {messageText,messageOf}=await import(pathToFileURL(path.join(workspace,'lib','response-context.js')).href)
+                    const {markedPacket,decodeArchive,extractMarkedTurn,archiveEvents,importReviewRun}=evalModule
+                    const sessionRoot=path.join(isolated,'sessions')
+                    const scanMarked=runId=>{
+                      const marker='PURGE-QA-RUN: '+runId, found=[]
+                      if(!fs.existsSync(sessionRoot))return found
+                      for(const dir of fs.readdirSync(sessionRoot,{withFileTypes:true})){
+                        if(!dir.isDirectory()||dir.isSymbolicLink())continue
+                        const folder=path.join(sessionRoot,dir.name)
+                        const files=['session.v4.jsonl.zstd','session.v4.jsonl'].map(n=>path.join(folder,n)).filter(p=>fs.existsSync(p)&&fs.lstatSync(p).isFile())
+                        for(const file of files){
+                          try{
+                            const records=decodeArchive(fs.readFileSync(file))
+                            const trace=extractMarkedTurn(records,marker,{child:true})
+                            let human=false
+                            try{extractMarkedTurn(records,marker);human=true}catch{}
+                            const user=archiveEvents(records).events.find(e=>e.seq===trace.humanSeq)
+                            const task=messageText(messageOf(user))
+                            const caseIds=cases.filter(c=>task.includes(c.id)).map(c=>c.id)
+                            found.push({sessionId:dir.name,records,trace,human,caseIds})
+                            break
+                          }catch{}
+                        }
+                      }
+                      return found
+                    }
+                    const observeConfig=spec=>{
+                      const {events}=archiveEvents(spec.records)
+                      const routes=[]
+                      const presets=[]
+                      for(const e of events){
+                        if(e.type==='agent-preset/selected'){
+                          const v=e.data?.agentPreset||e.data?.preset||e.data?.name
+                          if(label(v))presets.push(v)
+                        }
+                        if(e.type==='request/header'&&e.seq>spec.trace.humanSeq){
+                          const c=e.data?.header?.config
+                          if(c)routes.push({provider:label(c.provider),model:label(c.model),reasoningEffort:label(c.reasoningEffort)})
+                        }
+                      }
+                      return {presets:[...new Set(presets)],requestRoutes:[...new Set(routes.map(x=>JSON.stringify(x)))].map(JSON.parse)}
+                    }
+                    const outcomes={}
+                    for(const mode of ['direct','delegated']){
+                      const runId='DS41-20261116-'+mode.toUpperCase()+'-01'
+                      const cwd=path.join(tmp,'case-'+mode)
+                      fs.mkdirSync(cwd,{recursive:true})
+                      const task=markedPacket(runId,mode)
+                      const start=Date.now()
+                      const run=call(['--profile','codex-review','--patch',patch,'--permission-mode','read-only','--approval-policy','never','--json',task],isolated,420000,cwd)
+                      const elapsed=Date.now()-start
+                      const entries=(run.stdout||'').split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line)}catch{return null}}).filter(Boolean)
+                      const last=entries.findLast(x=>x.type==='final')
+                      const finalReason=label(last?.reason?.kind)
+                      const archived=scanMarked(runId)
+                      const roots=archived.filter(row=>row.human&&!archived.some(other=>other!==row&&other.trace.childIds.includes(row.sessionId))&&!row.trace.parentRefs.some(id=>archived.some(other=>other.sessionId===id)))
+                      const execution={stage:'model-run',mode,runId,elapsedMs:elapsed,...classify(run),finalReason,cliEvents:entries.length,markedArchives:archived.length,parentCandidates:roots.length}
+                      console.log(JSON.stringify(execution))
+                      if(roots.length!==1){
+                        console.log(JSON.stringify({stage:'result',mode,valid:false,reason:'missing-or-ambiguous-parent-archive'}))
+                        process.exitCode=6
+                        break
+                      }
+                      const parent=roots[0]
+                      const linked=archived.filter(row=>row!==parent&&(parent.trace.childIds.includes(row.sessionId)||row.trace.parentRefs.includes(parent.sessionId)))
+                      const claims=new Map()
+                      for(const child of linked)for(const id of child.caseIds)claims.set(id,(claims.get(id)||0)+1)
+                      // Only unambiguous case briefs enter scoring. An observed
+                      // child session is not automatically a verified result.
+                      const children=linked.filter(row=>row.caseIds.length>0&&row.caseIds.every(id=>claims.get(id)===1))
+                      let scored
+                      try{
+                        scored=importReviewRun({runId,parent,children,settingsId:'deepseek-flash-redteam-max'})
+                      }catch{
+                        scored=importReviewRun({runId,parent,children:[],settingsId:'deepseek-flash-redteam-max'})
+                      }
+                      outcomes[mode]=scored
+                      console.log(JSON.stringify({stage:'result',mode,observedConfig:observeConfig(parent),lifecycle:parent.trace.lifecycle,route:scored.route,usage:scored.usage,archiveCoverage:scored.archiveCoverage,delegationTimeline:scored.delegationTimeline,linkedMarkedChildren:linked.length,scoredChildren:children.length,strictParentJson:scored.batch.strictJson}))
+                      if(run.status!==0||parent.trace.lifecycle!=='completed'){
+                        console.log(JSON.stringify({stage:'pair',status:'stopped',reason:'parent-run-not-completed'}))
+                        process.exitCode=7
+                        break
+                      }
+                    }
+                    if(outcomes.direct&&outcomes.delegated){
+                      const comparison=compareReviewRuns(outcomes)
+                      console.log(JSON.stringify({stage:'pair',status:'completed',comparison,directCoverage:outcomes.direct.archiveCoverage,delegatedCoverage:outcomes.delegated.archiveCoverage,delegationTimeline:outcomes.delegated.delegationTimeline,scope:'fictional-record-review-only',billing:'not-observed'}))
+                    }
+                  }
+
                 }
               }
             }
