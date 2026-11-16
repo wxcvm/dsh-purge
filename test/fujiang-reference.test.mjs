@@ -213,3 +213,27 @@ test('Fortinet edge advisories retain original claims and corrected product-spec
   assert.equal(versionStatus('CVE-2024-47575', '7.6.0'), 'unknown')
   assert.equal(versionStatus('CVE-2018-13379', '5.4.12'), 'unknown')
 })
+
+
+test('additional edge advisories preserve corrected build and product boundaries', () => {
+  const get = name => getBundledKnowledge('fujiang:edge-device:' + name)
+  const citrix = get('cve-2019-19781-citrix-path-traversal')
+  assert.match(citrix.body, /10\.5\.70\.12/)
+  assert.match(citrix.body, /13\.0\.47\.24/)
+  assert.match(citrix.body, /SD-WAN WANOP/)
+  const f5 = get('cve-2021-22986-f5-icontrol')
+  assert.match(f5.body, /12\.1\.5\.3/)
+  assert.match(f5.body, /7\.1\.0\.3/)
+  assert.match(f5.body, /BIG-IQ/)
+  const ivanti = get('cve-2023-35078-ivanti-epmm-auth-bypass')
+  assert.match(ivanti.body, /RPM/)
+  assert.match(ivanti.body, /更旧版本/)
+  const mft = get('cve-2024-0204-goanywhere-auth-bypass')
+  assert.match(mft.body, /7\.4\.1/)
+  assert.match(mft.body, /6\.4\.3/)
+  assert.ok([citrix, f5, ivanti, mft].every(row => row.verified === false))
+  const status = version => matchCveCandidates({cve:'CVE-2024-0204', version}).items[0].version_applicability.status
+  assert.equal(status('6.4.3'), 'affected')
+  assert.equal(status('7.4.0'), 'affected')
+  assert.equal(status('7.4.1'), 'not_affected')
+})
