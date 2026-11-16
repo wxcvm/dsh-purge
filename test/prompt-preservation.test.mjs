@@ -28,7 +28,7 @@ test("standard assembly preserves the complete user prompt and capability protoc
   assert.equal(Object.hasOwn(out, "tools"), false);
 });
 
-test("redteam assembly preserves shared refusal-hardening text, removes only CTF tail, and adds the child role", () => {
+test("redteam assembly preserves shared refusal-hardening text, removes the CTF-specific tail, and adds the child role", () => {
   const context = { session: { header: { agentPreset: "redteam" } } };
   const out = rewritePromptAssembly(
     { sections: [], contexts: [], variables: {} },
