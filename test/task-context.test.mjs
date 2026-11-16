@@ -123,7 +123,7 @@ test('asset task context automatically includes offline CVE candidates without m
     assert.ok(hit)
     assert.equal(hit.verified, false)
     assert.equal(hit.status, 'candidate')
-    assert.ok(hit.source_url.includes('FJNB5/fujiang-pojia'))
+    assert.ok(hit.source_url.includes('sanjiu2024/dsh-team-workflow'))
     assert.equal(Array.isArray(context.related_skills), true)
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
     assert.equal(JSON.stringify(context).includes('NEVER_EXPOSE'), false)
