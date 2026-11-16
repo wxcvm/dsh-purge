@@ -56,3 +56,63 @@ test('observed trace and usage are reported separately from reasoning quality', 
   assert.deepEqual(result.summary.usage, { elapsedMs: 100, inputTokens: 200, outputTokens: 50 })
   assert.equal(result.summary.passed, 6)
 })
+
+test('trace analysis separates retries from repeated previously successful checks by case', () => {
+  const a = cases[0].id, b = cases[1].id
+  const trace = [
+    { id: a, check: 'read', status: 'error' },
+    { id: a, check: 'read', status: 'error' },
+    { id: a, check: 'read', status: 'ok' },
+    { id: a, check: 'read', status: 'ok' },
+    { id: a, check: 'read', status: 'error' },
+    { id: b, check: 'read', status: 'ok' },
+  ]
+  const { summary } = evaluate({ reports: correct(), trace })
+  assert.deepEqual(summary.trace, { checks: 6, repeatedChecks: 4, toolErrors: 3 })
+  assert.deepEqual(summary.traceAnalysis, {
+    casesWithTrace: 2, distinctSuccessfulChecks: 2, repeatAfterSuccess: 2,
+    retryBeforeSuccess: 2, recoveredChecks: 1,
+    byCase: [
+      { id: a, checks: 5, repeatedChecks: 4, toolErrors: 3, repeatAfterSuccess: 2,
+        retryBeforeSuccess: 2, recoveredChecks: 1, distinctChecks: 1, distinctSuccessfulChecks: 1 },
+      { id: b, checks: 1, repeatedChecks: 0, toolErrors: 0, repeatAfterSuccess: 0,
+        retryBeforeSuccess: 0, recoveredChecks: 0, distinctChecks: 1, distinctSuccessfulChecks: 1 },
+    ],
+  })
+  assert.equal(summary.passed, 6)
+  assert.doesNotMatch(JSON.stringify(summary.traceAnalysis), /"read"/)
+})
+
+test('missing and empty trace are distinguished without inventing task activity', () => {
+  assert.equal(evaluate({ reports: [] }).summary.traceAnalysis, null)
+  const { summary } = evaluate({ reports: [], trace: [] })
+  assert.equal(summary.traceAnalysis.casesWithTrace, 0)
+  assert.deepEqual(summary.traceAnalysis.byCase, [])
+  assert.equal(summary.passed, 0)
+})
+
+test('case-associated subagent summaries retain overlap and missing-event evidence without changing scores', () => {
+  const observed = {
+    observed: true, scope: 'direct-parent', startsObserved: 3, endsObserved: 2,
+    pairedRuns: 2, startOnly: 1, endOnly: 0, outOfOrder: 0,
+    peakPairedOverlap: 1, capacity: 200, evicted: 4, prompt: 'PRIVATE',
+  }
+  const empty = { ...observed, observed: false, startsObserved: 0, endsObserved: 0,
+    pairedRuns: 0, startOnly: 0, peakPairedOverlap: null }
+  const snapshots = [{ id: cases[0].id, snapshot: observed }, { id: cases[1].id, snapshot: empty }]
+  const { summary } = evaluate({ reports: [], subagentSnapshots: snapshots })
+  assert.equal(summary.passed, 0)
+  assert.equal(summary.subagentAnalysis.casesWithSnapshots, 2)
+  assert.equal(summary.subagentAnalysis.casesWithObservedEvents, 1)
+  assert.equal(summary.subagentAnalysis.byCase[0].peakPairedOverlap, 1)
+  assert.equal(summary.subagentAnalysis.byCase[0].evicted, 4)
+  assert.equal(summary.subagentAnalysis.byCase[1].observed, false)
+  assert.doesNotMatch(JSON.stringify(summary.subagentAnalysis), /PRIVATE/)
+  assert.equal(evaluate({ reports: [] }).summary.subagentAnalysis, null)
+  for (const patch of [{ scope: 'all-recent' }, { pairedRuns: 4 }, { peakPairedOverlap: 3 }, { observed: false }]) {
+    assert.throws(() => evaluate({ reports: [], subagentSnapshots: [
+      { id: cases[0].id, snapshot: { ...observed, ...patch } },
+    ] }), /subagent snapshot/)
+  }
+  assert.throws(() => evaluate({ reports: [], subagentSnapshots: [snapshots[0], snapshots[0]] }), /duplicate/)
+})
