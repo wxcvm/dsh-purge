@@ -607,3 +607,51 @@ test('context-only route change does not inherit the previous output reservation
   assert.equal(next.contextBudget.messageBudgetTokens, null);
   assert.equal(old.requestMaxTokens, 4096);
 });
+
+
+test('late mount restores the recorded route and compaction from the history prefix', () => {
+  const o = createRuntimeObservations(), a = agent('late-history');
+  a.session.events = [
+    { seq: 70, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } },
+    { seq: 71, type: 'request/context', data: { provider: 'p', model: 'a', contextWindow: 32768 } },
+    { seq: 72, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } },
+    { seq: 73, type: 'turn/end', data: { turn: 80 } },
+    { seq: 74, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } },
+  ];
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 'late:81', revision: 1, turn: 81, step: 1 } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.startSeq, 74);
+  assert.equal(row.humanSeqAtStart, 74);
+  assert.equal(row.humanSourceAtStart, 'session-snapshot');
+  assert.equal(row.compactionSeqAtStart, 72);
+  assert.equal(row.contextBudget.messageBudgetTokens, 28672);
+  assert.equal(row.requestHeaderSeq, 70);
+  assert.equal(row.requestContextSeq, 71);
+  assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+});
+
+test('first live event bounds historical replay and later requests retain live route changes', () => {
+  const o = createRuntimeObservations(), a = agent('history-boundary');
+  a.session.events = [
+    { seq: 1, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } },
+    { seq: 2, type: 'request/context', data: { model: 'a', contextWindow: 32768 } },
+    { seq: 3, type: 'compaction/end', data: {} },
+    { seq: 4, type: 'turn/end', data: { turn: 79 } },
+    { seq: 6, type: 'request/context', data: { model: 'future', contextWindow: 131072 } },
+  ];
+  o.event(a.session, { seq: 5, type: 'request/header', data: { header: { config: { provider: 'p', model: 'b', maxTokens: 2048 } } } });
+  start(o, a);
+  const first = o.snapshot().items[0];
+  assert.equal(first.model, 'b');
+  assert.equal(first.contextWindow, null);
+  assert.equal(first.requestMaxTokens, 2048);
+  assert.equal(first.compactionSeqAtStart, 3);
+  assert.equal(first.humanSeqAtStart, 0);
+  o.event(a.session, a.session.events[4]);
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 2, turn: 2, step: 1 } });
+  const [next, old] = o.snapshot().items;
+  assert.equal(next.model, 'future');
+  assert.equal(next.contextWindow, 131072);
+  assert.equal(next.requestMaxTokens, null);
+  assert.equal(old.model, 'b');
+});
