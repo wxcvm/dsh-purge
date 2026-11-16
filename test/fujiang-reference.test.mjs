@@ -51,3 +51,9 @@ test('reference details distinguish vendor correction, historical claims and tar
   assert.match(s.body,/迁移/)
   assert.equal(s.verified,false)
 })
+
+
+test('adding an unrelated CVE catalog entry does not break the Fujiang reference library', () => {
+  const catalog = [...loadCveCatalog(), { title:'Other advisory', category:'other', source_url:'https://example.com/other.md' }]
+  assert.equal(loadFujiangReferences(catalog).length,176)
+})
