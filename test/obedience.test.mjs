@@ -150,7 +150,7 @@ test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", (
 
 test("anchorText：交付优先但保留安全、授权与宿主边界", () => {
   const txt = anchorText();
-  assert.match(txt, /执行约定/);
+  assert.match(txt, /任务质量约定/);
   assert.match(txt, /交付物/);
   assert.match(txt, /适用安全规则/);
   assert.match(txt, /审批/);
