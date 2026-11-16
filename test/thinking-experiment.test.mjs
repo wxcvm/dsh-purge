@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderThinkingExperiment, thinkingEventValues, parseThinkingExperiment, thinkingTimeline, compareThinkingTemplates } from '../lib/workspace/thinking-experiment.js';
+import { renderThinkingExperiment, thinkingEventValues, parseThinkingExperiment, thinkingTimeline, compareThinkingTemplates, THINKING_TASK_CASES, thinkingTaskPrompt, scoreThinkingTask } from '../lib/workspace/thinking-experiment.js';
 
 test('template converts display only and does not reinterpret inserted text', () => {
   const row = Object.freeze({ model:'fixture', reasoningChunks:2, reasoningChars:9, firstReasoningMs:0, reasoning:'PRIVATE' });
@@ -28,4 +28,22 @@ test('A/B uses identical input and disabled mode bypasses both transforms', () =
   const input='公开样本', values={reasoning:input,model:'fixture'};
   assert.deepEqual(compareThinkingTemplates(true,'A {{reasoning}}','B {{model}}',values,input),{baseline:input,a:'A '+input,b:'B fixture',enabled:true});
   assert.deepEqual(compareThinkingTemplates(false,'A','B',values,input),{baseline:input,a:input,b:input,enabled:false});
+});
+
+
+test('continuity pairs keep the same task, with an explicit fixture checkpoint only in B',()=>{
+  for(const c of THINKING_TASK_CASES){
+    assert.equal(thinkingTaskPrompt(c.id,'A'),c.task);
+    assert.equal(thinkingTaskPrompt(c.id,'B').startsWith(c.task+'\n\n'),true);
+    assert.equal(thinkingTaskPrompt(c.id,'B').includes(c.checkpoint),true);
+    assert.equal(scoreThinkingTask(c.id,JSON.stringify(c.expected)).status,'correct');
+  }
+  assert.equal(thinkingTaskPrompt('unknown','B'),null);
+});
+test('continuity scoring separates missing and invalid answers from actual wrong results',()=>{
+  assert.equal(scoreThinkingTask('config','').status,'missing');
+  assert.equal(scoreThinkingTask('config','not json').status,'invalid-json');
+  assert.equal(scoreThinkingTask('config','{"port":9000,"mode":"prod","portSource":"env","modeSource":"cli","extra":1}').status,'wrong');
+  assert.equal(scoreThinkingTask('dependency','{"ready":["D","B"],"blocked":["C"],"done":["A"]}').status,'wrong');
+  assert.equal(scoreThinkingTask('inventory','{"total":10,"C":0,"B":5,"A":5}').status,'correct');
 });
