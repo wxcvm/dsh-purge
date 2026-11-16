@@ -57,11 +57,16 @@ test('unknown, active, or non-read-only task types are never grouped', () => {
   assert.equal(plan.sequential.length, 4)
 })
 
-test('parallel batch respects the agreed three-agent ceiling and defers the rest', () => {
-  const plan = planParallelReviewBatch([task(1), task(2), task(3), task(4), task(5)], 9)
-  assert.equal(plan.max_parallel, 3)
-  assert.equal(plan.batch.length, 3)
-  assert.deepEqual(plan.deferred.map(item => item.target), ['vuln #4', 'vuln #5'])
+test('parallel batch follows the configured limit and defaults to three', () => {
+  const actions = [task(1), task(2), task(3), task(4), task(5)]
+  const configured = planParallelReviewBatch(actions, 9)
+  assert.equal(configured.max_parallel, 9)
+  assert.equal(configured.batch.length, 5)
+  assert.deepEqual(configured.deferred, [])
+  const defaults = planParallelReviewBatch(actions)
+  assert.equal(defaults.max_parallel, 3)
+  assert.equal(defaults.batch.length, 3)
+  assert.deepEqual(defaults.deferred.map(item => item.target), ['vuln #4', 'vuln #5'])
 })
 
 test('duplicate target keys are not dispatched together', () => {
