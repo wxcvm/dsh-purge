@@ -1,4 +1,4 @@
-name: QA Desktop Mode and Collaboration
+name: QA Desktop Verified Focus Interaction
 on:
   pull_request:
     types: [synchronize]
@@ -67,27 +67,63 @@ jobs:
           public static class QaDesktopMouse {
             [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
             [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+            [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h,uint flags);
+            [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+            [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h,int cmd);
+            [DllImport("user32.dll")] public static extern void keybd_event(byte key,byte scan,uint flags,UIntPtr extra);
+            [StructLayout(LayoutKind.Sequential)] public struct Point { public int X; public int Y; public Point(int x,int y){X=x;Y=y;} }
+            [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point p);
             [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
             [DllImport("user32.dll")] public static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
           }
           '@
+          function Same-Element($a,$b) {
+            if($null -eq $a -or $null -eq $b){return $false}
+            try { return (($a.GetRuntimeId() -join ',') -eq ($b.GetRuntimeId() -join ',')) } catch { return $false }
+          }
+          function Is-DescendantOrSelf($node,$target) {
+            $walker=[System.Windows.Automation.TreeWalker]::RawViewWalker
+            for($j=0;$j -lt 24 -and $null -ne $node;$j++){
+              if(Same-Element $node $target){return $true}
+              try{$node=$walker.GetParent($node)}catch{break}
+            }
+            return $false
+          }
+          function App-Foreground {
+            $fg=[QaDesktopMouse]::GetForegroundWindow()
+            return ($fg -ne [IntPtr]::Zero -and [QaDesktopMouse]::GetAncestor($fg,2) -eq [QaDesktopMouse]::GetAncestor($handle,2))
+          }
+          function Focus-Verified($element) {
+            if(-not (Is-Visible $element)){return $false}
+            if([QaDesktopMouse]::IsIconic($handle)){[void][QaDesktopMouse]::ShowWindowAsync($handle,9);Start-Sleep -Milliseconds 300}
+            try{$element.SetFocus()}catch{}
+            if(-not (App-Foreground)){[void][QaDesktopMouse]::SetForegroundWindow($handle);Start-Sleep -Milliseconds 350}
+            try{$element.SetFocus()}catch{}
+            Start-Sleep -Milliseconds 180
+            $focused=$false
+            try{$focused=(Is-DescendantOrSelf ([System.Windows.Automation.AutomationElement]::FocusedElement) $element) -or $element.Current.HasKeyboardFocus}catch{}
+            [ordered]@{stage='focus-verification';foreground=(App-Foreground);targetFocused=$focused;class=$element.Current.ClassName}|ConvertTo-Json -Compress|Write-Host
+            return ((App-Foreground) -and $focused)
+          }
+          function Open-Verified($element) {
+            if(-not (Focus-Verified $element)){return $false}
+            # Only deliver Enter when the exact intended control owns focus and
+            # the foreground root is the authorized Harness window.
+            [QaDesktopMouse]::keybd_event(13,0,0,[UIntPtr]::Zero)
+            [QaDesktopMouse]::keybd_event(13,0,2,[UIntPtr]::Zero)
+            return $true
+          }
           function Click-Verified($element) {
             if (-not (Is-Visible $element)) { return $false }
-            if ([QaDesktopMouse]::GetForegroundWindow() -ne $handle) {
-              [void][QaDesktopMouse]::SetForegroundWindow($handle)
-              Start-Sleep -Milliseconds 250
-            }
-            if ([QaDesktopMouse]::GetForegroundWindow() -ne $handle) { return $false }
+            if(-not (App-Foreground)){try{$element.SetFocus()}catch{};[void][QaDesktopMouse]::SetForegroundWindow($handle);Start-Sleep -Milliseconds 250}
             $b=$element.Current.BoundingRectangle
             $x=[int]($b.Left+$b.Width/2);$y=[int]($b.Top+$b.Height/2)
-            $hit=[System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x,$y))
-            $walker=[System.Windows.Automation.TreeWalker]::ControlViewWalker
-            $matched=$false
-            for($j=0;$j -lt 12 -and $null -ne $hit;$j++){
-              if($hit.Equals($element)){$matched=$true;break}
-              $hit=$walker.GetParent($hit)
-            }
-            if(-not $matched){return $false}
+            $nativeHit=[QaDesktopMouse]::WindowFromPoint([QaDesktopMouse+Point]::new($x,$y))
+            $windowMatched=($nativeHit -ne [IntPtr]::Zero -and [QaDesktopMouse]::GetAncestor($nativeHit,2) -eq [QaDesktopMouse]::GetAncestor($handle,2))
+            $hitMatched=$false
+            try{$hit=[System.Windows.Automation.AutomationElement]::FromPoint([System.Windows.Point]::new($x,$y));$hitMatched=Is-DescendantOrSelf $hit $element}catch{}
+            [ordered]@{stage='click-verification';foreground=(App-Foreground);windowMatched=$windowMatched;targetMatched=$hitMatched;class=$element.Current.ClassName}|ConvertTo-Json -Compress|Write-Host
+            if(-not (App-Foreground) -or -not $windowMatched -or -not $hitMatched){return $false}
             [void][QaDesktopMouse]::SetCursorPos($x,$y)
             [QaDesktopMouse]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
             [QaDesktopMouse]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
@@ -125,7 +161,8 @@ jobs:
               Start-Sleep -Milliseconds 700
               $red=@(Get-Labelled $redPattern)
               if($red.Count -eq 0){
-                $clicked=Click-Verified $picker
+                $clicked=Open-Verified $picker
+                if(-not $clicked){$clicked=Click-Verified $picker}
                 Start-Sleep -Milliseconds 700
                 $red=@(Get-Labelled $redPattern)
                 [ordered]@{stage='preset-menu-click';clicked=$clicked;redCandidates=$red.Count}|ConvertTo-Json -Compress
@@ -158,7 +195,8 @@ jobs:
             $collabPattern='(?i)^(?:多智能体|multi[\s-]*agent|协作模式|collaboration)'
             $collab=@(Get-Labelled $collabPattern)
             if($collab.Count -eq 0){
-              $clicked=Click-Verified $mp
+              $clicked=Open-Verified $mp
+              if(-not $clicked){$clicked=Click-Verified $mp}
               Start-Sleep -Milliseconds 600
               $collab=@(Get-Labelled $collabPattern)
               [ordered]@{stage='model-menu-click';clicked=$clicked;collaborationCandidates=$collab.Count}|ConvertTo-Json -Compress
