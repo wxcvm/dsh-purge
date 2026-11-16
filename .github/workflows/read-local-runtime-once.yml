@@ -1,4 +1,4 @@
-name: Inspect exact synthetic delegation result and tool metadata
+name: Inspect synthetic delegation tool arguments and prompt sizes
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -25,6 +25,11 @@ jobs:
           const marker='PURGE-DS41-DELEGATE-02'
           const root=path.join(process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh'),'sessions')
           const out=x=>console.log('PURGE_DS41_RESULT='+JSON.stringify(x))
+          const home=process.env.DSH_HOME||path.join(process.env.USERPROFILE||os.homedir(),'.dsh')
+          const promptPath=path.join(home,'prompt-inject.md')
+          let promptInfo={exists:false,chars:null,bytes:null};try{const b=fs.readFileSync(promptPath);promptInfo={exists:true,chars:b.toString('utf8').length,bytes:b.length}}catch{}
+          const logPath=path.join(os.tmpdir(),'dsh-purge-desktop.log')
+          let internalLog=[];try{internalLog=fs.readFileSync(logPath,'utf8').split(/\\r?\\n/).filter(l=>/\\[(?:assemble\\.rewrite|inject\\.read)\\]/.test(l)).slice(-80).map(l=>l.replace(/ cwd=[^ ]+/,' cwd=[redacted]'))}catch{}
           const dirs=d=>{try{return fs.readdirSync(d,{withFileTypes:true}).filter(x=>x.isDirectory()&&!x.isSymbolicLink()).map(x=>x.name)}catch{return []}}
           const files=[]
           for(const a of dirs(root))for(const b of dirs(path.join(root,a))){const f=path.join(root,a,b,'session.v4.jsonl.zstd');try{const s=fs.lstatSync(f);if(s.isFile()&&!s.isSymbolicLink())files.push({f,id:b,mtime:s.mtimeMs,size:s.size})}catch{}}
@@ -46,7 +51,7 @@ jobs:
            return {valid:rows.every(r=>r.lifecycle!=='invalid'&&r.outcome!=='invalid'),strict,passed:rows.filter(r=>r.correct).length,rows}
           }
           let scanned=0,bytes=0,incomplete=0,matches=[],children=[],parentRefs=new Map(),recent=[],markerHits=[]
-          const newRun=(started)=>({toolNames:{},messageToolNames:{},started,route:{provider:null,model:null},attempts:[],final:null,ended:null,toolStarts:0,subagentToolStarts:0,turnEnds:[],parseComplete:true,childIds:new Set(),descriptorEvents:0})
+          const newRun=(started)=>({toolNames:{},messageToolNames:{},toolCalls:[],started,route:{provider:null,model:null},attempts:[],final:null,ended:null,toolStarts:0,subagentToolStarts:0,turnEnds:[],parseComplete:true,childIds:new Set(),descriptorEvents:0})
           function scan(f,child=false,rank=null){
            if(f.size>64*1024*1024||bytes+f.size>256*1024*1024)return
            let buf;try{buf=fs.readFileSync(f.f)}catch{return}
@@ -87,7 +92,16 @@ jobs:
            if(e.type==='assistant/message'||e.type==='assistant/attempt'){
              const u0=d?.usage,stream=Array.isArray(d?.stream)?d.stream:[]
              const addName=(bucket,n)=>{const k=typeof n==='string'&&/^[A-Za-z][A-Za-z0-9_.:-]{0,79}$/.test(n)?n:'unknown';bucket[k]=(bucket[k]||0)+1}
-             for(const b of Array.isArray(d?.message?.content)?d.message.content:[]){if(['tool-call','tool_call','tool-use','tool_use'].includes(b?.type))addName(active.messageToolNames,b.name??b.toolName??b.tool?.name??b.function?.name)}
+             for(const b of Array.isArray(d?.message?.content)?d.message.content:[]){
+               if(!['tool-call','tool_call','tool-use','tool_use'].includes(b?.type))continue
+               const name=b.name??b.toolName??b.tool?.name??b.function?.name??'unknown';addName(active.messageToolNames,name)
+               let args=b.arguments??b.input??b.args??b.parameters??b.tool?.arguments??b.function?.arguments??null
+               if(typeof args==='string'){try{args=JSON.parse(args)}catch{args={raw:args}}}
+               const safe=v=>{if(typeof v!=='string')return null;return v.replace(/(?:api[_-]?key|token|secret|password|authorization|cookie)\\s*[:=]\\s*[^\\s,;]+/ig,'$1=[redacted]').replace(/Bearer\\s+[^\\s]+/ig,'Bearer [redacted]').slice(0,220)}
+               const summary={name,type:b.type,blockKeys:Object.keys(b).slice(0,18),argKeys:args&&typeof args==='object'?Object.keys(args).filter(k=>!/(?:key|token|secret|password|authorization|cookie)/i.test(k)).slice(0,16):[],preview:{}}
+               if(args&&typeof args==='object')for(const k of ['pattern','query','search','command','cmd','script','path','file','cwd','prompt','task','description','id','timeout'])if(Object.hasOwn(args,k)){const v=args[k];summary.preview[k]=typeof v==='string'?safe(v):typeof v==='number'||typeof v==='boolean'?v:Array.isArray(v)?{type:'array',length:v.length}:v&&typeof v==='object'?{type:'object',keys:Object.keys(v).filter(x=>!/(?:key|token|secret|password|authorization|cookie)/i.test(x)).slice(0,12)}:null}
+               active.toolCalls.push(summary)
+             }
              let u1=null,reason=null,text=''
              for(const r of stream){const c=r?.chunk;if(c?.type==='usage'&&fields.some(k=>num(c.usage?.[k])))u1=c.usage;if(c?.type==='finish')reason=c.reason?.kind;if(c?.type==='block-start'&&c.blockType==='tool-call'){active.toolStarts++;const n=c.name??c.toolName??c.tool?.name??c.block?.name??c.block?.toolName;addName(active.toolNames,n);if(['subagent','subagent_fork'].includes(n))active.subagentToolStarts++};if(c?.type==='text-delta'&&typeof c.text==='string')text+=c.text}
              const u=num(u0?.totalTokens)?u0:num(u1?.totalTokens)?u1:fields.some(k=>num(u0?.[k]))?u0:u1
@@ -119,7 +133,7 @@ jobs:
           const parent=matches.length===1?matches[0]:null
           const ids=new Set(parent?[...parent.childIds,...Array.from(parentRefs).filter(([c,p])=>p===parent.id&&files.some(f=>f.id===c&&f.mtime>=parent.started-5000)).map(([c])=>c)]:[])
           for(const f of files.filter(f=>ids.has(f.id)).slice(0,10))scan(f,true)
-          function view(x){return {matchBasis:x.matchBasis??null,parseComplete:x.parseComplete,turnEnds:x.turnEnds,wallMs:x.started!==null&&x.ended!==null?x.ended-x.started:null,toolStarts:x.toolStarts,subagentToolStarts:x.subagentToolStarts,toolNames:x.toolNames,messageToolNames:x.messageToolNames,descriptorEvents:x.descriptorEvents,linkedChildCount:x.childIds.size,attempts:x.attempts,final:x.final}}
-          out({status:matches.length?'matched':'not-found',archiveCount:files.length,scanned,incomplete,matchCount:matches.length,linkedChildCount:ids.size,childArchivesFound:children.length,parent:parent?view(parent):null,children:children.map(view),matchBases:matches.map(x=>x.matchBasis),recent,markerHits:markerHits.slice(0,30)})
+          function view(x){return {id:x.id,matchBasis:x.matchBasis??null,started:x.started===null?null:new Date(x.started).toISOString(),ended:x.ended===null?null:new Date(x.ended).toISOString(),parseComplete:x.parseComplete,turnEnds:x.turnEnds,wallMs:x.started!==null&&x.ended!==null?x.ended-x.started:null,toolStarts:x.toolStarts,subagentToolStarts:x.subagentToolStarts,toolNames:x.toolNames,messageToolNames:x.messageToolNames,toolCalls:x.toolCalls,descriptorEvents:x.descriptorEvents,linkedChildCount:x.childIds.size,attempts:x.attempts,final:x.final}}
+          out({status:matches.length?'matched':'not-found',archiveCount:files.length,scanned,incomplete,matchCount:matches.length,linkedChildCount:ids.size,childArchivesFound:children.length,parent:parent?view(parent):null,children:children.map(view),promptInfo,internalLog:internalLog.slice(-30),matchBases:matches.map(x=>x.matchBasis),recent,markerHits:markerHits.slice(0,30)})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
