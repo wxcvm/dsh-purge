@@ -47,7 +47,7 @@ for(const g of ['A','B']){
       durable.streamRecords++;const c=r?.chunk;add(durable.chunkTypes,c?.type);
       if(safeType(c?.type)==='unknown'){
         const keys=v=>v&&typeof v==='object'?Object.keys(v).filter(k=>/^[a-zA-Z][a-zA-Z0-9_-]{0,48}$/.test(k)).sort():[];
-        const shape={recordKeys:keys(r),recordType:safeType(r?.type),chunkKeys:keys(c),chunkType:safeType(c?.type),dataKeys:keys(r?.data),deltaKeys:keys(r?.delta)};
+        const shape={recordKeys:keys(r),recordType:safeType(r?.type),chunkKeys:keys(c),chunkType:safeType(c?.type),dataKeys:keys(r?.data),deltaKeys:keys(r?.delta),textsIsArray:Array.isArray(r?.texts),textsCount:Array.isArray(r?.texts)?r.texts.length:null,nonemptyTextCount:Array.isArray(r?.texts)?r.texts.filter(t=>typeof t==='string'&&t.length).length:null,textChars:Array.isArray(r?.texts)?r.texts.reduce((sum,t)=>sum+(typeof t==='string'?t.length:0),0):null};
         if(durable.unrecognizedRecordShapes.length<8)durable.unrecognizedRecordShapes.push(shape);
       }
       if(c?.type==='block-start'||c?.type==='block-end')add(durable.blockTypes,c.blockType);
