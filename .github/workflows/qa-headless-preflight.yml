@@ -1,4 +1,4 @@
-name: QA Headless Paired Model Evaluation
+name: QA Headless Paired Model Evaluation Retry
 on:
   pull_request:
     types: [opened]
@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   preflight:
-    if: github.head_ref == 'robin/qa-headless-paired-20261116'
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 20
     steps:
@@ -37,6 +37,7 @@ jobs:
           const req = createRequire(cli)
           const parse = req('yaml').parse
           const desktopReq = createRequire(path.join(profileRoot, 'desktop', 'package.json'))
+          const reviewReq = createRequire(path.join(profileRoot, 'codex-review', 'package.json'))
           const tmp = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'purge-qa-paired-'))
           const label = v => typeof v === 'string' && /^[\w./:@+-]{1,120}$/.test(v) ? v : null
           const collect = (v, out = []) => {
@@ -47,15 +48,30 @@ jobs:
           }
           const pick = (rows, id) => rows.find(row => row.id === id)
           const resolvePlugin = spec => {
-            for (const resolver of [desktopReq, req]) {
+            for (const resolver of [reviewReq, desktopReq, req]) {
               try { return resolver.resolve(spec) } catch {}
             }
             return null
           }
           const describe = row => row ? {id:row.id,name:label(row.name),disabled:row.disabled===true,keys:Object.keys(row.config||{})} : null
+          const moduleDiagnostics = res => {
+            const raw=(res.stderr||'')+'\n'+(res.status===0?'':res.stdout||'')
+            const safeSpec=spec=>{
+              if(/^(?:@[\w.-]+\/)?[\w.-]+(?:\/[\w.-]+)*$/.test(spec)&&spec.length<=200)return spec
+              const normalized=spec.replace(/\\/g,'/')
+              const m=normalized.match(/(?:^|\/)node_modules\/((?:@[\w.-]+\/)?[\w.-]+(?:\/[\w.-]+)*)$/)
+              return m?.[1]?.slice(0,200)||path.win32.basename(spec).replace(/[^\w.@+-]/g,'').slice(0,100)||'unresolved-path'
+            }
+            const missing=[]
+            for(const match of raw.matchAll(/Cannot find (?:package|module)\s+['"]([^'"\r\n]+)['"](?:\s+imported from\s+([^\r\n]+))?/g)){
+              const row={specifier:safeSpec(match[1]),importer:match[2]?safeSpec(match[2].trim()):null}
+              if(!missing.some(x=>JSON.stringify(x)===JSON.stringify(row)))missing.push(row)
+            }
+            return missing.slice(0,12)
+          }
           const classify = res => {
             const msg=(res.stderr||'')+'\n'+(res.status===0?'':res.stdout||'')
-            return {exit:res.status,timeout:res.error?.code==='ETIMEDOUT',classes:['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','Cannot find','ENOENT','EACCES','EPERM','unknown','Unknown','invalid','Invalid','already queued','not found','profile','plugin','schema','TypeError','ReferenceError','SyntaxError'].filter(s=>msg.includes(s)),stderrBytes:Buffer.byteLength(res.stderr||'')}
+            return {exit:res.status,timeout:res.error?.code==='ETIMEDOUT',classes:['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','Cannot find','ENOENT','EACCES','EPERM','unknown','Unknown','invalid','Invalid','already queued','not found','profile','plugin','schema','TypeError','ReferenceError','SyntaxError'].filter(s=>msg.includes(s)),stderrBytes:Buffer.byteLength(res.stderr||''),missingModules:moduleDiagnostics(res)}
           }
           try {
             const entry=path.join(tmp,'entry.mjs')
@@ -110,8 +126,43 @@ jobs:
                   }
                   const presetSource=path.join(home,'.agent-presets','redteam')
                   if(fs.existsSync(presetSource))fs.cpSync(presetSource,path.join(isolated,'.agent-presets','redteam'),{recursive:true})
-                  const desktopModules=path.join(profileRoot,'desktop','node_modules')
-                  if(fs.existsSync(desktopModules))fs.symlinkSync(desktopModules,path.join(target,'node_modules'),'junction')
+                  // Preserve the original headless dependency roots, then add
+                  // Desktop-only plugins without replacing the headless tree.
+                  const sources=[path.join(profileRoot,'codex-review','node_modules'),path.join(profileRoot,'desktop','node_modules'),path.join(root,'resources/app/dsh/node_modules')]
+                  const modules=path.join(target,'node_modules')
+                  fs.mkdirSync(modules,{recursive:true})
+                  const linkedPackages=[]
+                  const linkPackage=(src,dst,name,source)=>{
+                    if(fs.existsSync(dst))return
+                    try{
+                      if(!fs.statSync(src).isDirectory())return
+                      fs.symlinkSync(fs.realpathSync(src),dst,'junction')
+                      linkedPackages.push({name,source})
+                    }catch{}
+                  }
+                  for(const [sourceIndex,source] of sources.entries()){
+                    if(!fs.existsSync(source))continue
+                    for(const item of fs.readdirSync(source,{withFileTypes:true})){
+                      if(item.name.startsWith('.'))continue
+                      const src=path.join(source,item.name),dst=path.join(modules,item.name)
+                      if(item.name.startsWith('@')){
+                        try{
+                          if(!fs.statSync(src).isDirectory())continue
+                          fs.mkdirSync(dst,{recursive:true})
+                          for(const child of fs.readdirSync(src,{withFileTypes:true}))linkPackage(path.join(src,child.name),path.join(dst,child.name),item.name+'/'+child.name,sourceIndex)
+                        }catch{}
+                      }else linkPackage(src,dst,item.name,sourceIndex)
+                    }
+                  }
+                  // The preset's relative anchor entry resolves from the profile.
+                  const presetAnchor=path.join(isolated,'.agent-presets','redteam','anchor-gate.mjs')
+                  if(fs.existsSync(presetAnchor))fs.writeFileSync(path.join(target,'anchor-gate.mjs'),'export * from "../../.agent-presets/redteam/anchor-gate.mjs";\n')
+                  const isolatedReq=createRequire(path.join(target,'package.json'))
+                  const resolution={}
+                  for(const spec of ['@deepseek-ai/dsh-agent-preset-registry','@deepseek-ai/dsh-subagent','dsh-purge','dsh-purge/redteam','dsh-purge/redteam/store','dsh-purge/redteam/tools']){
+                    try{isolatedReq.resolve(spec);resolution[spec]=true}catch{resolution[spec]=false}
+                  }
+                  console.log(JSON.stringify({stage:'isolated-modules',sourceAvailable:sources.map(p=>fs.existsSync(p)),linkedPackages:linkedPackages.length,resolution,anchorBridge:fs.existsSync(path.join(target,'anchor-gate.mjs'))}))
                   const boot=call(['--profile','codex-review','--patch',patch,'--help'],isolated)
                   console.log(JSON.stringify({stage:'isolated-boot',...classify(boot),help:/(?:Usage:|--json)/.test(boot.stdout||''),modelRequests:0,profileIsolated:true}))
                   if(boot.status!==0)process.exitCode=5
