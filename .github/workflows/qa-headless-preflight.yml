@@ -1,7 +1,7 @@
 name: QA Headless Paired Model Evaluation Retry
 on:
   pull_request:
-    types: [opened]
+    types: [synchronize]
 permissions:
   contents: read
 jobs:
@@ -68,6 +68,22 @@ jobs:
               if(!missing.some(x=>JSON.stringify(x)===JSON.stringify(row)))missing.push(row)
             }
             return missing.slice(0,12)
+          }
+          const safeError = value => {
+            if(typeof value!=='string'||!value.trim())return null
+            let s=value.trim().replace(/\x1b\[[0-9;]*m/g,'')
+            if(/(?:password|passwd|secret|api[_ -]?key|bearer|authorization\s*[:=]|access[_ -]?token|refresh[_ -]?token|cookie\s*[:=])/i.test(s))return '[sensitive diagnostic omitted]'
+            s=s.replace(/https?:\/\/\S+/gi,'[url]').replace(/file:\/\/\/\S+/gi,'[file]')
+              .replace(/[A-Za-z]:[\\/][^'"\r\n]+/g,'[local-path]')
+              .replace(/(?:^|\s)\/(?:home|Users|tmp|var|mnt)\/\S+/g,' [local-path]')
+              .replace(/[A-Za-z0-9_-]{32,}/g,'[opaque-id]')
+              .replace(/[\r\n]+/g,' ')
+            return s.slice(0,300)
+          }
+          const failureDetails = (run,events) => {
+            const lines=(run.stderr||'').split(/\r?\n/).filter(x=>/\b(?:error|failed|fatal|invalid|unknown|missing|cannot|unsupported|preset|profile|plugin|credential)\b/i.test(x)&&! /^\s*at\s/.test(x))
+            const errorEvents=events.filter(e=>['error','final','fatal'].includes(e?.type)).map(e=>({type:e.type,code:label(e.code||e.error?.code),message:safeError(typeof e.error==='string'?e.error:e.error?.message||e.message||e.reason?.message),reason:label(e.reason?.kind)}))
+            return {stderr:lines.slice(0,5).map(safeError).filter(Boolean),eventTypes:[...new Set(events.map(e=>label(e?.type)).filter(Boolean))],errorEvents:errorEvents.slice(0,3)}
           }
           const classify = res => {
             const msg=(res.stderr||'')+'\n'+(res.status===0?'':res.stdout||'')
@@ -240,6 +256,7 @@ jobs:
                       const roots=archived.filter(row=>row.human&&!archived.some(other=>other!==row&&other.trace.childIds.includes(row.sessionId))&&!row.trace.parentRefs.some(id=>archived.some(other=>other.sessionId===id)))
                       const execution={stage:'model-run',mode,runId,elapsedMs:elapsed,...classify(run),finalReason,cliEvents:entries.length,markedArchives:archived.length,parentCandidates:roots.length}
                       console.log(JSON.stringify(execution))
+                      if(run.status!==0)console.log(JSON.stringify({stage:'startup-diagnostic',mode,...failureDetails(run,entries)}))
                       if(roots.length!==1){
                         console.log(JSON.stringify({stage:'result',mode,valid:false,reason:'missing-or-ambiguous-parent-archive'}))
                         process.exitCode=6
