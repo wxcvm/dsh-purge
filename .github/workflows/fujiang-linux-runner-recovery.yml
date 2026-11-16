@@ -25,7 +25,7 @@ jobs:
             exit 2
           fi
           # Read only the repository URL, never credentials or tokens.
-          python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); sys.exit(0 if x.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge" else 1)' "$dir/.runner" || {
+          python3 -c 'import json,sys; x=json.load(open(sys.argv[1], encoding="utf-8-sig")); sys.exit(0 if x.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/wxcvm/dsh-purge" else 1)' "$dir/.runner" || {
             echo "Runner belongs to another repository or could not be identified; leaving it unchanged."
             exit 3
           }
