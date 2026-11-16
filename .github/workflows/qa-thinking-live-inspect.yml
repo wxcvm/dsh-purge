@@ -1,0 +1,20 @@
+name: QA Thinking Live Inspection
+on:
+  push:
+    branches: [robin/qa-thinking-live-inspect-20261116]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Inspect Harness listeners and installed protocol without model calls
+        shell: pwsh
+        run: ./scripts/qa-thinking-live-inspect.ps1
