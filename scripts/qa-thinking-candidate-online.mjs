@@ -21,6 +21,14 @@ const safe=v=>typeof v==='string'&&/^[\w./:@+-]{1,120}$/.test(v)?v:null;
 const num=v=>Number.isFinite(v)&&v>=0?v:null;
 const collect=(v,out=[])=>{if(!v||typeof v!=='object')return out;if(typeof v.id==='string')out.push(v);for(const x of Object.values(v))if(x&&typeof x==='object')collect(x,out);return out};
 const pick=(rows,id)=>rows.find(r=>r.id===id);
+const normalize=v=>{
+ if(typeof v!=='string')return null;
+ try{
+  const p=v.startsWith('file:')?fileURLToPath(v):v;
+  return path.isAbsolute(p)?path.normalize(p).toLowerCase():null;
+ }catch{return null}
+};
+const samePath=(a,b)=>normalize(a)!==null&&normalize(a)===normalize(b);
 const call=(args,timeout=30000)=>spawnSync(exe,['--expose-internals',entry,...args],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',DSH_HOME:home},cwd:temp,encoding:'utf8',timeout,windowsHide:true,maxBuffer:32*1024*1024});
 const exitSummary=r=>({exit:r.status,timeout:r.error?.code==='ETIMEDOUT',stderrBytes:Buffer.byteLength(r.stderr||'')});
 let attempted=false;
@@ -46,8 +54,9 @@ try{
    const effective=call(['--profile',profile,'--patch',patch,'--dump-config']);
    let merged=[];try{if(effective.status===0)merged=collect(parse(effective.stdout))}catch{}
    const m=pick(merged,'agent-default-model')?.config,p=pick(merged,'purge-runtime-observation-probe');
-   const ready=effective.status===0&&m?.provider==='deepseek-account'&&m?.model==='deepseek-flash'&&m?.reasoningEffort==='max'&&p?.name===probe&&p?.config?.output===output&&pick(merged,'permission')?.config?.defaultPreset==='read-only';
-   log('candidate-preflight',{status:ready?'ready':'overlay-not-confirmed',...exitSummary(effective),model:{provider:safe(m?.provider),model:safe(m?.model),reasoningEffort:safe(m?.reasoningEffort)},probeConfirmed:p?.name===probe,existingPermission:safe(pick(merged,'permission')?.config?.defaultPreset),profileConfigWritten:false});
+   const probeConfirmed=!!p&&p.disabled!==true&&samePath(p.name,probe)&&samePath(p.config?.output,output);
+   const ready=effective.status===0&&m?.provider==='deepseek-account'&&m?.model==='deepseek-flash'&&m?.reasoningEffort==='max'&&probeConfirmed&&pick(merged,'permission')?.config?.defaultPreset==='read-only';
+   log('candidate-preflight',{status:ready?'ready':'overlay-not-confirmed',...exitSummary(effective),model:{provider:safe(m?.provider),model:safe(m?.model),reasoningEffort:safe(m?.reasoningEffort)},probeConfirmed,probePresent:!!p,probeNameType:typeof p?.name,probeNameMatches:samePath(p?.name,probe),probeOutputMatches:samePath(p?.config?.output,output),probeNameFileUrl:typeof p?.name==='string'&&p.name.startsWith('file:'),probeNameBasename:typeof p?.name==='string'?safe(path.basename(p.name)):null,probeConfigKeys:Object.keys(p?.config||{}),candidateRows:merged.filter(r=>/probe/i.test(r.id)||typeof r.name==='string'&&r.name.includes('runtime-observation-probe')).map(r=>({id:safe(r.id),nameMatches:samePath(r.name,probe),outputMatches:samePath(r.config?.output,output)})),existingPermission:safe(pick(merged,'permission')?.config?.defaultPreset),profileConfigWritten:false});
    if(!ready)process.exitCode=2;
    else if(fs.existsSync(marker)){log('candidate-online',{status:'already-attempted-no-repeat'});process.exitCode=2}
    else{
