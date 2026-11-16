@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "02d7a6b6355a0df4";
+		const CLIENT_BUILD_ID = "284075ca9a874a7b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3847,6 +3847,17 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 /* __DSH_PURGE_RUNTIME_BEGIN__ */
+/** All scheduled cases are the denominator; missing captures are not successful delivery. */
+function completionSummary(counts, total) {
+  const captured = total - counts.missing;
+  return {
+    planned: total, captured, correct: counts.correct,
+    captureRate: total ? captured / total : null,
+    allCasesCorrectRate: total ? counts.correct / total : null,
+    capturedCorrectRate: captured ? counts.correct / captured : null,
+  };
+}
+
 /** Browser/CLI shared report projection. No responses or user-supplied markup escape into the UI. */
 function qualityReportSummary(report) {
   if (!report || typeof report !== 'object') throw new Error('Expected a quality report object');
@@ -3895,7 +3906,8 @@ function qualityReportSummary(report) {
       }));
       return [group, fields];
     })) : null;
-    return { name, totalCases: total, ...groups, pairedCases, diagnostics, efficiency, assessmentCounts };
+    const completion = Object.fromEntries(['baseline', 'candidate'].map(key => [key, completionSummary(groups[key], total)]));
+    return { name, totalCases: total, ...groups, pairedCases, diagnostics, efficiency, assessmentCounts, completion };
   });
   return { captureKind: ['real', 'synthetic'].includes(report.captureKind) ? report.captureKind : 'unspecified',
     provenance: 'collector-declared', comparisons };
