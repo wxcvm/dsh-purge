@@ -1,14 +1,14 @@
-name: QA Headless Startup Isolation
+name: QA Headless Paired Model Evaluation One Shot
 on:
   pull_request:
-    types: [synchronize]
+    types: [reopened]
 permissions:
   contents: read
 jobs:
   preflight:
     if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Compare no-model startup across profile layers
+      - name: Run one isolated six-case direct and delegated Max pair
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -179,47 +179,139 @@ jobs:
                     try{isolatedReq.resolve(spec);resolution[spec]=true}catch{resolution[spec]=false}
                   }
                   console.log(JSON.stringify({stage:'isolated-modules',sourceAvailable:sources.map(p=>fs.existsSync(p)),linkedPackages:linkedPackages.length,resolution,anchorBridge:fs.existsSync(path.join(target,'anchor-gate.mjs'))}))
-                  // Compare startup one layer at a time. No task, no account
-                  // store copied, and no real-model invocation.
-                  const rowId=row=>row.id||row.insert?.[0]?.id
-                  const makeHome=label=>{
-                    const h=path.join(tmp,'home-'+label)
-                    const p=path.join(h,'profiles','codex-review')
-                    fs.mkdirSync(p,{recursive:true})
-                    for(const item of fs.readdirSync(path.join(profileRoot,'codex-review'),{withFileTypes:true})){
-                      if(item.isFile()&&/^(cordis|profile|package)\.(?:yml|yaml|json|mjs|js|cjs)$/.test(item.name))fs.copyFileSync(path.join(profileRoot,'codex-review',item.name),path.join(p,item.name))
+                  // The five-layer startup-only run already passed. Verify the
+                  // composed isolated configuration rather than booting help again.
+                  const boot=call(['--profile','codex-review','--patch',patch,'--dump-config'],isolated)
+                  let isolatedRows=[]
+                  try{isolatedRows=collect(parse(boot.stdout||''))}catch{}
+                  const isolatedModel=pick(isolatedRows,'agent-default-model')?.config||{}
+                  const isolatedPreset=pick(isolatedRows,'agent-preset-registry')?.config?.selectedDefault
+                  const isolatedReady=boot.status===0&&isolatedModel.provider===model.config.provider&&isolatedModel.model===model.config.model&&isolatedModel.reasoningEffort==='max'&&isolatedPreset==='redteam'&&['subagent','dsh-purge','dsh-purge-redteam'].every(id=>!!pick(isolatedRows,id))
+                  let purgeVersion=null
+                  try{purgeVersion=label(JSON.parse(fs.readFileSync(desktopReq.resolve('dsh-purge/package.json'),'utf8')).version)}catch{}
+                  console.log(JSON.stringify({stage:'isolated-config',...classify(boot),ready:isolatedReady,model:{provider:label(isolatedModel.provider),model:label(isolatedModel.model),reasoningEffort:label(isolatedModel.reasoningEffort)},preset:label(isolatedPreset),purgeVersion,modelRequests:0,profileIsolated:true}))
+                  if(!isolatedReady)process.exitCode=5
+                  if(isolatedReady){
+                    // Reuse only the local credential store, in the same user's
+                    // temporary directory. Never print its contents or upload it.
+                    const authCandidates=fs.readdirSync(home,{withFileTypes:true}).filter(x=>!x.isSymbolicLink()&&/^(?:\.?credentials?(?:\.(?:json|ya?ml|db|sqlite|bin))?|\.?auth(?:orization)?(?:\.(?:json|ya?ml|db|sqlite|bin))?|deepseek-account(?:\.json)?|accounts?\.json)$/i.test(x.name))
+                    const authNames=[]
+                    for(const item of authCandidates){
+                      const src=path.join(home,item.name),dst=path.join(isolated,item.name)
+                      if(fs.existsSync(dst))fs.rmSync(dst,{recursive:true,force:true})
+                      fs.cpSync(src,dst,{recursive:item.isDirectory(),filter:p=>!fs.lstatSync(p).isSymbolicLink()})
+                      authNames.push(item.name)
                     }
-                    fs.symlinkSync(modules,path.join(p,'node_modules'),'junction')
-                    if(fs.existsSync(presetSource))fs.cpSync(presetSource,path.join(h,'.agent-presets','redteam'),{recursive:true})
-                    if(fs.existsSync(path.join(h,'.agent-presets','redteam','anchor-gate.mjs')))fs.writeFileSync(path.join(p,'anchor-gate.mjs'),'export * from "../../.agent-presets/redteam/anchor-gate.mjs";\n')
-                    return h
+                    console.log(JSON.stringify({stage:'local-auth',copiedStoreEntries:authNames.length,rawCredentialsLogged:false}))
+                    const workspace=process.env.GITHUB_WORKSPACE
+                    const evalModule=await import(pathToFileURL(path.join(workspace,'scripts','review-trace-import.mjs')).href)
+                    const {cases}=await import(pathToFileURL(path.join(workspace,'scripts','agent-quality-eval.mjs')).href)
+                    const {compareReviewRuns}=await import(pathToFileURL(path.join(workspace,'scripts','review-run-compare.mjs')).href)
+                    const {reconcileReviewBatch}=await import(pathToFileURL(path.join(workspace,'scripts','review-batch-eval.mjs')).href)
+                    const {evaluate}=await import(pathToFileURL(path.join(workspace,'scripts','agent-quality-eval.mjs')).href)
+                    const {messageText,messageOf}=await import(pathToFileURL(path.join(workspace,'lib','response-context.js')).href)
+                    const {markedPacket,decodeArchive,extractMarkedTurn,archiveEvents,importReviewRun}=evalModule
+                    const sessionRoot=path.join(isolated,'sessions')
+                    const scanMarked=runId=>{
+                      const marker='PURGE-QA-RUN: '+runId, found=[]
+                      if(!fs.existsSync(sessionRoot))return found
+                      for(const dir of fs.readdirSync(sessionRoot,{withFileTypes:true})){
+                        if(!dir.isDirectory()||dir.isSymbolicLink())continue
+                        const folder=path.join(sessionRoot,dir.name)
+                        const files=['session.v4.jsonl.zstd','session.v4.jsonl'].map(n=>path.join(folder,n)).filter(p=>fs.existsSync(p)&&fs.lstatSync(p).isFile())
+                        for(const file of files){
+                          try{
+                            const records=decodeArchive(fs.readFileSync(file))
+                            const trace=extractMarkedTurn(records,marker,{child:true})
+                            let human=false
+                            try{extractMarkedTurn(records,marker);human=true}catch{}
+                            const user=archiveEvents(records).events.find(e=>e.seq===trace.humanSeq)
+                            const task=messageText(messageOf(user))
+                            const caseIds=cases.filter(c=>task.includes(c.id)).map(c=>c.id)
+                            found.push({sessionId:dir.name,records,trace,human,caseIds})
+                            break
+                          }catch{}
+                        }
+                      }
+                      return found
+                    }
+                    const observeConfig=spec=>{
+                      const {events}=archiveEvents(spec.records)
+                      const routes=[]
+                      const presets=[]
+                      for(const e of events){
+                        if(e.type==='agent-preset/selected'){
+                          const v=e.data?.agentPreset||e.data?.preset||e.data?.name
+                          if(label(v))presets.push(v)
+                        }
+                        if(e.type==='request/header'&&e.seq>spec.trace.humanSeq){
+                          const c=e.data?.header?.config
+                          if(c)routes.push({provider:label(c.provider),model:label(c.model),reasoningEffort:label(c.reasoningEffort)})
+                        }
+                      }
+                      return {presets:[...new Set(presets)],requestRoutes:[...new Set(routes.map(x=>JSON.stringify(x)))].map(JSON.parse)}
+                    }
+                    const outcomes={}
+                    for(const mode of ['direct','delegated']){
+                      const runId='DS41-20261116-'+mode.toUpperCase()+'-'+process.env.GITHUB_RUN_ID
+                      const cwd=path.join(tmp,'case-'+mode)
+                      fs.mkdirSync(cwd,{recursive:true})
+                      const task=markedPacket(runId,mode)
+                      console.log(JSON.stringify({stage:'model-run-start',mode,runId,scope:'fictional-record-review-only'}))
+                      const start=Date.now()
+                      const run=call(['--profile','codex-review','--patch',patch,'--permission-mode','read-only','--approval-policy','never','--json',task],isolated,420000,cwd)
+                      const elapsed=Date.now()-start
+                      const entries=(run.stdout||'').split(/\r?\n/).filter(Boolean).map(line=>{try{return JSON.parse(line)}catch{return null}}).filter(Boolean)
+                      const last=entries.findLast(x=>x.type==='final')
+                      const finalReason=label(last?.reason?.kind)
+                      // Preserve the CLI-only quality result if native persistence
+                      // fails; it is not evidence of native lifecycle or linkage.
+                      let cliScore=null
+                      try{
+                        const value=JSON.parse(typeof last?.text==='string'?last.text:'')
+                        if(Array.isArray(value?.reports)){
+                          const validIds=new Set(cases.map(row=>row.id))
+                          const reports=value.reports.filter(row=>validIds.has(row?.id)).map(row=>({id:row.id,answer:['a','b','c'].includes(row.answer)?row.answer:null,evidence:Array.isArray(row.evidence)?row.evidence.filter(x=>typeof x==='string'):null}))
+                          const result=evaluate({reports})
+                          cliScore={summary:result.summary,results:result.results.map(({id,completed,conclusionCorrect,evidenceCorrect,passed})=>({id,completed,conclusionCorrect,evidenceCorrect,passed}))}
+                        }
+                      }catch{}
+                      const archived=scanMarked(runId)
+                      const roots=archived.filter(row=>row.human&&!archived.some(other=>other!==row&&other.trace.childIds.includes(row.sessionId))&&!row.trace.parentRefs.some(id=>archived.some(other=>other.sessionId===id)))
+                      const execution={stage:'model-run',mode,runId,elapsedMs:elapsed,...classify(run),finalReason,cliEvents:entries.length,markedArchives:archived.length,parentCandidates:roots.length,cliOnlyScore:cliScore}
+                      console.log(JSON.stringify(execution))
+                      if(run.status!==0)console.log(JSON.stringify({stage:'startup-diagnostic',mode,...failureDetails(run,entries)}))
+                      if(roots.length!==1){
+                        console.log(JSON.stringify({stage:'result',mode,valid:false,reason:'missing-or-ambiguous-parent-archive'}))
+                        process.exitCode=6
+                        break
+                      }
+                      const parent=roots[0]
+                      const linked=archived.filter(row=>row!==parent&&(parent.trace.childIds.includes(row.sessionId)||row.trace.parentRefs.includes(parent.sessionId)))
+                      const claims=new Map()
+                      for(const child of linked)for(const id of child.caseIds)claims.set(id,(claims.get(id)||0)+1)
+                      // Only unambiguous case briefs enter scoring. An observed
+                      // child session is not automatically a verified result.
+                      const children=linked.filter(row=>row.caseIds.length>0&&row.caseIds.every(id=>claims.get(id)===1))
+                      let scored
+                      try{
+                        scored=importReviewRun({runId,parent,children,settingsId:'deepseek-flash-redteam-max'})
+                      }catch{
+                        scored=importReviewRun({runId,parent,children:[],settingsId:'deepseek-flash-redteam-max'})
+                      }
+                      outcomes[mode]=scored
+                      console.log(JSON.stringify({stage:'result',mode,observedConfig:observeConfig(parent),lifecycle:parent.trace.lifecycle,route:scored.route,usage:scored.usage,archiveCoverage:scored.archiveCoverage,delegationTimeline:scored.delegationTimeline,linkedMarkedChildren:linked.length,scoredChildren:children.length,strictParentJson:scored.batch.strictJson,score:reconcileReviewBatch(scored.batch).summary}))
+                      if(run.status!==0||parent.trace.lifecycle!=='completed'||parent.trace.route.provider!==model.config.provider||parent.trace.route.model!==model.config.model){
+                        console.log(JSON.stringify({stage:'pair',status:'stopped',reason:'parent-run-not-completed-or-route-mismatch'}))
+                        process.exitCode=7
+                        break
+                      }
+                    }
+                    if(outcomes.direct&&outcomes.delegated){
+                      const comparison=compareReviewRuns(outcomes)
+                      console.log(JSON.stringify({stage:'pair',status:'completed',comparison,directCoverage:outcomes.direct.archiveCoverage,delegatedCoverage:outcomes.delegated.archiveCoverage,delegationTimeline:outcomes.delegated.delegationTimeline,scope:'fictional-record-review-only',billing:'not-observed'}))
+                    }
                   }
-                  const routeOnly=overlay.filter(row=>['agent-default-model','subagent'].includes(rowId(row)))
-                  const standard=JSON.parse(JSON.stringify(overlay))
-                  for(const row of standard){
-                    const entry=row.insert?.[0]||row
-                    if(entry.id==='agent-preset-registry')entry.config.selectedDefault='standard'
-                  }
-                  const variants=[
-                    {name:'original-headless',home,patch:null},
-                    {name:'isolated-base',home:makeHome('base'),patch:null},
-                    {name:'isolated-max-subagent',home:makeHome('max'),patch:routeOnly},
-                    {name:'isolated-purge-standard',home:makeHome('standard'),patch:standard},
-                    {name:'isolated-purge-redteam',home:makeHome('redteam'),patch:overlay},
-                  ]
-                  const results=[]
-                  for(const v of variants){
-                    const args=['--profile','codex-review']
-                    if(v.patch){const fp=path.join(tmp,v.name+'.json');fs.writeFileSync(fp,JSON.stringify(v.patch));args.push('--patch',fp)}
-                    const began=Date.now()
-                    const res=call([...args,'--help'],v.home,45000)
-                    const events=(res.stdout||'').split(/\r?\n/).map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean)
-                    const detail={name:v.name,elapsedMs:Date.now()-began,...classify(res),help:/(?:Usage:|--json)/.test(res.stdout||''),...failureDetails(res,events)}
-                    results.push(detail)
-                    console.log(JSON.stringify({stage:'startup-layer',...detail,modelRequests:0}))
-                  }
-                  console.log(JSON.stringify({stage:'startup-comparison',results:results.map(({name,exit,timeout,elapsedMs,help})=>({name,exit,timeout,elapsedMs,help})),modelRequests:0}))
-                  if(results.some(r=>r.exit!==0||!r.help))process.exitCode=5
 
                 }
               }
