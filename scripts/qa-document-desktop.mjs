@@ -6,9 +6,20 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { documentReviewPacket, scoreDocumentReviewText } from './document-review-eval.mjs'
 import { decodeArchive, extractMarkedTurn } from './review-trace-import.mjs'
 
-const marker='PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01'
+const marker='PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-REVIEW-01'
 if(process.argv[2]==='--packet'){
-  console.log(marker+'\nAnswer the supplied fictional office records yourself. Do not delegate, call tools, or access external resources. Return only the requested JSON.\n'+JSON.stringify(documentReviewPacket(),null,2))
+  // D's observed answer letters and evidence sets, reconstructed from the
+  // completed scorer's exact/missing/additional keys. Order is normalized;
+  // no corrections, expected evidence labels or scores are sent to the model.
+  const candidateReports=[
+    {id:'invoice-posted',answer:'b',evidence:['ledger','reminder']},
+    {id:'meeting-effective',answer:'a',evidence:['original','amendment','draft']},
+    {id:'partial-returns',answer:'c',evidence:['scope','report','inspections']},
+    {id:'refund-allocation',answer:'a',evidence:['refund','mapping','totals']},
+    {id:'delivery-cutoff',answer:'b',evidence:['purchase','receipt1','receipt2','receipt3','cutoff']},
+    {id:'approval-chain',answer:'c',evidence:['rule','current','program','finance','register']},
+  ]
+  console.log(marker+'\nThe supplied fictional office records and candidate reports are from a previous review, not an answer key. Independently review each candidate against all its original records. Decide the answer yourself, check whether every record required to justify the conclusion is present, remove redundant citations and correct any omission or mistake. Do not merely accept the candidate; do not delegate, call tools, read files or access external resources. Return exactly one bare JSON object with a reports array and no Markdown fences or extra text.\n'+JSON.stringify({...documentReviewPacket(),candidateReports},null,2))
 }else if(process.argv[2]==='--collect'){
   const root=path.join(process.env.DSH_HOME||path.join(os.homedir(),'.dsh'),'sessions')
   const cutoff=Date.now()-120000

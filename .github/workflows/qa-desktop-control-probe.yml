@@ -1,4 +1,4 @@
-name: QA Desktop Fictional Office Records
+name: QA Desktop Fictional Office Independent Review
 on:
   pull_request:
     types: [labeled]
@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   office-review:
-    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-office-direct'
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-office-independent-review'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
@@ -16,13 +16,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Submit and score a fictional office-record review in Standard mode
+      - name: Submit and score independent fictional office-record review in Standard mode
         shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           # Prevent an accidental rerun of this exact model request. The marker
           # is local to the Runner and contains no credentials or transcript.
-          $sendMarker=Join-Path $env:RUNNER_TEMP 'purge-qa-DS41-DESKTOP-20261116-OFFICE-DIRECT-01.sent'
+          $sendMarker=Join-Path $env:RUNNER_TEMP 'purge-qa-DS41-DESKTOP-20261116-OFFICE-REVIEW-01.sent'
           if(Test-Path -LiteralPath $sendMarker){
             [ordered]@{stage='office-submit';status='already-attempted-no-repeat';taskSubmitted=$false}|ConvertTo-Json -Compress
             return
@@ -180,7 +180,7 @@ jobs:
             return
           }
           $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-document-desktop.mjs') --packet) -join [char]10).TrimEnd()
-          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
+          if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-REVIEW-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
           function Normalize-ComposerText($text) {
             if($null -eq $text){return ''}
             return (([string]$text).Replace(([string][char]13+[string][char]10),[string][char]10).Replace([string][char]13,[string][char]10)).TrimEnd()
@@ -193,8 +193,8 @@ jobs:
             return [ordered]@{
               valueLength=$value.Length;textLength=$text.Length
               valueMatches=($value -ceq $expected);textMatches=($text -ceq $expected)
-              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01')
-              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-DIRECT-01')
+              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-REVIEW-01')
+              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-OFFICE-REVIEW-01')
             }
           }
           $packet=Normalize-ComposerText $packet
@@ -255,6 +255,6 @@ jobs:
           $clicked=Click-Verified $send[0]
           if(-not $clicked){(Get-Pattern $send[0] ([System.Windows.Automation.InvokePattern]::Pattern)).Invoke()}
           Start-Sleep -Milliseconds 1200
-          [ordered]@{stage='office-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-OFFICE-DIRECT-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
+          [ordered]@{stage='office-submit';status='send-invoked';runId='DS41-DESKTOP-20261116-OFFICE-REVIEW-01';taskSubmitted=$true;modelCompletionVerified=$false} | ConvertTo-Json -Compress
           & node (Join-Path $env:GITHUB_WORKSPACE 'scripts/qa-document-desktop.mjs') --collect
           if($LASTEXITCODE -ne 0){exit $LASTEXITCODE}
