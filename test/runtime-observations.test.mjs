@@ -503,3 +503,12 @@ test('thinking timeline isolates attempts and preserves interleaved event eviden
   assert.equal(other.firstReasoningMs,null); assert.equal(other.lastReasoningMs,null); assert.equal(other.reasoningChunks,0);
   assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
 });
+
+
+test('runtime snapshot reports bounded coverage and observed turn-end clock',()=>{
+  let time=10;const o=createRuntimeObservations({now:()=>time}),a=agent('s'),b=agent('b');
+  start(o,a);time=20;end(o,a,0);time=30;o.event(a.session,{seq:4,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
+  start(o,b);const snap=o.snapshot({limit:1});
+  assert.equal(snap.matchedCount,2);assert.equal(snap.returnedCount,1);
+  const one=o.snapshot({sessionId:'s'});assert.equal(one.matchedCount,1);assert.equal(one.items[0].turnEndedAt,30);
+});
