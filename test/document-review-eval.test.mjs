@@ -63,3 +63,60 @@ test('format diagnostics preserve content score but never accept ambiguous or du
   assert.equal(scoreDocumentReviewText(JSON.stringify({reports:[{id:'foreign',answer:'a',evidence:[]}]})).score,null)
   assert.equal(scoreDocumentReviewText('{"other":[]}').strict,false)
 })
+
+
+test('audited support preserves D/E historical metrics and distinguishes explicit contrast from sufficient proof',()=>{
+  // Sets reconstructed from the completed D and E run scoring diagnostics.
+  const d=structuredClone(reports)
+  d[0].evidence.push('reminder')
+  d[3].evidence=['refund','mapping','totals']
+  const e=structuredClone(reports)
+  e[1].evidence=['original','amendment']
+  e[3].evidence=['refund','mapping']
+  e[4].evidence=['purchase','receipt1','receipt3','cutoff']
+  const before=scoreDocumentReview({reports:d}), after=scoreDocumentReview({reports:e})
+  assert.equal(before.summary.requiredCoverage,5)
+  assert.equal(before.summary.exactEvidence,4)
+  assert.equal(after.summary.requiredCoverage,3)
+  assert.equal(after.summary.exactEvidence,3)
+  assert.deepEqual(before.auditedRubric.summary,{total:6,supportCovered:6,supportedConclusions:6,minimalSupportMatch:0,
+    contrastCases:5,contrastCovered:5,unrelatedReferenceCount:0})
+  assert.deepEqual(after.auditedRubric.summary,{total:6,supportCovered:6,supportedConclusions:6,minimalSupportMatch:4,
+    contrastCases:5,contrastCovered:1,unrelatedReferenceCount:0})
+  assert.deepEqual(after.results[1].audit.missingSupport,[])
+  assert.deepEqual(after.results[1].audit.missingContrast,['draft'])
+  assert.deepEqual(after.results[3].audit.missingSupport,[])
+  assert.deepEqual(after.results[4].audit.missingContrast,['receipt2'])
+  assert.equal(after.auditedRubric.byDifficulty.complex.supportedConclusions,2)
+})
+test('audited sufficient sets still reject genuine missing support and wrong conclusions',()=>{
+  const copy=structuredClone(reports)
+  copy[1].evidence=['original','draft']
+  copy[3].evidence=['refund','totals','selected']
+  copy[4].evidence=['purchase','receipt1','receipt3','receipt2']
+  copy[5].answer='a'
+  const out=scoreDocumentReview({reports:copy})
+  assert.equal(out.auditedRubric.summary.supportCovered,3)
+  assert.equal(out.auditedRubric.summary.supportedConclusions,2)
+  assert.deepEqual(out.results[1].audit.missingSupport,['amendment'])
+  assert.deepEqual(out.results[3].audit.missingSupport,['mapping'])
+  assert.deepEqual(out.results[4].audit.missingSupport,['cutoff'])
+  assert.equal(out.results[5].audit.supportedConclusion,false)
+})
+test('context is not a mandatory citation; unrelated, invalid and duplicate references remain visible',()=>{
+  const copy=structuredClone(reports)
+  copy[0].evidence=['ledger','memo','ledger','PRIVATE']
+  copy[2].evidence=['scope','report']
+  copy[5].evidence=['rule','current','register']
+  const out=scoreDocumentReview({reports:copy})
+  assert.equal(out.results[0].audit.supportCovered,true)
+  assert.equal(out.results[0].audit.minimalSupportMatch,false)
+  assert.deepEqual(out.results[0].audit.unrelated,['memo'])
+  assert.equal(out.results[0].invalidCount,1)
+  assert.equal(out.results[0].duplicateCount,1)
+  assert.equal(out.results[2].audit.minimalSupportMatch,true)
+  assert.equal(out.results[5].audit.minimalSupportMatch,true)
+  assert.doesNotMatch(JSON.stringify(out),/PRIVATE/)
+  const packet=JSON.stringify(documentReviewPacket())
+  assert.doesNotMatch(packet,/auditedRubric|rationale|missingSupport/)
+})
