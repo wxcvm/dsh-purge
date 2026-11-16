@@ -101,3 +101,12 @@ test('thinking preview includes durable-only reasoning blocks without inventing 
   assert.equal(renderThinkingExperiment('{{reasoning_chunks}}/{{durable_reasoning_blocks}}/{{durable_reasoning_chars}}/{{first_reasoning_ms}}',v),'0/1/12/未观测');
   assert.equal(v.reasoning,null);assert.equal(thinkingTimeline(row).span,null);
 });
+
+
+test('compact-only reasoning evidence renders counts without fabricating raw text or live latency',()=>{
+  const row={durableCompactReasoningRecords:1,durableCompactReasoningChunks:3,durableCompactReasoningChars:12,firstReasoningMs:null};
+  assert.equal(hasThinkingEvidence(row),true);
+  const v=thinkingEventValues(row);
+  assert.equal(renderThinkingExperiment('{{durable_compact_reasoning_chunks}}/{{durable_compact_reasoning_chars}}/{{reasoning_chunks}}/{{first_reasoning_ms}}',v),'3/12/未观测/未观测');
+  assert.equal(v.reasoning,null);
+});

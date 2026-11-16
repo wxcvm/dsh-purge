@@ -538,3 +538,22 @@ test('reasoning content unknown differs from absent; a late commit only updates 
   assert.equal(previous.durableReasoningDeltaChunks,null);assert.equal(previous.firstReasoningMs,null);
   assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
 });
+
+
+test('native compact reasoning and text batches are counted separately without live timing',()=>{
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);
+  const batch=Object.freeze({type:'reasoning-chunks',index:1,time0:100,dt:[1,2,3],texts:Object.freeze(['PRIVATE A','','PRIVATE B'])});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content:[{type:'reasoning',text:'PRIVATE APRIVATE B'}]},stream:[
+    {chunk:{type:'block-start',blockType:'reasoning'}},batch,{chunk:{type:'block-end'}},
+    {type:'text-chunks',texts:['PRIVATE FINAL']},
+    {type:'reasoning-chunks',texts:['PRIVATE',null]},
+    {chunk:{type:'reasoning-delta',text:'PRIVATE EXPLICIT'}},
+    {chunk:{type:'finish',reason:{kind:'stop'}}}
+  ]}});
+  end(o,a,0);const r=o.snapshot().items[0];
+  assert.equal(r.durableCompactReasoningRecords,1);assert.equal(r.durableCompactReasoningChunks,2);
+  assert.equal(r.durableCompactReasoningChars,18);assert.equal(r.durableCompactTextChunks,1);assert.equal(r.durableCompactInvalidRecords,1);
+  assert.equal(r.durableReasoningDeltaChunks,1);assert.equal(r.durableReasoningBlocks,1);
+  assert.equal(r.durableTextObserved,true);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);assert.equal(r.firstTextMs,null);
+  assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});

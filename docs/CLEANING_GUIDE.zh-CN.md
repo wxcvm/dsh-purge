@@ -218,3 +218,5 @@ _本文按仓库现有界面实现整理。UI 与安装方式随版本变化；�
 ### 真实 Desktop 思考块兼容
 
 2026-11-16 的两条 DeepSeek MAX 正常任务归档均观察到一个非空 assistant/message reasoning.text 块，但没有按 reasoning-delta/text 识别的增量。运行诊断分别显示实时 reasoning 块开始/增量、持久流同类计数以及已提交 reasoning 块及文本长度；仅有提交块也可进入实验预览。持久块不能补算实时思考延迟，实时和持久计数不能相加；未知与零分开显示。只保存计数和长度，不保存正文或原始 reasoning。真实取证：QA run 43882185351；实际运行诊断 HTTP 未连通，实时字段仍需候选版本端到端验证。
+
+原生 Desktop 归档另有顶层 `reasoning-chunks` / `text-chunks` 批次（字段 `index/time0/dt/texts`，QA run 43882450945），不同于 `{chunk:{type:'reasoning-delta',text}}`。观测按非空 `texts` 字符串数和字符长度分别统计压缩推理批次及正文片段，无效批次单独计数；不把压缩、显式增量、最终 reasoning 块相加，也不使用归档 `time0/dt` 伪造实时计时。该修复仅涉及只读观测和显示。
