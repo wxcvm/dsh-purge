@@ -1,12 +1,12 @@
 name: QA Desktop Direct Evaluation Paste
 on:
   pull_request:
-    types: [synchronize]
+    types: [labeled]
 permissions:
   contents: read
 jobs:
   direct:
-    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116'
+    if: github.head_ref == 'robin/qa-headless-paired-retry-20261116' && github.event.label.name == 'qa-desktop-direct'
     runs-on: [self-hosted, Windows]
     timeout-minutes: 5
     steps:
