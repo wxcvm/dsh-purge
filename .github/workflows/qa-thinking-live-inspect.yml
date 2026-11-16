@@ -37,6 +37,11 @@ jobs:
           trap 'rm -rf -- "$work"' EXIT
           tar -xf "$archive" -C "$work"
           cd "$work"
+          # Exact existing setup-node cache from successful AH-WSL run 43877160255.
+          cached=/home/kerna/actions-runner/_work/_tool/node/24.22.3/x64/bin
+          if [ -x "$cached/node" ] && [ -x "$cached/npm" ]; then
+            export PATH="$cached:$PATH"
+          fi
           if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
             echo 'Existing WSL Node/npm unavailable; no installation attempted'
             exit 2
