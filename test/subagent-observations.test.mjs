@@ -72,3 +72,54 @@ test('installed observer subscribes to native lifecycle and releases handlers on
   assert.equal(listeners.size, 0);
   assert.equal(runtimeObservations(ctx).subagents.observed, false);
 });
+
+test('handoff evidence separates normal turn end from verified task completion and retains no output', () => {
+  const o = createSubagentObservations();
+  o.start(event('normal'));
+  o.end({ ...event('normal'), stopReason: 'completed',
+    lastAssistantMessage: [{ type: 'text', text: 'PRIVATE CHILD RESULT' }] });
+  o.start(event('failed'));
+  o.end({ ...event('failed'), stopReason: 'error', lastAssistantMessage: [] });
+  o.end({ ...event('end-only'), stopReason: 'max-tokens' });
+  const s = o.snapshot({ parentSessionId: 'parent' });
+  assert.equal(s.pairedRuns, 2);
+  assert.equal(s.endOnly, 1);
+  assert.deepEqual(s.handoff.stopReasons, {
+    completed: 1, aborted: 0, error: 1, 'max-tokens': 1, refusal: 0, unknown: 0,
+  });
+  assert.deepEqual(s.handoff.finalMessage, { present: 1, empty: 1, 'not-observed': 1 });
+  assert.equal(s.handoff.taskVerified, false);
+  assert.doesNotMatch(JSON.stringify(s), /PRIVATE|CHILD RESULT/);
+});
+
+test('duplicated and conflicting terminal reasons never invent a successful handoff', () => {
+  const o = createSubagentObservations();
+  o.start(event('duplicate'));
+  o.end({ ...event('duplicate'), stopReason: 'completed' });
+  o.end({ ...event('duplicate'), stopReason: 'completed' });
+  assert.equal(o.snapshot().handoff.stopReasons.completed, 1);
+  o.end({ ...event('duplicate'), stopReason: 'error' });
+  o.end({ ...event('unknown'), stopReason: 'future-reason' });
+  const s = o.snapshot();
+  assert.equal(s.endsObserved, 2);
+  assert.equal(s.handoff.conflictingEnds, 1);
+  assert.equal(s.handoff.stopReasons.completed, 0);
+  assert.equal(s.handoff.stopReasons.unknown, 2);
+  assert.equal(s.handoff.taskVerified, false);
+  assert.equal(s.handoff.finalMessage['not-observed'], 2);
+});
+
+test('parent-filtered handoff counts exclude other sessions with identical run ids', () => {
+  const o = createSubagentObservations();
+  o.start(event('same', 'first'));
+  o.end({ ...event('same', 'first'), stopReason: 'aborted', lastAssistantMessage: [] });
+  o.start(event('same', 'second'));
+  o.end({ ...event('same', 'second'), stopReason: 'completed', lastAssistantMessage: [{ type: 'text', text: 'PRIVATE' }] });
+  const first = o.snapshot({ parentSessionId: 'first' });
+  const second = o.snapshot({ parentSessionId: 'second' });
+  assert.equal(first.handoff.stopReasons.aborted, 1);
+  assert.equal(first.handoff.stopReasons.completed, 0);
+  assert.equal(second.handoff.stopReasons.completed, 1);
+  assert.equal(second.handoff.stopReasons.aborted, 0);
+  assert.doesNotMatch(JSON.stringify(second), /PRIVATE/);
+});
