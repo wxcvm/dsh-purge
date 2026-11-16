@@ -65,5 +65,6 @@ jobs:
           echo "Runner listener not observed after startup; inspect its local diagnostic logs."
           exit 5
           '@
+          $script = $script.Replace("`r", "")
           wsl.exe --exec bash -lc $script
           exit $LASTEXITCODE
