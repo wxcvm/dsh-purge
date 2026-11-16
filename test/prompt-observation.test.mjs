@@ -10,7 +10,7 @@ test("prompt metrics report UTF-8 bytes by stable section family without content
     { name: "dshpg-capabilities", text: "A" },
     { name: "dshpg-objective", text: "目标" },
     { name: "dshpg-redteam-role", text: "角色" },
-    { name: "persona:prefix", text: "## 运行环境前提\\n专用演练环境" },
+    { name: "persona:prefix", text: "## 运行环境前提\n专用演练环境" },
     { name: "agent-instructions", text: workspace },
     { name: "dsh-purge:post", text: "private-prompt-secret" },
     { name: "third-party-private-secret", text: "host-value" },
@@ -23,7 +23,7 @@ test("prompt metrics report UTF-8 bytes by stable section family without content
   assert.equal(metrics.capabilityBytes, Buffer.byteLength("A", "utf8"));
   assert.equal(metrics.objectiveBytes, Buffer.byteLength("目标", "utf8"));
   assert.equal(metrics.redteamRoleBytes, Buffer.byteLength("角色", "utf8"));
-  assert.equal(metrics.redteamOpsBytes, Buffer.byteLength("## 运行环境前提\\n专用演练环境", "utf8"));
+  assert.equal(metrics.redteamOpsBytes, Buffer.byteLength("## 运行环境前提\n专用演练环境", "utf8"));
   assert.equal(metrics.workspaceBaselineBytes, Buffer.byteLength(workspace, "utf8"));
   assert.equal(metrics.pluginOtherBytes, Buffer.byteLength("private-prompt-secret", "utf8"));
   assert.equal(metrics.hostOtherBytes, Buffer.byteLength("host-value", "utf8"));
