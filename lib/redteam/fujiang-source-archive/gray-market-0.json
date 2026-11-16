@@ -1,0 +1,407 @@
+[
+  {
+    "id": "fujiang:gray-market:admin-api-unauthenticated",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/admin-api-unauthenticated.md",
+    "metadata": {
+      "title": "后台管理 API 未授权（只在前端隐藏菜单）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "自研包网/代理后台",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "admin api, 未授权, 越权, 前端隐藏, 菜单",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 服务端按角色鉴权（不是前端隐藏）；管理端独立域名/内网。\n- 路径不可枚举（加统一网关前缀）；所有 admin 接口打审计与限速。",
+    "reference_notes": "- OWASP API Security Top 10：API5 BFLA。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/admin-api-unauthenticated.md"
+  },
+  {
+    "id": "fujiang:gray-market:admin-ip-whitelist-bypass",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/admin-ip-whitelist-bypass.md",
+    "metadata": {
+      "title": "后台 IP 白名单绕过（X-Forwarded-For 伪造内网来源）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.4",
+      "product": "自研后台网关（只校验 XFF 或只查首段 IP）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "白名单, ip, xff, 绕过, 后台, 内网",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 只信反代写入的固定头并要求覆盖；内网判定用 TCP 源 IP；后台独立内网入口。",
+    "reference_notes": "- OWASP 访问控制；CWE-290。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/admin-ip-whitelist-bypass.md"
+  },
+  {
+    "id": "fujiang:gray-market:admin-reset-any-user",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/admin-reset-any-user.md",
+    "metadata": {
+      "title": "后台“重置任意用户密码”接口越权（直接接管会员/管理员）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.2",
+      "product": "自研后台（会员管理/代理管理）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "重置密码, 任意用户, 越权, 后台, 接管",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 重置接口限超管 + 二次认证 + 审计；禁止请求体指定 uid（从 token 取）。",
+    "reference_notes": "- OWASP API5 BFLA；CWE-639。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/admin-reset-any-user.md"
+  },
+  {
+    "id": "fujiang:gray-market:agent-hierarchy-privilege",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/agent-hierarchy-privilege.md",
+    "metadata": {
+      "title": "代理层级越权（读全站下级 / 改佣金比例）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "博彩包网 / 代理分销系统",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "代理, agentId, 层级越权, 佣金, 返水, 会员列表",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- `agentId` 从服务端会话取，不接受请求传入；查询强制加\"上级链包含当前用户\"条件。\n- 佣金/返水比例变更走审批流 + 双人复核 + 审计日志；比例上限硬编码。\n- 列表接口按层级过滤并做行级鉴权（返回 403 而非空列表）。",
+    "reference_notes": "- OWASP API Security Top 10：API1 BOLA / API5 BFLA。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/agent-hierarchy-privilege.md"
+  },
+  {
+    "id": "fujiang:gray-market:api-idor-bola",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/api-idor-bola.md",
+    "metadata": {
+      "title": "接口越权 / BOLA（读他人订单、流水、提现）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.1",
+      "product": "自研 API（博彩/代理/跑分平台高发）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "idor, bola, 越权, 水平越权, orderNo, uid, 代理后台",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 服务端以 session/JWT 里的 `uid` 为准，忽略请求里的 `uid`；资源级鉴权（owner check）。\n- 订单号用 UUID/带签名的不透明 ID，禁止顺序可枚举。\n- 未授权访问统一返回 404/403，避免\"200 + 空对象\"暴露存在性。\n- 代理层级在服务端做\"上级链校验\"，不接受客户端传 `agentId`。",
+    "reference_notes": "- OWASP API Security Top 10：API1 BOLA、API5 BFLA。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/api-idor-bola.md"
+  },
+  {
+    "id": "fujiang:gray-market:api-replay-nonce-missing",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/api-replay-nonce-missing.md",
+    "metadata": {
+      "title": "接口无 nonce / 时间戳 → 请求重放（充值、领奖、下注）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.2",
+      "product": "自研 App/小程序 API",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "重放, replay, nonce, 时间戳, 签名, 幂等",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 服务端维护 nonce 缓存（一次性）+ timestamp ±5 分钟窗口；\n- 资金类请求幂等键（bizId）去重。",
+    "reference_notes": "- OWASP API Security；CWE-294。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/api-replay-nonce-missing.md"
+  },
+  {
+    "id": "fujiang:gray-market:bet-history-idor",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/bet-history-idor.md",
+    "metadata": {
+      "title": "注单 / 流水接口越权批量拉取（全站会员数据）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.6",
+      "product": "自研注单与报表接口（博彩）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "注单, 流水, idor, 越权, 批量, 报表",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 接口按 token 里的 uid 过滤，忽略请求里的 uid；代理只看自己下级。\n- 加访问频次限制与审计。",
+    "reference_notes": "- OWASP API Security Top 10 API1 BOLA。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/bet-history-idor.md"
+  },
+  {
+    "id": "fujiang:gray-market:bet-odds-tampering",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/bet-odds-tampering.md",
+    "metadata": {
+      "title": "下注/结算赔率与倍数篡改（资金面）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "博彩/彩票投注接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "bet, odds, 赔率, 倍数, 结算, 篡改",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 赔率/倍数/结算一律服务端按玩法与期号计算，请求体只接受 `issue`+`selection`+`amount`。\n- 金额与赔率做上下限校验；结算幂等（注单唯一状态机）。\n- 对账：每期开奖后核对注单赔率与系统赔率是否一致。",
+    "reference_notes": "- OWASP WSTG-BUSL-01；CWE-472。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/bet-odds-tampering.md"
+  },
+  {
+    "id": "fujiang:gray-market:callback-url-ssrf",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/callback-url-ssrf.md",
+    "metadata": {
+      "title": "支付 / 回调地址可控 → 内网 SSRF（含云元数据）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.5",
+      "product": "自研支付与通知模块",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "回调, 支付, ssrf, 内网, 元数据, notify",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 白名单域名 + 禁止内网与元数据网段；回调只允许 https 且校验签名。",
+    "reference_notes": "- OWASP SSRF 防护速查；阿里云/AWS 元数据安全公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/callback-url-ssrf.md"
+  },
+  {
+    "id": "fujiang:gray-market:client-side-signature-forgery",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/client-side-signature-forgery.md",
+    "metadata": {
+      "title": "前端签名 / 加密可逆（伪造请求绕过风控）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.1",
+      "product": "H5 / App 自研接口（自定义 sign、AES 请求体）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "sign, hmac, aes, 前端加密, 可逆, nonce, timestamp, 风控",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 关键逻辑服务端；前端只做展示，不做信任边界。\n- 若必须签名：密钥服务端下发短时 token + HMAC + nonce 防重放（服务端存 nonce TTL）。\n- 敏感字段服务端二次校验（金额、uid 从会话取）；风控基于服务端事实而非客户端声明。",
+    "reference_notes": "- OWASP Mobile Top 10 M7（代码质量/逆向）；OWASP A04 Insecure Design。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/client-side-signature-forgery.md"
+  },
+  {
+    "id": "fujiang:gray-market:cors-misconfig-credential",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/cors-misconfig-credential.md",
+    "metadata": {
+      "title": "CORS 配置错误（带凭据读他人接口数据）",
+      "cve": "无（配置缺陷）",
+      "severity": "high",
+      "source_cvss": "8.1",
+      "product": "自研 API（回显 Origin + ACAC:true）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "cors, 跨域, 带凭据, origin, 泄露",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- Origin 白名单；敏感接口禁 `ACAC:true`；CSRF token / SameSite。",
+    "reference_notes": "- OWASP CORS 配置指南；CWE-942。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/cors-misconfig-credential.md"
+  },
+  {
+    "id": "fujiang:gray-market:coupon-code-enumeration",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/coupon-code-enumeration.md",
+    "metadata": {
+      "title": "券码 / 彩金码可枚举（批量领取与套现）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.3",
+      "product": "自研活动/兑换码系统",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "券码, 彩金, 兑换, 枚举, coupon, 领取",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 码长 ≥12 随机 + 一次性 + 绑定活动与用户；领取失败计数与限速；\n- 兑换接口加行为风控（同 IP/设备高频拒绝）。",
+    "reference_notes": "- OWASP WSTG-BUSL-04；CWE-799。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/coupon-code-enumeration.md"
+  },
+  {
+    "id": "fujiang:gray-market:cs-chat-export-unauth",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/cs-chat-export-unauth.md",
+    "metadata": {
+      "title": "客服聊天记录导出未鉴权（全站会话与身份材料）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.4",
+      "product": "自研客服系统（在线客服 / 工单 / IM）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "客服, 聊天记录, 导出, 未鉴权, 会话, im",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 导出仅超管 + 二次认证；会话按 agent/会员归属过滤；\n- 敏感内容脱敏（手机号/卡号中间位）。",
+    "reference_notes": "- OWASP API1/API5；CWE-639。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/cs-chat-export-unauth.md"
+  },
+  {
+    "id": "fujiang:gray-market:csrf-transfer",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/csrf-transfer.md",
+    "metadata": {
+      "title": "CSRF（无 token 的提现/改密/绑卡）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.0",
+      "product": "自研会员中心（Cookie 会话）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "csrf, 跨站, 提现, 改密, 绑卡, token",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 关键操作加 CSRF token（一次性）+ `SameSite=Lax/Strict`；校验 Origin/Referer。",
+    "reference_notes": "- OWASP CSRF 防护；CWE-352。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/csrf-transfer.md"
+  },
+  {
+    "id": "fujiang:gray-market:daily-reward-farming",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/daily-reward-farming.md",
+    "metadata": {
+      "title": "签到 / 任务奖励批量刷取（缺幂等与频率控制）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "自研活动系统（博彩/包网）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "签到, 任务, 奖励, 刷取, 幂等, 并发",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 领取记录唯一索引（user_id + act_id + 日期）；接口加分布式锁与频率限制。\n- 活动状态机校验（未开始/已结束直接拒）。",
+    "reference_notes": "- OWASP WSTG-BUSL-04；CWE-837。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/daily-reward-farming.md"
+  }
+]

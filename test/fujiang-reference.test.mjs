@@ -146,3 +146,31 @@ test('Java web knowledge preserves source metadata and corrected vendor boundari
   assert.doesNotMatch(struts.body,/## PoC|## 利用步骤/)
   assert.match(struts.source_url,/sanjiu2024\/dsh-team-workflow/)
 })
+
+
+test('all 167 archive articles preserve original frontmatter and stable source paths', () => {
+  const rows = loadFujiangReferences().filter(r => !r.id.endsWith(':SKILL'))
+  assert.equal(rows.length, 167)
+  assert.equal(new Set(rows.map(r => r.id)).size, 167)
+  assert.deepEqual(Object.fromEntries(['cloud-container','edge-device','exchange-ad','gray-market','java-deser','java-web','linux-priv','triage','web-cms'].map(category => [category, rows.filter(r => r.fujiang_category === category).length])), {
+    'cloud-container':14,'edge-device':16,'exchange-ad':14,'gray-market':59,'java-deser':9,'java-web':22,'linux-priv':11,'triage':3,'web-cms':19,
+  })
+  for (const row of rows) {
+    assert.equal(row.verified, false)
+    assert.match(row.body, /原始资料元数据/, row.id)
+    assert.match(row.body, /原始 CVSS：/, row.id)
+    assert.match(row.body, /原始 verified：false/, row.id)
+    assert.match(row.source_ref, /^plugin\/knowledge\//, row.id)
+    assert.match(row.source_url, /sanjiu2024\/dsh-team-workflow/, row.id)
+    assert.doesNotMatch(row.body, /^## (?:PoC|利用步骤)$/m, row.id)
+  }
+  const tomcat = getBundledKnowledge('fujiang:java-web:cve-2017-12615-tomcat-put')
+  assert.match(tomcat.body, /原始 CVSS：9\.8/)
+  assert.doesNotMatch(tomcat.body, /原文无 frontmatter/)
+  const business = getBundledKnowledge('fujiang:gray-market:payment-notify-forgery')
+  assert.match(business.body, /原始修复建议/)
+  assert.match(business.body, /修复与缓解/)
+  const method = getBundledKnowledge('fujiang:triage:fingerprint-workflow')
+  assert.match(method.body, /原始资料元数据/)
+  assert.match(method.body, /方法归纳/)
+})

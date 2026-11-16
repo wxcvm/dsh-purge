@@ -10,7 +10,7 @@
 - 数据以 JSON 放在 `lib/redteam/cve-catalog/`，随当前插件包发布，默认纯离线检索。
 - `redteam_cve_match` 可直接从现有 SQLite 的 `asset_id` 读取服务/产品/banner/指纹，也可不依赖数据库按 `cve` 或 `product` 查询。不创建第二套任务台账，不自动导入现有漏洞库。
 - 匹配返回 `matched_score` 和 `matched_reasons`，结果一律 `status: candidate`、`verified: false`。通用端口不能单独推断漏洞，受影响版本由人工复核或后续证据验证。
-- 目前有 **5 组结构化版本范围**：Grafana、Apache HTTP Server、runc、Apache Log4j2、Apache Druid；保留各自的版本分支、修复边界与官方参考链接。版本命中只表示候选适用性，不代表目标已验证。
+- 结构化版本范围由 CVE 目录中的 `version_constraints` 和对应厂商公告维护，按各自分支及修复边界判断候选适用性。版本命中只表示候选适用性，不代表目标已验证。
 - 指纹匹配只从端口上记录的服务/产品/banner/页面标题，以及 SQLite `fingerprint.evidence` 等实际指纹证据中取信号；**主机名和 URL 自身不会推断组件安装**。需要手工检索时仍可直接输入 `product` / `keyword`。
 - 已有 `redteam_poc_search`（本机 PoC/模板）与 `redteam_vuln_add` / `redteam_http_evidence_add`（真实验证记录）继续原样工作。
 - 上传包中的 59 条业务安全资料已归纳为 `skills/redteam/business-security-controls.md` 防御性控制基线，覆盖对象级授权、多租户隔离、字段白名单、订单状态机、支付回调、幂等与并发、令牌生命周期、隐私导出、SSRF 与 WebSocket 边界；未复制上游 PoC 或利用链。
@@ -41,3 +41,11 @@ AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provid
 - 参考资料接入已有 bundled 知识搜索和详情，按标题、标签、正文检索，列表只返回摘要，按需读取正文；与 105 条 CVE 候选索引分工，不自动建立漏洞、改动个人知识数据库或引入新依赖。
 - `CVE-2019-9193` 依据 PostgreSQL 厂商声明标记为 vendor-disputed（预期权限功能），保留原历史版本及等级；`CVE-2024-53677` 依据 Apache S2-067 修正版本与迁移条件。其他未经独立核对的修复摘要标明原包资料及厂商复核待办，不能视为最新已验证修复。
 - 这是对全部源条目的防御性内容覆盖，不等于将原始利用正文全部迁入或完成 105 条公告的独立逐一复核。上游文件引用保留原固定提交，上传包的来源路径亦独立保留。
+
+## 全量原始资料归纳（167 篇正文）
+
+- 依据上传的富江 v0.20.13 压缩包重新核对全部 167 篇正文的 frontmatter、修复章节和参考章节。原包中的 UTF-8 BOM 与 CRLF 在解析前统一处理；此前误判为缺失 frontmatter 的条目现在使用原始字段。
+- `lib/redteam/fujiang-source-archive/` 保存 167 条原始资料记录：105 个组件/配置条目、59 个业务安全条目和 3 个方法论条目；九个分类入口仍独立计数。每条保留原始标题、产品、标识、严重度、CVSS、版本、端口、关键词、来源及未验证状态，原始修复意见与现行防御归纳分开呈现。
+- 读取副本来自固定的 `sanjiu2024/dsh-team-workflow@c55070e2858c1677bbebaf6ec1e8f13dad366cd6`，按批次与原始上传 ZIP 中的元数据及防御章节比对。原归档路径和已有 CVE 索引 URL 不变，详情另显示固定读取副本。
+- Java Web 22 个条目的防御性摘要和公告来源同步复核更新，包括 Druid 的认证前提、Confluence 的分支修复边界、GitLab 的遗漏受影响版本、ActiveMQ Classic / Artemis 的区别，以及 Struts S2-067 的上传机制迁移要求。
+- 原始资料字段和历史修复建议保留不代表已独立验证。没有复制 PoC、攻击入口、利用步骤或操作链；识别和前置条件章节登记为来源线索，现行建议依据实际资产证据和已核验的厂商公告。其余组件仍需要进一步逐条核验公告，而不是把历史 CVSS 当作当前目标风险。
