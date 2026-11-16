@@ -10,8 +10,10 @@
 - 数据以 JSON 放在 `lib/redteam/cve-catalog/`，随当前插件包发布，默认纯离线检索。
 - `redteam_cve_match` 可直接从现有 SQLite 的 `asset_id` 读取服务/产品/banner/指纹，也可不依赖数据库按 `cve` 或 `product` 查询。不创建第二套任务台账，不自动导入现有漏洞库。
 - 匹配返回 `matched_score` 和 `matched_reasons`，结果一律 `status: candidate`、`verified: false`。通用端口不能单独推断漏洞，受影响版本由人工复核或后续证据验证。
+- 目前有 **5 组结构化版本范围**：Grafana、Apache HTTP Server、runc、Apache Log4j2、Apache Druid；保留各自的版本分支、修复边界与官方参考链接。版本命中只表示候选适用性，不代表目标已验证。
 - 指纹匹配只从端口上记录的服务/产品/banner/页面标题，以及 SQLite `fingerprint.evidence` 等实际指纹证据中取信号；**主机名和 URL 自身不会推断组件安装**。需要手工检索时仍可直接输入 `product` / `keyword`。
 - 已有 `redteam_poc_search`（本机 PoC/模板）与 `redteam_vuln_add` / `redteam_http_evidence_add`（真实验证记录）继续原样工作。
+- 上传包中的 59 条业务安全资料已归纳为 `skills/redteam/business-security-controls.md` 防御性控制基线，覆盖对象级授权、多租户隔离、字段白名单、订单状态机、支付回调、幂等与并发、令牌生命周期、隐私导出、SSRF 与 WebSocket 边界；未复制上游 PoC 或利用链。
 
 ## 为什么不直接安装富江破甲到当前 profile
 
@@ -26,8 +28,8 @@ MIT License
 Copyright (c) 2026 DSH Desktop contributors
 ```
 
-本分支只提取元数据并保留每条原始链接；尊重上游署名及源码许可。上游条目中的 `verified: false` 没有变成实测结论。对外使用时按具体厂商安全公告与 NVD 再核对版本。
+CVE 索引只提取必要元数据并保留每条原始链接；业务安全资料则归纳为防御性控制清单，不复制原始 PoC 或利用步骤。尊重上游署名及源码许可。上游条目中的 `verified: false` 没有变成实测结论。对外使用时按具体厂商安全公告与 NVD 再核对版本。
 
 ## 当前集成状态
 
-AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provider 已在现有「管理 → 技能库」中实现，详见 [独立集成说明](ABOUTSECURITY_INTEGRATION.md)。现有任务卡会附上离线 CVE 候选和已安装技能提示。自动作业链仍使用原来的任务、证据和进度对账系统，没有增加第二套 `campaigns.json`。Desktop 实机调用与新版本发布需单独验收。
+AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provider 已在现有「管理 → 技能库」中实现，详见 [独立集成说明](ABOUTSECURITY_INTEGRATION.md)。内置技能 frontmatter 描述已参与目录展示与检索；任务上下文可根据实际任务表面、开放服务和指纹证据推荐产品技能及业务安全控制技能，不再要求先命中 CVE。`redteam_next_action` 还可把明确独立的只读记录核查任务组成并行批次，遵循当前用户配置的并发上限（默认 3）；主动探测和有依赖的任务仍按阶段顺序执行。自动作业链继续复用原来的任务、证据和进度对账系统，没有增加第二套 `campaigns.json`。Desktop 实机调用与新版本发布需单独验收。
