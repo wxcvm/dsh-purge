@@ -1,0 +1,969 @@
+{
+  "schemaVersion": 1,
+  "sourceVersion": "0.20.13",
+  "sourceRepository": "sanjiu2024/dsh-team-workflow",
+  "sourceCommit": "c55070e2858c1677bbebaf6ec1e8f13dad366cd6",
+  "entries": [
+    {
+      "id": "fujiang:cloud-container:SKILL",
+      "kind": "category",
+      "category": "cloud-container",
+      "source_ref": "plugin/knowledge/cloud-container/SKILL.md",
+      "mirror_ref": "skills/kb-cloud-container/SKILL.md",
+      "title": "云 / 容器 / 中间件（14 条）",
+      "description": "云与容器：Docker/Redis/Mongo 未授权、Nexus 与 PostgreSQL 提权、vCenter/ESXi 绕过、runc 逃逸。按指纹查条目。",
+      "guide_entries": [
+        {
+          "file": "cve-2019-7238-nexus-rce.md",
+          "title": "Nexus Repository 未授权 RCE（CVE-2019-7238）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2019-9193-postgres.md",
+          "title": "PostgreSQL COPY PROGRAM 命令执行（CVE-2019-9193）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2021-21972-vcenter-upload.md",
+          "title": "vCenter Server 未授权上传 → RCE（vROPS 插件）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-29441-nacos.md",
+          "title": "Nacos 认证绕过（User-Agent 白名单）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-43798-grafana-file-read.md",
+          "title": "Grafana 插件路径穿越任意文件读（CVE-2021-43798）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2022-0492-cgroup-release-agent.md",
+          "title": "cgroups release_agent 容器逃逸",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2022-22954-workspace-one-ssti.md",
+          "title": "VMware Workspace ONE Access 模板注入 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-27532-veeam-credential-dump.md",
+          "title": "Veeam Backup 凭据泄露（CVE-2023-27532）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2024-21626-runc-leaky-vessels.md",
+          "title": "runc 文件描述符泄露逃逸（Leaky Vessels）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-37085-esxi-auth-bypass.md",
+          "title": "VMware ESXi 认证绕过 → hypervisor 失守（CVE-2024-37085）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-40711-veeam-rce.md",
+          "title": "Veeam Backup 未认证 RCE（CVE-2024-40711）",
+          "severity": "critical"
+        },
+        {
+          "file": "docker-api-2375.md",
+          "title": "Docker Remote API 未授权（直接拿宿主）",
+          "severity": "critical"
+        },
+        {
+          "file": "mongodb-unauth.md",
+          "title": "MongoDB 未授权访问（直接拖库）",
+          "severity": "critical"
+        },
+        {
+          "file": "redis-unauth.md",
+          "title": "Redis 未授权（写文件 / 模块加载 / 主从复制）",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:edge-device:SKILL",
+      "kind": "category",
+      "category": "edge-device",
+      "source_ref": "plugin/knowledge/edge-device/SKILL.md",
+      "mirror_ref": "skills/kb-edge-device/SKILL.md",
+      "title": "边界设备 / VPN / 负载均衡（16 条）",
+      "description": "边界设备：Fortinet / F5 / Citrix / Pulse / Ivanti 的认证绕过与文件读，含版本区间与最小验证。",
+      "guide_entries": [
+        {
+          "file": "cve-2018-13379-fortinet-fortios.md",
+          "title": "FortiOS SSL VPN 路径穿越（凭据读取）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2019-11510-pulse-secure-file-read.md",
+          "title": "Pulse Secure 任意文件读取（凭据与会话）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2019-19781-citrix-path-traversal.md",
+          "title": "Citrix ADC 路径穿越 → 模板注入 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2020-12812-fortios-2fa-case-bypass.md",
+          "title": "FortiOS SSL VPN 双因素绕过（用户名大小写）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2020-5902-f5-tmui.md",
+          "title": "F5 BIG-IP TMUI 未授权 RCE（..;/ 路径穿越）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-22986-f5-icontrol.md",
+          "title": "F5 iControl REST 未授权 RCE（2021 变体）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-1388-f5-icontrol.md",
+          "title": "F5 BIG-IP iControl REST 认证绕过 → 命令执行",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-40684-fortios-auth-bypass.md",
+          "title": "FortiOS / FortiProxy 管理面认证绕过（假 Forwarded 头）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-35078-ivanti-epmm-auth-bypass.md",
+          "title": "Ivanti EPMM 认证绕过（CVE-2023-35078）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-46805-2024-21887-ivanti.md",
+          "title": "Ivanti Connect Secure 认证绕过 + 命令注入（串联）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-48788-forticlient-ems-sqli.md",
+          "title": "FortiClient EMS SQL 注入 → 未认证 RCE（CVE-2023-48788）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-0012-panos-auth-bypass.md",
+          "title": "PAN-OS 管理面认证绕过 → root RCE（CVE-2024-0012 + CVE-2024-9474）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-0204-goanywhere-auth-bypass.md",
+          "title": "GoAnywhere MFT 认证绕过 → 新建管理员（CVE-2024-0204）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-24919-checkpoint-quantum.md",
+          "title": "Check Point Quantum 安全网关任意文件读（CVE-2024-24919）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-3400-panos-globalprotect.md",
+          "title": "PAN-OS GlobalProtect 命令注入",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-47575-fortimanager-fortijump.md",
+          "title": "FortiManager 未认证 RCE（FortiJump，CVE-2024-47575）",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:exchange-ad:SKILL",
+      "kind": "category",
+      "category": "exchange-ad",
+      "source_ref": "plugin/knowledge/exchange-ad/SKILL.md",
+      "mirror_ref": "skills/kb-exchange-ad/SKILL.md",
+      "title": "Exchange / Windows / AD（14 条）",
+      "description": "Exchange 与 AD：ProxyLogon/ProxyShell、MS17-010、Zerologon、noPac、AD CS、Kerberoast、DCSync。",
+      "guide_entries": [
+        {
+          "file": "adcs-esc1-esc8.md",
+          "title": "AD CS 证书滥用（ESC1 / ESC8 等）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2017-0144-eternalblue.md",
+          "title": "EternalBlue（MS17-010 SMBv1 远程溢出）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2020-0688-exchange-viewstate.md",
+          "title": "Exchange ViewState 反序列化（静态 machineKey）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2020-1472-zerologon.md",
+          "title": "Zerologon（Netlogon 密钥置零 → 域控接管）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-26855-proxylogon.md",
+          "title": "Exchange ProxyLogon（SSRF + 任意文件写入 → RCE）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-34473-proxyshell.md",
+          "title": "Exchange ProxyShell（三个洞串联 → RCE）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-34527-printnightmare.md",
+          "title": "PrintNightmare（打印后台服务任意 DLL 加载）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-42287-nopac.md",
+          "title": "noPac（sAMAccountName 伪装 + 无 PAC 票据 → 域管）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-42321-exchange-deser.md",
+          "title": "Exchange 认证后反序列化 RCE（CVE-2021-42321）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-30190-follina.md",
+          "title": "MSDT 协议远程代码执行（Follina）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-41040-proxynotshell.md",
+          "title": "Exchange ProxyNotShell（SSRF + PowerShell 远程）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-21410-exchange-ntlm-relay.md",
+          "title": "Exchange EWS NTLM 中继提权（CVE-2024-21410）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-21413-outlook-monikerlink.md",
+          "title": "Outlook MonikerLink 绕过与 NTLM 泄露（CVE-2024-21413）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-45519-zimbra-postjournal.md",
+          "title": "Zimbra postjournal 未授权命令执行（CVE-2024-45519）",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:gray-market:SKILL",
+      "kind": "category",
+      "category": "gray-market",
+      "source_ref": "plugin/knowledge/gray-market/SKILL.md",
+      "mirror_ref": "skills/kb-gray-market/SKILL.md",
+      "title": "博彩 / 黑灰产站点面（59 条）",
+      "description": "业务逻辑面：越权(BOLA)、后台 API 未授权、前端签名可逆、回调伪造、并发与幂等缺陷。不靠 CVE。",
+      "guide_entries": [
+        {
+          "file": "admin-api-unauthenticated.md",
+          "title": "后台管理 API 未授权（只在前端隐藏菜单）",
+          "severity": "critical"
+        },
+        {
+          "file": "admin-ip-whitelist-bypass.md",
+          "title": "后台 IP 白名单绕过（X-Forwarded-For 伪造内网来源）",
+          "severity": "high"
+        },
+        {
+          "file": "admin-reset-any-user.md",
+          "title": "后台“重置任意用户密码”接口越权（直接接管会员/管理员）",
+          "severity": "critical"
+        },
+        {
+          "file": "agent-hierarchy-privilege.md",
+          "title": "代理层级越权（读全站下级 / 改佣金比例）",
+          "severity": "critical"
+        },
+        {
+          "file": "api-idor-bola.md",
+          "title": "接口越权 / BOLA（读他人订单、流水、提现）",
+          "severity": "high"
+        },
+        {
+          "file": "api-replay-nonce-missing.md",
+          "title": "接口无 nonce / 时间戳 → 请求重放（充值、领奖、下注）",
+          "severity": "high"
+        },
+        {
+          "file": "bet-history-idor.md",
+          "title": "注单 / 流水接口越权批量拉取（全站会员数据）",
+          "severity": "high"
+        },
+        {
+          "file": "bet-odds-tampering.md",
+          "title": "下注/结算赔率与倍数篡改（资金面）",
+          "severity": "critical"
+        },
+        {
+          "file": "callback-url-ssrf.md",
+          "title": "支付 / 回调地址可控 → 内网 SSRF（含云元数据）",
+          "severity": "high"
+        },
+        {
+          "file": "client-side-signature-forgery.md",
+          "title": "前端签名 / 加密可逆（伪造请求绕过风控）",
+          "severity": "high"
+        },
+        {
+          "file": "cors-misconfig-credential.md",
+          "title": "CORS 配置错误（带凭据读他人接口数据）",
+          "severity": "high"
+        },
+        {
+          "file": "coupon-code-enumeration.md",
+          "title": "券码 / 彩金码可枚举（批量领取与套现）",
+          "severity": "high"
+        },
+        {
+          "file": "cs-chat-export-unauth.md",
+          "title": "客服聊天记录导出未鉴权（全站会话与身份材料）",
+          "severity": "high"
+        },
+        {
+          "file": "csrf-transfer.md",
+          "title": "CSRF（无 token 的提现/改密/绑卡）",
+          "severity": "high"
+        },
+        {
+          "file": "daily-reward-farming.md",
+          "title": "签到 / 任务奖励批量刷取（缺幂等与频率控制）",
+          "severity": "high"
+        },
+        {
+          "file": "db-admin-tool-exposed.md",
+          "title": "phpMyAdmin / Adminer 暴露（弱口令直进数据库）",
+          "severity": "critical"
+        },
+        {
+          "file": "druid-monitor-unauth.md",
+          "title": "Druid 监控未授权 → session 泄露/后台接管（若依系必备）",
+          "severity": "critical"
+        },
+        {
+          "file": "export-file-read.md",
+          "title": "导出 / 下载接口任意文件读取",
+          "severity": "high"
+        },
+        {
+          "file": "finance-export-pii.md",
+          "title": "财务导出接口越权（银行卡 + 身份证批量导出）",
+          "severity": "critical"
+        },
+        {
+          "file": "game-vendor-api-forgery.md",
+          "title": "三方游戏 / 视讯接口 key 泄露与回调伪造",
+          "severity": "critical"
+        },
+        {
+          "file": "host-header-poisoning.md",
+          "title": "Host 头投毒（密码重置链接被劫持 → 任意账号接管）",
+          "severity": "critical"
+        },
+        {
+          "file": "impersonate-switch-user.md",
+          "title": "后台\"切换用户/代登录\"接口越权（任意账号接管）",
+          "severity": "critical"
+        },
+        {
+          "file": "im-websocket-unauth.md",
+          "title": "客服 IM / WebSocket 未鉴权（订阅他人会话）",
+          "severity": "high"
+        },
+        {
+          "file": "invite-referral-selfdealing.md",
+          "title": "邀请返水自邀循环（小号矩阵刷返水）",
+          "severity": "high"
+        },
+        {
+          "file": "jwt-none-and-weak-key.md",
+          "title": "JWT 实现缺陷（alg:none / 弱密钥 / 可预测 / kid 注入）",
+          "severity": "high"
+        },
+        {
+          "file": "lottery-prng-predictable.md",
+          "title": "开奖结果可预测（弱 PRNG / 客户端算法 / 固定种子）",
+          "severity": "critical"
+        },
+        {
+          "file": "mass-assignment-role.md",
+          "title": "Mass Assignment（注册/资料接口注入 role / vip / balance / agentId）",
+          "severity": "high"
+        },
+        {
+          "file": "member-data-enumeration.md",
+          "title": "会员隐私批量查询 / 账号枚举（手机号、银行卡）",
+          "severity": "high"
+        },
+        {
+          "file": "multi-tenant-cross-site.md",
+          "title": "包网多租户越权（tenantId/siteId 遍历，横穿几十个站点）",
+          "severity": "critical"
+        },
+        {
+          "file": "notification-template-ssti.md",
+          "title": "通知模板注入（标题/正文模板未转义 → SSTI / 存储型 XSS）",
+          "severity": "critical"
+        },
+        {
+          "file": "oauth-redirect-uri.md",
+          "title": "OAuth redirect_uri 劫持 / state 缺失（账号接管）",
+          "severity": "high"
+        },
+        {
+          "file": "object-storage-datastore-exposure.md",
+          "title": "对象存储与数据存储裸露（OSS / S3 / MinIO / MySQL / MongoDB）",
+          "severity": "high"
+        },
+        {
+          "file": "operator-backend-weak-login.md",
+          "title": "运营后台弱口令 + 验证码复用（博彩站点最常见入口）",
+          "severity": "critical"
+        },
+        {
+          "file": "order-status-tamper.md",
+          "title": "订单状态机篡改（未支付改成已支付 / 已取消再入账）",
+          "severity": "critical"
+        },
+        {
+          "file": "origin-ip-leak-waf-bypass.md",
+          "title": "源站 IP 泄露 → 绕过 WAF 直打（博彩站必看）",
+          "severity": "critical"
+        },
+        {
+          "file": "panel-bt-1panel.md",
+          "title": "宝塔 / 1Panel 面板弱口令与未授权（黑灰站最常见后台）",
+          "severity": "critical"
+        },
+        {
+          "file": "password-reset-token-abuse.md",
+          "title": "密码重置 token 可预测 / 未绑定用户（任意用户改密）",
+          "severity": "critical"
+        },
+        {
+          "file": "payment-channel-swap.md",
+          "title": "支付通道 / 商户号篡改（充值进攻击者账户）",
+          "severity": "critical"
+        },
+        {
+          "file": "payment-notify-forgery.md",
+          "title": "支付回调伪造与金额篡改（资金面）",
+          "severity": "critical"
+        },
+        {
+          "file": "promotion-abuse.md",
+          "title": "活动 / 彩金 / 返水无限领取（幂等缺失）",
+          "severity": "high"
+        },
+        {
+          "file": "race-condition-balance.md",
+          "title": "余额并发与负数（竞态 / 金额符号）",
+          "severity": "critical"
+        },
+        {
+          "file": "redis-session-forgery.md",
+          "title": "Redis 未授权 → 偷后台 session / token 直接进后台",
+          "severity": "critical"
+        },
+        {
+          "file": "repo-config-backup-leak.md",
+          "title": "源码 / 备份 / 配置泄露",
+          "severity": "high"
+        },
+        {
+          "file": "report-api-unauth.md",
+          "title": "报表/财务接口未授权（全站流水与代理佣金）",
+          "severity": "high"
+        },
+        {
+          "file": "ruoyi-admin-unauth.md",
+          "title": "若依（RuoYi）系后台默认口令 / Druid / 定时任务 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "scheduled-task-injection.md",
+          "title": "后台定时任务 / 计划任务注入（Quartz、XXL-JOB、若依）",
+          "severity": "critical"
+        },
+        {
+          "file": "sms-bomb-and-enum.md",
+          "title": "短信轰炸与账号枚举（验证码面）",
+          "severity": "medium"
+        },
+        {
+          "file": "sms-code-reuse-and-bruteforce.md",
+          "title": "短信验证码回显 / 复用 / 爆破（任意账号接管）",
+          "severity": "critical"
+        },
+        {
+          "file": "sourcemap-js-secret-leak.md",
+          "title": "sourcemap / 前端 JS 泄露接口与密钥（SPA 包网站第一入口）",
+          "severity": "high"
+        },
+        {
+          "file": "spring-actuator-exposure.md",
+          "title": "Spring Boot Actuator 未授权（heapdump / Jolokia / Gateway）",
+          "severity": "critical"
+        },
+        {
+          "file": "sql-injection-business-api.md",
+          "title": "业务接口 SQL 注入（报表 / 订单 / 代理查询）",
+          "severity": "critical"
+        },
+        {
+          "file": "ssrf-to-internal.md",
+          "title": "SSRF（图片抓取 / 回调校验 / 推广链接检测）打内网与云元数据",
+          "severity": "high"
+        },
+        {
+          "file": "stored-xss-to-admin.md",
+          "title": "会员资料存储型 XSS 打后台审核（管理员会话劫持）",
+          "severity": "high"
+        },
+        {
+          "file": "support-ticket-attachment-idor.md",
+          "title": "客服工单附件越权下载（证件照 / KYC 材料）",
+          "severity": "high"
+        },
+        {
+          "file": "swagger-knife4j-unauth.md",
+          "title": "Swagger / Knife4j 接口文档暴露 → 未授权接口直打",
+          "severity": "high"
+        },
+        {
+          "file": "upload-getshell.md",
+          "title": "上传点 getshell（头像 / KYC 证件 / 客服附件）",
+          "severity": "critical"
+        },
+        {
+          "file": "vip-level-escalation.md",
+          "title": "VIP/等级接口参数篡改（免费拿高等级权益）",
+          "severity": "high"
+        },
+        {
+          "file": "withdraw-approval-idor.md",
+          "title": "提现审核接口越权（读他人银行卡 / 改审核状态）",
+          "severity": "critical"
+        },
+        {
+          "file": "withdraw-bankcard-swap.md",
+          "title": "提现银行卡越权替换（把别人提现收进自己卡）",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:java-deser:SKILL",
+      "kind": "category",
+      "category": "java-deser",
+      "source_ref": "plugin/knowledge/java-deser/SKILL.md",
+      "mirror_ref": "skills/kb-java-deser/SKILL.md",
+      "title": "Java 反序列化 / 表达式注入（9 条）",
+      "description": "Java 反序列化：CC/CB/Groovy 链、Shiro、Log4j、Fastjson、Jackson，含检测点与利用前置。",
+      "guide_entries": [
+        {
+          "file": "cve-2015-4852-weblogic-t3.md",
+          "title": "WebLogic T3 反序列化（CommonsCollections）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2016-4437-shiro-rememberme.md",
+          "title": "Shiro rememberMe 默认密钥反序列化 RCE（CVE-2016-4437）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2017-10271-weblogic-wls-wsat.md",
+          "title": "WebLogic wls-wsat XMLDecoder 反序列化 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2017-5638-struts2-s2-045.md",
+          "title": "Struts2 S2-045 Content-Type OGNL 注入",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-44228-log4shell.md",
+          "title": "Apache Log4j2 JNDI 注入（Log4Shell）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-1471-snakeyaml.md",
+          "title": "SnakeYAML 反序列化 RCE（CVE-2022-1471）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-21449-psychic-signatures.md",
+          "title": "Java ECDSA 空签名绕过（Psychic Signatures）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2022-22965-spring4shell.md",
+          "title": "Spring Framework 数据绑定 RCE（Spring4Shell）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-25845-fastjson-autotype.md",
+          "title": "Fastjson autoType 反序列化 RCE",
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:java-web:SKILL",
+      "kind": "category",
+      "category": "java-web",
+      "source_ref": "plugin/knowledge/java-web/SKILL.md",
+      "mirror_ref": "skills/kb-java-web/SKILL.md",
+      "title": "Java Web / CMS / CI（22 条）",
+      "description": "Java Web：Spring/Actuator、Shiro 绕过、Tomcat、Weblogic、JNDI 注入、若依后台。",
+      "guide_entries": [
+        {
+          "file": "cve-2017-12615-tomcat-put.md",
+          "title": "Tomcat PUT 任意文件写入（JSP 落地）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2019-17558-solr-velocity.md",
+          "title": "Apache Solr Velocity 模板注入 RCE",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2019-2725-weblogic-async.md",
+          "title": "WebLogic wls9_async_response 未授权 RCE（2019 在野）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2020-14882-weblogic-console.md",
+          "title": "WebLogic 控制台未授权 RCE（console.portal 路径穿越）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2020-1938-tomcat-ajp-ghostcat.md",
+          "title": "Tomcat AJP 文件读取 / 包含（Ghostcat）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-25646-druid-rce.md",
+          "title": "Apache Druid 未授权 RCE（CVE-2021-25646）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-26084-confluence-ognl-preauth.md",
+          "title": "Confluence 未授权 OGNL 注入（pre-auth，ENCODED_TOKEN）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-22947-gateway-spel.md",
+          "title": "Spring Cloud Gateway Actuator SpEL 注入 RCE（CVE-2022-22947）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-22963-spring-cloud-function.md",
+          "title": "Spring Cloud Function SpEL 注入 RCE（CVE-2022-22963）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2022-26134-confluence-ognl.md",
+          "title": "Confluence 未授权 OGNL 注入（Confluence OGNL RCE）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-22515-confluence-admin.md",
+          "title": "Confluence 未授权管理员接管（setup 流程未关）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-22518-confluence-setup-restore.md",
+          "title": "Confluence 未授权恢复导致管理员接管",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-22527-confluence-ssti.md",
+          "title": "Confluence 模板注入 RCE（text-inline.vm）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-27350-papercut-setup-bypass.md",
+          "title": "PaperCut NG/MF 认证绕过 → RCE（CVE-2023-27350）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-42793-teamcity-auth-bypass.md",
+          "title": "TeamCity 认证绕过 → 管理员令牌 → RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-46604-activemq-openwire.md",
+          "title": "Apache ActiveMQ OpenWire 反序列化 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-50164-struts2-s2-066.md",
+          "title": "Struts2 文件上传路径穿越（S2-066）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-7028-gitlab-takeover.md",
+          "title": "GitLab 任意账号接管（CVE-2023-7028）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-23897-jenkins-file-read.md",
+          "title": "Jenkins CLI 任意文件读取",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2024-27198-teamcity-bypass.md",
+          "title": "TeamCity 鉴权绕过（;.jsp 路径参数）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-38856-ofbiz-unauth-rce.md",
+          "title": "Apache OFBiz 未授权 RCE（CVE-2024-38856）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-53677-struts2-s2-067.md",
+          "title": "Struts2 文件上传路径穿越 → RCE（S2-067，CVE-2024-53677）",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:linux-priv:SKILL",
+      "kind": "category",
+      "category": "linux-priv",
+      "source_ref": "plugin/knowledge/linux-priv/SKILL.md",
+      "mirror_ref": "skills/kb-linux-priv/SKILL.md",
+      "title": "Linux 本地提权（11 条）",
+      "description": "Linux 提权：sudo 配置、SUID、Cron、内核 CVE、容器逃逸，每类有可直接跑的判定命令。",
+      "guide_entries": [
+        {
+          "file": "cve-2021-3156-baron-samedit.md",
+          "title": "Baron Samedit（sudo 堆溢出提权）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2021-3493-ubuntu-overlayfs.md",
+          "title": "Ubuntu overlayfs 本地提权（2021）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2021-4034-pwnkit.md",
+          "title": "PwnKit（polkit pkexec 本地提权）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2022-0185-fs-context-overflow.md",
+          "title": "fs_context 堆溢出提权（legacy_parse_param）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2022-0847-dirtypipe.md",
+          "title": "Dirty Pipe（页缓存写覆盖提权）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2023-0386-overlayfs.md",
+          "title": "overlayfs copy-up 权限绕过提权",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2023-22809-sudo-edit.md",
+          "title": "sudoedit 环境变量注入提权（EDITOR 带 --）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2023-2640-gameoverlay.md",
+          "title": "Ubuntu overlayfs 权限提升（GameOver(lay)）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2023-32233-nftables.md",
+          "title": "nf_tables 释放后重用提权（2023）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2024-0582-io-uring-uaf.md",
+          "title": "Linux io_uring 本地提权（CVE-2024-0582）",
+          "severity": "high"
+        },
+        {
+          "file": "cve-2024-1086-nftables.md",
+          "title": "nf_tables 释放后重用提权",
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:triage:SKILL",
+      "kind": "category",
+      "category": "triage",
+      "source_ref": "plugin/knowledge/triage/SKILL.md",
+      "mirror_ref": "skills/kb-triage/SKILL.md",
+      "title": "工作方法（3 条）",
+      "description": "取数之后怎么分诊：认资产 → 指纹 → 版本 → 匹配 → 最小验证 → 利用 → 取证 → 清理，含报告模板。",
+      "guide_entries": [
+        {
+          "file": "fingerprint-workflow.md",
+          "title": "指纹到漏洞的匹配流程",
+          "severity": "info"
+        },
+        {
+          "file": "report-template.md",
+          "title": "漏洞报告模板",
+          "severity": "info"
+        },
+        {
+          "file": "safe-verification.md",
+          "title": "PoC 安全验证与取证规范",
+          "severity": "info"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:web-cms:SKILL",
+      "kind": "category",
+      "category": "web-cms",
+      "source_ref": "plugin/knowledge/web-cms/SKILL.md",
+      "mirror_ref": "skills/kb-web-cms/SKILL.md",
+      "title": "Web / CMS（19 条）",
+      "description": "Web/CMS：Drupalgeddon2、PHP-FPM、ThinkPHP、Joomla、WordPress 插件、SSTI/XXE/LFI 通用打法。",
+      "guide_entries": [
+        {
+          "file": "command-injection.md",
+          "title": "命令注入（分号 / 反引号 / $() 与盲注外带）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2017-9841-phpunit.md",
+          "title": "PHPUnit eval-stdin 远程代码执行",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2018-7600-drupalgeddon2.md",
+          "title": "Drupal 表单 API 远程代码执行（Drupalgeddon2）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2019-11043-phpfpm-underflow.md",
+          "title": "PHP-FPM 路径信息下溢 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2019-16759-vbulletin.md",
+          "title": "vBulletin widget 配置代码执行",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-3129-laravel-ignition.md",
+          "title": "Laravel Ignition 调试模式任意文件读 → RCE（CVE-2021-3129）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2021-41773-apache-path-traversal.md",
+          "title": "Apache HTTP Server 路径穿越 / CGI RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2023-23752-joomla-config-leak.md",
+          "title": "Joomla 未授权配置泄露（API）",
+          "severity": "medium"
+        },
+        {
+          "file": "cve-2023-6553-backup-migration-rce.md",
+          "title": "WordPress Backup Migration 未授权 RCE（CVE-2023-6553）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-25600-bricks-rce.md",
+          "title": "WordPress Bricks 未授权 RCE（CVE-2024-25600）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-27956-wp-automatic-sqli.md",
+          "title": "WordPress WP-Automatic 未授权 SQL 注入（CVE-2024-27956）",
+          "severity": "critical"
+        },
+        {
+          "file": "cve-2024-4577-phpcgi-windows.md",
+          "title": "PHP-CGI Windows 参数注入（best-fit 编码）",
+          "severity": "critical"
+        },
+        {
+          "file": "lfi-to-rce.md",
+          "title": "本地文件包含 → RCE（日志包含 / pearcmd / PHP filter chain）",
+          "severity": "critical"
+        },
+        {
+          "file": "nginx-alias-traversal.md",
+          "title": "Nginx alias 路径穿越（读任意文件/源码泄露）",
+          "severity": "high"
+        },
+        {
+          "file": "php-object-injection.md",
+          "title": "PHP 反序列化（POP 链 → RCE / phar 触发）",
+          "severity": "critical"
+        },
+        {
+          "file": "sqli-union-error.md",
+          "title": "SQL 注入（报错 / UNION / 堆叠）通用打法",
+          "severity": "critical"
+        },
+        {
+          "file": "ssti-rce.md",
+          "title": "SSTI 模板注入 → RCE（Jinja2 / Twig / Freemarker）",
+          "severity": "critical"
+        },
+        {
+          "file": "thinkphp5-rce.md",
+          "title": "ThinkPHP 5.x 方法注入 / 路由 RCE",
+          "severity": "critical"
+        },
+        {
+          "file": "xxe-file-read.md",
+          "title": "XXE 外部实体注入（读文件 / SSRF / OOB 外带）",
+          "severity": "high"
+        }
+      ]
+    },
+    {
+      "id": "fujiang:triage:fingerprint-workflow",
+      "kind": "method",
+      "category": "triage",
+      "source_ref": "plugin/knowledge/triage/fingerprint-workflow.md",
+      "mirror_ref": "skills/kb-triage/fingerprint-workflow.md",
+      "title": "指纹到漏洞的匹配流程",
+      "safe_body": "## 1. 先分资产类型（决定后面查哪一类）\n\n| 观测 | 资产类型 | 首查分类 |\n|---|---|---|\n| 7001 / `WebLogic` | Java 中间件 | `kb-java-deser` |\n| `X-Confluence-*` / `X-Jenkins` / `GitLab` | Java Web / CI | `kb-java-web` |\n| 8090/8111/8983 且 Java 技术栈 | 同上 | `kb-java-web` |\n| `GlobalProtect` / `Citrix Gateway` / `FortiGate` / `BIG-IP` | 边界设备 | `kb-edge-device` |\n| `/owa/` `/ecp/` `/autodiscover/` | Exchange | `kb-exchange-ad` |\n| 445 + 域控 / 88 开放 | AD | `kb-exchange-ad` |\n| `X-Powered-By: PHP` / Drupal / ThinkPHP | PHP 站点 | `kb-web-cms` |\n| 低权 shell / 容器内 | 提权 | `kb-linux-priv` |\n| 2375 / 6379 / 5432 / 8848 / 6443 / 10250 | 云原生与中间件 | `kb-cloud-container` |\n\n## 2. 取版本（按可靠性排序）\n\n1. 应用自报：`/version`、`/api/v1/version`、`X-Jenkins`、`X-OWA-Version`、`X-FEServer`、`X-Generator`、`Server`。\n2. 静态资源指纹：`/static/js/...` 的 hash、`CHANGELOG.txt`、`/core/CHANGELOG.txt`、`/help`、`/login.action` 页脚。\n3. 报错差异：非法参数触发的堆栈、`Whitelabel Error Page`、`Ignition` 页面。\n4. 端口/协议：经授权的服务版本识别工具 的 banner（对自研中间件常常不准，只作参考）。\n\n## 3. 映射到条目\n\n- 用 `name` 里的产品名 + `versions` 区间做核对；区间不覆盖就换条目或记为「未见该组件」。\n- 同一资产可能命中多条（如 Exchange 2019 同时有 ProxyLogon / ProxyShell / 0-day 面），按**影响面 × 可验证性**排序。\n\n## 4. 常见误判\n\n- 反代/网关改写响应头 → 版本看起来是网关的。\n- 容器镜像版本 ≠ 应用版本（`Server: nginx` 后面可能是 Tomcat）。\n- WAF 返回的 403/200 空页被当成\"漏洞不存在\"；用不同路径/参数再验一次。\n- CDN 缓存把 `/version` 缓存成旧值。"
+    },
+    {
+      "id": "fujiang:triage:safe-verification",
+      "kind": "method",
+      "category": "triage",
+      "source_ref": "plugin/knowledge/triage/safe-verification.md",
+      "mirror_ref": "skills/kb-triage/safe-verification.md",
+      "title": "PoC 安全验证与取证规范",
+      "safe_body": "## 授权前置\n- 目标清单与时间窗，谁批的、批到哪一步（只读 / 验证 / 利用）。\n- 影响面：单机、单实例、共享数据库、边界设备（一旦崩影响整条链路）。\n\n## 分级验证（保留原等级，移除利用示例）\n| 级别 | 动作 |\n|---|---|\n| L1 只读 | 读版本、读配置、未授权 GET |\n| L2 探测 | 发送无害 payload 看回显/DNS |\n| L3 利用 | 写文件、反连、加账号 |\n| L4 落地 | 持久化、横向 |\n\n**默认停在 L2**；超出只读或无害验证的操作，必须有明确、单独的书面授权。\n\n## 证据清单\n- 请求原文（含完整 header 与 body）+ 响应原文（状态码、关键回显）。\n- 时间戳与时区、源 IP、目标 IP:端口。\n- 版本证据（一条命令 + 输出）。\n- L3 及以上：写入文件的路径与内容摘要、进程树、反连记录、清理前后对比。\n\n## 高风险验证的安全要求\n- 内核 exploit（nf_tables / overlayfs）：先同类实验机跑通，记录 panic 概率；生产上先申请窗口。\n- 域控相关（Zerologon / noPac）：**会改机器账号或目录属性**，先准备恢复脚本。\n- 边界设备：先确认是否在业务链路上，改策略/删证书类动作最后做。\n- 反连一律用一次性监听端口，事后关掉；避免把攻击机暴露在目标网段。\n\n## 清理与恢复\n1. 删除写入的 webshell / 计划任务 / SUID 文件 / 新增账号。\n2. 恢复被改的配置（OAB、`params.resource.loader`、`session.auto_start`、`pipeline.first.*`）。\n3. 撤销自己创建的 token、临时 ServiceAccount、API Key。\n4. 在报告里记录清理动作与时间，便于客户复核。"
+    },
+    {
+      "id": "fujiang:triage:report-template",
+      "kind": "method",
+      "category": "triage",
+      "source_ref": "plugin/knowledge/triage/report-template.md",
+      "mirror_ref": "skills/kb-triage/report-template.md",
+      "title": "漏洞报告模板",
+      "safe_body": "## 标题\n资产、组件、问题标识及影响。\n\n## 摘要\n说明影响对象、暴露面、版本和前置条件；明确标记已验证、未能验证或证据不足。\n\n## 资产与指纹\n记录目标标识、组件及版本证据、暴露面和现有防护。\n\n## 验证记录\n只记录授权范围内的只读或无害验证步骤、请求/响应证据及其局限；不在知识库模板中存放利用载荷。\n\n## 证据\n保留请求与响应、时间戳和时区、源与目标标识、版本证据及脱敏后的相关日志。\n\n## 影响分析\n区分数据、权限和业务影响；未知范围明确标注，不推测横向影响。\n\n## 修复建议\n列出厂商修复版本及适用分支、临时缓解、权限收敛、监控和责任人。\n\n## 复测\n记录修复前后相同条件下的结果，标记已修复、部分修复或未修复。\n\n## 附录\n时间线、参与人、清理记录和参考链接。"
+    }
+  ]
+}
