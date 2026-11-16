@@ -14,7 +14,7 @@ jobs:
         with:
           node-version: '24'
       - name: Check installed CLI and effective model without model requests
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $script = Join-Path $env:RUNNER_TEMP 'purge-qa-preflight.mjs'
