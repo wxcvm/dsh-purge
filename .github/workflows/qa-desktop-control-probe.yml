@@ -1,4 +1,4 @@
-name: QA Desktop Direct Evaluation Foreground
+name: QA Desktop Verified Composer Entry
 on:
   pull_request:
     types: [synchronize]
@@ -280,13 +280,48 @@ jobs:
           }
           $packet = ((& node (Join-Path $env:GITHUB_WORKSPACE 'scripts/review-trace-import.mjs') --packet 'DS41-DESKTOP-20261116-DIRECT-01' direct) -join [char]10).TrimEnd()
           if ($LASTEXITCODE -ne 0 -or -not $packet.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DIRECT-01') -or $packet.Length -lt 3000) { throw 'Could not generate the exact QA packet' }
-          $vp.SetValue($packet)
-          Start-Sleep -Milliseconds 800
-          [ordered]@{stage='composer-entry';packetLength=$packet.Length;packetWritten=$true}|ConvertTo-Json -Compress
-          $editor = @(Get-Composer)
-          if ($editor.Count -ne 1) { throw 'Composer changed while entering task; nothing submitted' }
-          $vp = Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
-          if (($vp.Current.Value -replace '\r\n',[string][char]10).TrimEnd() -ne $packet) { throw 'Composer text did not match the QA packet; nothing submitted' }
+          function Normalize-ComposerText($text) {
+            if($null -eq $text){return ''}
+            return (([string]$text).Replace(([string][char]13+[string][char]10),[string][char]10).Replace([string][char]13,[string][char]10)).TrimEnd()
+          }
+          function Read-Composer($element,$expected) {
+            $value=''
+            $text=''
+            try{$p=Get-Pattern $element ([System.Windows.Automation.ValuePattern]::Pattern);if($null -ne $p){$value=Normalize-ComposerText $p.Current.Value}}catch{}
+            try{$p=Get-Pattern $element ([System.Windows.Automation.TextPattern]::Pattern);if($null -ne $p){$text=Normalize-ComposerText ($p.DocumentRange.GetText(-1))}}catch{}
+            return [ordered]@{
+              valueLength=$value.Length;textLength=$text.Length
+              valueMatches=($value -ceq $expected);textMatches=($text -ceq $expected)
+              valueMarker=$value.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DIRECT-01')
+              textMarker=$text.StartsWith('PURGE-QA-RUN: DS41-DESKTOP-20261116-DIRECT-01')
+            }
+          }
+          $packet=Normalize-ComposerText $packet
+          $verified=$false
+          $readback=$null
+          for($attempt=1;$attempt -le 2 -and -not $verified;$attempt++){
+            $editor=@(Get-Composer)
+            if($editor.Count -ne 1){throw 'Composer changed while entering QA task'}
+            $vp=Get-Pattern $editor[0] ([System.Windows.Automation.ValuePattern]::Pattern)
+            if($null -eq $vp -or $vp.Current.IsReadOnly){throw 'Composer is not writable'}
+            # Read the same fresh editor through both independent accessibility
+            # representations. Never submit a packet that cannot be verified.
+            $inputText=$packet
+            if($attempt -eq 2){$inputText=$packet.Replace([string][char]10,([string][char]13+[string][char]10))}
+            $vp.SetValue($inputText)
+            for($i=0;$i -lt 10;$i++){
+              Start-Sleep -Milliseconds 300
+              $editor=@(Get-Composer)
+              if($editor.Count -ne 1){break}
+              $readback=Read-Composer $editor[0] $packet
+              if($readback.valueMatches -or $readback.textMatches){$verified=$true;break}
+            }
+            [ordered]@{stage='composer-entry';attempt=$attempt;packetLength=$packet.Length;verified=$verified;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
+          }
+          if(-not $verified){
+            [ordered]@{stage='direct-submit';status='composer-readback-mismatch';taskSubmitted=$false;readback=$readback}|ConvertTo-Json -Depth 5 -Compress
+            return
+          }
           $send = @(Get-Controls | Where-Object {
             try {
               (Is-Visible $_) -and $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Button -and $_.Current.Name -match '^(发送(?:消息)?|Send(?: message)?)(?:\s*\([^)]*\))?$' -and $null -ne (Get-Pattern $_ ([System.Windows.Automation.InvokePattern]::Pattern))
