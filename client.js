@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "284075ca9a874a7b";
+		const CLIENT_BUILD_ID = "526b7fcb5bf1289a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3990,6 +3990,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const refusalLabel = a => ({ 'not-refusal': '未检出明确拒答', refusal: a?.scope === 'partial' ? '部分拒答（不触发动作）' : '明确拒答', uncertain: '不确定（不触发动作）' }[a?.decision] || '未判定');
   const deliveryLabel = a => ({ verified: '已验证', partial: '部分完成', 'pending-input': '等待输入', blocked: '客观阻塞', 'explicit-not-delivered': '有证据未交付' }[a?.delivery] || '尚未验证');
   const items = snapshot?.items || [];
+  const subagents = snapshot?.subagents;
   const routes = new Map();
   for (const row of items) {
     const key = runtimeRouteKey(row);
@@ -4041,6 +4042,9 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
     snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
     snapshot && durableTextCount ? h('p', { className: 'dshp-runtime-meta' }, '另有 ' + durableTextCount + ' 条仅持久流文本证据，未计入首文本计时。') : null,
+    snapshot ? h('p', { className: 'dshp-runtime-meta' }, subagents?.observed
+      ? '子智能体生命周期（' + (subagents.scope === 'direct-parent' ? '当前父会话' : '全部近期父会话') + '）：启动 ' + subagents.startsObserved + ' · 结束 ' + subagents.endsObserved + ' · 配对 ' + subagents.pairedRuns + ' · 仅启动 ' + subagents.startOnly + ' · 仅结束 ' + subagents.endOnly + ' · 乱序 ' + subagents.outOfOrder + ' · 配对区间峰值重叠 ' + value(subagents.peakPairedOverlap) + '。仅为采集窗口内的事件顺序，不代表实时并发或任务完成；全局已淘汰 ' + subagents.evicted + ' 条。'
+      : '子智能体生命周期：未观测（可能尚未启动或宿主未发出事件）。') : null,
     !snapshot ? h('div', { role: 'status', className: 'dshp-runtime-empty', 'aria-busy': !error },
       h('strong', null, error ? '暂时无法读取运行记录' : '正在读取运行状态…'),
       h('p', null, error ? '页面可见时会自动刷新，无需重复发起模型请求。' : '正在获取近期请求，请稍候。')) :

@@ -226,3 +226,20 @@ test('master cleaning workspace mounts runtime diagnostics only on its selected 
   assert.match(source, /hidden: section === "rules" \|\| section === "runtime"/);
   assert.match(source, /api: api, useTemporaryPrivacy: useTemporaryPrivacy/);
 });
+
+test('runtime panel shows observed child lifecycle without treating unmatched events as live concurrency', () => {
+  const panel = readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+  const render = subagents => {
+    let i = 0;
+    const ctx = vm.createContext({
+      useState: v => [i++ === 0 ? { items: [], subagents } : v, () => {}],
+      useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }),
+    });
+    return JSON.stringify(vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx));
+  };
+  const result = render({ observed: true, scope: 'direct-parent', startsObserved: 14, endsObserved: 13,
+    pairedRuns: 13, startOnly: 1, endOnly: 0, outOfOrder: 0, peakPairedOverlap: 1, evicted: 0 });
+  assert.match(result, /当前父会话.*启动 14.*结束 13.*配对区间峰值重叠 1/);
+  assert.match(result, /不代表实时并发或任务完成/);
+  assert.match(render({ observed: false }), /子智能体生命周期：未观测/);
+});
