@@ -39,19 +39,28 @@ jobs:
           const runIds=Object.fromEntries(modes.map(mode=>[mode,'DS41-DESKTOP-20261116-'+mode.toUpperCase()+'-01']))
           const candidates=[]
           const recent=Date.now()-48*60*60*1000
-          if(fs.existsSync(root))for(const dir of fs.readdirSync(root,{withFileTypes:true})){
-            if(!dir.isDirectory()||dir.isSymbolicLink())continue
-            const folder=path.join(root,dir.name)
-            for(const name of ['session.v4.jsonl.zstd','session.v4.jsonl']){
-              const file=path.join(folder,name)
-              try{
-                const st=fs.lstatSync(file)
-                if(!st.isFile()||st.isSymbolicLink()||st.mtimeMs<recent)continue
-                candidates.push({sessionId:dir.name,file})
-                break
-              }catch{}
+          const visit=(folder,depth)=>{
+            let entries=[]
+            try{entries=fs.readdirSync(folder,{withFileTypes:true})}catch{return}
+            for(const dir of entries){
+              if(!dir.isDirectory()||dir.isSymbolicLink())continue
+              const child=path.join(folder,dir.name)
+              for(const name of ['session.v4.jsonl.zstd','session.v4.jsonl']){
+                const file=path.join(child,name)
+                try{
+                  const st=fs.lstatSync(file)
+                  if(!st.isFile()||st.isSymbolicLink()||st.mtimeMs<recent)continue
+                  candidates.push({sessionId:dir.name,file,mtime:st.mtimeMs,depth:depth+1})
+                  break
+                }catch{}
+              }
+              // Native Desktop layout is sessions/<bucket>/<session-id>/.
+              if(depth<1)visit(child,depth+1)
             }
           }
+          visit(root,0)
+          candidates.sort((a,b)=>b.mtime-a.mtime)
+          console.log(JSON.stringify({stage:'archive-scan',rootPresent:fs.existsSync(root),recentArchiveCandidates:candidates.length,byDepth:{one:candidates.filter(x=>x.depth===1).length,two:candidates.filter(x=>x.depth===2).length}}))
           const observations=Object.fromEntries(modes.map(mode=>[mode,[]]))
           let unreadable=0
           for(const candidate of candidates){
