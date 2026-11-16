@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as zlib from 'node:zlib'
 import { cases, answerKey } from '../scripts/agent-quality-eval.mjs'
-import { decodeArchive, extractMarkedTurn, importReviewRun, markedPacket } from '../scripts/review-trace-import.mjs'
+import { decodeArchive, extractMarkedTurn, importReviewRun, markedPacket, diagnoseReportContent } from '../scripts/review-trace-import.mjs'
 import { compareReviewRuns } from '../scripts/review-run-compare.mjs'
 
 const ids = cases.map(row => row.id)
@@ -141,4 +141,62 @@ test('native child intervals distinguish overlap, sequential boundaries, and mis
   const none = importReviewRun({ runId: 'example', parent, children: [] }).delegationTimeline
   assert.equal(none.observedPeakConcurrentTurns, null)
   assert.equal(none.observedOverlapMs, null)
+})
+
+
+test('content diagnostics distinguish extra valid evidence, missing evidence and output format', () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const reports = ids.map(answer)
+  reports[0] = { ...reports[0], evidence: ['before', 'after', 'report'] }
+  reports[3] = { ...reports[3], evidence: ['coverage', 'notes'] }
+  const directText = 'Review complete.\n' + fence + 'json\n' + JSON.stringify({ reports }) + '\n' + fence
+  const direct = diagnoseReportContent({ finalText: directText })
+  assert.equal(direct.shape, 'json-fence-with-prose')
+  assert.deepEqual(direct.score, { total: 6, parsed: 6, correctConclusions: 6, requiredCoverage: 6, exactEvidence: 4 })
+  assert.deepEqual(direct.cases[0].additional, ['report'])
+  assert.deepEqual(direct.cases[0].missing, [])
+  const child = diagnoseReportContent({ finalText: JSON.stringify({ id: ids[5], answer: 'b', evidence: ['delta', 'newRecord'] }) }, [ids[5]])
+  assert.equal(child.shape, 'single-json-object')
+  assert.deepEqual(child.cases[0].missing, ['task'])
+  assert.equal(child.cases[0].requiredCovered, false)
+  assert.equal(child.cases[0].conclusionCorrect, true)
+  const invalid = diagnoseReportContent({ finalText: JSON.stringify({ reports: [{ id: ids[0], answer: 'b', evidence: ['before','after','after','PRIVATE-RAW-TEXT'] }] }) })
+  assert.equal(invalid.cases[0].requiredCovered, true)
+  assert.equal(invalid.cases[0].exactEvidence, false)
+  assert.equal(invalid.cases[0].invalidCount, 1)
+  assert.equal(invalid.cases[0].duplicateCount, 1)
+  assert.doesNotMatch(JSON.stringify(invalid), /PRIVATE-RAW-TEXT/)
+  assert.equal(diagnoseReportContent({ finalText: directText + '\n' + fence + 'json\n{}\n' + fence }).shape, 'ambiguous-fences')
+  assert.equal(diagnoseReportContent({ finalText: JSON.stringify({ reports: [reports[0], reports[0]] }) }).shape, 'invalid-report-identity')
+  assert.equal(diagnoseReportContent({ finalText: JSON.stringify({ reports: [answer(ids[1])] }) }, [ids[0]]).shape, 'invalid-report-identity')
+  assert.equal(diagnoseReportContent({ finalText: 'not a report' }).score, null)
+})
+
+test('replay real observed A/B answer patterns without model calls; separate content and strict delivery', () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const a = ids.map(answer)
+  a[0] = { ...a[0], evidence: ['before','after','report'] }
+  a[3] = { ...a[3], evidence: ['coverage','notes'] }
+  const b = ids.map(answer)
+  b[3] = { ...b[3], evidence: ['coverage','notes'] }
+  b[5] = { ...b[5], evidence: ['delta','newRecord'] }
+  const textReply = (seq, text) => ev(seq, 'assistant/message', {
+    turn: 1, step: 1, message: { source: { provider: 'fixture', model: 'qa-model' }, content: text }, stream: stream()
+  })
+  const fenced = reports => 'Completed.\n' + fence + 'json\n' + JSON.stringify({ reports }) + '\n' + fence
+  const direct = importReviewRun({ runId: 'example', parent: session('a', [request(), textReply(2, fenced(a)), end(3, 1)]) })
+  const parent = session('p', [request(), ev(2, 'subagent/catalog', { items: ids.map((_,i)=>({ childId:'c'+i })) }),
+    textReply(3, fenced(b)), end(4, 1)])
+  const children = b.map((report,i)=>session('c'+i, [request(), textReply(2, JSON.stringify(report)), end(3,1)], { caseIds:[report.id] }))
+  const delegated = importReviewRun({ runId: 'example', parent, children })
+  const compared = compareReviewRuns({ direct: { ...direct, runId: 'direct' }, delegated })
+  assert.equal(compared.summary.directAccepted, 0)
+  assert.equal(compared.summary.delegatedAccepted, 0)
+  assert.equal(compared.summary.childAccepted, 0)
+  assert.equal(direct.archiveCoverage.strictParentJson, false)
+  assert.deepEqual(compared.contentComparison.direct, { parsed: 6, correctConclusions: 6, requiredCoverage: 6, exactEvidence: 4 })
+  assert.deepEqual(compared.contentComparison.delegated, { parsed: 6, correctConclusions: 6, requiredCoverage: 5, exactEvidence: 4 })
+  assert.deepEqual(compared.contentComparison.child, compared.contentComparison.delegated)
+  assert.equal(compared.contentComparison.sameEvidenceCount, 6)
+  assert.deepEqual(compared.contentComparison.uncorrectedChildOmissions, [ids[5]])
 })

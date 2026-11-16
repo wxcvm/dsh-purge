@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname, basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as zlib from 'node:zlib'
-import { cases, casePacket } from './agent-quality-eval.mjs'
+import { cases, casePacket, answerKey } from './agent-quality-eval.mjs'
 import { isHumanEvent, messageOf, messageText } from '../lib/response-context.js'
 import { streamSummary } from '../lib/runtime-observations.js'
 
@@ -183,6 +183,64 @@ export function observedDelegationTimeline(parent, children, missingChildren) {
       : missingChildren || intervals.length !== rows.length ? 'partial' : 'observed-children-only' }
 }
 
+/**
+ * Content diagnostics are deliberately separate from strict delivery/lifecycle
+ * acceptance. A single unambiguous JSON fence can be scored without counting
+ * it as strict bare JSON. A one-case child may return a standalone object.
+ * Only fixture identifiers, answer letters and allowlisted evidence keys leave
+ * this function; never return the original response text.
+ */
+export function diagnoseReportContent(trace, assigned = ids) {
+  validCases(assigned)
+  const empty = shape => ({ shape, score: null, cases: [] })
+  const text = typeof trace?.finalText === 'string' ? trace.finalText.trim() : ''
+  if (!text) return empty('missing')
+  const rowsOf = value => Array.isArray(value?.reports) ? value.reports
+    : assigned.length === 1 && value?.id === assigned[0]
+      && Object.hasOwn(value, 'answer') && Object.hasOwn(value, 'evidence') ? [value] : null
+  let value = null, shape = 'unrecognized'
+  try { value = JSON.parse(text) } catch {}
+  if (rowsOf(value)) shape = Array.isArray(value.reports) ? 'strict-json' : 'single-json-object'
+  else {
+    const fence = String.fromCharCode(96).repeat(3)
+    const re = new RegExp(fence + '(?:json)?[\\t ]*\\r?\\n([\\s\\S]*?)\\r?\\n' + fence, 'gi')
+    const blocks = [...text.matchAll(re)]
+    if (blocks.length !== 1) return empty(blocks.length > 1 ? 'ambiguous-fences' : shape)
+    try { value = JSON.parse(blocks[0][1]) } catch { return empty(shape) }
+    if (!rowsOf(value)) return empty(shape)
+    shape = blocks[0][0] === text ? 'single-json-fence' : 'json-fence-with-prose'
+  }
+  const expectedIds = new Set(assigned), byId = new Map()
+  for (const row of rowsOf(value)) {
+    if (!expectedIds.has(row?.id) || byId.has(row.id)) {
+      return empty('invalid-report-identity')
+    }
+    byId.set(row.id, row)
+  }
+  const details = assigned.map(id => {
+    const row = byId.get(id)
+    if (!row || !['a', 'b', 'c'].includes(row.answer) || !Array.isArray(row.evidence)) {
+      return { id, conclusionCorrect: null, requiredCovered: null, exactEvidence: null,
+        evidence: null, missing: null, additional: null, invalidCount: null, duplicateCount: null }
+    }
+    const expected = answerKey[id].evidence
+    const known = row.evidence.filter(key => typeof key === 'string' && Object.hasOwn(caseById.get(id).records, key))
+    const evidence = [...new Set(known)].sort()
+    const missing = expected.filter(key => !evidence.includes(key))
+    const additional = evidence.filter(key => !expected.includes(key))
+    const invalidCount = row.evidence.length - known.length
+    const duplicateCount = known.length - evidence.length
+    return { id, conclusionCorrect: row.answer === answerKey[id].answer,
+      requiredCovered: missing.length === 0, exactEvidence: missing.length === 0
+        && additional.length === 0 && invalidCount === 0 && duplicateCount === 0,
+      evidence, missing, additional, invalidCount, duplicateCount }
+  })
+  const count = key => details.filter(row => row[key] === true).length
+  return { shape, score: { total: assigned.length, parsed: details.filter(row => row.conclusionCorrect !== null).length,
+    correctConclusions: count('conclusionCorrect'), requiredCoverage: count('requiredCovered'),
+    exactEvidence: count('exactEvidence') }, cases: details }
+}
+
 function sanitizedBatch(trace, caseIds, attempt) {
   const assignments = caseIds.map(id => ({ id, attempt }))
   const observations = trace.lifecycle === 'unknown' ? []
@@ -243,6 +301,8 @@ export function importReviewRun({ runId, parent, children = [], settingsId }) {
     reports: childBatches.flatMap(row => row.reports),
   } : null
   return { runId, route: main.route, settingsId: label(settingsId), batch, childBatch, usage,
+    contentDiagnostics: { parent: diagnoseReportContent(main),
+      children: childTraces.map(({ trace, caseIds }) => ({ caseIds, report: diagnoseReportContent(trace, caseIds) })) },
     delegationTimeline: observedDelegationTimeline(main, childTraces, missingChildren),
     archiveCoverage: { observedChildren: children.length, listedButMissingChildren: missingChildren,
       strictParentJson: batch.strictJson, childRoutes: traces.slice(1).map(trace => trace.route) } }

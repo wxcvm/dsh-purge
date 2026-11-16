@@ -68,6 +68,31 @@ function qualitySummary(rows) {
   return { conclusion: counts('conclusionCorrect'), evidence: counts('evidenceCorrect') }
 }
 
+// Content accuracy is reported alongside, never in place of, strict acceptance.
+function contentComparison(direct, delegated) {
+  const a = direct.contentDiagnostics, b = delegated.contentDiagnostics
+  if (!a?.parent || !b?.parent) return null
+  const index = rows => new Map((rows ?? []).map(row => [row.id, row]))
+  const d = index(a.parent.cases), p = index(b.parent.cases)
+  const c = index((b.children ?? []).flatMap(child => child.report.cases))
+  const rows = caseIds.map(id => {
+    const first = d.get(id) ?? null, parent = p.get(id) ?? null, child = c.get(id) ?? null
+    const sameEvidence = child?.evidence && parent?.evidence
+      ? child.evidence.length === parent.evidence.length && child.evidence.every(key => parent.evidence.includes(key))
+      : null
+    return { id, direct: first, delegated: parent, child, sameEvidence,
+      uncorrectedChildOmission: child?.requiredCovered === false && parent?.requiredCovered === false
+        && sameEvidence === true }
+  })
+  const summarize = values => ({ parsed: values.filter(row => row?.conclusionCorrect != null).length,
+    correctConclusions: values.filter(row => row?.conclusionCorrect === true).length,
+    requiredCoverage: values.filter(row => row?.requiredCovered === true).length,
+    exactEvidence: values.filter(row => row?.exactEvidence === true).length })
+  return { direct: summarize(rows.map(row => row.direct)), delegated: summarize(rows.map(row => row.delegated)),
+    child: summarize(rows.map(row => row.child)), sameEvidenceCount: rows.filter(row => row.sameEvidence === true).length,
+    uncorrectedChildOmissions: rows.filter(row => row.uncorrectedChildOmission).map(row => row.id), rows }
+}
+
 export function compareReviewRuns({ direct, delegated }) {
   if (!present(direct?.runId) || !present(delegated?.runId) || direct.runId === delegated.runId) {
     throw new Error('Two distinct run IDs are required')
@@ -102,6 +127,7 @@ export function compareReviewRuns({ direct, delegated }) {
       childAccepted: children ? children.summary.accepted : null,
       childTotal: children ? children.summary.total : null,
     },
+    contentComparison: contentComparison(direct, delegated),
     reportQuality: { direct: qualitySummary(baseline.results), delegated: qualitySummary(candidate.results),
       child: children ? qualitySummary(children.results) : null },
     childParentOutcomes: Object.fromEntries([...new Set(results.map(row => row.childParentOutcome))]
