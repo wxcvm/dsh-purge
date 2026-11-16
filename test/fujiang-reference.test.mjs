@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadFujiangReferences } from '../lib/redteam/fujiang-reference.js'
-import { loadCveCatalog } from '../lib/redteam/cve-knowledge.js'
+import { loadCveCatalog, matchCveCandidates } from '../lib/redteam/cve-knowledge.js'
 import { listBundledKnowledge, getBundledKnowledge } from '../lib/redteam/knowledge-bundled.js'
 
 test('all original archive knowledge filenames are represented once, with nine reconstructed category guides', () => {
@@ -184,4 +184,45 @@ test('Confluence and ActiveMQ source claims do not override corrected branch bou
   const mq=getBundledKnowledge('fujiang:java-web:cve-2023-46604-activemq-openwire')
   assert.match(mq.body,/5\.15\.16 之前/)
   assert.match(mq.body,/Apache Software Foundation CNA 评分为 10\.0/)
+})
+
+
+test('all nine Java deserialization-category references preserve advisory scope and historic claims', () => {
+  const get = name => getBundledKnowledge('fujiang:java-deser:' + name)
+  const wls = get('cve-2015-4852-weblogic-t3')
+  assert.match(wls.body, /CVSS v2 7\.5/)
+  assert.match(wls.body, /2075927\.1/)
+  const shiro = get('cve-2016-4437-shiro-rememberme')
+  assert.match(shiro.body, /1\.2\.5 之前/)
+  assert.match(shiro.body, /未设置加密密钥/)
+  const wsat = get('cve-2017-10271-weblogic-wls-wsat')
+  assert.match(wsat.body, /12\.2\.1\.1\.0/)
+  assert.match(wsat.body, /WLS Security\/T3 拒绝服务/)
+  const struts = get('cve-2017-5638-struts2-s2-045')
+  assert.match(struts.body, /2\.5\.10\.1/)
+  assert.match(struts.body, /Jakarta Multipart parser/)
+  const log4j = get('cve-2021-44228-log4shell')
+  assert.match(log4j.body, /log4j-core/)
+  assert.match(log4j.body, /log4j-api 不受影响/)
+  assert.match(log4j.body, /2\.17\.1/)
+  const yaml = get('cve-2022-1471-snakeyaml')
+  assert.match(yaml.body, /SafeConstructor/)
+  assert.match(yaml.body, /2\.0 边界差异/)
+  const ecdsa = get('cve-2022-21449-psychic-signatures')
+  assert.match(ecdsa.body, /18\.0\.1/)
+  assert.match(ecdsa.body, /GraalVM/)
+  const spring = get('cve-2022-22965-spring4shell')
+  assert.match(spring.body, /5\.2\.20\.RELEASE/)
+  assert.match(spring.body, /具体方式/)
+  const fastjson = get('cve-2022-25845-fastjson-autotype')
+  assert.match(fastjson.body, /1\.2\.83/)
+  assert.match(fastjson.body, /safeMode/)
+  assert.ok([wls, shiro, wsat, struts, log4j, yaml, ecdsa, spring, fastjson].every(row => row.verified === false))
+  const status = (cve, version) => matchCveCandidates({cve, version}).items[0].version_applicability.status
+  assert.equal(status('CVE-2016-4437', '1.2.4'), 'affected')
+  assert.equal(status('CVE-2016-4437', '1.2.5'), 'not_affected')
+  assert.equal(status('CVE-2022-25845', '1.2.82'), 'affected')
+  assert.equal(status('CVE-2022-25845', '1.2.83'), 'not_affected')
+  assert.equal(status('CVE-2017-5638', '2.5.10.1'), 'unknown')
+  assert.equal(status('CVE-2022-1471', '2.0'), 'unknown')
 })
