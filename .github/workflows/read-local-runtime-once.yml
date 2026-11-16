@@ -1,4 +1,4 @@
-name: Classify host error codes from archived runtime
+name: Compare anonymized historical agent cohorts
 on:
   push:
     branches: [robin/read-runtime-usage-once]
@@ -22,7 +22,11 @@ jobs:
           import path from 'node:path'
           import os from 'node:os'
           import zlib from 'node:zlib'
-          const target = 'exploit-bucket-backstage'
+          const cohorts=[['vuln-scan-ztbeb','exploit-ztbeb','exploit-ztbeb-2','recon-ztbeb-pivot','vuln-scan-chaicp','vuln-scan-cniia','exploit-sitecode','vuln-scan-main3','exploit-3381','exploit-3381-admin','exploit-3381-admin2','exploit-3381-login','exploit-3381-browser','exploit-6377','exploit-ocs','exploit-3381-data','exploit-3381-v2'],['recon-kaiyuan','vulnscan-db-unauth','exploit-bucket-backstage','exploit-login-3381']]
+          const labels=new Set(cohorts.flat())
+          const links=new Map()
+          const parentLinks=new Map()
+          function attach(id,label,parent){if(typeof id!=='string'||!id||!labels.has(label))return;if(!links.has(id))links.set(id,new Set());links.get(id).add(label);if(parent){if(!parentLinks.has(parent))parentLinks.set(parent,new Set());parentLinks.get(parent).add(id)}}
           const root = path.join(process.env.DSH_HOME || path.join(process.env.USERPROFILE || os.homedir(), '.dsh'), 'sessions')
           const magic = Buffer.from([0x28,0xb5,0x2f,0xfd])
           const fields = ['inputTokens','outputTokens','totalTokens','cacheReadTokens','cacheWriteTokens','reasoningTokens']
@@ -70,11 +74,11 @@ jobs:
           }
           if(!files.length){out({status:'no-readable-session-archives',archiveCount:0});process.exit(0)}
           files.sort((a,b)=>b.mtime-a.mtime)
-          const selected=files.slice(0,80)
-          const matchingIds=new Set(), records=[]
+          const selected=files.slice(0,160)
+          const records=[]
           let scanned=0, compressedBytes=0, skipped=0, parsedEvents=0, incompleteFiles=0
-          const exact = x => typeof x==='string' && x===target
-          const labelMatch = x => x && typeof x==='object' && ['label','name','title'].some(k=>exact(x[k]))
+          const exact = x => typeof x==='string' && labels.has(x)
+          const labelMatch = x => x && typeof x==='object' ? ['label','name','title'].map(k=>x[k]).find(exact) : undefined
           function fieldSnapshot(u){return u&&typeof u==='object'&&fields.some(k=>numeric(u[k]))?u:null}
           function newStat(){return Object.fromEntries(fields.map(k=>[k,{observedSum:null,observed:0,missing:0}]))}
           for(const f of selected){
@@ -90,8 +94,8 @@ jobs:
             if(!obj||typeof obj!=='object')return
             const e=obj.event&&typeof obj.event.type==='string'?obj.event:obj
             const d=e.data
-            if(labelMatch(obj.header)||labelMatch(e.header)||labelMatch(d?.header)||labelMatch(obj.meta)||labelMatch(e.meta))stat.matched=true
-            if(['header','session/header','session/meta','session/create','session/created','session/start'].includes(e.type)&&(labelMatch(e)||labelMatch(d)))stat.matched=true
+            for(const h of [obj.header,e.header,d?.header,obj.meta,e.meta]){const l=labelMatch(h);if(l)attach(f.id,l);if(typeof h?.parentSession==='string')stat.parent=h.parentSession}
+            if(['header','session/header','session/meta','session/create','session/created','session/start'].includes(e.type)){const l=labelMatch(e)||labelMatch(d);if(l)attach(f.id,l);if(typeof d?.parentSession==='string')stat.parent=d.parentSession}
             if(typeof e.type!=='string')return
             if(Number.isSafeInteger(e.seq)){if(seen.has(e.seq)){stat.duplicateSeq++;return}seen.add(e.seq)}
             stat.events++;parsedEvents++;typeCounts.set(e.type,(typeCounts.get(e.type)||0)+1)
@@ -103,9 +107,9 @@ jobs:
             if(e.type==='subagent/descriptor'||e.type==='subagent/catalog'){
              const list=Array.isArray(d)?d:Array.isArray(d?.items)?d.items:Array.isArray(d?.children)?d.children:Array.isArray(d?.catalog)?d.catalog:[d]
              for(const v of list){
-              if(labelMatch(v)||labelMatch(v?.descriptor)||labelMatch(v?.child)){
+              const l=labelMatch(v)||labelMatch(v?.descriptor)||labelMatch(v?.child);if(l){
                const id=v?.childId||v?.sessionId||v?.id||v?.descriptor?.id||v?.child?.id
-               if(typeof id==='string'&&id)matchingIds.add(id)
+               attach(id,l,f.id)
               }
              }
             }
@@ -150,12 +154,27 @@ jobs:
            if(stat.invalidLines)stat.complete=false
            if(!stat.complete)incompleteFiles++
            stat.observedEventSpanMs=firstTs!==null&&lastTs!==null?lastTs-firstTs:null
-           stat.firstTs=firstTs
+           stat.firstTs=firstTs;stat.lastTs=lastTs
            records.push(stat)
           }
-          const matches=records.filter(x=>x.matched||matchingIds.has(x.id))
-          const candidateMatches=matches.length?matches:records.filter(x=>numeric(x.usage.totalTokens.observedSum)&&x.usage.totalTokens.observedSum>=14.05e6&&x.usage.totalTokens.observedSum<14.15e6)
-          const anonymize=(x,i)=>({sample:i+1,selection:matches.length?'exact-label-or-parent-descriptor':'rounded-total-candidate-unconfirmed',events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,toolStarts:x.toolStarts,assistantEventsWithStream:x.withToolStream,observedEventSpanMs:x.observedEventSpanMs,completeArchiveParse:x.complete,frameErrors:x.frameErrors,invalidLines:x.invalidLines,duplicateSeq:x.duplicateSeq,assistantEventTypes:x.assistantEventTypes,errors:x.errors.map(({time,...e})=>({...e,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),terminalSequence:x.terminalSequence.map(({kind,time})=>({kind,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null})),turnEnds:x.turnEnds.map(({time,...e})=>({...e,offsetMs:time!==null&&x.firstTs!==null?time-x.firstTs:null}))})
-          out({status:matches.length?'matched':candidateMatches.length?'candidate-unconfirmed':'no-matching-archive',archiveCount:files.length,scanned,skipped,incompleteFiles,parsedEvents,matchedByLabel:matches.length,matchedCandidates:candidateMatches.slice(0,5).map(anonymize),coverage:{maxArchives:80,compressedBytes,allArchivesScanned:scanned===files.length}})
+          function summarize(x,slot,base){
+           const counts={};for(const e of x.errors){const k=e.code||'unknown-group-'+(e.codeGroup??'none');counts[k]=(counts[k]||0)+1}
+           const turns={};for(const e of x.turnEnds)turns[e.kind]=(turns[e.kind]||0)+1
+           const final=x.turnEnds.at(-1)
+           return {slot,events:x.events,assistantEvents:x.attemptEvents,usage:x.usage,finish:x.finish,errors:counts,toolStarts:x.toolStarts,turns,finalTurn:final?.kind??'not-observed',finalCode:final?.code??null,spanMs:x.observedEventSpanMs,startOffsetMs:x.firstTs!==null&&base!==null?x.firstTs-base:null,endOffsetMs:x.lastTs!==null&&base!==null?x.lastTs-base:null,parseComplete:x.complete}
+          }
+          const groups=cohorts.map((wanted,i)=>{
+           const chosen=wanted.map((l,j)=>({slot:j+1,matches:records.filter(x=>links.get(x.id)?.has(l))}))
+           const unique=chosen.filter(x=>x.matches.length===1).map(x=>x.matches[0])
+           const parentCandidates=[...new Set([...unique.map(x=>x.parent).filter(Boolean),...Array.from(parentLinks).filter(([p,ids])=>unique.some(x=>ids.has(x.id))).map(([p])=>p)])]
+           const parentEvidence=parentCandidates.map(p=>({id:p,count:unique.filter(x=>x.parent===p||parentLinks.get(p)?.has(x.id)).length})).sort((a,b)=>b.count-a.count)
+           const root=parentEvidence[0]&&(!parentEvidence[1]||parentEvidence[0].count>parentEvidence[1].count)?parentEvidence[0]:null
+           const anchored=root?unique.filter(x=>x.parent===root.id||parentLinks.get(root.id)?.has(x.id)):unique
+           const times=anchored.map(x=>x.firstTs).filter(x=>x!==null)
+           const base=times.length?Math.min(...times):null
+           const parentRecord=root?records.find(x=>x.id===root.id):null
+           return {group:i+1,expected:wanted.length,matched:unique.length,parentVerified:root?.count??0,parent:parentRecord?summarize(parentRecord,0,base):null,missingSlots:chosen.filter(x=>x.matches.length===0).map(x=>x.slot),ambiguousSlots:chosen.filter(x=>x.matches.length>1).map(x=>x.slot),children:chosen.filter(x=>x.matches.length===1).map(x=>summarize(x.matches[0],x.slot,base))}
+          })
+          out({status:'cohort-comparison',archiveCount:files.length,scanned,skipped,incompleteFiles,parsedEvents,groups,coverage:{maxArchives:160,compressedBytes,allArchivesScanned:scanned===files.length}})
           '@ | node --input-type=module -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
