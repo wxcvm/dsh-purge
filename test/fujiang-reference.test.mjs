@@ -174,3 +174,14 @@ test('all 167 archive articles preserve original frontmatter and stable source p
   assert.match(method.body, /原始资料元数据/)
   assert.match(method.body, /方法归纳/)
 })
+
+
+test('Confluence and ActiveMQ source claims do not override corrected branch boundaries', () => {
+  const ognl=getBundledKnowledge('fujiang:java-web:cve-2022-26134-confluence-ognl')
+  assert.match(ognl.body,/修复版本不属于受影响版本/)
+  const admin=getBundledKnowledge('fujiang:java-web:cve-2023-22515-confluence-admin')
+  assert.match(admin.body,/8\.0\.0–8\.3\.2、8\.4\.0–8\.4\.2、8\.5\.0–8\.5\.1/)
+  const mq=getBundledKnowledge('fujiang:java-web:cve-2023-46604-activemq-openwire')
+  assert.match(mq.body,/5\.15\.16 之前/)
+  assert.match(mq.body,/Apache Software Foundation CNA 评分为 10\.0/)
+})

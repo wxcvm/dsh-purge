@@ -49,3 +49,5 @@ AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provid
 - 读取副本来自固定的 `sanjiu2024/dsh-team-workflow@c55070e2858c1677bbebaf6ec1e8f13dad366cd6`，按批次与原始上传 ZIP 中的元数据及防御章节比对。原归档路径和已有 CVE 索引 URL 不变，详情另显示固定读取副本。
 - Java Web 22 个条目的防御性摘要和公告来源同步复核更新，包括 Druid 的认证前提、Confluence 的分支修复边界、GitLab 的遗漏受影响版本、ActiveMQ Classic / Artemis 的区别，以及 Struts S2-067 的上传机制迁移要求。
 - 原始资料字段和历史修复建议保留不代表已独立验证。没有复制 PoC、攻击入口、利用步骤或操作链；识别和前置条件章节登记为来源线索，现行建议依据实际资产证据和已核验的厂商公告。其余组件仍需要进一步逐条核验公告，而不是把历史 CVSS 当作当前目标风险。
+
+- 同一批次进一步补齐 Solr、TeamCity 两条、OFBiz、Confluence 22515、GitLab 7028 六组结构化版本判断；修复版本按分支单独处理。ActiveMQ Classic 与 Artemis 不使用跨产品混合版本区间；NVD 与 CNA 评分差异保留原来源。
