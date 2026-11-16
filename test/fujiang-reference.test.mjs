@@ -106,7 +106,10 @@ test('cloud and container entries preserve source evidence while separating vend
   assert.match(grafana.body,/当前 CVSS：7\.5/)
   const cgroup=getBundledKnowledge('fujiang:cloud-container:cve-2022-0492-cgroup-release-agent')
   assert.match(cgroup.body,/5\.16\.6/)
-  assert.doesNotMatch(cgroup.body,/5\.16\.2\+/)
+  assert.match(cgroup.body,/原始修复建议（已由厂商资料纠正）/)
+  const currentRepair = cgroup.body.split('## 修复与缓解（Purge 防御性归纳）')[1]?.split('\n## ')[0] || ''
+  assert.match(currentRepair,/5\.16\.6/)
+  assert.doesNotMatch(currentRepair,/5\.16\.2\+/)
   const esxi=getBundledKnowledge('fujiang:cloud-container:cve-2024-37085-esxi-auth-bypass')
   assert.match(esxi.body,/原始 CVSS：9\.8/)
   assert.match(esxi.body,/当前 CVSS：6\.8/)
