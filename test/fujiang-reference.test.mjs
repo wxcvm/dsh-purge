@@ -128,6 +128,7 @@ test('Java web knowledge preserves source metadata and corrected vendor boundari
   assert.match(druid.title,/已认证用户/)
   assert.match(druid.body,/当前 CVSS：8\.8/)
   assert.match(druid.body,/不是未授权 RCE/)
+  assert.doesNotMatch(druid.tags,/未授权/)
   const confluence=getBundledKnowledge('fujiang:java-web:cve-2023-22518-confluence-setup-restore')
   assert.match(confluence.body,/原始 CVSS：9\.1/)
   assert.match(confluence.body,/当前 CVSS：10\.0/)
