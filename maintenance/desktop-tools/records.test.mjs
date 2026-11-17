@@ -112,3 +112,51 @@ test('resume does not invent completion or choose a task when nothing is ready',
   assert.equal(data.blocked.length,1);
   assert.throws(()=>resumeRecords(make({...row,status:'unknown'})),/invalid status/);
 });
+
+test('explicit task keys join active and ended subagent evidence without changing statuses', async () => {
+  const json = make(
+    {...row,id:'task-done',status:'done'},
+    {...row,id:'task-review',status:'doing'},
+    {...row,id:'task-error',status:'todo'},
+    {...row,id:'task-active',status:'doing'},
+    {...row,id:'task-pending',status:'todo'},
+    {...row,id:'task-unknown',status:'blocked'},
+  )
+  const coordination = { reservations: [
+    { key:'task-active',runId:'run-7',state:'assigned' },
+    { key:'task-pending',runId:null,state:'pending' },
+  ], handoffs: [
+    { key:'task-review',stopReason:'completed',finalMessage:'present' },
+    { key:'task-error',stopReason:'error',finalMessage:'empty' },
+    { key:'foreign-task',stopReason:'completed',finalMessage:'present' },
+  ] }
+  const before=JSON.parse(json)
+  const view=resumeRecords(json,coordination)
+  const statuses=Object.fromEntries(view.delegation.tasks.map(x=>[x.id,x.state]))
+  assert.deepEqual(statuses,{
+    'task-done':'recorded-done',
+    'task-review':'needs-verification',
+    'task-error':'needs-attention',
+    'task-active':'delegated',
+    'task-pending':'reserved',
+    'task-unknown':'no-linked-evidence',
+  })
+  assert.equal(view.counts.done,1)
+  assert.equal(view.counts.doing,2)
+  assert.equal(view.delegation.tasks.find(x=>x.id==='task-review').recordedStatus,'doing')
+  assert.deepEqual(JSON.parse(json),before)
+  const result=JSON.parse((await definitions()[2].execute({json,coordination:JSON.stringify(coordination)})).text)
+  assert.deepEqual(result.resume,view)
+  assert.equal(result.records.length,6)
+  assert.equal(resumeRecords(json).delegation,undefined)
+})
+
+test('retry reservation supersedes stale handoff and completed child does not imply task done',()=>{
+  const json=make({...row,id:'retry',status:'doing'})
+  const old={reservations:[],handoffs:[{key:'retry',stopReason:'completed',finalMessage:'present'}]}
+  const newer={reservations:[{key:'retry',runId:'second-run'}],handoffs:old.handoffs}
+  assert.equal(resumeRecords(json,old).delegation.tasks[0].state,'needs-verification')
+  assert.equal(resumeRecords(json,newer).delegation.tasks[0].state,'delegated')
+  assert.equal(resumeRecords(json,newer).current[0].status,'doing')
+  assert.throws(()=>resumeRecords(json,[]),/coordination status object/)
+})

@@ -142,3 +142,32 @@ test('one idle parent cannot reclaim sibling pending or running child reservatio
   assert.equal(r.end(event('active-run', 'parent-1')), true)
   assert.deepEqual(r.list('root').map(row => row.key), ['other-queued'])
 })
+
+test('completed child handoff survives slot release without fabricating task success', () => {
+  const r = createReservations()
+  r.acquire('root-a', 'parent-a', 'task', 1, 'TASK-1')
+  assert.equal(r.start({ ...event('run-a', 'parent-a'), id: 'child-a' }), true)
+  assert.equal(r.end({ ...event('run-a', 'parent-a'), stopReason: 'completed',
+    lastAssistantMessage: [{ type: 'text', text: 'PRIVATE RESULT' }] }), true)
+  assert.deepEqual(r.list('root-a'), [])
+  assert.deepEqual(r.handoffs('root-a'), [{ key: 'TASK-1', stopReason: 'completed', finalMessage: 'present' }])
+  assert.deepEqual(r.handoffs('root-b'), [])
+  assert.equal(r.end(event('run-a', 'parent-a')), false)
+  assert.equal(r.handoffs('root-a').length, 1)
+  assert.doesNotMatch(JSON.stringify(r.handoffs('root-a')), /PRIVATE|child-a|run-a/)
+  r.acquire('root-a', 'parent-a', 'retry', 2, 'TASK-1')
+  assert.deepEqual(r.handoffs('root-a'), [])
+})
+
+test('handoff evidence reflects abnormal stop and is not created by manual release', () => {
+  const r = createReservations()
+  r.acquire('root', 'parent', 'task', 1, 'task-1')
+  assert.equal(r.release('root', 'task-1'), true)
+  assert.deepEqual(r.handoffs('root'), [])
+  r.acquire('root', 'parent', 'retry', 2, 'task-1')
+  r.start(event('run', 'parent'))
+  r.end({ ...event('run', 'parent'), stopReason: 'error', lastAssistantMessage: [] })
+  assert.deepEqual(r.handoffs('root'), [{ key: 'task-1', stopReason: 'error', finalMessage: 'empty' }])
+  r.acquire('other', 'other-parent', 'other', 3, 'task-1')
+  assert.equal(r.handoffs('other').length, 0)
+})
