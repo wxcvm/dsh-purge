@@ -458,6 +458,8 @@ test('task context links a product candidate to the actual bundled reference and
     assert.deepEqual(row.reference, { source: 'bundled', id })
     assert.equal(row.match_reason, 'asset-product-candidate')
     assert.equal(row.verified, false)
+    assert.ok(row.advisory_url.startsWith('https://'))
+    assert.notEqual(row.source_url, row.advisory_url)
     assert.equal(row.version_applicability.status, 'affected')
     assert.equal(row.body, undefined)
     assert.match(getBundledKnowledge(row.reference.id).body, /修复与缓解/)
