@@ -221,9 +221,9 @@ test('malformed handoff journal remains unchanged and never breaks in-memory res
 test('agent page status projects task handoffs by root without confusing reserved and finished', () => {
   const book = createReservations()
   book.acquire('root-a', 'parent-a', 'first', 1, 'active-task')
-  book.acquire('root-a', 'parent-a', 'second', 2, 'waiting-task')
+  book.acquire('root-a', 'parent-a', 'second', 2, 'finished-task')
   book.start({ ...event('run-1', 'parent-a'), id: 'child-1' })
-  book.acquire('root-a', 'parent-a', 'third', 3, 'finished-task')
+  book.acquire('root-a', 'parent-a', 'third', 3, 'waiting-task')
   book.start({ ...event('run-2', 'parent-a'), id: 'child-2' })
   book.end({ ...event('run-2', 'parent-a'), stopReason: 'completed',
     lastAssistantMessage: [{ type: 'text', text: 'SECRET RESULT' }] })
