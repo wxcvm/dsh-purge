@@ -156,3 +156,56 @@ test('runtime reference articles include practical troubleshooting and preserve 
   assert.match(get('tool-call-contract').body,/不是两次执行/)
   assert.match(get('stream-events').body,/实收为 2/)
 })
+
+test('Fujiang CVE variants resolve consistently across bundled and CVE sources with distinct advisory links', () => {
+  const search = (source, query) => unifiedKnowledgeRequest('/unused', {
+    op: 'knowledgeUnifiedSearch', source, query,
+  }).groups[0]
+  const get = (source, id) => unifiedKnowledgeRequest('/unused', {
+    op: 'knowledgeUnifiedGet', source, id,
+  }).item
+  const bundled = search('bundled', 'CVE-2021-43798').items
+    .find(row => row.id === 'fujiang:cloud-container:cve-2021-43798-grafana-file-read')
+  assert.ok(bundled)
+  for (const query of ['CVE-2021-43798', 'cve 2021 43798', 'CVE_2021_43798',
+    'ＣＶＥ－２０２１－４３７９８', 'CVE–2021–43798']) {
+    const match = search('cve', query).items.find(row =>
+      row.description.includes('CVE-2021-43798'))
+    assert.ok(match, query)
+    assert.equal(match.verified, false)
+    assert.ok(match.advisory_url?.startsWith('https://'), query)
+    assert.equal(match.advisory_url, bundled.advisory_url)
+    assert.notEqual(match.source_url, match.advisory_url)
+    assert.equal(Object.hasOwn(match, 'body'), false)
+    const detail = get('cve', match.id)
+    assert.equal(detail.advisory_url, match.advisory_url)
+    assert.ok(detail.body.includes('核对公告：' + match.advisory_url))
+    assert.equal(detail.verified, false)
+  }
+  for (const query of ['CVE-2021-41773 CVE-2021-42013',
+    'CVE_2021_41773、ＣＶＥ－２０２１－４２０１３']) {
+    const rows = search('cve', query).items
+    assert.equal(rows.length, 1, query)
+    assert.ok(rows[0].description.includes('CVE-2021-41773'))
+    assert.ok(rows[0].description.includes('CVE-2021-42013'))
+    assert.equal(rows[0].verified, false)
+  }
+  assert.equal(search('cve', 'CVE-2021-41773 CVE-2021-43798').total, 0)
+  assert.equal(search('cve', 'CVE-2021-437980').total, 0)
+  assert.equal(search('cve', 'non-existent-cve-query').total, 0)
+})
+
+test('CVE lookup does not mistake a shorter identifier for a longer one', () => {
+  const options = { catalog: () => [
+    { title: 'short', cve: ['CVE-2024-12345'], source_url: 'https://example.test/a' },
+    { title: 'long', cve: ['CVE-2024-123456'], source_url: 'https://example.test/b' },
+    { title: 'incidental mention CVE-2024-12345', cve: ['CVE-2024-98765'] },
+  ] }
+  const search = query => unifiedKnowledgeRequest('/unused',
+    { op: 'knowledgeUnifiedSearch', source: 'cve', query }, options).groups[0]
+  assert.deepEqual(search('CVE-2024-12345').items.map(row => row.id), ['0'])
+  assert.deepEqual(search('CVE_2024_12345').items.map(row => row.id), ['0'])
+  assert.deepEqual(search('CVE-2024-123456').items.map(row => row.id), ['1'])
+  assert.deepEqual(search('CVE-2024-12345 CVE-2024-98765').items.map(row => row.id), [])
+  assert.deepEqual(search('CVE-2024-12345、CVE-2024-123456').items.map(row => row.id), [])
+})
