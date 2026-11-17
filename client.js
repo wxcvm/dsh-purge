@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "83f858898fca9fcd";
+		const CLIENT_BUILD_ID = "0d151c383b9c4d02";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12673,6 +12673,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             ? h('div', { className: 'rt-card' },
                 h('h4', null, '各主会话状态 · ' + perRoot.length),
                 perRoot.map((entry, index) => {
+                  const delegations = Array.isArray(entry.delegations) ? entry.delegations : []
+                  const handoffs = Array.isArray(entry.handoffs) ? entry.handoffs : []
+                  const taskLines = [
+                    ...delegations.map(row => ({
+                      key: row.key, label: row.state === 'reserved' ? '已预留 · 未派发' : '已关联运行 · 状态待核对',
+                    })),
+                    ...handoffs.map(row => ({
+                      key: row.key,
+                      label: row.stopReason === 'completed' && row.finalMessage === 'present'
+                        ? '已结束 · 待核验' : '已结束 · 需关注',
+                      detail: '终止原因：' + row.stopReason + ' · 最终回复：' + (
+                        row.finalMessage === 'present' ? '已观测' : row.finalMessage === 'empty' ? '空' : '未观测'),
+                    })),
+                  ]
                   const confirmed = entry.available === true && typeof entry.free === 'number'
                   const count = typeof entry.used === 'number' ? entry.used : null
                   const pending = entry.reserved_unobserved ? ' + 预留 ' + entry.reserved_unobserved : ''
@@ -12687,7 +12701,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                         ? h('div', { className: 'rt-err', style: { marginTop: 4 } }, String(entry.error))
                         : entry.unknown_children
                           ? h('div', { style: { fontSize: 11, marginTop: 4 } }, '状态不明的子智能体：' + entry.unknown_children)
-                          : null))
+                          : null,
+                      taskLines.length ? h('div', { style: { marginTop: 6, fontSize: 11.5 } },
+                        h('div', { style: { fontWeight: 600, marginBottom: 4 } },
+                          '最近任务交接 · ' + taskLines.length + ' 条（只读）'),
+                        taskLines.slice(-12).reverse().map((row, i) =>
+                          h('div', { key: String(row.key) + '-' + i, style: { marginBottom: 4, overflowWrap: 'anywhere' } },
+                            h('strong', null, String(row.key)), ' · ' + row.label,
+                            row.detail ? h('div', { style: { opacity: 0.75 } }, row.detail) : null)),
+                        taskLines.length > 12 ? h('div', null, '仅展示最近 12 条，其他记录可通过智能体状态工具查询。') : null)
+                        : null,
+                      entry.handoff_storage && entry.handoff_storage !== 'ready'
+                        && entry.handoff_storage !== 'not-configured'
+                        ? h('div', { className: 'rt-err', style: { marginTop: 4 } },
+                            '交接记录存储：' + entry.handoff_storage) : null))
                 }))
             : null,
           h('div', { className: 'rt-card' },

@@ -217,3 +217,31 @@ test('malformed handoff journal remains unchanged and never breaks in-memory res
   ])
   assert.equal(readFileSync(file, 'utf8'), '{incomplete')
 })
+
+test('agent page status projects task handoffs by root without confusing reserved and finished', () => {
+  const book = createReservations()
+  book.acquire('root-a', 'parent-a', 'first', 1, 'active-task')
+  book.acquire('root-a', 'parent-a', 'second', 2, 'waiting-task')
+  book.start({ ...event('run-1', 'parent-a'), id: 'child-1' })
+  book.acquire('root-a', 'parent-a', 'third', 3, 'finished-task')
+  book.start({ ...event('run-2', 'parent-a'), id: 'child-2' })
+  book.end({ ...event('run-2', 'parent-a'), stopReason: 'completed',
+    lastAssistantMessage: [{ type: 'text', text: 'SECRET RESULT' }] })
+  book.acquire('root-b', 'parent-b', 'elsewhere', 4, 'foreign-task')
+  const state = withReservationUsage({
+    available: true, max: 4, used: 2,
+    per_root: [
+      { owner: 'root-a', available: true, used: 1, running_ids: ['child-1'] },
+      { owner: 'root-b', available: true, used: 0, running_ids: [] },
+    ],
+  }, book)
+  const a = state.per_root[0], b = state.per_root[1]
+  assert.deepEqual(a.delegations, [
+    { key: 'active-task', state: 'delegated' }, { key: 'waiting-task', state: 'reserved' },
+  ])
+  assert.deepEqual(a.handoffs, [{ key: 'finished-task', stopReason: 'completed', finalMessage: 'present' }])
+  assert.deepEqual(b.delegations, [{ key: 'foreign-task', state: 'reserved' }])
+  assert.deepEqual(b.handoffs, [])
+  assert.equal(a.handoff_storage, 'not-configured')
+  assert.doesNotMatch(JSON.stringify(state), /SECRET RESULT|child-2|run-2/)
+})
