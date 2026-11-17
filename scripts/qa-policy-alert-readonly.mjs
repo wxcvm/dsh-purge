@@ -42,13 +42,29 @@ for (const item of entries.slice(0, 180)) {
   catch { decodeFailures++; continue; }
   const id = crypto.createHash('sha256').update(path.dirname(item.file)).digest('hex').slice(0, 10);
   let matchEvents = 0, codes = new Set(), statuses = new Set(), errorKinds = new Set(), recentFailure = false;
+  let route = { provider: null, model: null }, matchingTypes = new Set(), hasPurgeAnchor = false;
+  const routeName = value => typeof value === 'string' && /^[A-Za-z0-9._:/+-]{2,100}$/.test(value) ? value : null;
   for (const raw of records) {
     const event = raw?.event && typeof raw.event.type === 'string' ? raw.event : raw;
     if (event?.type === 'turn/end' && /^(?:error|failed|blocked)$/i.test(event?.data?.reason?.kind || '')) recentFailure = true;
+    if (event?.type === 'request/header') {
+      route.provider = routeName(event?.data?.header?.config?.provider) ?? route.provider;
+      route.model = routeName(event?.data?.header?.config?.model) ?? route.model;
+    }
+    if (event?.type === 'request/context') {
+      route.provider = routeName(event?.data?.provider) ?? route.provider;
+      route.model = routeName(event?.data?.model) ?? route.model;
+    }
+    if (event?.type === 'assistant/attempt' || event?.type === 'assistant/message') {
+      route.provider = routeName(event?.data?.message?.source?.provider) ?? route.provider;
+      route.model = routeName(event?.data?.message?.source?.model) ?? route.model;
+    }
     let serial;
     try { serial = JSON.stringify(event); } catch { continue; }
     if (!alert.test(serial)) continue;
     matchEvents++;
+    if (typeof event?.type === 'string' && /^[a-z/-]{2,60}$/i.test(event.type)) matchingTypes.add(event.type);
+    hasPurgeAnchor ||= /dsh-purge:anchor|OPERATOR ANCHOR/i.test(serial);
     const objects = [event?.data, event?.data?.reason, event?.data?.reason?.failure, event?.data?.reason?.error,
       event?.data?.failure, event?.data?.error, event?.data?.finish?.reason];
     for (const o of objects) {
@@ -62,7 +78,7 @@ for (const item of entries.slice(0, 180)) {
   if (matchEvents) {
     exactMatches += matchEvents;
     matches.push({ session: id, modifiedUtc: new Date(item.modified).toISOString(),
-      matchingEvents: matchEvents, codes: [...codes], statuses: [...statuses], reasonKinds: [...errorKinds] });
+      matchingEvents: matchEvents, matchingEventTypes: [...matchingTypes], codes: [...codes], statuses: [...statuses], reasonKinds: [...errorKinds], lastObservedRoute: route, anchorPresentInsideErrorEvent: hasPurgeAnchor });
   }
 }
 console.log(JSON.stringify({ stage: 'native-archive-policy-alert', readOnly: true, cutoffUtc: new Date(since).toISOString(),
