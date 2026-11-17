@@ -5,7 +5,7 @@
 
 ## 本轮吸收的内容
 
-- **105 条公开漏洞元数据**，覆盖 Java 反序列化、Java Web、云与容器、边界设备、Exchange / AD、Linux 提权及 Web / CMS。
+- **105 条组件/CVE 与配置风险元数据**，覆盖 Java 反序列化、Java Web、云与容器、边界设备、Exchange / AD、Linux 提权及 Web / CMS。
 - 仅保留分类、标题、CVE、产品、受影响版本声明、端口、关键词和每条原始资料链接。**未复制上游的 PoC 正文或利用步骤**。
 - 数据以 JSON 放在 `lib/redteam/cve-catalog/`，随当前插件包发布，默认纯离线检索。
 - `redteam_cve_match` 可直接从现有 SQLite 的 `asset_id` 读取服务/产品/banner/指纹，也可不依赖数据库按 `cve` 或 `product` 查询。不创建第二套任务台账，不自动导入现有漏洞库。
@@ -40,7 +40,7 @@ AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provid
 - `lib/redteam/fujiang-reference-data.json` 存放独立防御性摘要，`fujiang-reference.js` 复用现有 CVE 目录中的产品、版本、来源和公告信息，生成稳定 ID `fujiang:<分类>:<原文件名>`。分类入口按实际文件清单生成（原归档的 gray-market 分类描述仍写 29 条，但实际有 59 条）。
 - 参考资料接入已有 bundled 知识搜索和详情，按标题、标签、正文检索，列表只返回摘要，按需读取正文；与 105 条 CVE 候选索引分工，不自动建立漏洞、改动个人知识数据库或引入新依赖。
 - `CVE-2019-9193` 依据 PostgreSQL 厂商声明标记为 vendor-disputed（预期权限功能），保留原历史版本及等级；`CVE-2024-53677` 依据 Apache S2-067 修正版本与迁移条件。其他未经独立核对的修复摘要标明原包资料及厂商复核待办，不能视为最新已验证修复。
-- 这是对全部源条目的防御性内容覆盖，不等于将原始利用正文全部迁入或完成 105 条公告的独立逐一复核。上游文件引用保留原固定提交，上传包的来源路径亦独立保留。
+- 105 条组件/配置知识现已按相应厂商公告或官方配置指南完成资料级复核，并保留原始说法与修正说明；这不等于任何目标资产已经受漏洞影响或实际完成验证。上游文件引用保留原固定提交，上传包来源路径亦独立保留。
 
 ## 全量原始资料归纳（167 篇正文）
 
@@ -48,6 +48,17 @@ AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provid
 - `lib/redteam/fujiang-source-archive/` 保存 167 条原始资料记录：105 个组件/配置条目、59 个业务安全条目和 3 个方法论条目；九个分类入口仍独立计数。每条保留原始标题、产品、标识、严重度、CVSS、版本、端口、关键词、来源及未验证状态，原始修复意见与现行防御归纳分开呈现。
 - 读取副本来自固定的 `sanjiu2024/dsh-team-workflow@c55070e2858c1677bbebaf6ec1e8f13dad366cd6`，按批次与原始上传 ZIP 中的元数据及防御章节比对。原归档路径和已有 CVE 索引 URL 不变，详情另显示固定读取副本。
 - Java Web 22 个条目的防御性摘要和公告来源同步复核更新，包括 Druid 的认证前提、Confluence 的分支修复边界、GitLab 的遗漏受影响版本、ActiveMQ Classic / Artemis 的区别，以及 Struts S2-067 的上传机制迁移要求。
-- 原始资料字段和历史修复建议保留不代表已独立验证。没有复制 PoC、攻击入口、利用步骤或操作链；识别和前置条件章节登记为来源线索，现行建议依据实际资产证据和已核验的厂商公告。其余组件仍需要进一步逐条核验公告，而不是把历史 CVSS 当作当前目标风险。
+- 原始资料字段和历史修复建议保留不代表目标已验证。没有复制 PoC、攻击入口、利用步骤或操作链；识别和前置条件章节登记为来源线索，现行建议依据厂商公告或官方指南纠正。知识复核与具体资产的补丁状态仍是不同结论，不把历史 CVSS 当作当前目标风险。
 
 - 同一批次进一步补齐 Solr、TeamCity 两条、OFBiz、Confluence 22515、GitLab 7028 六组结构化版本判断；修复版本按分支单独处理。ActiveMQ Classic 与 Artemis 不使用跨产品混合版本区间；NVD 与 CNA 评分差异保留原来源。
+
+
+## 知识使用与验收（不需要先创建个人知识库）
+
+1. `redteam_knowledge_search(query="CVE-2021-43798", source="bundled")`：获取富江离线参考条目摘要、稳定 ID、原始资料 `source_url` 及独立核对公告 `advisory_url`。
+2. `redteam_knowledge_get(source="bundled", id="fujiang:cloud-container:cve-2021-43798-grafana-file-read")`：查看完整修复摘要及原始资料来源，不将搜索结果视为目标验证。
+3. `redteam_cve_match(asset_id=<已有资产ID>)`：按数据库中已有开放端口、软件指纹和版本进行候选匹配；也可按 `cve` / `product` 手动查询。
+4. `redteam_task_context(target="asset #<ID>")` 或 `redteam_task_context(target="vuln #<ID>")`：根据已有记录返回知识引用，再将对应 `reference.source` 和 `reference.id` 传给 `redteam_knowledge_get`。任务卡不直接返回整篇正文。
+5. 核对 Windows 与 Linux CI 的代码测试结果，再单独在实际 Harness 的当前插件版本上调用上述工具；CI 成功不代表桌面运行时已经加载新版本。
+
+**版本判断边界：** 仅在产品版本及公告范围能够可靠比较时给出结构化 `affected` 或 `not_affected`；无法可靠比较的四段构建版本或缺失版本范围保持 `unknown`；发行版回补必须按实际软件包和厂商公告独立核对，不能截短版本或仅据上游版本号推断修复状态。搜索列表的 `verified:false` 代表引用尚未验证为目标漏洞事实。
