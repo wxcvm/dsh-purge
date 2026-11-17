@@ -182,6 +182,15 @@ test('Fujiang CVE variants resolve consistently across bundled and CVE sources w
     assert.ok(detail.body.includes('核对公告：' + match.advisory_url))
     assert.equal(detail.verified, false)
   }
+  for (const query of ['CVE-2021-41773 CVE-2021-42013',
+    'CVE_2021_41773、ＣＶＥ－２０２１－４２０１３']) {
+    const rows = search('cve', query).items
+    assert.equal(rows.length, 1, query)
+    assert.ok(rows[0].description.includes('CVE-2021-41773'))
+    assert.ok(rows[0].description.includes('CVE-2021-42013'))
+    assert.equal(rows[0].verified, false)
+  }
+  assert.equal(search('cve', 'CVE-2021-41773 CVE-2021-43798').total, 0)
   assert.equal(search('cve', 'CVE-2021-437980').total, 0)
   assert.equal(search('cve', 'non-existent-cve-query').total, 0)
 })
@@ -197,4 +206,6 @@ test('CVE lookup does not mistake a shorter identifier for a longer one', () => 
   assert.deepEqual(search('CVE-2024-12345').items.map(row => row.id), ['0'])
   assert.deepEqual(search('CVE_2024_12345').items.map(row => row.id), ['0'])
   assert.deepEqual(search('CVE-2024-123456').items.map(row => row.id), ['1'])
+  assert.deepEqual(search('CVE-2024-12345 CVE-2024-98765').items.map(row => row.id), [])
+  assert.deepEqual(search('CVE-2024-12345、CVE-2024-123456').items.map(row => row.id), [])
 })
