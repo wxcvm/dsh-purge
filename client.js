@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f9d89e0af2fcc4b0";
+		const CLIENT_BUILD_ID = "e40b5e4d48a5e4f4";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -13490,7 +13490,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             state && state.online ? h('a', {
               href: 'http://127.0.0.1:8787/', target: '_blank', rel: 'noopener noreferrer',
               className: 'rt-btn',
-            }, '打开 ARTEX') : null),
+            }, '打开 ARTEX') : null,
+            state && state.online ? h('a', {
+              href: 'http://127.0.0.1:8787/function/sync?tab=purge-intel',
+              target: '_blank', rel: 'noopener noreferrer', className: 'rt-btn',
+            }, '打开 ARTEX 情报同步') : null),
           error ? h('p', { className: 'rt-err', role: 'alert' }, maskArtex ? 'ARTEX 状态读取失败，详情已隐藏。' : error) : null,
           state ? h('div', null,
             h('p', { className: 'rt-hint', role: 'status' },
