@@ -185,3 +185,16 @@ test('Fujiang CVE variants resolve consistently across bundled and CVE sources w
   assert.equal(search('cve', 'CVE-2021-437980').total, 0)
   assert.equal(search('cve', 'non-existent-cve-query').total, 0)
 })
+
+test('CVE lookup does not mistake a shorter identifier for a longer one', () => {
+  const options = { catalog: () => [
+    { title: 'short', cve: ['CVE-2024-12345'], source_url: 'https://example.test/a' },
+    { title: 'long', cve: ['CVE-2024-123456'], source_url: 'https://example.test/b' },
+    { title: 'incidental mention CVE-2024-12345', cve: ['CVE-2024-98765'] },
+  ] }
+  const search = query => unifiedKnowledgeRequest('/unused',
+    { op: 'knowledgeUnifiedSearch', source: 'cve', query }, options).groups[0]
+  assert.deepEqual(search('CVE-2024-12345').items.map(row => row.id), ['0'])
+  assert.deepEqual(search('CVE_2024_12345').items.map(row => row.id), ['0'])
+  assert.deepEqual(search('CVE-2024-123456').items.map(row => row.id), ['1'])
+})
