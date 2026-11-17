@@ -8,7 +8,7 @@
 | 项目 | 默认分支及本次核对提交 | 已发布版本 | 本轮目标 |
 | --- | --- | --- | --- |
 | [Purge](https://github.com/wxcvm/dsh-purge)（Private） | `master` / `49a9793ea2b0fd55e7cd0323d8e8a8967594dfc5` | [v1.1.92-wxcvm.9](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.9)（已见 ZIP 与 SHA256SUMS.txt；该标签源码不是 .10 完整集成基线） | `1.1.92-wxcvm.10`，尚无对应标签或 Release |
-| [ARTEX](https://github.com/wxcvm/ARTEX)（Public） | `main` / `128f398ecf460fcaf7d72be1efdbbfecc3ba193b` | [v0.5.1](https://github.com/wxcvm/ARTEX/releases/tag/v0.5.1)（Windows Setup/Desktop/跨平台 ZIP 与 SHA256SUMS） | 新版待定，建议以 `v0.5.2` 作为补丁版候选；**先确认最终范围再写入 CHANGELOG、打标签** |
+| [ARTEX](https://github.com/wxcvm/ARTEX)（Public） | `main` / `128f398ecf460fcaf7d72be1efdbbfecc3ba193b` | [v0.5.1](https://github.com/wxcvm/ARTEX/releases/tag/v0.5.1)（Windows Setup/Desktop/跨平台 ZIP 与 SHA256SUMS） | `v0.6.0` 联合候选；`CHANGELOG.md` 已有 `[0.6.0]` 章节，需在正式发布前补齐 #154 资料变更说明并核对最终范围，尚无正式标签或 Release |
 
 ARTEX [PR #154](https://github.com/wxcvm/ARTEX/pull/154) 已合并至上述 `main`；吸收的是 164 条**未验证**的富江资料索引条目，不包含 payout-hunt 脚本或主动目标操作。资料导入不等于可用于真实资产的已验证结论。
 
@@ -47,7 +47,7 @@ ARTEX [PR #154](https://github.com/wxcvm/ARTEX/pull/154) 已合并至上述 `mai
 
 ## 四、实际发布次序（完成验收后）
 
-1. 确定两个最终提交和版本配对；ARTEX 在 `CHANGELOG.md` 写入准确的版本章节。先确认本轮 `main` CI 全绿及 Windows 联动。
+1. 确定两个最终提交和版本配对；ARTEX 在现有 `CHANGELOG.md` 的 `[0.6.0]` 章节补齐遗漏的 #154 资料变更说明，核对准确的最终范围。先确认本轮 `main` CI 全绿及 Windows 联动。
 2. 分别准备发布说明：ARTEX 公开说明兼容的 Purge 版本和“Purge 为私有、需单独授权”的边界；Purge 私有 Release 说明包含 ARTEX 对应公开 Release。
 3. ARTEX 的 `.github/workflows/release.yml` 在推送 `release/v*` 分支或 `v*` 标签时都会触发**正式发布**；因此发版前只用普通准备分支/PR，**不要用 `release/v*` 作预演**。
 4. Purge 先用 `master` 的 Release `dry_run: true` 做非发布预演，再依据实际结果决定正式发布；正式发布设置与现有 `.10` 防旧标签机制保持一致。
