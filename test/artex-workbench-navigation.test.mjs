@@ -117,3 +117,20 @@ test('confirmed ARTEX exposes a direct link to its Purge intelligence tab in sou
     assert.match(toolbar, /打开 ARTEX'/)
   }
 })
+
+test('changing or reloading ARTEX pairing invalidates stale company overview', () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const panelStart = src.indexOf('function ArtexIntelPanel(props)')
+    const panelEnd = src.indexOf('function ArtexProjectOverview(props)', panelStart)
+    const parentStart = src.indexOf('function ArtexTab(props)')
+    const parentEnd = src.indexOf('function GuideTab(props)', parentStart)
+    assert.ok(panelStart >= 0 && panelEnd > panelStart && parentStart >= 0 && parentEnd > parentStart)
+    const panel = src.slice(panelStart, panelEnd)
+    const parent = src.slice(parentStart, parentEnd)
+    assert.match(panel, /setConfig\(r\); setPairToken\(''\); setPairCompany[^\n]*\n\s*props\.onPairingChange\?\.\(\)/)
+    assert.match(panel, /const reload = \(\) => \{\s*props\.onPairingChange\?\.\(\)/)
+    assert.match(parent, /onPairingChange: \(\) => setPairingRevision\(v => v \+ 1\)/)
+    assert.match(parent, /key: \(props\.engagement \|\| 'none'\) \+ ':' \+ pairingRevision/)
+  }
+})
