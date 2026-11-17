@@ -208,7 +208,7 @@ test('malformed handoff journal remains unchanged and never breaks in-memory res
   writeFileSync(file, '{incomplete', 'utf8')
   const r = createReservations()
   r.useHandoffDirectory('owner', root)
-  assert.equal(r.handoffStorage('owner'), 'not-configured')
+  assert.equal(r.handoffStorage('owner'), 'read-failed')
   r.acquire('owner', 'parent', 'Task', 1, 'task')
   r.start({ runId: 'r', parentSessionId: 'parent' })
   r.end({ runId: 'r', parentSessionId: 'parent', stopReason: 'error' })
