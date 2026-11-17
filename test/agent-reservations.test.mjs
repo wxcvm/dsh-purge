@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createReservations, reservedUsage, withReservationUsage } from '../lib/redteam/agent-reservations.js'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const event = (runId, parentSessionId) => ({ runId, parentSessionId })
 
@@ -170,4 +173,47 @@ test('handoff evidence reflects abnormal stop and is not created by manual relea
   assert.deepEqual(r.handoffs('root'), [{ key: 'task-1', stopReason: 'error', finalMessage: 'empty' }])
   r.acquire('other', 'other-parent', 'other', 3, 'task-1')
   assert.equal(r.handoffs('other').length, 0)
+})
+
+test('local handoff journal restores completed delegation across fresh reservation books', t => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-handoff-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const first = createReservations()
+  first.useHandoffDirectory('owner-a', root)
+  first.acquire('owner-a', 'parent-a', 'Task', 1, 'task-1')
+  first.start({ runId: 'run-1', parentSessionId: 'parent-a' })
+  first.end({ runId: 'run-1', parentSessionId: 'parent-a', stopReason: 'completed',
+    lastAssistantMessage: [{ type: 'text', text: 'PRIVATE RESULT' }] })
+  const json = readFileSync(join(root, 'agent-handoffs.json'), 'utf8')
+  assert.doesNotMatch(json, /PRIVATE RESULT|run-1|parent-a/)
+  assert.match(json, /"task-1"/)
+  const restored = createReservations()
+  restored.useHandoffDirectory('owner-a', root)
+  assert.deepEqual(restored.handoffs('owner-a'), [
+    { key: 'task-1', stopReason: 'completed', finalMessage: 'present' },
+  ])
+  assert.deepEqual(restored.list('owner-a'), [])
+  assert.equal(restored.handoffStorage('owner-a'), 'ready')
+  restored.acquire('owner-a', 'parent-a', 'Retry', 2, 'task-1')
+  const afterRetry = createReservations()
+  afterRetry.useHandoffDirectory('owner-a', root)
+  assert.deepEqual(afterRetry.handoffs('owner-a'), [])
+  restored.release('owner-a', 'task-1')
+})
+
+test('malformed handoff journal remains unchanged and never breaks in-memory reservations', t => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-handoff-bad-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const file = join(root, 'agent-handoffs.json')
+  writeFileSync(file, '{incomplete', 'utf8')
+  const r = createReservations()
+  r.useHandoffDirectory('owner', root)
+  assert.equal(r.handoffStorage('owner'), 'not-configured')
+  r.acquire('owner', 'parent', 'Task', 1, 'task')
+  r.start({ runId: 'r', parentSessionId: 'parent' })
+  r.end({ runId: 'r', parentSessionId: 'parent', stopReason: 'error' })
+  assert.deepEqual(r.handoffs('owner'), [
+    { key: 'task', stopReason: 'error', finalMessage: 'not-observed' },
+  ])
+  assert.equal(readFileSync(file, 'utf8'), '{incomplete')
 })
