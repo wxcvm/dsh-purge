@@ -1,8 +1,8 @@
-# 1.1.92-wxcvm.9
+# 1.1.92-wxcvm.10
 
 ## 中文
 
-本次 .9 正式版候选基于已发布的 .8，整合其后 master 中已合并、已通过相应 Windows + Ubuntu 兼容性 PR CI 的清洗、运行时、Agent、知识库与 ARTEX 改进。最终 master 联合验收、非发布式打包预演和 Desktop 实机验收仍需单独确认。
+本次 .10 正式版候选整合 master 中已合并、已通过相应 Windows + Ubuntu 兼容性 PR CI 的清洗、运行时、Agent、知识库与 ARTEX 改进。已有 .9 Git 标签固定在较早提交，不能用于打包这些新改动；因此改用新的 .10 版本，不移动原有标签。最终 master 联合验收、非发布式打包预演和 Desktop 实机验收仍需单独确认。
 
 - **清洗与响应判定**：减少引用内容造成的拒答误判，保留明确的授权范围与权限拒绝、安全边界；普通任务指导按任务需要调整，并减少无效的中性重复检查。此项改善判定精度，不承诺绕过模型自身的安全策略。
 - **Provider 与流式运行时**：区分最终响应与失败的流式尝试；保留宿主请求决策和 Provider 自身重试语义，识别永久性失败，取消过期重试，并改进原生工具结果、任务上下文和 token 预算的证据归因；清理陈旧后续请求并遮蔽运行诊断中的敏感内容。
@@ -22,7 +22,7 @@
 - Distinguishes ARTEX report availability from native triage status and fixes redteam persona-prefix YAML indentation.
 - Adds offline quality and evidence-review regression suites; synthetic results are not claims about live-target performance.
 
-The .8 tag and release remain immutable. This candidate uses the new version .9. Real Windows Desktop acceptance remains a separate step and is not implied by CI.
+Existing .8 and .9 tags remain unchanged. The .9 tag points to an older source revision, so the next release candidate uses the new version .10. Real Windows Desktop acceptance remains a separate step and is not implied by CI.
 
 ---
 
