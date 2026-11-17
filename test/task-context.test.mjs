@@ -520,3 +520,39 @@ test('hostnames and closed-port labels do not supply bundled task references', (
     assert.deepEqual(taskContext(store, 'lab', 'asset #5').bundled_knowledge.items, [])
   } finally { db.close() }
 })
+
+test('recorded Apache multi-CVE finding keeps both CVEs in linked Fujiang task context', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && {
+        ...asset,
+        ports: [{ port: 80, state: 'open', product: 'Apache HTTP Server', version: '2.4.50' }],
+        fingerprints: [{ product: 'Apache HTTP Server', version: '2.4.50' }],
+      }
+    }
+    db.prepare('UPDATE vuln SET cve = ?, title = ? WHERE id = 11').run(
+      'CVE-2021-41773、CVE-2021-42013', 'Apache HTTP Server 历史版本核对',
+    )
+    const context = taskContext(store, 'lab', 'vuln #11')
+    assert.equal(context.ok, true)
+    const candidate = context.knowledge_candidates.find(row => row.cve.includes('CVE-2021-42013'))
+    assert.ok(candidate)
+    assert.equal(candidate.version_applicability.status, 'affected')
+    assert.deepEqual(candidate.version_applicability.cves, [
+      { cve: 'CVE-2021-41773', status: 'not_affected' },
+      { cve: 'CVE-2021-42013', status: 'affected' },
+    ])
+    const reference = context.bundled_knowledge.items.find(row =>
+      row.id === 'fujiang:web-cms:cve-2021-41773-apache-path-traversal')
+    assert.ok(reference)
+    assert.deepEqual(reference.reference, { source: 'bundled', id: reference.id })
+    assert.equal(reference.match_reason, 'exact-cve')
+    assert.ok(reference.advisory_url.startsWith('https://'))
+    assert.equal(reference.verified, false)
+    assert.equal(reference.body, undefined)
+    assert.match(getBundledKnowledge(reference.id).body, /修复与缓解/)
+  } finally { db.close() }
+})
