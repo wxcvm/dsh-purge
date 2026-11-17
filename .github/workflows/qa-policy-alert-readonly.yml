@@ -1,0 +1,54 @@
+name: QA Harness Policy Alert (read-only)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qa-policy-alert-readonly.yml'
+      - 'scripts/qa-policy-alert-readonly.mjs'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.head_ref == 'diag/harness-policy-alert-20261117'
+    runs-on: [self-hosted, Windows, X64, purge-ci]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Inspect recent local native archives without exporting messages
+        shell: pwsh
+        run: node scripts/qa-policy-alert-readonly.mjs
+      - name: Read visible Harness policy alert through UI Automation without changing UI
+        shell: pwsh -STA -NoProfile -NonInteractive -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            Add-Type -AssemblyName UIAutomationClient
+            Add-Type -AssemblyName UIAutomationTypes
+            $session = (Get-Process -Id $PID).SessionId
+            $windows = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+              $_.ProcessName -like '*DeepSeek*Harness*' -and $_.SessionId -eq $session -and $_.MainWindowHandle -ne 0
+            })
+            if ($windows.Count -ne 1) {
+              [ordered]@{stage='desktop-visible-policy-alert';windowCount=$windows.Count;status='not-inspected';readOnly=$true}|ConvertTo-Json -Compress
+              return
+            }
+            $root = [System.Windows.Automation.AutomationElement]::FromHandle($windows[0].MainWindowHandle)
+            $nodes = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+            $alertFound = $false
+            $policyLabelFound = $false
+            $daybreakFound = $false
+            foreach ($node in $nodes) {
+              $name = ''
+              try { $name = [string]$node.Current.Name } catch { continue }
+              if ($name -match '(?i)This content was flagged for possible cybersecurity risk') {$alertFound = $true}
+              if ($name -match '(?i)policy:') {$policyLabelFound = $true}
+              if ($name -match '(?i)Daybreak access') {$daybreakFound = $true}
+            }
+            [ordered]@{stage='desktop-visible-policy-alert';status='inspected';readOnly=$true;nodeCount=$nodes.Count;alertVisible=$alertFound;policyLabelVisible=$policyLabelFound;daybreakVisible=$daybreakFound;noRawContentExported=$true}|ConvertTo-Json -Compress
+          } catch {
+            [ordered]@{stage='desktop-visible-policy-alert';status='inspection-failed';readOnly=$true;exceptionType=$_.Exception.GetType().Name}|ConvertTo-Json -Compress
+          }
