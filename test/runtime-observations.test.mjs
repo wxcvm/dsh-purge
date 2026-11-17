@@ -570,3 +570,128 @@ test('one turn/end event assigns one clock timestamp to all attempts in the turn
   assert.equal(second.turnEndedAt>second.startedAt,true);
   assert.equal(first.turnOutcome,'completed');assert.equal(second.turnOutcome,'completed');
 });
+
+
+test('long session never reuses a completed human task, even with a stale snapshot', () => {
+  const o = createRuntimeObservations(), a = agent('long-session');
+  let seq = 0, revision = 0;
+  const events = [];
+  a.session.events = events;
+  for (let turn = 1; turn <= 100; turn++) {
+    const human = turn % 2 ? { seq: ++seq, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK ' + turn } } : null;
+    if (human) { events.push(human); o.event(a.session, human); }
+    if (turn % 10 === 0) o.event(a.session, { seq: ++seq, type: 'compaction/end', data: {} });
+    const attemptId = 'long:' + turn;
+    o.frame({ agent: a, frame: { type: 'start', attemptId, revision: ++revision, turn, step: 1 } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSeqAtStart, human?.seq ?? 0);
+    assert.equal(row.humanSourceAtStart, human ? 'session-event' : 'not-observed');
+    o.event(a.session, { seq: ++seq, type: 'turn/end', data: { turn, reason: { kind: 'completed' } } });
+    // Deliberately leave the completed human message in a stale snapshot.
+  }
+  assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE TASK/);
+});
+
+test('context-only route change does not inherit the previous output reservation', () => {
+  const o = createRuntimeObservations(), a = agent('context-only-route');
+  o.event(a.session, { seq: 1, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } });
+  o.event(a.session, { seq: 2, type: 'request/context', data: { provider: 'p', model: 'a', contextWindow: 32768 } });
+  start(o, a);
+  o.event(a.session, { seq: 3, type: 'request/context', data: { model: 'b', contextWindow: 16384 } });
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 2, turn: 2, step: 1 } });
+  const [next, old] = o.snapshot().items;
+  assert.equal(next.model, 'b');
+  assert.equal(next.contextWindow, 16384);
+  assert.equal(next.requestMaxTokens, null);
+  assert.equal(next.requestHeaderSeq, null);
+  assert.equal(next.contextBudget.messageBudgetTokens, null);
+  assert.equal(old.requestMaxTokens, 4096);
+});
+
+
+test('late mount restores the recorded route and compaction from the history prefix', () => {
+  const o = createRuntimeObservations(), a = agent('late-history');
+  a.session.events = [
+    { seq: 70, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } },
+    { seq: 71, type: 'request/context', data: { provider: 'p', model: 'a', contextWindow: 32768 } },
+    { seq: 72, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } },
+    { seq: 73, type: 'turn/end', data: { turn: 80 } },
+    { seq: 74, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } },
+  ];
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 'late:81', revision: 1, turn: 81, step: 1 } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.startSeq, 74);
+  assert.equal(row.humanSeqAtStart, 74);
+  assert.equal(row.humanSourceAtStart, 'session-snapshot');
+  assert.equal(row.compactionSeqAtStart, 72);
+  assert.equal(row.contextBudget.messageBudgetTokens, 28672);
+  assert.equal(row.requestHeaderSeq, 70);
+  assert.equal(row.requestContextSeq, 71);
+  assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+});
+
+test('first live event bounds historical replay and later requests retain live route changes', () => {
+  const o = createRuntimeObservations(), a = agent('history-boundary');
+  a.session.events = [
+    { seq: 1, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } },
+    { seq: 2, type: 'request/context', data: { model: 'a', contextWindow: 32768 } },
+    { seq: 3, type: 'compaction/end', data: {} },
+    { seq: 4, type: 'turn/end', data: { turn: 79 } },
+    { seq: 6, type: 'request/context', data: { model: 'future', contextWindow: 131072 } },
+  ];
+  o.event(a.session, { seq: 5, type: 'request/header', data: { header: { config: { provider: 'p', model: 'b', maxTokens: 2048 } } } });
+  start(o, a);
+  const first = o.snapshot().items[0];
+  assert.equal(first.model, 'b');
+  assert.equal(first.contextWindow, null);
+  assert.equal(first.requestMaxTokens, 2048);
+  assert.equal(first.compactionSeqAtStart, 3);
+  assert.equal(first.humanSeqAtStart, 0);
+  o.event(a.session, a.session.events[4]);
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 2, turn: 2, step: 1 } });
+  const [next, old] = o.snapshot().items;
+  assert.equal(next.model, 'future');
+  assert.equal(next.contextWindow, 131072);
+  assert.equal(next.requestMaxTokens, null);
+  assert.equal(old.model, 'b');
+});
+
+
+test('long-session task visibility compares exact task before and after compaction without claiming causation', () => {
+  for (const [before, after, compact, expected] of [
+    [true, true, true, 'present-at-both'],
+    [true, false, true, 'missing-at-response'],
+    [false, false, true, 'missing-at-both'],
+    [false, true, false, 'visible-at-response'],
+    [true, false, false, 'missing-at-response'],
+  ]) {
+    const o = createRuntimeObservations(), a = agent('continuity');
+    const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+    a.session.events = before ? [human] : [];
+    o.event(a.session, human);
+    start(o, a);
+    if (compact) o.event(a.session, { seq: 2, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    a.session.events = after ? [human] : [];
+    o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'PRIVATE RESPONSE' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.taskContinuity.status, expected);
+    assert.equal(row.taskContinuity.compactionObservedBetween, compact);
+    assert.equal(row.taskContinuity.start, before ? 'present' : 'missing');
+    assert.equal(row.taskContinuity.response, after ? 'present' : 'missing');
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+  }
+});
+
+test('unavailable task snapshot is not reported as context loss', () => {
+  const o = createRuntimeObservations(), a = agent('unavailable-continuity');
+  const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'Task' } };
+  a.session.events = [human];
+  o.event(a.session, human);
+  start(o, a);
+  assert.equal(o.snapshot().items[0].taskContinuity.compactionObservedBetween, null);
+  a.session.snapshotEvents = () => { throw new Error('unavailable'); };
+  o.event(a.session, { seq: 2, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done' } } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.taskContinuity.status, 'insufficient-evidence');
+  assert.equal(row.taskContinuity.response, 'unavailable');
+});
