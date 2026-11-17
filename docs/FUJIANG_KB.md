@@ -61,4 +61,4 @@ AboutSecurity 的安装、更新、界面技能浏览和可选 DSH 原生 Provid
 4. `redteam_task_context(target="asset #<ID>")` 或 `redteam_task_context(target="vuln #<ID>")`：根据已有记录返回知识引用，再将对应 `reference.source` 和 `reference.id` 传给 `redteam_knowledge_get`。任务卡不直接返回整篇正文。
 5. 核对 Windows 与 Linux CI 的代码测试结果，再单独在实际 Harness 的当前插件版本上调用上述工具；CI 成功不代表桌面运行时已经加载新版本。
 
-**版本判断边界：** 仅在产品版本及公告范围能够可靠比较时给出结构化 `affected` 或 `not_affected`；无法识别的四段构建版本、发行版回补或缺失的版本范围保持 `unknown`，不要截短版本来推断修复状态。搜索列表的 `verified:false` 代表引用尚未验证为目标漏洞事实。
+**版本判断边界：** 仅在产品版本及公告范围能够可靠比较时给出结构化 `affected` 或 `not_affected`；无法可靠比较的四段构建版本或缺失版本范围保持 `unknown`；发行版回补必须按实际软件包和厂商公告独立核对，不能截短版本或仅据上游版本号推断修复状态。搜索列表的 `verified:false` 代表引用尚未验证为目标漏洞事实。
