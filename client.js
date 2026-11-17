@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "0d151c383b9c4d02";
+		const CLIENT_BUILD_ID = "f9d89e0af2fcc4b0";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12687,6 +12687,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                         row.finalMessage === 'present' ? '已观测' : row.finalMessage === 'empty' ? '空' : '未观测'),
                     })),
                   ]
+                  // Keep active delegations visible even when historical handoffs fill the list.
+                  const visibleTaskLines = [
+                    ...taskLines.slice(0, delegations.length),
+                    ...taskLines.slice(delegations.length).slice(-Math.max(0, 12 - delegations.length)).reverse(),
+                  ].slice(0, 12)
                   const confirmed = entry.available === true && typeof entry.free === 'number'
                   const count = typeof entry.used === 'number' ? entry.used : null
                   const pending = entry.reserved_unobserved ? ' + 预留 ' + entry.reserved_unobserved : ''
@@ -12705,7 +12710,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                       taskLines.length ? h('div', { style: { marginTop: 6, fontSize: 11.5 } },
                         h('div', { style: { fontWeight: 600, marginBottom: 4 } },
                           '最近任务交接 · ' + taskLines.length + ' 条（只读）'),
-                        taskLines.slice(-12).reverse().map((row, i) =>
+                        visibleTaskLines.map((row, i) =>
                           h('div', { key: String(row.key) + '-' + i, style: { marginBottom: 4, overflowWrap: 'anywhere' } },
                             h('strong', null, String(row.key)), ' · ' + row.label,
                             row.detail ? h('div', { style: { opacity: 0.75 } }, row.detail) : null)),
