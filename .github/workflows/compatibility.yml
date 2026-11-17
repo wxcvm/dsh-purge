@@ -40,6 +40,9 @@ jobs:
       - name: Prepare latest official fixture, without host or model execution
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          # Node 24 fetch bypasses env HTTP(S) proxies unless explicitly enabled.
+          NODE_USE_ENV_PROXY: '1'
         run: |
           $fixture = node scripts/prepare-host-fixture.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
