@@ -103,3 +103,17 @@ test('platform refresh retains unsaved selection while recording persisted confi
     assert.match(code, /if \(revision === sourceRevision.current\) \{\s+sourceDirty.current = false/)
   }
 })
+
+test('confirmed ARTEX exposes a direct link to its Purge intelligence tab in source and bundle', () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const start = src.indexOf("h('h4', { style: { margin: 0 } }, 'ARTEX 联合工作台 · 本机联动')")
+    const end = src.indexOf("error ? h('p', { className: 'rt-err'", start)
+    assert.ok(start >= 0 && end > start, path)
+    const toolbar = src.slice(start, end)
+    assert.match(toolbar, /state && state\.online \? h\('a'/)
+    assert.match(toolbar, /http:\/\/127\.0\.0\.1:8787\/function\/sync\?tab=purge-intel/)
+    assert.match(toolbar, /打开 ARTEX 情报同步/)
+    assert.match(toolbar, /打开 ARTEX'/)
+  }
+})
