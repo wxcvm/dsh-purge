@@ -60,10 +60,14 @@ jobs:
             exit 1
           fi
           zip="dsh-purge-$version.zip"
-          # Retry with the tag's exact source revision rather than moving master.
+          # Never package an older tagged source under a new master candidate.
           commit="$GITHUB_SHA"
           if git rev-parse -q --verify "refs/tags/$tag^{}" >/dev/null; then
-            commit="$(git rev-parse "refs/tags/$tag^{}")"
+            tagged_commit="$(git rev-parse "refs/tags/$tag^{}")"
+            if [ "$tagged_commit" != "$commit" ]; then
+              echo "::error::Version $version already has tag $tag at $tagged_commit, not master $commit; use a new version instead of republishing old source."
+              exit 1
+            fi
           fi
           git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$commit"
           test -s "$zip"
@@ -78,6 +82,7 @@ jobs:
           sha256sum "$zip" > SHA256SUMS.txt
           if [ "$DRY_RUN" = "true" ]; then
             echo "Release archive verified: $zip (no publication)"
+            cat SHA256SUMS.txt
             exit 0
           fi
           if ! gh release view "$tag" >/dev/null 2>&1; then
