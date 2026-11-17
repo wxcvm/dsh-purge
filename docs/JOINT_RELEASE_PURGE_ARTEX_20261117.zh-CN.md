@@ -28,6 +28,15 @@ ARTEX [PR #154](https://github.com/wxcvm/ARTEX/pull/154) 已合并至上述 `mai
 
 两项目各自遵循其已有许可证和第三方声明；联合发布不意味着合并许可或让私有 Purge 获得 ARTEX AGPL 代码的豁免。
 
+### 2026-11-17 联动功能追加（主分支已合并，非实机验收）
+
+- Purge [#326](https://github.com/wxcvm/dsh-purge/pull/326)：本机 ARTEX 在线时提供「打开 ARTEX 情报同步」，直接进入 `/function/sync?tab=purge-intel`；原「打开 ARTEX」入口不变。对应主分支提交 `e215de3` 的 [Windows/Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44081800376) 已成功。
+- Purge [#327](https://github.com/wxcvm/dsh-purge/pull/327)：配对保存、解除或刷新时清除旧公司的任务、资产和报告概览。PR 的 [Windows/Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44082437962) 已成功；合并提交 `33290a9`，合并后主分支 CI 需以实际运行结果核对。
+- ARTEX [#156](https://github.com/wxcvm/ARTEX/pull/156)：配对公司自动预选，概览发现计数与可读取发现条件一致；[#160](https://github.com/wxcvm/ARTEX/pull/160)：现有资产同步页识别 `?tab=purge-intel` 直达参数。两项 PR 的 [CI #44074115499](https://github.com/wxcvm/ARTEX/actions/runs/44074115499)、[CI #44081378233](https://github.com/wxcvm/ARTEX/actions/runs/44081378233) 均成功；后者合并提交 `943eb9c`，最终主分支 CI 仍应单独核对。
+- ARTEX 最新候选仍为 `v0.6.0`，Purge 为 `v1.1.92-wxcvm.10`；以上提交和 PR 证明代码落地，不证明已经生成/下载对应正式版安装包。
+
+**Windows 联合操作验收（以下均未实机执行）：** 安装并启动 ARTEX → 从 ARTEX「资产同步 → Purge 情报」选择受权公司并生成一次配对令牌 → 在 Purge「作战台 → 资源 → ARTEX」保存令牌与公司 ID 并检测配对 → 先读取 ARTEX 公司概览 → 生成同范围历史情报并确认同步 → 回到 ARTEX 情报页查看去重快照/分析 → 在 Purge 读取资产、任务/发现及历史快照 → 更换/解除配对并确认旧概览清空 → 停止 ARTEX 观察离线状态 → 重启并验证重新配对与旧数据保留。测试使用已授权的离线样例，不触发真实扫描；记录截图、宿主版本、双端构建和失败回执，不把后台接口返回 200 当作完整 UI 通过。
+
 ## 三、最小联动验收表
 
 | 项目 | 验证方式 | 结果 |
