@@ -245,3 +245,26 @@ test('agent page status projects task handoffs by root without confusing reserve
   assert.equal(a.handoff_storage, 'not-configured')
   assert.doesNotMatch(JSON.stringify(state), /SECRET RESULT|child-2|run-2/)
 })
+
+test('loading a journal projects only four supported fields, never replaying extra document contents', t => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-handoff-allowlist-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const path = join(root, 'agent-handoffs.json')
+  writeFileSync(path, JSON.stringify({
+    schemaVersion: 1,
+    handoffs: [{
+      owner: 'session-a', key: 'record-1', stopReason: 'completed', finalMessage: 'present',
+      privateContent: 'PRIVATE CHAT BODY', diagnostic: { raw: 'RAW TOKEN' },
+    }],
+  }), 'utf8')
+  const book = createReservations()
+  book.useHandoffDirectory('session-a', root)
+  const rows = book.handoffs('session-a')
+  assert.deepEqual(rows, [{ key: 'record-1', stopReason: 'completed', finalMessage: 'present' }])
+  assert.doesNotMatch(JSON.stringify(rows), /PRIVATE CHAT BODY|RAW TOKEN|privateContent|diagnostic/)
+  book.acquire('session-a', 'session-a', 'followup', 2, 'other-task')
+  book.start({ runId: 'next-run', parentSessionId: 'session-a' })
+  book.end({ runId: 'next-run', parentSessionId: 'session-a', stopReason: 'error' })
+  const saved = readFileSync(path, 'utf8')
+  assert.doesNotMatch(saved, /PRIVATE CHAT BODY|RAW TOKEN|privateContent|diagnostic/)
+})
