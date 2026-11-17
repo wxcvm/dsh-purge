@@ -9,6 +9,7 @@
 - **Agent 协作与长对话连续性**：支持按依赖关系组织独立只读审查批次，保留任务优先级和顺序，并按可用执行槽位调度；补入 #317 的显式任务连续性、子 Agent 分范围预留、有限交接证据及既有 Agent 页状态显示；不将该能力扩大为活动攻击任务的自动并发调度。
 - **富江知识库与技能索引**：整合 167 篇原始资料（105 条组件/CVE、59 条业务安全控制、3 条方法论）与 9 份分类入口；区分来源资料与厂商核对公告（#318），统一 CVE 编号书写和联合检索（#319），修复一条漏洞记录含多个 CVE 的任务上下文关联（#320），避免将四段构建版本截短后误判适用性（#321）。匹配结果仍不等于目标漏洞已验证。
 - **ARTEX 与预设修复**：报告审查区分原生分诊状态与报告证据可用性，不把外部状态误写为 DSH 独立确认；修复红队预设 YAML persona 前缀缩进，确保角色与操作章节保留在预期提示词块中。
+- **Purge × ARTEX 联动**：Purge 工作台新增直达 ARTEX「资产同步 → Purge 情报」的本机入口（#326），同时保留原首页入口；保存、解除或刷新独立情报配对后清除旧公司概览，避免误显示历史任务和报告（#327）。与 ARTEX `v0.6.0` 的公司预选、可读发现计数和深链接功能（#156、#160）配套；安装器、宿主权限和 Windows 双端实机验收仍分别进行，不把 CI 通过写成已发布或已实测。
 - **离线质量评估**：整合离线 Agent 推理基线和虚构记录审查评估工具，用于回归与证据质量分析；这些数据不代表真实目标测试结果，也不构成对实战得分或模型能力的保证。
 
 主要整合：#278–#281、#283–#290、#296–#297、#282、#295，以及 #317–#321 中已合并的专项改动。此前 .8 的 ARTEX 宿主注入与会话靶标绑定修复保持不变。
@@ -20,6 +21,7 @@
 - Adds dependency-aware batches for independent read-only reviews; #317 improves long-session task continuity, subagent reservations, bounded handoff evidence and agent status.
 - Integrates 167 Fujiang source articles (105 component/CVE references, 59 business-security controls and 3 methodology entries) plus 9 category guides. #318–#321 add advisory links, normalized and multi-CVE lookup, task-context mapping and safer four-part version handling; results remain unverified against live targets.
 - Distinguishes ARTEX report availability from native triage status and fixes redteam persona-prefix YAML indentation.
+- Coordinates with ARTEX v0.6.0: adds a direct Purge intelligence page link and clears stale company overview after local pairing changes (#326, #327; ARTEX #156, #160). Both applications remain independently installed, and real Windows cross-app acceptance is pending.
 - Adds offline quality and evidence-review regression suites; synthetic results are not claims about live-target performance.
 
 Existing .8 and .9 tags remain unchanged. The .9 tag points to an older source revision, so the next release candidate uses the new version .10. Real Windows Desktop acceptance remains a separate step and is not implied by CI.
