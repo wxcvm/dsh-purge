@@ -15,11 +15,20 @@ jobs:
           $ErrorActionPreference = 'Continue'
           $overlay = Join-Path $env:RUNNER_TEMP 'qa-dsh-max.patch.yml'
           @'
-          - id: agent-default-model
+          - id: credentials
+            disabled: false
+          - id: authorization
+            disabled: false
+          - id: deepseek-account
+            disabled: false
+          - id: agent-loop
             config:
-              provider: deepseek-account
-              model: deepseek-flash
-              reasoningEffort: max
+              agents:
+                - id: main
+                  provider: deepseek-account
+                  model: deepseek-flash
+                  reasoningEffort: max
+                  cwd: !!js process.cwd()
           '@ | Set-Content -LiteralPath $overlay -Encoding utf8
           $lines = @(& dsh --profile headless --patch $overlay --json '只进行文本判断，不运行工具。已知任务A未完成，请只回答：任务A未完成。' 2>&1)
           $exit = $LASTEXITCODE
@@ -30,6 +39,12 @@ jobs:
           $raw = ($lines | ForEach-Object { [string]$_ }) -join '\n'
           Write-Host "qa.exit=$exit"
           Write-Host "qa.json.events=$($events.Count)"
+          foreach ($e in $events) {
+            if ($e.type -ne 'final') { continue }
+            Write-Host "qa.final.fields=$($e.Keys -join ',')"
+            if ($e.ContainsKey('status')) { Write-Host "qa.final.status=$($e.status)" }
+            if ($e.error -is [System.Collections.IDictionary]) { Write-Host "qa.final.error.code=$($e.error.code)" }
+          }
           Write-Host "qa.event.types=$($kinds -join ',')"
           Write-Host "qa.account.route.mentioned=$($raw.Contains('deepseek-account'))"
           Write-Host "qa.model.route.mentioned=$($raw.Contains('deepseek-flash'))"
