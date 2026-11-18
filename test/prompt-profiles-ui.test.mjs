@@ -129,6 +129,6 @@ test("session picker reads the actual lock and applies explicit off/unlock actio
 test("missing prompt-profiles API shows an actionable backend-version error", () => {
   assert.match(source, /提示词库接口返回 404/);
   assert.match(source, /完整退出 Harness/);
-  assert.match(source, /loadError \\? h\\("p", \\{ role: "alert"/);
-  assert.match(source, /disabled: busy \\|\\| Boolean\\(loadError\\)/);
+  assert.match(source, /loadError \? h\("p", \{ role: "alert"/);
+  assert.match(source, /disabled: busy \|\| Boolean\(loadError\)/);
 });
