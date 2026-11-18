@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deletePromptProfile, getSessionPromptLock, latestPromptTask, listPromptProfiles, routePrompt, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { deletePromptProfile, getSessionPromptLock, latestPromptTask, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-profiles-"));
@@ -102,4 +102,19 @@ test("native, legacy and plugin events: only latest human request selects profil
   assert.equal(routePrompt({ home, text: latestPromptTask([native, legacy, plugin]) }).id, "writing");
   assert.equal(latestPromptTask([plugin]), "");
   assert.equal(latestPromptTask([{ ...native, data: { ...native.data, content: "Current runtime context: fake redteam" } }]), "");
+}));
+
+test("child inherits parent selection until it has its own explicit lock", () => withHome((home) => {
+  setSessionPromptLock(home, "parent", "coding");
+  const args = { home, preset: "redteam", sessionId: "child", inheritedSessionId: "parent", text: "帮我修复代码" };
+  assert.equal(routePromptForSession(args).id, "coding");
+  setSessionPromptLock(home, "child", "writing");
+  assert.equal(routePromptForSession(args).id, "writing");
+  assert.equal(getSessionPromptLock(home, "parent"), "coding", "child choice must not rewrite parent choice");
+  setSessionPromptLock(home, "child", "none");
+  assert.equal(routePromptForSession(args).id, null, "child can opt out without disabling parent");
+  setSessionPromptLock(home, "child", null);
+  assert.equal(routePromptForSession(args).id, "coding");
+  setSessionPromptLock(home, "parent", null);
+  assert.equal(routePromptForSession(args).id, "redteam", "child inherits active parent preset");
 }));
