@@ -226,9 +226,9 @@ test('clean workspace combines runtime observations under diagnostics and preser
   const nav = source.slice(source.indexOf('const sections = [', source.indexOf('function SettingsRoot(props)')));
   assert.doesNotMatch(nav, /id: "runtime"|id: "profiles"/);
   assert.match(nav, /id: "diagnostics", title: "诊断中心"/);
-  assert.match(source, /section === "diagnostics" && diagnosticsPane === "runtime" \\? h\\(RuntimeObservationsSection/);
-  assert.match(source, /onNavigate: \\(\\) => setDiagnosticsPane\\("health"\\)/);
-  assert.match(source, /hidden: section === "rules" \\|\\| \\(section === "prompt" && promptPane === "library"\\)/);
+  assert.match(source, /section === "diagnostics" && diagnosticsPane === "runtime" \? h\(RuntimeObservationsSection/);
+  assert.match(source, /onNavigate: \(\) => setDiagnosticsPane\("health"\)/);
+  assert.match(source, /hidden: section === "rules" \|\| \(section === "prompt" && promptPane === "library"\)/);
   assert.match(source, /api: api, useTemporaryPrivacy: useTemporaryPrivacy/);
 });
 
