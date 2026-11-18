@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "d3fc0792614af99d";
+		const CLIENT_BUILD_ID = "1beb501558212d7a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3326,6 +3326,16 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const policyOptions = (st && Array.isArray(st.workspace_policies) && st.workspace_policies.length) ? st.workspace_policies : ["fallback", "strict", "always"];
 			const cwdCandidates = (st && Array.isArray(st.cwd_candidates)) ? st.cwd_candidates : [];
 			const cwdValue = (st && typeof st.cwd === "string") ? st.cwd : "";
+            const ruleMode = st?.workspace_rule_mode || "fallback";
+            const lastAssembly = st?.last_workspace_assembly?.cwd === cwdValue ? st.last_workspace_assembly : null;
+            const lastReasons = new Map((lastAssembly?.decisions || []).map(row => [row.path, row.reason]));
+            const ruleReasonText = {
+                assembled: "已写入上次组装", "native-present": "宿主原生已包含",
+                "not-observed-in-assembly": "组装结果未确认", "prompt-present": "已有提示词，兜底未触发",
+                "not-selected": "未选择", disabled: "Purge 未启用", "injection-off": "注入已关闭",
+                "read-failed": "文件读取失败", "empty-file": "文件为空",
+                "duplicate-selected": "与另一文件重复", "size-limit": "超过现有大小上限",
+            };
 			return h("section", { className: "dshp-panel", "aria-label": t("rules.title") },
 				h("div", { className: "dshp-head" },
 					h("h3", { className: "dshp-title" }, t("rules.title")),
@@ -3357,8 +3367,19 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("p", { className: "dshp-block-hint" }, t("policy.hint")),
 				),
 				h("div", { className: "dshp-block" },
-					h("div", { className: "dshp-block-head" },
-						h("h4", null, t("cwd.title")),
+                    h("div", { className: "dshp-policy-row", style: { marginBottom: 12 } },
+                        h("label", { htmlFor: "dshp-workspace-rule-mode" }, "本地规则注入方式"),
+                        h("select", { id: "dshp-workspace-rule-mode", className: "dshp-field",
+                            value: ruleMode, disabled: busy || !cwdValue,
+                            onChange: e => doPost("set-workspace-rule-mode", { mode: e.target.value, cwd: cwdValue }) },
+                            h("option", { value: "fallback" }, "空位兜底（原行为）"),
+                            h("option", { value: "combine" }, "与全局／局部提示词组合")),
+                    ),
+                    h("p", { className: "dshp-block-hint" },
+                        ruleMode === "combine" ? "当前项目：勾选文件可与提示词共同生效；相同内容不重复注入。" :
+                        "当前项目：只有没有匹配的 Purge 提示词时，才尝试使用勾选文件。"),
+                    h("div", { className: "dshp-block-head" },
+                        h("h4", null, t("cwd.title")),
 						h(Btn, {
 							tiny: true,
 							disabled: busy,
@@ -3382,7 +3403,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 									type: "checkbox",
 									checked: Boolean(item.selected),
 									disabled: busy,
-									onChange: (e) => doPost("toggle-cwd", { path: item.path, enabled: e.target.checked }),
+									onChange: (e) => doPost("toggle-cwd", { path: item.path, enabled: e.target.checked, cwd: cwdValue }),
 								}),
 								h("div", { className: "dshp-cwd-main" },
 									h("div", { className: "dshp-cwd-name" },
@@ -3392,9 +3413,17 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 									),
 									h("div", { className: "dshp-cwd-sub" }, item.path),
 									item.preview ? h("div", { className: "dshp-cwd-prev" }, item.preview) : null,
+                                    h("div", { className: "dshp-cwd-prev" },
+                                        lastAssembly ? (ruleReasonText[lastReasons.get(item.path)] || "未观察到") :
+                                          (item.selected ? "已选择 · 等待实际组装验证" : "未选择")),
 								),
 							)))),
-					h("p", { className: "dshp-block-hint" }, t("cwd.hint")),
+					h("p", { className: "dshp-block-hint" },
+                        lastAssembly ? ("上次实际组装：" + lastAssembly.observed_at +
+                            " · " + (lastAssembly.preset || "预设未识别") + "。只证实服务端组装，不代表模型采纳。")
+                          : "尚无当前工作目录的真实组装记录；勾选只是配置，不代表已经注入。"),
+                    h("p", { className: "dshp-block-hint" },
+                        "每个项目单独保存选择与注入方式；旧版全局选择会被保留，首次修改此项目后独立记录。"),
 				),
 				h("div", { className: "dshp-block" },
 				h("div", { className: "dshp-split" },
@@ -3719,6 +3748,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 							h("span", { className: "dshp-rule-name" }, item.id),
 							h("span", { className: "dshp-rule-meta" },
 								(item.valid ? item.description : t("skills.invalid")) + " · " + formatSize(item.size),
+                                " · " + (item.valid ? "本地格式有效" : "本地格式无效"),
+                                " · 宿主登记/实际调用未核验",
 							),
 							item.valid ? h("span", { className: "dshp-rule-meta" },
 								[
@@ -3750,7 +3781,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("div", { className: "dshp-row", style: { margin: 0 } }, noticeNode(notice)),
 				),
 				h("p", { className: "dshp-hint", style: { margin: "0 0 10px", color: "var(--dshp-mute)", fontSize: 12 } }, hostText(t, "skills.hint", hostSurfaceOf())),
-				h("div", { className: "dshp-split" },
+				h("p", { className: "dshp-hint" },
+                    "已安装、格式有效与真正被宿主注册／模型调用是不同状态；本页不能从文件列表推断后两者成功。"),
+                h("div", { className: "dshp-split" },
 					h("div", { className: "dshp-rulelist" },
 						h("div", { className: "dshp-rulebody" }, list),
 						h("div", { className: "dshp-create" },
