@@ -44,8 +44,8 @@ test('native clean workspace has separate navigation without discarding edits', 
 })
 
 test('clean pages reuse one state owner and keep hidden editors mounted', () => {
-  assert.match(client, /h\(PurgifySection, \{ section \}\)/)
-  assert.match(client, /function PurgifySection\(\{ section \} = \{\}\)/)
+  assert.match(client, /h\(PurgifySection, \{ section, onNavigate: navigate \}\)/)
+  assert.match(client, /function PurgifySection\(\{ section, onNavigate \} = \{\}\)/)
   for (const id of ['overview', 'patches', 'prompt', 'maintenance', 'rules']) {
     assert.ok(client.includes('{ id: "' + id + '", title:'))
   }

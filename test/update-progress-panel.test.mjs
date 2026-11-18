@@ -115,6 +115,11 @@ test("recovered update keeps disk, renderer, backend and profile outcomes separa
   tree = render({ receipt: { ...receipt, rendererDiskBuildId: "old-build" } });
   assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
   assert.match(words(tree), /实际前端构建 不匹配/);
+  tree = render({ receipt, unavailable: true });
+  assert.match(words(tree), /当前运行状态未确认/);
+  assert.match(words(tree), /上次读取的结果/);
+  assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
+  assert.match(words(render({ receipt, unavailable: false })), /当前宿主运行版本已核验/);
   tree = render({ receipt: { ...receipt, verification: "interrupted", phase: "writing" }, unavailable: true });
   assert.match(words(tree), /上次更新中断/);
   assert.match(words(tree), /上次读取的结果/);

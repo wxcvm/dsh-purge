@@ -12,7 +12,7 @@ test('runtime panel polls only while visible, projects a report locally and clea
     useEffect: fn => { cleanup = fn(); }, h: (type, props, ...children) => ({ type, props, children }),
     document: { visibilityState: 'visible' }, apiUrl: p => p, AbortController,
     setTimeout: (fn, ms) => { if (ms === 1000) timer = fn; return ++count; }, clearTimeout() {},
-    fetch: async (url, init) => { requests.push({ url, init }); return { ok: true, json: async () => ({ items: [], streamSupport: 'not-observed' }) }; },
+    fetch: async (url, init) => { requests.push({ url, init }); return { ok: true, json: async () => ({ ok: true, items: [], streamSupport: 'not-observed' }) }; },
   };
   const projection = readFileSync(new URL('../lib/task-quality-report.js', import.meta.url), 'utf8').replace(/^export /gm, '');
   const panel = runtimePanel();
@@ -69,6 +69,13 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
   const all = render('all');
   assert.equal(all.cards.length, 5);
   assert.equal(all.cards.map(n => n.props['data-status']).join(','), 'running,ended,ended,attention,attention');
+  assert.equal(new Set(all.cards.map(n => n.props.key)).size, all.cards.length);
+  for (const card of all.cards) {
+    const details = card.children[0];
+    assert.equal(details.type, 'details');
+    assert.equal(details.props?.open, undefined);
+    assert.equal(details.children[0].type, 'summary');
+  }
   const body = JSON.stringify(all.cards);
   assert.match(body, /0 \/ 未观测 ms/);
   assert.match(body, /已取消/);
@@ -143,7 +150,7 @@ test('runtime route filter uses actual observed provider/model pairs and keeps u
 test('inactive runtime pane preserves local state without scheduling requests', () => {
  const panel=runtimePanel();
  let count=0,cleanup;
- const ctx=vm.createContext({useState:v=>[v,()=>{count++}],useRef:()=>({}),useEffect:f=>{cleanup=f()},h:(type,props,...children)=>({type,props,children}),fetch:()=>{count++},setTimeout:()=>{count++}});
+  const ctx=vm.createContext({useState:v=>[v,()=>{}],useRef:()=>({}),useEffect:f=>{cleanup=f()},h:(type,props,...children)=>({type,props,children}),fetch:()=>{count++},setTimeout:()=>{count++}});
  vm.runInContext(panel+'\nRuntimeObservationsSection({active:false})',ctx);
  assert.equal(count,0);assert.equal(cleanup,undefined);
 });
@@ -221,12 +228,67 @@ test('runtime card shows usage source and separates live and durable totals', ()
 })
 
 
-test('master cleaning workspace mounts runtime diagnostics only on its selected page', () => {
+test('cleaning workspace preserves runtime filters and lazily mounted profile drafts across navigation', () => {
   const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
   assert.match(source, /id: "runtime", title: "运行诊断"/);
-  assert.match(source, /section === "runtime" \? h\(RuntimeObservationsSection, \{ onNavigate: setSection, active: true \}\)/);
+  assert.match(source, /hidden: section !== "runtime" \},\s*h\(RuntimeObservationsSection, \{ onNavigate: navigate, active: section === "runtime" \}\)/);
+  assert.match(source, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "profiles" \},\s*h\(PromptProfilesSection, null\)\)/);
+  assert.match(source, /if \(next === "profiles"\) setProfilesVisited\(true\)/);
   assert.match(source, /hidden: section === "rules" \|\| section === "runtime"/);
   assert.match(source, /api: api, useTemporaryPrivacy: useTemporaryPrivacy/);
+});
+
+test('runtime read separates missing route, disconnect, malformed response and recovery', async () => {
+  const updates = [];
+  let timer, i = 0;
+  const responses = [
+    async () => ({ ok: false, status: 404, json() { throw Error('must not read body'); } }),
+    async () => { throw Error('fixture-secret-in-network-error'); },
+    async () => ({ ok: true, json: async () => ({ ok: false, items: [], error: 'fixture-secret-in-response' }) }),
+    async () => ({ ok: true, json: async () => ({ ok: true, items: [null] }) }),
+    async () => ({ ok: true, json: async () => ({ ok: true, items: [] }) }),
+  ];
+  const ctx = vm.createContext({
+    useState(v) { const idx = i++; return [v, next => updates.push([idx, next])]; },
+    useRef: () => ({ current: { getClientRects: () => [1] } }), useEffect: fn => fn(),
+    h: (type, props, ...children) => ({ type, props, children }),
+    document: { visibilityState: 'visible' }, apiUrl: p => p, AbortController,
+    fetch: () => responses.shift()(),
+    setTimeout: (fn, delay) => { if (delay === 1000) timer = fn; }, clearTimeout() {},
+  });
+  vm.runInContext(runtimePanel() + '\nRuntimeObservationsSection()', ctx);
+  await new Promise(resolve => setImmediate(resolve));
+  for (let step = 1; step < 5; step++) await timer();
+  assert.deepEqual(updates.filter(([idx]) => idx === 1).map(([, next]) => next), [
+    'diag.runtime.missing', 'diag.runtime.offline', 'diag.runtime.invalid', 'diag.runtime.invalid', '',
+  ]);
+  assert.deepEqual(updates.filter(([idx]) => idx === 0).map(([, next]) => next), [{ ok: true, items: [] }]);
+  assert.doesNotMatch(JSON.stringify(updates), /fixture-secret/);
+});
+
+test('unknown privacy settings cannot reveal identifiers or a local imported report', () => {
+  for (const privacy of [undefined, { api() {} }]) {
+    let i = 0;
+    const ctx = vm.createContext({ __dshPurgeDrill: privacy,
+      useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-sample-session', attemptId: 'a' }] }
+        : at === 2 ? { secret: 'private-sample-report' } : at === 9 ? true : v, () => {}]; },
+      useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) });
+    const tree = vm.runInContext(runtimePanel() + '\nRuntimeObservationsSection()', ctx);
+    const visible = [];
+    function walk(node) {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (typeof node === 'string') visible.push(node);
+      if (node && typeof node.type === 'string') walk(node.children);
+    }
+    walk(tree);
+    const text = visible.join('\n');
+    assert.doesNotMatch(text, /private-sample|重新隐藏详情|临时显示详情/);
+    assert.match(text, /会话 \/ 请求标识已隐藏/);
+    assert.match(text, /报告已读取，详细内容已隐藏/);
+    const childPanels = tree.children.filter(node => typeof node?.type === 'function');
+    assert.equal(childPanels.length, 2);
+    assert.ok(childPanels.every(node => node.props.mask === true));
+  }
 });
 
 test('runtime panel shows observed child lifecycle without treating unmatched events as live concurrency', () => {

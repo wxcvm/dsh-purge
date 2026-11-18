@@ -23,7 +23,7 @@ This repository is private. Access source and release assets through an authoriz
 
 - [Package metadata](package.json): source version, dependencies, runtime requirements and scripts.
 - [Releases](https://github.com/wxcvm/dsh-purge/releases): published versions and available assets.
-- [Actions](https://github.com/wxcvm/dsh-purge/actions): build and test records. A passing CI run is not a substitute for Windows device acceptance.
+- [Actions](https://github.com/wxcvm/dsh-purge/actions): build and test records. The [`.11` delivery ledger](docs/DELIVERY_STATUS_11.zh-CN.md) separates verified release bytes, local tests, and pending Desktop/Web device acceptance.
 - [Documentation](docs/): existing guides and technical records.
 
 ```sh

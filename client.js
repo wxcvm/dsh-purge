@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "de45a8effff5001e";
+		const CLIENT_BUILD_ID = "6129f4ec4eb1be3b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -192,6 +192,28 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"saved.own": "已保存自己的服务器",
 			"saved.own.dropped": "已保存。有 {n} 行不是单个 IP 或主机名，已丢掉",
 			"metric.purged": "已写入",
+			"diag.overview.title": "当前安装与运行",
+			"diag.overview.host": "宿主",
+			"diag.overview.disk": "磁盘插件版本",
+			"diag.overview.backend": "已加载的后端版本",
+			"diag.overview.renderer": "当前前端构建",
+			"diag.overview.unknown": "未确认",
+			"diag.overview.unavailable": "暂时无法读取宿主状态。",
+			"diag.overview.mismatch": "磁盘与已加载版本不一致。",
+			"diag.overview.stale": "更新状态暂时无法刷新。",
+			"diag.overview.restart": "更新后尚未确认宿主重启。",
+			"diag.overview.updateFailed": "最近一次更新失败。",
+			"diag.overview.actionFailed": "最近一次维护操作失败。",
+			"diag.overview.runtime": "查看运行诊断",
+			"diag.overview.details": "查看故障诊断",
+			"diag.overview.back": "返回状态总览",
+			"diag.runtime.missing": "运行诊断接口未找到（HTTP 404）。",
+			"diag.runtime.denied": "运行记录读取被拒绝。",
+			"diag.runtime.http": "运行记录读取失败（HTTP {status}）。",
+			"diag.runtime.invalid": "宿主返回的运行记录格式无效。",
+			"diag.runtime.timeout": "运行记录请求超时。",
+			"diag.runtime.offline": "暂时无法连接宿主 API。",
+			"diag.runtime.totals": "总耗时 {elapsed} · Token {tokens}",
 			"metric.purged.skip": "已写入。跳过 {n} 项，本机没有这些文件",
 			"metric.pendingShort": "待处理 {n}",
 			"metric.unmatchedShort": "没对上 {n}",
@@ -555,6 +577,28 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"saved.own": "Own servers saved",
 			"saved.own.dropped": "Saved. {n} lines were not a single IP or hostname and were dropped",
 			"metric.purged": "Written",
+			"diag.overview.title": "Current installation and runtime",
+			"diag.overview.host": "Host",
+			"diag.overview.disk": "Plugin version on disk",
+			"diag.overview.backend": "Loaded backend version",
+			"diag.overview.renderer": "Current frontend build",
+			"diag.overview.unknown": "Unconfirmed",
+			"diag.overview.unavailable": "Host status is temporarily unavailable.",
+			"diag.overview.mismatch": "The loaded version differs from the version on disk.",
+			"diag.overview.stale": "Update status could not be refreshed.",
+			"diag.overview.restart": "Host restart after the update is not confirmed.",
+			"diag.overview.updateFailed": "The last update failed.",
+			"diag.overview.actionFailed": "The last maintenance operation failed.",
+			"diag.overview.runtime": "View runtime diagnostics",
+			"diag.overview.details": "View host diagnostics",
+			"diag.overview.back": "Back to overview",
+			"diag.runtime.missing": "Runtime diagnostics endpoint was not found (HTTP 404).",
+			"diag.runtime.denied": "Access to runtime observations was denied.",
+			"diag.runtime.http": "Could not read runtime observations (HTTP {status}).",
+			"diag.runtime.invalid": "The host returned invalid observation data.",
+			"diag.runtime.timeout": "The runtime observations request timed out.",
+			"diag.runtime.offline": "The host API is temporarily unreachable.",
+			"diag.runtime.totals": "Elapsed {elapsed} · Tokens {tokens}",
 			"metric.purged.skip": "Written. Skipped {n}; those files are not on this install",
 			"metric.pendingShort": "Pending {n}",
 			"metric.unmatchedShort": "No match {n}",
@@ -872,19 +916,23 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-runtime-heading,.dshp-runtime-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .dshp-runtime-heading h3{margin:0 0 6px}
 .dshp-runtime-heading p,.dshp-runtime-meta{color:var(--dshp-mute);font-size:12px;line-height:1.55;overflow-wrap:anywhere}
-.dshp-runtime-metrics,.dshp-runtime-grid, .dshp-runtime-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:14px 0}
+.dshp-runtime-metrics,.dshp-overview-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin:12px 0}
+.dshp-overview-facts div{min-width:0}.dshp-overview-facts dt{color:var(--dshp-mute);font-size:12px}.dshp-overview-facts dd{margin:4px 0 0;overflow-wrap:anywhere;font-weight:600}
+.dshp-runtime-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin:14px 0}
 .dshp-runtime-metric,.dshp-runtime-card{min-width:0;padding:14px;border:1px solid var(--dshp-line);border-radius:10px;background:var(--dshp-paper);color:var(--dshp-ink)}
 .dshp-runtime-metric{display:flex;flex-direction:column;gap:5px}
 .dshp-runtime-metric small,.dshp-runtime-card dt{color:var(--dshp-mute);font-size:12px}
 .dshp-runtime-metric strong{font-size:24px;font-variant-numeric:tabular-nums}
-.dshp-runtime-card header header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dshp-runtime-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dshp-runtime-card>details>summary{cursor:pointer;overflow-wrap:anywhere}
+.dshp-runtime-card>details>summary:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:3px}
+.dshp-runtime-summary{display:inline-flex;align-items:center;gap:4px 10px;flex-wrap:wrap;vertical-align:middle;max-width:calc(100% - 1.5em);min-width:0}
 .dshp-runtime-card header strong{overflow-wrap:anywhere;min-width:0}
 .dshp-runtime-status{font-size:11px;padding:3px 7px;border-radius:6px;background:var(--dshp-fill);color:var(--dshp-ink);white-space:nowrap}
-.dshp-runtime-card[data-status="attention"] .dshp-runtime-status[data-status="attention"] .dshp-runtime-status,.dshp-runtime-warning{color:#ffcf96}
+.dshp-runtime-card[data-status="attention"] .dshp-runtime-status,.dshp-runtime-warning{color:var(--dshp-warn)}
 .dshp-runtime-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}
 .dshp-runtime-card dd{margin:4px 0 0;overflow-wrap:anywhere;font-size:13px}
-.dshp-runtime-card details details{border-top:1px solid var(--dshp-line);padding-top:10px;font-size:12px;overflow-wrap:anywhere}
-.dshp-runtime-card summary summary{cursor:pointer}
+.dshp-runtime-card details[open]>summary{border-bottom:1px solid var(--dshp-line);padding-bottom:8px}
 .dshp-runtime-filters,.dshp-clean-shortcuts{display:flex;gap:8px;flex-wrap:wrap}
 .dshp-runtime-filters button,.dshp-runtime-action,.dshp-clean-shortcuts button{appearance:none;cursor:pointer;border:1px solid var(--dshp-line);border-radius:8px;padding:8px 12px;font:inherit;color:var(--dshp-ink);background:var(--dshp-paper)}
 .dshp-runtime-filters button[aria-pressed="true"]{background:var(--dshp-fill);border-color:var(--dshp-accent)}
@@ -2225,9 +2273,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const profile = r.profileVerification;
 			const rendererMatch = r.rendererDiskBuildId && r.clientDiskMatch === true
 				? r.rendererDiskBuildId === CLIENT_BUILD_ID : null;
-			const runtimeVerified = r.verification === "backend_verified" && rendererMatch === true;
+			const runtimeVerified = !unavailable && r.verification === "backend_verified" && rendererMatch === true;
 			const label = r.phase === "failed" ? "上次更新失败" : r.verification === "interrupted" ? "上次更新中断"
-				: runtimeVerified ? "当前宿主运行版本已核验" : "上次更新待核验";
+				: runtimeVerified ? "当前宿主运行版本已核验" : unavailable ? "当前运行状态未确认" : "上次更新待核验";
 			const row = (name, value) => h("div", { style: { display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" } },
 				h("span", null, name), h("b", null, value));
 			const tri = value => value === true ? "匹配" : value === false ? "不匹配" : "未知";
@@ -2262,7 +2310,37 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				h("span", { className: "dshp-hint" }, "仅核验记录中的四个关键文件和当前宿主，不代表其他宿主已重启。"));
 		}
 
-		function PurgifySection({ section } = {}) {
+		function CleanOverview({ state, receipt, progressUnavailable, applicationFailed, onNavigate }) {
+			const t = useT();
+			const observed = state?.ok === true && state.ready !== false;
+			const host = observed ? state.surface : null;
+			const loaded = observed ? state.plugin_identity?.loaded : null;
+			const disk = observed ? state.plugin_identity?.disk : null;
+			const warnings = [];
+			if (state && !observed) warnings.push("diag.overview.unavailable");
+			if (loaded && disk && loaded !== disk) warnings.push("diag.overview.mismatch");
+			if (applicationFailed) warnings.push("diag.overview.actionFailed");
+			if (progressUnavailable) warnings.push("diag.overview.stale");
+			if (receipt?.phase === "failed") warnings.push("diag.overview.updateFailed");
+			else if (receipt?.phase === "awaiting_restart" && receipt.processRestarted !== true) warnings.push("diag.overview.restart");
+			const facts = [
+				["host", host === "desktop" || host === "web" ? t("surface." + host) : null],
+				["disk", disk],
+				["backend", loaded],
+				["renderer", CLIENT_BUILD_ID],
+			];
+			return h("div", { className: "dshp-clean-browser" },
+				h("h4", null, t("diag.overview.title")),
+				h("dl", { className: "dshp-overview-facts" }, facts.map(([key, value]) =>
+					h("div", { key }, h("dt", null, t("diag.overview." + key)), h("dd", null, value || t("diag.overview.unknown"))))),
+				warnings.length ? h("ul", { className: "dshp-runtime-warning" },
+					warnings.map(key => h("li", { key }, t(key)))) : null,
+				h("div", { className: "dshp-clean-shortcuts" },
+					h("button", { type: "button", onClick: () => onNavigate("runtime") }, t("diag.overview.runtime")),
+					h("button", { type: "button", onClick: () => onNavigate("diagnostics") }, t("diag.overview.details"))));
+		}
+
+		function PurgifySection({ section, onNavigate } = {}) {
 			const t = useT();
 			const tRef = useRef(t);
 			tRef.current = t;
@@ -2976,6 +3054,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					!updateBusy && lastReceipt ? h(UpdateRecoveryPanel, { receipt: lastReceipt, unavailable: progressUnavailable }) : null,
 
 				)),
+				onNavigate ? cleanPane(["overview"], h(CleanOverview, {
+					state: s, receipt: lastReceipt, progressUnavailable, applicationFailed: Boolean(job?.error), onNavigate,
+				})) : null,
 				cleanPane(["overview", "maintenance"], s ? h("div", { className: "dshp-metrics" },
 					h("div", { className: "dshp-metric" },
 						h("b", null, located ? (applied + " / " + total) : (patchesLost ? t("metric.lost.count") : (sealedReady ? t("metric.sealed.count") : t("metric.unlocated.count")))),
@@ -4252,6 +4333,7 @@ function runtimeRouteKey(row) {
 }
 
 function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
+  const t = typeof useT === 'function' ? useT() : (key) => key;
   const [snapshot, setSnapshot] = useState(null), [error, setError] = useState('');
   const [report, setReport] = useState(null), [reportError, setReportError] = useState('');
   const [session, setSession] = useState('');
@@ -4259,23 +4341,23 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   const [route, setRoute] = useState('');
   const root = useRef(null);
   const privacyApi = typeof __dshPurgeDrill !== 'undefined' ? __dshPurgeDrill.api : null;
-  const [privacyDisplay, setPrivacyDisplay] = useState(privacyApi ? null : { maskHistory: false });
+  const [privacyDisplay, setPrivacyDisplay] = useState(null);
   const [privacyFailed, setPrivacyFailed] = useState(false);
   const [revealPrivate, setRevealPrivate] = useState(false);
   useEffect(() => {
+    setPrivacyDisplay(null); setPrivacyFailed(false); setRevealPrivate(false);
     if (!active || !privacyApi) return;
     let live = true;
-    setPrivacyDisplay(null); setPrivacyFailed(false); setRevealPrivate(false);
-    privacyApi({ op: 'privacyDisplayStatus' }).then(result => {
+    Promise.resolve().then(() => live && privacyApi({ op: 'privacyDisplayStatus' })).then(result => {
       if (!live) return;
-      if (result?.ok === true) setPrivacyDisplay(result);
+      if (result?.ok === true && typeof result.maskHistory === 'boolean') setPrivacyDisplay(result);
       else setPrivacyFailed(true);
     }).catch(() => { if (live) setPrivacyFailed(true); });
     return () => { live = false; };
   }, [active, privacyApi]);
   const temporary = typeof __dshPurgeDrill !== 'undefined' && __dshPurgeDrill.useTemporaryPrivacy ? __dshPurgeDrill.useTemporaryPrivacy() : null;
   useEffect(() => { if (temporary?.maskHistory) setRevealPrivate(false); }, [temporary]);
-  const maskRuntime = !!temporary?.maskHistory || (!revealPrivate && (!privacyDisplay || privacyDisplay.maskHistory));
+  const maskRuntime = !!temporary?.maskHistory || !privacyDisplay || (privacyDisplay.maskHistory && !revealPrivate);
   useEffect(() => {
     if (!active) return;
     let stopped = false, timer, controller;
@@ -4286,11 +4368,23 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
         const timeout = setTimeout(() => controller.abort(), 8000);
         try {
           const response = await fetch(apiUrl('/dsh-purge/runtime-observations?limit=50&sessionId=' + encodeURIComponent(session)), { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
-          if (!response.ok) throw new Error('运行观测不可用（HTTP ' + response.status + '）');
-          const value = await response.json();
-          if (!stopped) { setSnapshot(value); setError(''); }
-        } catch (e) { if (!stopped) setError(e.name === 'AbortError' ? '运行观测请求超时' : String(e.message)); }
-        finally { clearTimeout(timeout); }
+          if (!response.ok) {
+            const status = response.status;
+            if (!stopped) setError(status === 404 ? t('diag.runtime.missing')
+              : status === 401 || status === 403 ? t('diag.runtime.denied')
+              : t('diag.runtime.http', { status }));
+          } else {
+            const value = await response.json();
+            if (!stopped) {
+              if (value?.ok !== true || !Array.isArray(value.items) || value.items.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
+                setError(t('diag.runtime.invalid'));
+              } else { setSnapshot(value); setError(''); }
+            }
+          }
+        } catch (e) {
+          if (!stopped) setError(t(e?.name === 'AbortError' ? 'diag.runtime.timeout'
+            : e?.name === 'SyntaxError' ? 'diag.runtime.invalid' : 'diag.runtime.offline'));
+        } finally { clearTimeout(timeout); }
       }
       if (!stopped) timer = setTimeout(refresh, 1000);
     }
@@ -4337,15 +4431,17 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   return h('section', { ref: root, className: 'dshp-runtime-observations' },
     h('div', { className: 'dshp-runtime-heading' },
       h('div', null, h('h3', null, '运行诊断 · 只读'), h('p', null, '观察近期请求、终态和异常，不保存提示、正文或工具参数。流结束不等于任务完成。')),
-      onNavigate ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => onNavigate('diagnostics') }, '打开故障诊断') : null),
+      onNavigate ? h('div', { className: 'dshp-clean-shortcuts' },
+        h('button', { type: 'button', onClick: () => onNavigate('overview') }, t('diag.overview.back')),
+        h('button', { type: 'button', onClick: () => onNavigate('diagnostics') }, t('diag.overview.details'))) : null),
     privacyApi ? h('div', { className: 'dshp-runtime-meta' },
       '智能隐私中心 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
-        : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置') + (revealPrivate ? ' · 当前临时显示详情' : ''),
+        : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置') + (!maskRuntime && revealPrivate ? ' · 当前临时显示详情' : ''),
       h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => {
         __dshPurgeDrill.setUI({ tab: 'low-impact', focus: null }); showPurgeWorkspace('drill');
       } }, '打开智能隐私中心'),
       temporary?.maskHistory ? h('span', null, ' · 本次工作区临时遮蔽已开启') : null,
-      !temporary?.maskHistory && (!privacyDisplay || privacyDisplay.maskHistory) ? h('button', { type: 'button', className: 'dshp-runtime-action',
+      !temporary?.maskHistory && privacyDisplay?.maskHistory === true ? h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
     h('div', { className: 'dshp-runtime-metrics' },
       metric('近期记录', counts.all), metric('等待后续事件', counts.running), metric('需要关注', counts.attention), metric('已结束 / 取消', counts.ended)),
@@ -4358,7 +4454,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
       h('div', { className: 'dshp-runtime-filters', 'aria-label': '请求状态筛选' },
         [['all', '全部'], ['running', '等待中'], ['attention', '异常'], ['ended', '已结束']].map(([key, name]) =>
           h('button', { key, type: 'button', 'aria-pressed': filter === key, onClick: () => setFilter(key) }, name + ' ' + (snapshot ? counts[key] : '—'))))),
-    error ? h('p', { role: 'alert' }, (maskRuntime ? '运行观测读取失败，详情已隐藏' : error) + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
+    error ? h('p', { role: 'alert' }, error + (snapshot ? '；下方为上次成功读取的记录。' : '')) : null,
     h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
     h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
     snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
@@ -4373,31 +4469,37 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
         h('strong', null, items.length || session ? '当前筛选没有匹配记录' : '暂无运行记录'),
         h('p', null, items.length || session ? '清除会话、路由或状态筛选以查看其他近期记录。' : '正常发起模型请求后可在此查看。'),
         items.length || session ? h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setFilter('all'); if (route) setRoute(''); if (session) { setSnapshot(null); setError(''); setSession(''); } } }, '清除筛选') : null) : null,
-    h(ThinkingExperimentPanel, { rows: shown, mask: maskRuntime, snapshotAvailable: !!snapshot }),
-    h(ThinkingTaskBenchmarkPanel, { rows: items, mask: maskRuntime, snapshotAvailable: !!snapshot, stale: !!error }),
     h('div', { className: 'dshp-runtime-grid' }, shown.map(r => {
       const status = runtimeRowStatus(r);
+      const sessionId = typeof r.sessionId === 'string' ? r.sessionId : '';
+      const shortSession = sessionId.length > 12 ? sessionId.slice(0, 8) + '…' + sessionId.slice(-4) : sessionId;
       return h('article', { key: r.generation + ':' + r.attemptId, className: 'dshp-runtime-card', 'data-status': status.key },
-        h('header', null, h('strong', null, value(r.provider) + ' / ' + value(r.model)), h('span', { className: 'dshp-runtime-status' }, status.label)),
-        h('p', { className: 'dshp-runtime-meta' }, maskRuntime ? '会话 / 请求标识已隐藏' : value(r.sessionId) + ' / ' + value(r.attemptId)),
-        h('dl', null,
-          detail('流 / 结算', (r.streamEnded ? '流已结束' : '流结束未观测') + ' / ' + value(r.settlement)),
-          detail('首文本 / 总耗时', value(r.firstTextMs) + ' / ' + value(r.elapsedMs) + ' ms'),
-          detail('终态 / 回合', (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome)),
-          detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
-          detail('用量证据', ({ 'host-stream': '实时流', 'durable-stream': '持久流' }[r.usageSource] || '未观测') + ' · 实时 / 持久总量：' + value(r.liveUsage?.totalTokens) + ' / ' + value(r.durableUsage?.totalTokens)),
-          detail('错误代码', value(r.errorCode)),
-          detail('失败/拒答归因', outcomeLabel(r)),
-          detail('终态来源', source(r)),
-          detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
-          detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),
-          detail('文本证据', r.firstTextMs != null ? '实时已计时' : r.durableTextObserved === true ? '持久流已观测 · 无实时计时' : '未观测')),
-        r.streamGap || r.terminalConflict || r.interrupted ? h('p', { className: 'dshp-runtime-warning' }, [r.streamGap && '分片缺口', r.terminalConflict && '终态证据冲突', r.interrupted && '中断前缀'].filter(Boolean).join(' · ')) : null,
-        h('details', null, h('summary', null, '任务质量与原始状态'),
+        h('details', null,
+          h('summary', null, h('span', { className: 'dshp-runtime-summary' },
+            h('strong', null, value(r.provider) + ' / ' + value(r.model)),
+            h('span', { className: 'dshp-runtime-status' }, status.label),
+            h('span', { className: 'dshp-runtime-meta' }, t('diag.runtime.totals', { elapsed: r.elapsedMs == null ? '—' : r.elapsedMs + ' ms', tokens: r.usage?.totalTokens ?? '—' })),
+            !maskRuntime && shortSession ? h('span', { className: 'dshp-runtime-meta' }, shortSession) : null)),
+          h('p', { className: 'dshp-runtime-meta' }, maskRuntime ? '会话 / 请求标识已隐藏' : value(r.sessionId) + ' / ' + value(r.attemptId)),
+          h('dl', null,
+            detail('流 / 结算', (r.streamEnded ? '流已结束' : '流结束未观测') + ' / ' + value(r.settlement)),
+            detail('首文本 / 总耗时', value(r.firstTextMs) + ' / ' + value(r.elapsedMs) + ' ms'),
+            detail('终态 / 回合', (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome)),
+            detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
+            detail('用量证据', ({ 'host-stream': '实时流', 'durable-stream': '持久流' }[r.usageSource] || '未观测') + ' · 实时 / 持久总量：' + value(r.liveUsage?.totalTokens) + ' / ' + value(r.durableUsage?.totalTokens)),
+            detail('错误代码', value(r.errorCode)),
+            detail('失败/拒答归因', outcomeLabel(r)),
+            detail('终态来源', source(r)),
+            detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
+            detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),
+            detail('文本证据', r.firstTextMs != null ? '实时已计时' : r.durableTextObserved === true ? '持久流已观测 · 无实时计时' : '未观测')),
+          r.streamGap || r.terminalConflict || r.interrupted ? h('p', { className: 'dshp-runtime-warning' }, [r.streamGap && '分片缺口', r.terminalConflict && '终态证据冲突', r.interrupted && '中断前缀'].filter(Boolean).join(' · ')) : null,
           h('p', null, refusalLabel(r.assessment) + ' / ' + deliveryLabel(r.assessment)),
           h('p', null, (r.assessment?.reasonCodes || []).join(', ')),
           h('p', null, '回合 ' + value(r.turn) + ' · 步骤 ' + value(r.step) + ' · 实收分片 ' + value(r.observedChunks) + ' / 序号覆盖 ' + value(r.chunks) + ' · 工具开始 ' + value(r.toolCalls) + '（实时）')));
     })),
+    h(ThinkingExperimentPanel, { rows: shown, mask: maskRuntime, snapshotAvailable: !!snapshot }),
+    h(ThinkingTaskBenchmarkPanel, { rows: items, mask: maskRuntime, snapshotAvailable: !!snapshot, stale: !!error }),
     h('h3', null, '任务质量报告'),
     h('p', null, '导入 evaluate-task-quality 的输出 JSON；仅在本页面读取，不上传。采集来源由报告作者声明。'),
     h('input', { type: 'file', accept: '.json,application/json', 'aria-label': '导入任务质量报告', onChange: importReport }),
@@ -4540,6 +4642,20 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
 			const [theme, setTheme] = useState(readTheme);
 			const [section, setSection] = useState("overview");
+			const [profilesVisited, setProfilesVisited] = useState(false);
+			const pageHeading = useRef(null);
+			const focusNextPage = useRef(false);
+			const navigate = (next) => {
+				if (next === section) return;
+				if (next === "profiles") setProfilesVisited(true);
+				focusNextPage.current = true;
+				setSection(next);
+			};
+			useEffect(() => {
+				if (!focusNextPage.current) return;
+				focusNextPage.current = false;
+				pageHeading.current?.focus();
+			}, [section]);
 			useEffect(() => {
 				let cancelled = false;
 				let timer = 0;
@@ -4596,20 +4712,23 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					sections.map((item) => h("button", {
 						key: item.id, type: "button", className: "dshp-clean-nav-item",
 						"aria-current": section === item.id ? "page" : undefined,
-						onClick: () => setSection(item.id),
+						onClick: () => navigate(item.id),
 					}, h("strong", null, item.title), h("small", null, item.description))),
 				),
 				h("div", { className: "dshp-clean-content" },
 					h("header", { className: "dshp-clean-page-heading" },
-						h("h2", null, selected.title),
+						h("h2", { ref: pageHeading, tabIndex: -1 }, selected.title),
 						h("p", null, selected.description),
+						section === "diagnostics" ? h("button", { type: "button", className: "dshp-runtime-action", onClick: () => navigate("overview") }, t("diag.overview.back")) : null,
 					),
 					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" || section === "profiles" },
-						h(PurgifySection, { section })),
+						h(PurgifySection, { section, onNavigate: navigate })),
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
-					section === "profiles" ? h(PromptProfilesSection, null) : null,
-					section === "runtime" ? h(RuntimeObservationsSection, { onNavigate: setSection, active: true }) : null,
+					profilesVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "profiles" },
+						h(PromptProfilesSection, null)) : null,
+					h("div", { className: "dshp-clean-pane", hidden: section !== "runtime" },
+						h(RuntimeObservationsSection, { onNavigate: navigate, active: section === "runtime" })),
 				),
 			);
 		}

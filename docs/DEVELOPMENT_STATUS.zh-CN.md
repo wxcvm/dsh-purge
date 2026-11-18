@@ -2,7 +2,7 @@
 
 [返回工作台](../README.md) · [版本中心](RELEASE_CENTER.zh-CN.md) · [PR 列表](https://github.com/wxcvm/dsh-purge/pulls) · [问题追踪](https://github.com/wxcvm/dsh-purge/issues)
 
-> 快照日期：2026-11-12。GitHub PR、Issues 和 Actions 是实时记录；本文仅汇总已核对的维护工作。
+> 历史快照日期：2026-11-12。当前工作见 [#351 总台账](https://github.com/wxcvm/dsh-purge/issues/351) 与 [.11 交付台账](DELIVERY_STATUS_11.zh-CN.md)。下文为历史记录，不用于判断最新工作是否完成。
 
 ## 已完成 · 仓库与维护
 
