@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listPromptProfiles, routePrompt, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { deletePromptProfile, getSessionPromptLock, listPromptProfiles, routePrompt, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-profiles-"));
@@ -51,4 +51,31 @@ test("redteam body edits cannot overwrite existing global prompt", () => withHom
 test("profile ids never escape the private profile directory", () => withHome((home) => {
   assert.throws(() => savePromptProfile(home, { id: "../elsewhere", body: "bad" }), /invalid profile id/);
   assert.throws(() => setSessionPromptLock(home, "session", "../elsewhere"), /unknown profile/);
+}));
+
+test("deleting a custom profile removes content and stale session locks", () => withHome((home) => {
+  savePromptProfile(home, { id: "custom", name: "自定义", keywords: ["自定义任务"], body: "Original" });
+  setSessionPromptLock(home, "s1", "custom");
+  assert.equal(getSessionPromptLock(home, "s1"), "custom");
+  assert.equal(routePrompt({ home, preset: "standard", sessionId: "s1" }).id, "custom");
+  deletePromptProfile(home, "custom");
+  assert.equal(getSessionPromptLock(home, "s1"), null);
+  assert.equal(routePrompt({ home, preset: "standard", text: "自定义任务" }).id, null);
+  assert.equal(fs.existsSync(path.join(home, "dsh-purge", "prompt-profiles", "custom.md")), false);
+  assert.throws(() => deletePromptProfile(home, "redteam"), /built-in/);
+}));
+
+test("profile edits preserve enabled/priority and unrelated profiles", () => withHome((home) => {
+  savePromptProfile(home, { id: "first", name: "First", priority: 70, keywords: ["共同任务"], body: "First prompt" });
+  savePromptProfile(home, { id: "second", name: "Second", priority: 80, keywords: ["共同任务"], body: "Second prompt" });
+  assert.equal(routePrompt({ home, text: "共同任务" }).id, "second");
+  savePromptProfile(home, { id: "second", enabled: false });
+  assert.equal(routePrompt({ home, text: "共同任务" }).id, "first");
+  assert.equal(listPromptProfiles(home).find((p) => p.id === "second").body, "Second prompt");
+}));
+
+test("technical discussion without explicit redteam task never selects redteam prompt", () => withHome((home) => {
+  for (const text of ["什么是 SQL 注入？", "解释红队演练的原理", "我们讨论开展红队演练的设计", "请介绍渗透测试"]) {
+    assert.notEqual(routePrompt({ home, preset: "standard", text }).id, "redteam", text);
+  }
 }));
