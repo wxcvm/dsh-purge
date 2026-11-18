@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 const client = readFileSync(new URL("../client.js", import.meta.url), "utf8");
-const start = client.indexOf("function PromptProfilesSection()");
+const start = client.indexOf("function PromptProfilesSection(");
 const end = client.indexOf("function SettingsRoot(props)", start);
 assert.ok(start > 0 && end > start, "profile component must be included in the generated client");
 const source = client.slice(start, end);
