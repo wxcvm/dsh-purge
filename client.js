@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "787a362916cdad64";
+		const CLIENT_BUILD_ID = "278984926c5a388c";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4422,7 +4422,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [loadError, setLoadError] = useState("");
 			const explainError = (error) => {
 				const message = String(error?.message || error);
-				return /\\b404\\b/.test(message)
+				return /\b404\b/.test(message)
 					? "提示词库接口返回 404：当前页面与宿主后端可能不是同一版，或后端路由尚未注册。请完整退出 Harness（包括托盘）并重新打开已安装的同版本插件；仍未恢复请到「诊断中心」核对实际加载的版本。原红队提示词不受影响。"
 					: "提示词库请求失败：" + message;
 			};
