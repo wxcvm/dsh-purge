@@ -4487,7 +4487,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 							type: "button", disabled: busy, onClick: () => {
 								if (window.confirm("删除提示词「" + draft.name + "」？")) perform("delete", { id: draft.id });
 							},
-						}, "删除"))),
+						}, "删除")),
 					) : null,
 				h("h4", null, "规则命中预览"),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
