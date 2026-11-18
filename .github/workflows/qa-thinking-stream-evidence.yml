@@ -9,9 +9,9 @@ jobs:
     runs-on: [self-hosted, Windows]
     timeout-minutes: 3
     steps:
-      - name: Identify existing Harness CLI commands only
+      - name: Inspect existing headless model controls
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          & dsh --help 2>&1 | Select-Object -First 100
+          & dsh headless --help 2>&1 | Select-Object -First 130
           Write-Host "dsh-exit=$LASTEXITCODE"
