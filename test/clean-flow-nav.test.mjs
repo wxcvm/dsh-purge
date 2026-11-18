@@ -105,7 +105,8 @@ test('prompt and diagnostics are consolidated into two pages with internal tabs'
   assert.match(settings, /\["library", "自动匹配与会话"\]/);
   assert.match(settings, /\["health", "宿主与故障"\]/);
   assert.match(settings, /\["runtime", "Provider 与运行记录"\]/);
-  assert.match(settings, /section === "prompt" && promptPane === "library" \? h\(PromptProfilesSection/);
+  assert.match(settings, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "prompt" \|\| promptPane !== "library"/);
+  assert.match(settings, /runtimeVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "diagnostics" \|\| diagnosticsPane !== "runtime"/);
 });
 test('patch page explains coverage versus loaded host and treats skips separately', () => {
   assert.match(root, /当前定位宿主的磁盘补丁覆盖情况，不等于当前进程已经加载/);
