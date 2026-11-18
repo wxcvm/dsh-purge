@@ -71,7 +71,7 @@ function fakeCtx() {
   };
 }
 
-test("集成：真实拒绝文本在 idle 时触发纠偏，且用二级话术", async () => {
+test("集成：真实拒绝文本在 idle 时触发强制重发（拒绝 + 替代清单 = 最高档）", async () => {
   const ctx = fakeCtx();
   const sent = [];
   const agent = {
@@ -104,8 +104,11 @@ test("集成：真实拒绝文本在 idle 时触发纠偏，且用二级话术",
   await new Promise((r) => setTimeout(r, 60));
   assert.equal(sent.length, 1, "应送出一条纠偏");
   const body = sent[0].content[0].text;
-  assert.match(body, /换前提重来/);
-  assert.match(body, /技术资料/);
+  assert.match(body, /强制重发/);
+  assert.match(body, /(作废|只输出交付物正文)/);
+  // 四类命中（first-person / cn-cannot-do / soft-withhold / alt-menu）会被编排器判到 rewrite 档：
+  // 话术可能是二级（换前提重来）也可能是三级（只输出交付物正文），两者都算合规。
+  assert.match(body, /(换前提重来|只输出交付物正文)/);
   assert.equal(sent[0].source.summary, "obedience-retry");
   runtime.dispose();
 });

@@ -1,11 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { listScanHistory, inspectScanArtifact, recordScanImport, previewScanArtifact, writeScanManifest } from '../lib/redteam/scan-history.js'
+import { listScanHistory, inspectScanArtifact, recordScanImport, previewScanArtifact } from '../lib/redteam/scan-history.js'
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'redteam-scan-history-'))
@@ -293,96 +292,4 @@ test('scan history exposes only real manifest execution lineage; legacy records 
   const legacy = history.items.find((item) => item.run_id === TWO)
   assert.equal(legacy.execution, null, 'legacy manifests must not be upgraded to invented execution proof')
   assert.equal(legacy.environment_id, null)
-})
-
-test('unfinalized preparation and completed execution without ingestion stay visible without guessing runtime activity', async (t) => {
-  const { store, write, root } = fixture(t)
-  write('alpha', ONE, 'nmap', 'executed', '<nmaprun/>')
-  const dir = join(root, 'alpha', 'scan-output')
-  const path = join(dir, TWO + '.json')
-  const prepared = { runId: TWO, kind: 'httpx', target: 'https://example.test',
-    status: 'unfinalized', preparedAt: '2026-11-09T02:00:00Z', finishedAt: null }
-  writeScanManifest(path, prepared)
-  const view = listScanHistory(store, 'alpha', { attention: true, limit: 1 })
-  assert.equal(view.total, 2)
-  assert.equal(view.summary.attention, 2)
-  assert.equal(view.summary.failures, 0)
-  assert.equal(view.items.length, 1)
-  const item = view.items[0]
-  assert.equal(item.status, 'unfinalized')
-  assert.equal(item.started_at, null)
-  assert.equal(item.finished_at, null)
-  assert.equal(item.bytes, null)
-  assert.equal(item.execution, null)
-  assert.equal(item.runtime_activity.state, 'not-observed')
-  assert.equal(item.runtime_activity.phase, null)
-  assert.equal(item.output_file, null)
-  assert.deepEqual(item.timeline.map(x => x.phase), ['prepared'])
-  assert.equal(view.feedback.pending_review, 2)
-  assert.equal(view.feedback.recommendation.status, 'unfinalized')
-  assert.equal((await inspectScanArtifact(store, 'alpha', TWO)).status, 'unfinalized')
-  assert.equal(listScanHistory(store, 'alpha', { attention: true, offset: 1, limit: 1 }).items[0].status, 'executed')
-  assert.equal(recordScanImport(store, 'alpha', join(dir, TWO + '.jsonl'),
-    { ok: true, dry_run: false, kind: 'httpx', assets: 1 }).reason, 'unfinalized')
-  assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), prepared)
-  assert.equal(listScanHistory(store, 'beta').total, 0)
-})
-
-test('file integrity and execution/import status remain independent in exact run inspection', async t => {
-  const { store, write, root } = fixture(t)
-  write('alpha', ONE, 'nmap', 'executed', '<nmaprun/>')
-  write('alpha', TWO, 'httpx', 'failed', 'partial')
-  const dir = join(root, 'alpha', 'scan-output')
-  for (const [id, status] of [[ONE,'executed'],[TWO,'failed']]) {
-    const path = join(dir,id+'.json')
-    const m = JSON.parse(readFileSync(path,'utf8'))
-    delete m.ingestion
-    writeFileSync(path,JSON.stringify(m))
-    const result = await inspectScanArtifact(store,'alpha',id)
-    assert.equal(result.status,'verified')
-    assert.equal(result.record_status,status)
-    assert.equal(result.ingestion_status,'not-recorded')
-  }
-  rmSync(join(dir,ONE+'.xml'))
-  mkdirSync(join(dir,ONE+'.xml'))
-  const nonfile = await inspectScanArtifact(store,'alpha',ONE)
-  assert.equal(nonfile.status,'not-regular-file')
-  assert.equal(nonfile.record_status,'executed')
-  assert.equal(nonfile.ok,false)
-})
-
-test('local observations are isolated by exact manifest path and cleaned up after rejection', async t => {
-  const { store, write, root } = fixture(t)
-  const { withScanActivity } = await import('../lib/redteam/scan-history.js')
-  write('alpha',ONE,'nmap','executed','<nmaprun/>')
-  write('beta',ONE,'nmap','executed','<nmaprun/>')
-  const path = join(root,'alpha','scan-output',ONE+'.json')
-  await assert.rejects(withScanActivity(path,'ingestion',async()=>{
-    assert.equal(listScanHistory(store,'alpha').items[0].runtime_activity.phase,'ingestion')
-    assert.equal(listScanHistory(store,'beta').items[0].runtime_activity.state,'not-observed')
-    throw new Error('fixture rejection')
-  }),/fixture rejection/)
-  assert.equal(listScanHistory(store,'alpha').items[0].runtime_activity.state,'not-observed')
-})
-
-test('exact stored import reference is checked only in its own engagement database', async t => {
-  const { store, write } = fixture(t)
-  const alpha = new DatabaseSync(':memory:'), beta = new DatabaseSync(':memory:')
-  t.after(() => { alpha.close(); beta.close() })
-  for (const db of [alpha,beta]) db.exec('CREATE TABLE scan_run(id INTEGER PRIMARY KEY, tool TEXT, status TEXT, started_at TEXT, finished_at TEXT)')
-  alpha.exec("INSERT INTO scan_run VALUES (19,'nmap','completed','2026-11-09',NULL)")
-  beta.exec("INSERT INTO scan_run VALUES (99,'httpx','completed',NULL,NULL)")
-  store.db = id => id === 'alpha' ? alpha : beta
-  write('alpha',ONE,'nmap','imported','<nmaprun/>',{assets:1,imported:{scan_run_id:19}})
-  write('beta',ONE,'nmap','imported','<nmaprun/>',{assets:1,imported:{scan_run_id:19}})
-  write('alpha',TWO,'httpx','executed','{}')
-  const present = await inspectScanArtifact(store,'alpha',ONE)
-  assert.equal(present.status,'verified')
-  assert.equal(present.ingestion_record.status,'record-present')
-  assert.equal(present.ingestion_record.scan_run_id,19)
-  assert.equal(present.ingestion_record.stored_status,'completed')
-  assert.equal((await inspectScanArtifact(store,'beta',ONE)).ingestion_record.status,'missing')
-  assert.equal((await inspectScanArtifact(store,'alpha',TWO)).ingestion_record.status,'not-recorded')
-  store.db = () => { throw new Error('fixture unavailable') }
-  assert.equal((await inspectScanArtifact(store,'alpha',ONE)).ingestion_record.status,'unavailable')
 })

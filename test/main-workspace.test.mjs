@@ -10,9 +10,8 @@ const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 test('Purge uses the native main panel and matching global sidebar entry', () => {
   assert.match(client, /name: "main", key: PURGE_PANEL_ID/)
   assert.match(client, /name: "sidebar.panellist", id: PURGE_PANEL_ID/)
-  assert.match(client, /selectPurgeHostPanel\(PURGE_PANEL_ID\)/)
-  assert.match(client, /selectPurgeHostPanel\(null\)/)
-  assert.match(client, /layout\.selectPanel\(panel\)/)
+  assert.match(client, /layout\.selectPanel\(PURGE_PANEL_ID\)/)
+  assert.match(client, /layout\.selectPanel\(null\)/)
 })
 
 test('the main page reuses real clean and redteam components instead of a mockup', () => {
@@ -32,37 +31,15 @@ test('regenerating the embedded redteam component does not overwrite the main wo
 })
 
 test('native clean workspace has separate navigation without discarding edits', () => {
-  assert.match(client, /const \[section, setSection\] = useState\("overview"\)/)
+  assert.match(client, /const \[section, setSection\] = useState\("patches"\)/)
   assert.match(client, /"aria-label": "清洗台功能导航"/)
   assert.match(client, /"aria-current": section === item.id \? "page" : undefined/)
-  assert.match(client, /className: "dshp-clean-pane", hidden: section === "rules"/)
+  assert.match(client, /className: "dshp-clean-pane", hidden: section !== "patches"/)
   assert.match(client, /className: "dshp-clean-pane", hidden: section !== "rules"/)
   assert.match(client, /h\(PurgifySection, null\)/)
   assert.match(client, /h\(RulesSection, null\)/)
   assert.match(client, /if \(props\.workspace !== true\)/)
-  assert.match(client, /\.dshp-clean-pane\[hidden\],\.dshp-clean-subpane\[hidden\]\{display:none!important\}/)
-})
-
-test('clean pages reuse one state owner and keep hidden editors mounted', () => {
-  assert.match(client, /h\(PurgifySection, \{ section \}\)/)
-  assert.match(client, /function PurgifySection\(\{ section \} = \{\}\)/)
-  for (const id of ['overview', 'patches', 'prompt', 'maintenance', 'rules']) {
-    assert.ok(client.includes('{ id: "' + id + '", title:'))
-  }
-  const helper = client.match(/const cleanPane = ([\s\S]*?\}, \.\.\.children\));/)
-  assert.ok(helper)
-  const makePane = new Function('h', 'section', 'return (' + helper[1] + ')')
-  const h = (type, props, ...children) => ({ type, props, children })
-  const editor = { value: 'unsaved' }
-  assert.equal(makePane(h, 'prompt')(['prompt'], editor).props.hidden, false)
-  const hidden = makePane(h, 'patches')(['prompt'], editor)
-  assert.equal(hidden.props.hidden, true)
-  assert.equal(hidden.children[0], editor)
-  assert.equal(makePane(h, undefined)(['prompt'], editor).props.hidden, false)
-  assert.match(client, /cleanPane\(\["patches"\], h\(PatchGroups/)
-  assert.match(client, /cleanPane\(\["prompt"\], h\(InjectSwitchSection\)/)
-  assert.match(client, /cleanPane\(\["maintenance"\], h\("div", \{ className: "dshp-rel"/)
-  assert.match(client, /cleanPane\(\["overview", "maintenance"\], s \? h\("div", \{ className: "dshp-metrics"/)
+  assert.match(client, /\.dshp-clean-pane\[hidden\]\{display:none!important\}/)
 })
 
 test('closed legacy Dock does not mount duplicate forms or run hidden API effects', () => {
@@ -72,24 +49,8 @@ test('closed legacy Dock does not mount duplicate forms or run hidden API effect
 
 test('native main workspace loads both styles without depending on shell overlay', () => {
   assert.match(client, /function ensurePurgeWorkspaceStyles\(\)/)
-  assert.match(client, /function PurgeWorkspacePage\(\) \{\s*const t = useT\(\);\s*useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/)
+  assert.match(client, /function PurgeWorkspacePage\(\) \{\s*const t = useT\(\);\s*useEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/)
   assert.match(client, /document\.querySelector\('style\[data-dsh-purge-drill="1"\]'\)/)
   assert.match(client, /function PurgeDock\(\)/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
-})
-
-
-test('native maximized redteam workspace has opaque, blur-free scrolling surfaces', () => {
-  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
-  const scope = '.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded'
-  for (const code of [source, client]) {
-    const start = code.indexOf(scope + ',\n' + scope + ' *{')
-    assert.ok(start >= 0, 'native workspace paint rule must be present')
-    const rule = code.slice(start, code.indexOf('}', start))
-    assert.ok(rule.includes('backdrop-filter:none!important'))
-    assert.ok(rule.includes('-webkit-backdrop-filter:none!important'))
-    for (const [selector, color] of [['.rt-tabs', '#0e1a2b'], ['.rt-pane', '#101b2b'], ['.rt-card', '#18283d']]) {
-      assert.ok(code.includes(scope + ' ' + selector + '{\n  background:' + color + '!important'))
-    }
-  }
 })

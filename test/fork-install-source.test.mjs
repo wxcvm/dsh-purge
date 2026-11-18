@@ -35,10 +35,9 @@ test('English and Chinese installation instructions select this fork without del
     assert.match(content, /https:\/\/codeload\.github\.com\/wxcvm\/dsh-purge\/tar\.gz\/refs\/heads\/master/)
     assert.doesNotMatch(content, /https:\/\/codeload\.github\.com\/YuJunZhiXue\/dsh-purge\//)
     assert.match(content, /git clone https:\/\/github\.com\/wxcvm\/dsh-purge\.git/)
-    assert.ok(content.includes('https://github.com/' + fork + '/releases'), 'authorized release source')
-    assert.ok(content.includes('docs/PRIVATE_UPDATE.zh-CN.md'), 'private installation guide')
-    assert.ok(content.includes(version), 'current package version documented')
-    assert.doesNotMatch(content, /dsh:\/\/plugin\/install/, 'no anonymous desktop install link for private repository')
+    assert.match(content, /repo=wxcvm%2Fdsh-purge/)
+    assert.ok(content.includes('version=' + version + '&repo='))
+    assert.ok(content.includes('downloadUrl=https%3A%2F%2Fcodeload.github.com%2Fwxcvm%2Fdsh-purge%2Ftar.gz%2Frefs%2Ftags%2Fv' + version))
     assert.ok(content.includes('YuJunZhiXue/dsh-purge'), 'original attribution retained')
   }
 })

@@ -1,0 +1,59 @@
+# PURGE / 版本中心
+
+[返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
+
+> 本页为私有仓库的维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
+
+## 当前版本快照 · 2026-11-18
+
+| 渠道 | 版本 | 状态 |
+| --- | --- | --- |
+| Stable | [1.1.92-wxcvm.11](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) | 已发布；ZIP、SHA-256 与提交 `00975bf` 已核对，安装与重启待实机验收 |
+| Stable 历史版本 | [1.1.92-wxcvm.10](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.10) | GitHub 已列出 Release；本轮未重新核对其资产字节 |
+| Stable 历史版本 | [.6–.9](https://github.com/wxcvm/dsh-purge/releases) | 仅按各标签及实际 Release 记录判断，不套用 .11 的验收结果 |
+| Beta | [独立分支](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 以该分支与实际 Release 为准，不自动提升为 Stable |
+
+[.11 交付台账](DELIVERY_STATUS_11.zh-CN.md)分别记录发布资产、本地打包、自动化检查和待实机项。这份工作副本上的诊断修复尚未发布，原标签与资产未修改。
+
+## 后续发布预检
+
+- 固定候选提交，确认包内版本、标签、必要运行文件和 SHA-256。已发布版本不使用相同标签替换资产。
+- `dry_run: true` 可在授权的发布工作流中只做归档检查；预检日志不能替代实际下载资产校验。核对候选提交上的 CI，不借用其他提交的结果。
+- Windows Desktop 与 Web 独立记录干净配置安装、现有配置升级、重启重连和故障恢复。真实宿主未跑时明确写「未验收」。
+
+## 如何判断版本状态
+
+| 阶段 | 核对位置 | 完成条件 |
+| --- | --- | --- |
+| 1. 源码 | package.json、目标分支 | 版本号及提交确定 |
+| 2. CI | [Actions](https://github.com/wxcvm/dsh-purge/actions) | 对应提交的必要构建与测试通过 |
+| 3. 标签 | [Tags](https://github.com/wxcvm/dsh-purge/tags) | 标签指向预期提交 |
+| 4. Release | [Releases](https://github.com/wxcvm/dsh-purge/releases) | 目标版本发布，正确资产及校验文件可访问 |
+| 5. 实机 | 验收记录 | 对应宿主、安装方式、版本与真实运行结果有记录 |
+| 6. Stable 提升 | [Pull requests](https://github.com/wxcvm/dsh-purge/pulls) | 明确批准并完成目标分支合并 |
+
+预览版不自动等于正式版。不要用旧版本的验收结果替代新版本实机验收。
+
+## 私有交付
+
+- 在已登录且具备仓库权限的 GitHub 会话中访问 Releases，选择明确的版本和实际上传资产。
+- 若版本提供 SHA256SUMS，下载后核对相应文件的 SHA-256；没有校验文件时不记录为已完成校验。
+- 匿名安装地址和 codeload URL 不能直接访问私有仓库。#268 已合并授权更新与恢复实现；实际安装、升级和重启结果仍需核验。参见 [更新恢复](UPDATE_RECOVERY.zh-CN.md)。
+- GitHub 访问令牌不得写入发布文件、日志或仓库文档。
+
+## 发布与验收记录模板
+
+复制以下字段到每次发布说明或对应 PR，未验证项标为待确认，失败项记录具体结果。
+
+| 字段 | 记录 |
+| --- | --- |
+| 版本 / 渠道 | 待填写 |
+| 源码提交 / 标签 | 待填写 |
+| CI 链接 / 结论 | 待填写 |
+| Release 链接 / 资产 / SHA-256 | 待填写 |
+| Windows Desktop 宿主版本 / 验收 | 待填写 |
+| Web 宿主版本 / 验收 | 待填写 |
+| 安装、更新、版本切换、重启 | 待填写 |
+| 已知问题 / 回滚版本 | 待填写 |
+
+维护约定：每次版本发布或 Stable 提升后更新本页快照；无发布变更的文档 PR 不修改版本号。

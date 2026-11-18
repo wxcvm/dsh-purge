@@ -1,6 +1,6 @@
 /**
  * 把 lib/redteam/client.js 抽成可嵌入的工厂片段，
- * 写进 client.js 的 DSH_PURGE_DRILL 标记之间，并同步工作区源码与样式。
+ * 写进 client.js 里的 DSH_PURGE_DRILL 标记之间。
  *
  * 用法：node scripts/build-client.mjs
  * 校验：node scripts/build-client.mjs --check（只比较，不写文件）
@@ -12,13 +12,9 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const drillSrc = join(root, "lib", "redteam", "client.js");
 const clientPath = join(root, "client.js");
-const workspaceSrc = join(root, "lib", "workspace", "client-shell.js");
-const workspaceCssSrc = join(root, "lib", "workspace", "workspace.css");
 
 const BEGIN = "/* __DSH_PURGE_DRILL_BEGIN__ */";
 const END = "/* __DSH_PURGE_DRILL_END__ */";
-const WORKSPACE_BEGIN = "/* __DSH_PURGE_WORKSPACE_BEGIN__ */";
-const WORKSPACE_END = "/* __DSH_PURGE_WORKSPACE_END__ */";
 
 let raw = readFileSync(drillSrc, "utf8").replace(/\r\n/g, "\n");
 const startMark = "factory: (require) => {";
@@ -52,7 +48,7 @@ for (; j < body.length; j += 1) {
 	}
 }
 const applyParts = `function applyDrillParts() {
-      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth };
+      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api, useTemporaryPrivacy: useTemporaryPrivacy, setTemporaryPrivacy: setTemporaryPrivacy };
     }
 `;
 body = body.slice(0, applyAt) + applyParts + body.slice(j);
@@ -75,20 +71,16 @@ const beginAt = client.indexOf(BEGIN);
 const endAt = client.indexOf(END);
 if (beginAt < 0 || endAt < 0 || endAt < beginAt) throw new Error("drill markers out of order");
 let generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.length);
-
-// Workspace source stays readable; the host still receives a single client.js.
-const workspaceSource = readFileSync(workspaceSrc, "utf8").replace(/\r\n/g, "\n");
-const workspaceCss = readFileSync(workspaceCssSrc, "utf8").replace(/\r\n/g, "\n");
-const cssPlaceholder = 'const PURGE_WORKSPACE_CSS = "__DSH_PURGE_WORKSPACE_CSS__";';
-if (workspaceSource.split(cssPlaceholder).length !== 2) throw new Error("workspace CSS placeholder missing or duplicated");
-const workspaceBody = workspaceSource
-  .replace(cssPlaceholder, "const PURGE_WORKSPACE_CSS = " + JSON.stringify(workspaceCss) + ";")
-  .split("\n").map((line) => line ? "\t\t" + line : line).join("\n");
-const workspaceFragment = WORKSPACE_BEGIN + "\n" + workspaceBody + WORKSPACE_END;
-const workspaceBeginAt = generated.indexOf(WORKSPACE_BEGIN);
-const workspaceEndAt = generated.indexOf(WORKSPACE_END);
-if (workspaceBeginAt < 0 || workspaceEndAt < workspaceBeginAt) throw new Error("workspace markers missing or out of order");
-generated = generated.slice(0, workspaceBeginAt) + workspaceFragment + generated.slice(workspaceEndAt + WORKSPACE_END.length);
+// Keep the runtime panel and report projection generated from their own sources.
+const runtimeBegin = "/* __DSH_PURGE_RUNTIME_BEGIN__ */";
+const runtimeEnd = "/* __DSH_PURGE_RUNTIME_END__ */";
+const runtimeBody = readFileSync(join(root, "lib", "task-quality-report.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "thinking-experiment.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "runtime-panel.js"), "utf8");
+const runtimeAt = generated.indexOf(runtimeBegin), runtimeEndAt = generated.indexOf(runtimeEnd);
+if (runtimeAt < 0 || runtimeEndAt < runtimeAt) throw new Error("runtime panel markers missing");
+generated = generated.slice(0, runtimeAt) + runtimeBegin + "\n" + runtimeBody.replace(/\r\n/g, "\n")
+  + runtimeEnd + generated.slice(runtimeEndAt + runtimeEnd.length);
 // Normalize line endings so a Windows checkout does not change the build identity.
 // FNV-1a is an identity for stale UI detection, not a security signature.
 const buildMarker = /const CLIENT_BUILD_ID = "[^"]*";/;
@@ -104,9 +96,9 @@ if (process.argv.includes("--check")) {
     console.error("client.js is stale; run node scripts/build-client.mjs and commit the generated client.js");
     process.exitCode = 1;
   } else {
-    console.log("client.js embedded drill matches lib/redteam/client.js and workspace source");
+    console.log("client.js embedded drill matches lib/redteam/client.js");
   }
 } else {
   writeFileSync(clientPath, generated);
-  console.log("embedded drill and workspace into client.js");
+  console.log("embedded drill client into client.js (" + Buffer.byteLength(fragment) + " bytes fragment)");
 }

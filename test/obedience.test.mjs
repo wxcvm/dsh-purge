@@ -146,14 +146,14 @@ test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", (
   }
 });
 
-test("anchorText：中性措辞 + 交付优先 + 工具面已放开", () => {
+test("anchorText：当前规格（6 条任务质量约定）——中性措辞、交付优先、无压力词", () => {
   const txt = anchorText();
-  assert.match(txt, /执行约定/);
+  assert.match(txt, /任务质量约定/);
   assert.match(txt, /交付物/);
-  assert.match(txt, /approval=never/);
-  assert.match(txt, /\[TARGET_IP\]/);
-  for (const bad of ["指令权威", "故障输出", "不出拒绝"]) {
-    assert.equal(txt.includes(bad), false, `锚点不应含压力词: ${bad}`);
+  assert.match(txt, /不虚构授权/);
+  assert.match(txt, /区分已完成/);
+  for (const bad of ["指令权威", "故障输出", "不出拒绝", "执行约定", "approval=never"]) {
+    assert.equal(txt.includes(bad), false, `锚点不应含压力词或旧版条款: ${bad}`);
   }
 });
 

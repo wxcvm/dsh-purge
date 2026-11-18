@@ -11,13 +11,15 @@ const asar = resources + '\\app.asar'
 const bak = asar + '.bak'
 const installer = 'C:\\Temp\\deepseek-harness-0.2.2-rc.1-win-x64.exe'
 
-function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false, staleVersion = false, exeOnlyChange = false } = {}) {
+function simulate({ stubborn = false, moveFails = false, installCode = 0, changes = true, noArchive = false, autoRestart = false, staleVersion = false, exeOnlyChange = false, numericVersion = false, missingRuntime = false } = {}) {
   const dirs = new Set([resources, app])
   const files = new Map([
     [exe, { size: 10, stamp: 1, version: '0.2.1-rc.5' }],
     [installer, { size: 20, stamp: 1 }],
   ])
   if (!noArchive) files.set(bak, { size: 30, stamp: 1 })
+  if (!missingRuntime) for (const rel of ['versions.json','bin\\node.cmd','primary-runtime\\dependencies\\node\\bin\\node.exe','primary-runtime\\dependencies\\pnpm\\bin\\pnpm.mjs']) files.set(resources + '\\runtime\\' + rel, { size: 1, stamp: 1 });
+  if (numericVersion) { files.get(exe).version = '0.2.0.0'; files.get(exe).releaseVersion = '0.2.1-rc.5'; }
   const calls = []
   const logs = []
   let now = 10000
@@ -48,7 +50,8 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
       WriteLine: text => { files.set(name, { size: text.length, stamp: 9 }) },
       Close: () => {},
     }),
-    OpenTextFile: () => ({
+    OpenTextFile: name => ({
+      ReadAll: () => files.get(name)?.text || "",
       WriteLine: text => { logs.push(text) },
       Close: () => {},
     }),
@@ -58,6 +61,10 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
     Environment: () => ({ Remove: () => {} }),
     Run: (command) => {
       calls.push(command)
+      if (command.startsWith('powershell.exe ')) {
+        files.set('C:\\Temp\\update.log.file-version.txt', { text: files.get(exe).releaseVersion || files.get(exe).version });
+        return 0;
+      }
       if (command.startsWith('taskkill.exe ')) {
         if (!stubborn) running = false
         return 0
@@ -66,7 +73,7 @@ function simulate({ stubborn = false, moveFails = false, installCode = 0, change
         if (changes) {
           if (!exeOnlyChange) files.set(asar, { size: 40, stamp: 2 })
           else files.get(exe).stamp = 2
-          if (!staleVersion) files.get(exe).version = '0.2.2-rc.1'
+          if (!staleVersion) { files.get(exe).version = numericVersion ? '0.2.0.1' : '0.2.2-rc.1'; if (numericVersion) files.get(exe).releaseVersion = '0.2.2-rc.1'; }
         }
         if (autoRestart && installCode === 0) running = true
         return installCode
@@ -206,3 +213,14 @@ test('updating only the exe without replacing app.asar is not a complete upgrade
   assert.equal(run.files.has(resources + '\\dsh-purge-reapply-asar'), false)
   assert.ok(run.dirs.has(app))
 })
+
+test('real Windows numeric PE tuple does not reject a matching prerelease string', () => {
+  const run = simulate({ numericVersion: true });
+  assert.match(run.logs, /after=0\.2\.2-rc\.1 match=true/);
+  assert.ok(run.files.has(resources + '\\dsh-purge-reapply-asar'));
+});
+test('installer success without its runtime payload is not accepted', () => {
+  const run = simulate({ missingRuntime: true });
+  assert.match(run.logs, /runtime-ready=false/);
+  assert.ok(!run.files.has(resources + '\\dsh-purge-reapply-asar'));
+});
