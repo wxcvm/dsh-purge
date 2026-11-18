@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { deletePromptProfile, getSessionPromptLock, latestPromptTask, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { isLoopbackRequest } from "../lib/web.js";
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-profiles-"));
@@ -118,3 +119,13 @@ test("child inherits parent selection until it has its own explicit lock", () =>
   setSessionPromptLock(home, "parent", null);
   assert.equal(routePromptForSession(args).id, "redteam", "child inherits active parent preset");
 }));
+
+test("private prompt storage API accepts only local loopback peers", () => {
+  for (const peer of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+    assert.equal(isLoopbackRequest({ socket: { remoteAddress: peer } }), true, peer);
+  }
+  for (const peer of ["192.168.1.20", "10.0.0.5", "2001:db8::1", "", null]) {
+    assert.equal(isLoopbackRequest({ socket: { remoteAddress: peer } }), false, String(peer));
+  }
+  assert.equal(isLoopbackRequest(null), false);
+});
