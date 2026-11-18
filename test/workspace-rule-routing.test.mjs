@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  readCwdSelections, writeCwdSelections, toggleCwdSelection,
+  readCwdSelections, writeCwdSelections, toggleCwdSelection, readWorkspaceFileScope, writeWorkspaceFileScope,
   readWorkspaceRuleMode, writeWorkspaceRuleMode, planCwdRuleInject,
   readSelectedCwdInject, rulesStatus, recordWorkspaceAssembly, latestWorkspaceAssembly,
 } from "../lib/rules.js";
@@ -116,4 +116,49 @@ test("ordinary global prompt can combine workspace rules in the actual assembly"
   assert.equal(result.sections[1].text, "Native host persona");
   assert.equal(result.tools, host.tools);
   assert.equal(latestWorkspaceAssembly(home, projectA).decisions.find(x => x.path === fileA).reason, "assembled");
+});
+
+test("per-file model / provider allow-deny and Agent preset constraints are project-scoped", async t => {
+  const { home, projectA, projectB, fileA, fileB } = fixture(t);
+  await toggleCwdSelection(home, fileA, true, projectA);
+  await toggleCwdSelection(home, fileB, true, projectB);
+  await writeWorkspaceRuleMode(home, projectA, "combine");
+  await writeWorkspaceRuleMode(home, projectB, "combine");
+  await writeWorkspaceFileScope(home, projectA, fileA, {
+    allowModels: ["glm-*"], blockModels: ["glm-debug"],
+    allowProviders: ["zhipu"], blockProviders: ["blocked"],
+    restrictPresets: true, presets: ["standard", "ptc"], includeOtherPresets: false,
+  });
+  const evalA = (model, provider, preset) => planCwdRuleInject(home, projectA,
+    { hasPrompt: true, model, provider, preset }).decisions[0].reason;
+  assert.equal(evalA("glm-4.7", "zhipu", "standard"), "planned");
+  assert.equal(evalA("glm-4.7", "zhipu", "ptc"), "planned");
+  assert.equal(evalA("glm-debug", "zhipu", "standard"), "model-blocked");
+  assert.equal(evalA("glm-4.7", "blocked", "standard"), "provider-blocked");
+  assert.equal(evalA("gpt-6", "zhipu", "standard"), "model-not-allowed");
+  assert.equal(evalA("", "zhipu", "standard"), "model-unobserved");
+  assert.equal(evalA("glm-4.7", "", "standard"), "provider-unobserved");
+  assert.equal(evalA("glm-4.7", "zhipu", "redteam"), "preset-not-allowed");
+  assert.equal(evalA("glm-4.7", "zhipu", ""), "preset-unobserved");
+  assert.deepEqual(readWorkspaceFileScope(home, projectB, fileB).allowModels, [],
+    "project B must not inherit project A's model restrictions");
+  assert.equal(planCwdRuleInject(home, projectB, { model: "gpt-6" }).decisions[0].reason, "planned");
+  assert.deepEqual((await rulesStatus(home, projectA)).cwd_candidates[0].filter.allowModels, ["glm-*"]);
+  await assert.rejects(writeWorkspaceFileScope(home, projectB, fileA, {}), /current workspace scan/);
+});
+
+test("unlisted Agent presets opt in independently of built-in preset picks", async t => {
+  const { home, projectA, fileA } = fixture(t);
+  await toggleCwdSelection(home, fileA, true, projectA);
+  await writeWorkspaceFileScope(home, projectA, fileA, {
+    restrictPresets: true, presets: ["cordis"], includeOtherPresets: false,
+  });
+  const check = preset => planCwdRuleInject(home, projectA, { preset }).decisions[0].reason;
+  assert.equal(check("cordis"), "planned");
+  assert.equal(check("creator"), "planned");
+  assert.equal(check("standard"), "preset-not-allowed");
+  assert.equal(check("my-custom"), "preset-not-allowed");
+  await writeWorkspaceFileScope(home, projectA, fileA, { restrictPresets: true,
+    presets: ["cordis"], includeOtherPresets: true });
+  assert.equal(check("my-custom"), "planned");
 });

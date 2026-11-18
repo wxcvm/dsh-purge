@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "1beb501558212d7a";
+		const CLIENT_BUILD_ID = "6548a3c34dbc2a72";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3209,6 +3209,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const [newName, setNewName] = useState("");
 			const [newTarget, setNewTarget] = useState("AGENTS.md");
 			const [busy, setBusy] = useState(false);
+            const [scopePath, setScopePath] = useState("");
+            const [scopeDrafts, setScopeDrafts] = useState({});
 			const [notice, setNotice] = useState({ kind: "idle", text: "" });
 
 			const loadStatus = useCallback(() => {
@@ -3326,6 +3328,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const policyOptions = (st && Array.isArray(st.workspace_policies) && st.workspace_policies.length) ? st.workspace_policies : ["fallback", "strict", "always"];
 			const cwdCandidates = (st && Array.isArray(st.cwd_candidates)) ? st.cwd_candidates : [];
 			const cwdValue = (st && typeof st.cwd === "string") ? st.cwd : "";
+            const scopeFile = cwdCandidates.find(item => item.path === scopePath) || cwdCandidates[0] || null;
+            const scopeValue = scopeFile ? (scopeDrafts[scopeFile.path] || scopeFile.filter || {}) : {};
+            const scopeUpdate = (key, value) => {
+                if (!scopeFile) return;
+                setScopeDrafts(old => ({ ...old, [scopeFile.path]: {
+                    ...(old[scopeFile.path] || scopeFile.filter || {}), [key]: value,
+                } }));
+            };
+            const scopeLines = text => String(text || "").split(/[\n,，]+/).map(x => x.trim()).filter(Boolean);
             const ruleMode = st?.workspace_rule_mode || "fallback";
             const lastAssembly = st?.last_workspace_assembly?.cwd === cwdValue ? st.last_workspace_assembly : null;
             const lastReasons = new Map((lastAssembly?.decisions || []).map(row => [row.path, row.reason]));
@@ -3335,6 +3346,10 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
                 "not-selected": "未选择", disabled: "Purge 未启用", "injection-off": "注入已关闭",
                 "read-failed": "文件读取失败", "empty-file": "文件为空",
                 "duplicate-selected": "与另一文件重复", "size-limit": "超过现有大小上限",
+                "model-blocked": "模型黑名单排除", "provider-blocked": "厂商黑名单排除",
+                "model-not-allowed": "模型白名单未命中", "provider-not-allowed": "厂商白名单未命中",
+                "model-unobserved": "未观察到当前模型", "provider-unobserved": "未观察到当前厂商",
+                "preset-not-allowed": "Agent 预设未选中", "preset-unobserved": "未观察到 Agent 预设",
             };
 			return h("section", { className: "dshp-panel", "aria-label": t("rules.title") },
 				h("div", { className: "dshp-head" },
@@ -3424,6 +3439,45 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
                           : "尚无当前工作目录的真实组装记录；勾选只是配置，不代表已经注入。"),
                     h("p", { className: "dshp-block-hint" },
                         "每个项目单独保存选择与注入方式；旧版全局选择会被保留，首次修改此项目后独立记录。"),
+                    cwdCandidates.length ? h("details", { style: { marginTop: 10 } },
+                        h("summary", { style: { cursor: "pointer" } }, "每份工作区规则的模型 / Agent 适用范围（可选）"),
+                        h("div", { style: { display: "grid", gap: 10, padding: "12px 0" } },
+                            h("label", null, "选择文件",
+                                h("select", { className: "dshp-field", value: scopeFile?.path || "",
+                                    onChange: e => setScopePath(e.target.value) },
+                                    cwdCandidates.map(item => h("option", { key: item.path, value: item.path },
+                                        item.name + " · " + item.scope)))),
+                            [["allowModels", "模型白名单"], ["blockModels", "模型黑名单"],
+                             ["allowProviders", "厂商白名单"], ["blockProviders", "厂商黑名单"]]
+                            .map(([key, label]) => h("label", { key }, label + "（每行一项，可用 *；空白表示不限制）",
+                                h("textarea", { className: "dshp-area", rows: 2,
+                                    "aria-label": label, value: (scopeValue[key] || []).join("\n"),
+                                    onChange: e => scopeUpdate(key, scopeLines(e.target.value)) }))),
+                            h("label", null,
+                                h("input", { type: "checkbox", checked: scopeValue.restrictPresets === true,
+                                    onChange: e => scopeUpdate("restrictPresets", e.target.checked) }),
+                                " 按指定 Agent 预设启用"),
+                            scopeValue.restrictPresets === true
+                              ? h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap" } },
+                                  [["standard", "标准"], ["ptc", "PTC"], ["minimal", "极简"],
+                                   ["cordis", "创造"], ["redteam", "红队"]].map(([id, title]) =>
+                                      h("label", { key: id },
+                                          h("input", { type: "checkbox", checked: (scopeValue.presets || []).includes(id),
+                                              onChange: e => scopeUpdate("presets", e.target.checked ?
+                                                  [...new Set([...(scopeValue.presets || []), id])] :
+                                                  (scopeValue.presets || []).filter(x => x !== id)) }),
+                                          " " + title)),
+                                  h("label", null, h("input", { type: "checkbox",
+                                      checked: scopeValue.includeOtherPresets !== false,
+                                      onChange: e => scopeUpdate("includeOtherPresets", e.target.checked) }),
+                                      " 未列出的预设也允许"))
+                              : null,
+                            h(Btn, { tiny: true, kind: "primary", disabled: busy || !scopeFile,
+                                onClick: () => doPost("set-cwd-scope", {
+                                    cwd: cwdValue, path: scopeFile.path, filter: scopeValue,
+                                }) }, "保存此文件的适用范围"),
+                        ))
+                      : null,
 				),
 				h("div", { className: "dshp-block" },
 				h("div", { className: "dshp-split" },
