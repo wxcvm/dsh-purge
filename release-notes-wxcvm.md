@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.16
+
+## 中文
+
+本次在 .15 基础上修复「规则与技能」的工作区规则生效链路并增强诊断；旧版标签和发布资产不变。
+
+- **普通 Agent 也能使用所选工作区规则**：修复旧组装链路对非红队模式过早返回的问题，统一处理标准/极简等普通提示词与本地工作区规则。
+- **项目独立配置**：勾选文件、注入方式及逐文件适用范围按项目根目录分别保存；原全局选择仍可读取和保留。
+- **明确的组合模式**：默认仍是「空位兜底」，可为单个项目切换「与全局／局部提示词组合」。重复正文及宿主已包含的原生正文不重复注入，保留既有文件总量约束与原「工作区策略」设置。
+- **逐文件适用范围**：模型与 Provider 独立白/黑名单（支持通配符）、Agent 预设勾选及自定义预设开关。未设置时不额外限制，无法观测实际模型/厂商时不假装命中。
+- **真实状态而非勾选即成功**：显示最近一次实际服务端组装所记录的文件纳入/排除原因、时间与预设，不保存文件正文；组装结果不代表模型最终遵循。
+- **Skill 状态辨别**：区分本地文件格式有效、宿主登记未知与实际调用未知，不用文件存在推断成功。
+- **验收边界**：Windows/Ubuntu 自动化测试包含项目隔离、多文件组合、作用域匹配和普通模式实际组装。真实 Harness Desktop 的 cwd、模型路由和系统提示词最终效果仍需独立实机验证。
+
+## English
+
+Fixes workspace instruction routing in ordinary Agent modes, adds opt-in prompt composition while preserving the legacy fallback default, per-project selections, per-file model/provider allow/deny and Agent-preset scoping, deduplication, and observed assembly diagnostics. Skill file validity is no longer confused with host registration or successful invocation. CI does not replace real Desktop acceptance.
+
+---
+
 # 1.1.92-wxcvm.15
 
 ## 中文
