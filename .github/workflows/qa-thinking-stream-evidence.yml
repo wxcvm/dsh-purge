@@ -12,13 +12,13 @@ jobs:
       - name: Check existing Harness CLI and profile without reading credentials
         shell: pwsh
         run: |
-          $home = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
+          $dshRoot = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
           $commands = @('dsh','pnpm','node','npx')
           foreach ($name in $commands) {
             $found = [bool](Get-Command $name -ErrorAction SilentlyContinue)
             Write-Host "cli.$name=$found"
           }
-          Write-Host "dsh.home.exists=$(Test-Path -LiteralPath $home)"
-          Write-Host "dsh.desktop.profile.exists=$(Test-Path -LiteralPath (Join-Path $home 'profiles/desktop'))"
-          Write-Host "dsh.sessions.exists=$(Test-Path -LiteralPath (Join-Path $home 'sessions'))"
+          Write-Host "dsh.home.exists=$(Test-Path -LiteralPath $dshRoot)"
+          Write-Host "dsh.desktop.profile.exists=$(Test-Path -LiteralPath (Join-Path $dshRoot 'profiles/desktop'))"
+          Write-Host "dsh.sessions.exists=$(Test-Path -LiteralPath (Join-Path $dshRoot 'sessions'))"
           Write-Host "local.web.ready=$([bool](Get-NetTCPConnection -LocalPort 3080 -State Listen -ErrorAction SilentlyContinue))"
