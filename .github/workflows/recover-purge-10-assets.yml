@@ -33,7 +33,7 @@ jobs:
           test "$actual_commit" = "$expected_commit"
           current_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.target_commitish')"
           test "$current_target" = "$expected_commit"
-          first="$(git show "$actual_commit:release-notes-wxcvm.md" | head -n 1 | tr -d '\r')"
+          first="$(git show "$actual_commit:release-notes-wxcvm.md" | sed -n '1p' | tr -d '\r')"
           test "$first" = "# $version"
           zip="dsh-purge-$version.zip"
           git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$actual_commit"
