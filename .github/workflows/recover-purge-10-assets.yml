@@ -19,6 +19,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Rebuild and upload immutable .10 release assets
         shell: bash
         env:
@@ -28,11 +31,15 @@ jobs:
           tag=v1.1.92-wxcvm.10
           expected_commit=66ddb75e6303c723f1e970c1c31f26a66497bbbf
           version=1.1.92-wxcvm.10
-          git fetch origin "refs/tags/${tag}:refs/tags/${tag}"
           actual_commit="$(git rev-parse "refs/tags/${tag}^{commit}")"
           test "$actual_commit" = "$expected_commit"
-          current_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.target_commitish')"
-          test "$current_target" = "$expected_commit"
+          api_headers=(-H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GH_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28")
+          curl_args=(--fail --silent --show-error --location --retry 4 --retry-all-errors --retry-delay 3 --connect-timeout 15 --max-time 90)
+          get_release() {
+            curl "${curl_args[@]}" "${api_headers[@]}" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$tag"
+          }
+          release_json="$(get_release)"
+          release_id="$(printf '%s' "$release_json" | EXPECTED="$expected_commit" node -e 'const r=JSON.parse(require("fs").readFileSync(0,"utf8")); if(r.target_commitish!==process.env.EXPECTED)process.exit(1); process.stdout.write(String(r.id));')"
           first="$(git show "$actual_commit:release-notes-wxcvm.md" | sed -n '1p' | tr -d '\r')"
           test "$first" = "# $version"
           zip="dsh-purge-$version.zip"
@@ -44,17 +51,29 @@ jobs:
             unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
           done
           sha256sum "$zip" > SHA256SUMS.txt
-          # A partial previous upload can be recovered without replacing the tag.
-          success=false
-          for attempt in 1 2 3; do
-            if gh release upload "$tag" "$zip" SHA256SUMS.txt --clobber; then
-              success=true
-              break
+          # Use GitHub's documented REST asset endpoint directly: no gh GraphQL preflight.
+          # Re-check the Release after a retry because an interrupted POST may have completed.
+          asset_uploaded() {
+            printf '%s' "$release_json" | FILE_NAME="$1" node -e '
+              const r=JSON.parse(require("fs").readFileSync(0,"utf8"));
+              if(!r.assets.some(a=>a.name===process.env.FILE_NAME && a.state==="uploaded" && a.size>0))process.exit(1);
+            '
+          }
+          for file in "$zip" SHA256SUMS.txt; do
+            release_json="$(get_release)"
+            if asset_uploaded "$file"; then
+              echo "Already uploaded: $file"
+              continue
             fi
-            echo "Upload attempt $attempt failed"
-            sleep 5
+            if ! curl "${curl_args[@]}" --max-time 180 "${api_headers[@]}" -H "Content-Type: application/octet-stream" \
+                --data-binary "@$file" -o upload-response.json \
+                "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id/assets?name=$file"; then
+              echo "Upload returned an error, checking whether GitHub received $file"
+            fi
+            release_json="$(get_release)"
+            asset_uploaded "$file"
           done
-          test "$success" = true
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.assets[].name' | sort > uploaded-assets.txt
-          grep -Fx "$zip" uploaded-assets.txt
-          grep -Fx SHA256SUMS.txt uploaded-assets.txt
+          release_json="$(get_release)"
+          asset_uploaded "$zip"
+          asset_uploaded SHA256SUMS.txt
+          echo "Verified .10 assets on the existing GitHub Release"
