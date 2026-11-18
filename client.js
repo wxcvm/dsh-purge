@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "0a74f6c848af080e";
+		const CLIENT_BUILD_ID = "a00c065d398b3ee8";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4234,6 +4234,19 @@ function runtimeRowStatus(row) {
   return { key: 'running', label: row.settlement === 'committed' ? '已提交 · 等待终态' : '等待后续事件' };
 }
 
+const outcomeLabels = {
+  "upstream-policy": "上游策略限制",
+  "provider-failure": "Provider 请求失败（原因未确认）",
+  "explicit-refusal": "回答明确拒答",
+  "no-explicit-refusal": "未观察到明确拒答（不等于任务完成）",
+  incomplete: "输出未完成",
+  uncertain: "证据不足",
+};
+function outcomeLabel(row) {
+  const result = row?.outcomeDiagnosis;
+  return result ? (outcomeLabels[result.kind] || "未分类") + " · " + (result.evidence || "unknown") : "未观测";
+}
+
 function runtimeRouteKey(row) {
   return JSON.stringify([row.provider ?? null, row.model ?? null]);
 }
@@ -4374,6 +4387,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
           detail('用量证据', ({ 'host-stream': '实时流', 'durable-stream': '持久流' }[r.usageSource] || '未观测') + ' · 实时 / 持久总量：' + value(r.liveUsage?.totalTokens) + ' / ' + value(r.durableUsage?.totalTokens)),
           detail('错误代码', value(r.errorCode)),
+          detail('失败/拒答归因', outcomeLabel(r)),
           detail('终态来源', source(r)),
           detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
           detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),
@@ -4502,6 +4516,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					} }, "预览路由")),
 				h("textarea", { className: "dshp-area", rows: 3, placeholder: "输入测试任务（不发送给主模型）", value: sample, onChange: (event) => setSample(event.target.value) }),
 				preview ? h("p", { className: "dshp-hint" }, "命中：" + (preview.selected || "无") + " · 原因：" + preview.reason) : null,
+				preview?.dispatch ? h("p", { className: "dshp-hint" }, "轻量调度建议：" + preview.dispatch.kind + " · " + (preview.dispatch.capabilities || []).map(c => c.id + (c.available === true ? "（已提供）" : "（可用性未知）")).join("、") + (preview.dispatch.subagent === "consider" ? " · 可考虑子代理" : "") + "（仅建议，不自动执行）") : null,
 				h("h4", null, "当前会话提示词锁定"),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
 					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "会话 ID", onChange: (event) => { setSessionId(event.target.value); setSessionLock(null); } }),
