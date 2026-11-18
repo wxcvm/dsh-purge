@@ -70,3 +70,32 @@ test("host callback child lock overrides the inherited parent task", (t) => {
   assert.equal(own.text(context), "");
   assert.equal(parent.header.agentPreset, "standard");
 });
+
+test("host prompt sections respect model/provider rules without using another model's defaults", (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-model-rule-"));
+  const previous = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  t.after(() => {
+    if (previous === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = previous;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  savePromptProfile(home, { id: "global", enabled: true, body: "GLOBAL_UNIQUE" });
+  savePromptProfile(home, { id: "glm_local", enabled: true, allowEnabled: true,
+    allowTargets: { models: ["glm-*"], providers: ["zhipu"] }, body: "GLM_UNIQUE" });
+  const sections = new Map();
+  registerPromptSections({ systemPrompt: { section(spec) { sections.set(spec.name, spec); } } },
+    { enabled: true, capabilityProtocol: false });
+  const session = { id: "s1", header: { agentPreset: "standard", model: "glm-4.7", provider: "zhipu" }, events: [] };
+  const current = { agent: { session } };
+  let text = sections.get("dsh-purge").text(current);
+  assert.match(text, /GLOBAL_UNIQUE/);
+  assert.match(text, /GLM_UNIQUE/);
+  session.header.model = "other-model";
+  text = sections.get("dsh-purge").text(current);
+  assert.match(text, /GLOBAL_UNIQUE/);
+  assert.doesNotMatch(text, /GLM_UNIQUE/);
+  session.header.model = "glm-4.7";
+  session.header.agentPreset = "redteam";
+  assert.doesNotMatch(sections.get("dsh-purge").text(current), /GLOBAL_UNIQUE|GLM_UNIQUE/);
+});
