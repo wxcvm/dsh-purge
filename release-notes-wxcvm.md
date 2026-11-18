@@ -1,3 +1,20 @@
+# 1.1.92-wxcvm.11
+
+## 中文
+
+本次版本基于已发布的 1.1.92-wxcvm.10，合并 Purge PR #330 的提示词规则路由、清洗台管理与来源诊断。保持原 .10 Git 标签与已发布资产不可变；.11 使用独立标签与安装包。
+
+- **提示词库与任务路由**：新增可编辑的并列提示词、关键词/排除词及优先级匹配、会话手动锁定；红队预设沿用原 prompt-inject.md；普通模式无匹配时保留宿主原生装配。
+- **会话和宿主兼容**：子代理默认继承父会话提示词，显式锁定可覆盖；只替换 Purge 自身的注入段，保留宿主工具/身份/上下文。
+- **清洗台诊断**：区分结构化策略错误、Provider 失败、明确文本拒答与不完整流；增加只读任务类型/能力建议，不自动调用工具。
+- **验证状态**：PR #330 最新提交 `076f47f` 的 Windows 与 Ubuntu CI 通过。合并后的 master 集成 CI、真实 Windows Desktop 页面点击/即时模式切换/子代理实际运行及 .11 安装升级需另行核验。本文不把 CI 当作实机验收。
+
+## English
+
+This release follows the immutable .10 publication and includes merged PR #330: editable rule-based prompt profiles, per-session locks, source-aware response diagnostics, and advisory-only task dispatch. The red-team preset still uses the existing prompt-inject.md; unmatched standard tasks keep native Harness assembly. The PR head passed Windows and Ubuntu CI; real Desktop acceptance and final .11 release/install checks remain independent.
+
+---
+
 # 1.1.92-wxcvm.10
 
 ## 中文
