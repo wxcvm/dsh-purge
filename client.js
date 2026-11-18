@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "55b9fe42da9ea4ef";
+		const CLIENT_BUILD_ID = "0a74f6c848af080e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4504,7 +4504,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				preview ? h("p", { className: "dshp-hint" }, "命中：" + (preview.selected || "无") + " · 原因：" + preview.reason) : null,
 				h("h4", null, "当前会话提示词锁定"),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "会话 ID", onChange: (event) => setSessionId(event.target.value) }),
+					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "会话 ID", onChange: (event) => { setSessionId(event.target.value); setSessionLock(null); } }),
 					h("button", { type: "button", onClick: selectedSession }, "获取当前会话"),
 					h("button", { type: "button", disabled: !sessionId, onClick: showLock }, "查询锁定")),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
