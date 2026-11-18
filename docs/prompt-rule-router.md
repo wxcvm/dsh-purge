@@ -54,7 +54,7 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 
 会话手动锁定数据存放在 `$DSH_HOME/dsh-purge/prompt-session-locks.json`。代码接口为 `setSessionPromptLock(home, sessionId, profileId)`；`profileId=null` 恢复自动选择，`profileId="none"` 表示该会话不注入 Purge 提示词。
 
-清洗台「提示词管理 → 自动匹配与会话」页签，支持新增、编辑、启用/禁用、删除自定义配置、命中预览和会话锁定。「红队主提示词」页签保留对现有 `prompt-inject.md` 的编辑。
+清洗台「提示词管理 → 通用与局部提示词」（默认页签），支持新增、编辑、启用/禁用、删除自定义配置、命中预览和会话锁定。「红队专用提示词」页签保留对现有 `prompt-inject.md` 的编辑。切换页签只改变分类展示，不迁移正文或改变运行时注入规则。
 
 新增同源管理端点：`GET /dsh-purge/prompt-profiles`、`POST /dsh-purge/prompt-profiles`，后者支持 `save` / `delete` / `preview` / `lock` / `unlock`。匹配预览只调用本地路由规则，不发起模型请求。
 

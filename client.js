@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "ac133861f98ccbe5";
+		const CLIENT_BUILD_ID = "d3fc0792614af99d";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3160,7 +3160,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				}) : null,
 				// h(ContinueRetrySection, null),
 				cleanPane(["prompt"], h("div", { className: "dshp-sub" },
-					h("h4", null, t("override.title")),
+					h("h4", null, "红队专用主提示词"),
+					h("p", { className: "dshp-hint" }, "此处编辑红队预设的独立正文（prompt-inject.md）。普通全局与局部规则请在「通用与局部提示词」中管理；局部规则只有勾选红队预设才会附加到红队模式。"),
 					h("div", { className: "dshp-row", style: { margin: 0 } },
 						h(Btn, { kind: "primary", tiny: true, disabled: patchBusy || !overrideLoaded, onClick: saveOverride }, t("btn.saveInject")),
 						h(Btn, { tiny: true, disabled: patchBusy || !overrideLoaded || !defaultOverride, onClick: restoreOverride }, t("btn.restoreInject")),
@@ -4664,7 +4665,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             const panel = { border: "1px solid var(--dsw-alias-border-l1, #36506b)",
                 borderRadius: 12, padding: 16, minWidth: 0, background: "var(--dsw-specific-card-bg, rgba(100,130,170,.045))" };
             return h("section", { className: "dshp-sub", style: { padding: 16, display: "grid", gap: 14 } },
-                h("h3", { style: { margin: 0 } }, "提示词管理"),
+                h("h3", { style: { margin: 0 } }, "通用与局部提示词"),
                 h("p", { className: "dshp-hint", style: { margin: 0 } },
                     "正文直接编辑；每份提示词下方选择生效的 Agent 预设。复杂规则折叠收起，红队专用提示词单独管理。"),
                 loadError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, loadError) : null,
@@ -4673,7 +4674,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
                         gap: 16, alignItems: "start" } },
                     h("section", { className: "dshp-prompt-global", style: panel },
-                        h("h4", { style: { margin: "0 0 10px" } }, "全局提示词"),
+                        h("h4", { style: { margin: "0 0 10px" } }, "通用全局提示词"),
                         globalDraft ? h("div", { style: { display: "grid", gap: 12 } },
                             h("textarea", { "aria-label": "全局提示词正文", className: "dshp-area",
                                 rows: 15, spellCheck: false, style: { minHeight: 280 },
@@ -4801,9 +4802,9 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
 			const [theme, setTheme] = useState(readTheme);
 			const [section, setSection] = useState("overview");
-			const [promptPane, setPromptPane] = useState("source");
+			const [promptPane, setPromptPane] = useState("library");
 			const [diagnosticsPane, setDiagnosticsPane] = useState("health");
-			const [profilesVisited, setProfilesVisited] = useState(false);
+			const [profilesVisited, setProfilesVisited] = useState(true);
 			const [runtimeVisited, setRuntimeVisited] = useState(false);
 			const pageHeading = useRef(null);
 			const focusNextPage = useRef(false);
@@ -4860,7 +4861,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const sections = [
 				{ id: "overview", title: "状态总览", description: "宿主、清洗进度与快捷操作" },
 				{ id: "patches", title: "补丁管理", description: "分类、筛选、检测与诊断" },
-				{ id: "prompt", title: "提示词管理", description: "原红队主提示词、自动匹配与会话配置" },
+				{ id: "prompt", title: "提示词管理", description: "通用、局部与红队专用提示词分类管理" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
 				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
 				{ id: "diagnostics", title: "诊断中心", description: "宿主故障、补丁核验与 Provider 运行记录" },
@@ -4883,7 +4884,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 						section === "diagnostics" ? h("button", { type: "button", className: "dshp-runtime-action", onClick: () => navigate("overview") }, t("diag.overview.back")) : null,
 					),
 					section === "prompt" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "提示词管理分组" },
-						[["source", "红队主提示词"], ["library", "自动匹配与会话"]].map(([id, label]) => h("button", {
+						[["library", "通用与局部提示词"], ["source", "红队专用提示词"]].map(([id, label]) => h("button", {
 							key: id, type: "button", className: "dshp-clean-filter" + (promptPane === id ? " is-on" : ""),
 							"aria-pressed": promptPane === id, onClick: () => { setPromptPane(id); if (id === "library") setProfilesVisited(true); },
 						}, label))) : null,
