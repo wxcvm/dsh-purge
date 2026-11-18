@@ -68,7 +68,10 @@ function mount() {
   }
   async function initialize() {
     render();
-    await effectQueue[0]();
+    effectQueue[0]();
+    // useEffect schedules the async reload but does not return its Promise.
+    // Flush that microtask before React's subsequent render/effect cycle.
+    await new Promise(resolve => setImmediate(resolve));
     render();
     effectQueue[1]();
     return render();
