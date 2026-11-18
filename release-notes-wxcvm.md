@@ -1,3 +1,21 @@
+# 1.1.92-wxcvm.13
+
+## 中文
+
+本次独立版本在 .12 基础上交付 Issue #340 的提示词规则改进；不移动或覆盖 .12 及更早标签和资产。
+
+- **通用全局与红队分离**：新增独立、默认关闭的全局提示词，沿用旧红队专属 prompt-inject.md，不会把红队内容自动注入普通会话；两者各自启停。
+- **局部规则**：新建按钮直接打开编辑草稿（无需预先填写 ID），可创建任意数量的局部正文与独立开关；本地保存后生效。适用的全局+局部规则按稳定优先级合并至单一 Purge section，不重写宿主原生提示词、工具与上下文。
+- **每条单独名单**：白名单、黑名单独立启停，模型、Provider 厂商、会话 ID、Agent 预设均可匹配；黑名单优先。支持精确 ID 与星号通配符；缺失的真实模型身份不宣称匹配。
+- **会话与预览**：旧锁定行为保持兼容，新增单条会话暂停/恢复；预览展示命中及排除原因，不调用模型。
+- **修复与验证**：避免把正文为空的规则误显示为已注入；补充持久化、宿主回调、作用域及 UI 交互测试。Windows + Ubuntu 自动化检查通过后才合并发布。真实 Desktop 的模型/厂商元数据、提示词 API 404 根因、安装升级和最终系统提示词装配仍需单独实机确认。
+
+## English
+
+Adds independently controlled ordinary global and local prompt rules while keeping the legacy redteam prompt separate. Per-rule allow/deny lists target models, providers, sessions and agent presets; matching rules combine in one Purge section. A new-rule button opens an editable local draft before saving. Per-session rule pause, explicit route preview and regression tests are included. Current CI does not establish real Desktop installation or runtime model metadata coverage.
+
+---
+
 # 1.1.92-wxcvm.12
 
 ## 中文
