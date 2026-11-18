@@ -12,7 +12,7 @@ permissions:
 jobs:
   upload:
     if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/release-assets/v1.1.92-wxcvm.10'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, purge-ci]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
