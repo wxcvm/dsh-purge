@@ -82,7 +82,7 @@ function mount() {
 test("prompt profile UI saves edited independent body through the active API callback", async () => {
   const ui = mount();
   let tree = await ui.initialize();
-  assert.match(JSON.stringify(tree), /红队正文仍在左侧/);
+  assert.match(JSON.stringify(tree), /红队正文请切换上方/);
   const selector = ui.find(tree, "select", "选择提示词");
   selector.props.onChange({ target: { value: "coding" } });
   ui.render();
@@ -123,4 +123,12 @@ test("session picker reads the actual lock and applies explicit off/unlock actio
   await ui.find(tree, "button", "应用锁定").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(ui.actions.at(-1).op, "unlock");
+});
+
+
+test("missing prompt-profiles API shows an actionable backend-version error", () => {
+  assert.match(source, /提示词库接口返回 404/);
+  assert.match(source, /完整退出 Harness/);
+  assert.match(source, /loadError \? h\("p", \{ role: "alert"/);
+  assert.match(source, /disabled: busy \|\| Boolean\(loadError\)/);
 });

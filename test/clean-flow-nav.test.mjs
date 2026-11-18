@@ -70,3 +70,21 @@ test('cleaning panel no longer houses ARTEX and embedded drill gets the updated 
   assert.match(root, /className: 'rt-tab-group-title'/)
   assert.match(rt, /fetch\('\/dsh-purge\/artex', \{ method: 'GET' \}\)/)
 })
+
+
+test('prompt and diagnostics are consolidated into two pages with internal tabs', () => {
+  const settings = root.slice(root.indexOf('function SettingsRoot(props)'), root.indexOf('const REWIND_CSS'));
+  assert.match(settings, /id: "prompt", title: "提示词管理"/);
+  assert.match(settings, /id: "diagnostics", title: "诊断中心"/);
+  assert.doesNotMatch(settings, /id: "profiles"|id: "runtime"/);
+  assert.match(settings, /\["source", "红队主提示词"\]/);
+  assert.match(settings, /\["library", "自动匹配与会话"\]/);
+  assert.match(settings, /\["health", "宿主与故障"\]/);
+  assert.match(settings, /\["runtime", "Provider 与运行记录"\]/);
+  assert.match(settings, /section === "prompt" && promptPane === "library" \? h\(PromptProfilesSection/);
+});
+test('patch page explains coverage versus loaded host and treats skips separately', () => {
+  assert.match(root, /当前定位宿主的磁盘补丁覆盖情况，不等于当前进程已经加载/);
+  assert.match(root, /跳过＝不适用或组件缺失/);
+  assert.match(root, /tally\.pending \+ tally\.unmatched/);
+});

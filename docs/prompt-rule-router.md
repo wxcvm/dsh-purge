@@ -1,6 +1,6 @@
 # Purge 提示词规则路由 · 发版前验收
 
-实现位于 [Draft PR #330](https://github.com/wxcvm/dsh-purge/pull/330)。未合并、未打标签、未安装到正式 Harness；本文记录可重复验证的事实，不将 CI 测试冒充真实桌面验收。
+实现已通过 [PR #330](https://github.com/wxcvm/dsh-purge/pull/330) 合并到 master；当前文档只记录可重复验证的事实。合并不代表已在真实 Windows Harness 窗口完成安装与点击验收。
 
 ## 选择顺序
 
@@ -40,7 +40,7 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 
 会话手动锁定数据存放在 `$DSH_HOME/dsh-purge/prompt-session-locks.json`。代码接口为 `setSessionPromptLock(home, sessionId, profileId)`；`profileId=null` 恢复自动选择，`profileId="none"` 表示该会话不注入 Purge 提示词。
 
-清洗台新增并列「提示词库」页面，支持新增、编辑、启用/禁用、删除自定义配置、命中预览和会话锁定。原「提示词」页面保留对现有 `prompt-inject.md` 的编辑。
+清洗台「提示词管理 → 自动匹配与会话」页签，支持新增、编辑、启用/禁用、删除自定义配置、命中预览和会话锁定。「红队主提示词」页签保留对现有 `prompt-inject.md` 的编辑。
 
 新增同源管理端点：`GET /dsh-purge/prompt-profiles`、`POST /dsh-purge/prompt-profiles`，后者支持 `save` / `delete` / `preview` / `lock` / `unlock`。匹配预览只调用本地路由规则，不发起模型请求。
 
@@ -64,18 +64,18 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 
 在隔离的 Windows Harness Desktop 环境中测试，保留现有配置备份；不要直接覆盖正在工作的正式安装。使用无敏感信息的本地示例任务。
 
-1. 打开清洗台「提示词库」，新建 `route-smoke`，设置关键词 `演示路线检查`、示例正文 `ROUTE_SMOKE_TEST`，保存后刷新。确认正文、优先级和启用状态持久化。
+1. 打开清洗台「提示词管理 → 自动匹配与会话」，新建 `route-smoke`，设置关键词 `演示路线检查`、示例正文 `ROUTE_SMOKE_TEST`，保存后刷新。确认正文、优先级和启用状态持久化。
 2. 在标准预设中发送 `演示路线检查`，检查真实宿主 assembled prompt 是否**仅出现一次** `ROUTE_SMOKE_TEST`，没有历史红队段；切回「你好」确认无命中时恢复宿主原生提示词。
 3. 在同一会话手动锁定为 `writing`，确认覆盖关键词路由；改为 `none`，确认不注入 Purge 段；恢复「自动选择」再验证能命中。切换到另一会话并返回，核对锁定显示与实际会话 ID 一致。
 4. 切到红队预设，核对仍读取原 `prompt-inject.md`，且没有因为新提示词库而改写文件；再切回标准/极简，检查锚点和残留。
 5. 派生一个只读子代理，先验证默认继承父会话提示词，再显式锁定子会话以覆盖；不改变父会话的锁定状态。
-6. 用一段正常响应、一段明确拒答文本和一次受控的本地请求失败测试「运行诊断」；仅核对分类来源是否分开，不用实际高风险目标。
+6. 用一段正常响应、一段明确拒答文本和一次受控的本地请求失败测试「诊断中心 → Provider 与运行记录」；仅核对分类来源是否分开，不用实际高风险目标。
 7. 完全退出并重启 Desktop，确认提示词库配置持久化、界面可保存、历史对话和已有工具/技能仍可访问；再核对卸载或回退是否保留用户数据。清理本轮测试用自定义提示词。
 
 **未完成项不能写成通过。** 如宿主无法显示最终 assembled prompt，就记录「不可直接观测」，结合调试日志和可获取的宿主证据；不能凭模型一句话推断成功。
 
-## 最终发布边界
+## 实机验收与发布边界
 
-- PR #330 保留 Draft，未合并到 `master`；不创建正式标签和 GitHub Release。
-- `.github/workflows/release.yml` 当前只允许 `master` 的手动调用。因而 PR 分支上的成功兼容性 CI **不是** Release `dry_run: true` 结果；只有在合并且重新检查最终主分支提交后，才能执行现有非发布预演。
+- PR #330 已合并。新布局修复需独立 PR 和对应 CI 核验；不能沿用旧 PR 的绿灯宣称新布局已通过。
+- 需使用目标版本的实机安装包，确认前后端接口同时更新，并核对清洗台与实际宿主版本；GitHub CI 不能替代 Desktop 实机验收。
 - Purge 与 ARTEX 联合发版仍须依照既有 `docs/JOINT_RELEASE_PURGE_ARTEX_20261117.zh-CN.md` 进行双端、资产、升级和回退验收；本文不宣称完成那部分工作。
