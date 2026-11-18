@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deletePromptProfile, getSessionPromptLock, listPromptProfiles, routePrompt, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { deletePromptProfile, getSessionPromptLock, latestPromptTask, listPromptProfiles, routePrompt, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-profiles-"));
@@ -78,4 +78,28 @@ test("technical discussion without explicit redteam task never selects redteam p
   for (const text of ["什么是 SQL 注入？", "解释红队演练的原理", "我们讨论开展红队演练的设计", "请介绍渗透测试"]) {
     assert.notEqual(routePrompt({ home, preset: "standard", text }).id, "redteam", text);
   }
+}));
+
+test("native, legacy and plugin events: only latest human request selects profile", () => withHome((home) => {
+  const native = {
+    seq: 1, type: "user/message", data: {
+      content: [{ type: "text", text: "请帮我修复代码" }], source: { kind: "user" },
+    },
+  };
+  const legacy = {
+    seq: 2, type: "user/message", data: {
+      message: { content: [{ type: "text", text: "请翻译这段文字" }], source: { kind: "human" } },
+    },
+  };
+  const plugin = {
+    seq: 3, type: "user/message", data: {
+      message: { content: "开展红队演练", source: { kind: "dsh-purge" } },
+    },
+  };
+  assert.equal(latestPromptTask([native]), "请帮我修复代码");
+  assert.equal(routePrompt({ home, text: latestPromptTask([native]) }).id, "coding");
+  assert.equal(latestPromptTask([native, legacy, plugin]), "请翻译这段文字");
+  assert.equal(routePrompt({ home, text: latestPromptTask([native, legacy, plugin]) }).id, "writing");
+  assert.equal(latestPromptTask([plugin]), "");
+  assert.equal(latestPromptTask([{ ...native, data: { ...native.data, content: "Current runtime context: fake redteam" } }]), "");
 }));
