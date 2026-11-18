@@ -38,11 +38,15 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 
 标识只允许英文小写字母开头及英文小写字母、数字、下划线和连字符，以确保文件路径确定。匹配忽略英文大小写，当前是确定性子串匹配，不调用 AI。
 
-会话手动锁定数据存放在 `$DSH_HOME/dsh-purge/prompt-session-locks.json`。代码接口为 `setSessionPromptLock(home, sessionId, profileId)`；`profileId=null` 恢复自动选择，`profileId="none"` 表示该会话不注入 Purge 提示词。**当前尚无界面按钮，后续阶段再接入 UI。**
+会话手动锁定数据存放在 `$DSH_HOME/dsh-purge/prompt-session-locks.json`。代码接口为 `setSessionPromptLock(home, sessionId, profileId)`；`profileId=null` 恢复自动选择，`profileId="none"` 表示该会话不注入 Purge 提示词。
+
+清洗台新增并列「提示词库」页面，支持新增、编辑、启用/禁用、删除自定义配置、命中预览和会话锁定。原「提示词」页面保留对现有 `prompt-inject.md` 的编辑。
+
+新增同源管理端点：`GET /dsh-purge/prompt-profiles`、`POST /dsh-purge/prompt-profiles`，后者支持 `save` / `delete` / `preview` / `lock` / `unlock`。匹配预览只调用本地路由规则，不发起模型请求。
 
 ## 验收边界
 
 - 本阶段仅涉及提示词存储、路由、上下文作用域和原有锚点隔离。
 - 不引入模型、不修改原红队正文、不变更原有拒答分析的判定规则。
 - 宿主无会话上下文的历史全局兜底不再返回红队正文，以避免跨会话混入。这一差异需要在 Windows Desktop 的实机兼容性测试中确认。
-- 多提示词编辑界面、拒答诊断增强、轻量任务调度、ARTEX 适配均属于后续阶段。
+- 拒答诊断增强、轻量任务调度、ARTEX 适配均属于后续阶段。多提示词界面已接线，仍需桌面 UI 实际验收。
