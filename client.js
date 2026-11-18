@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "a00c065d398b3ee8";
+		const CLIENT_BUILD_ID = "de45a8effff5001e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4466,16 +4466,20 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				perform("save", { profile: { id, name: id, enabled: true, priority: 30, body: "", keywords: [], excludes: [] } }, id);
 				setNewId("");
 			};
-			const selectedSession = () => {
-				const value = currentSessionId(rewindSessions);
-				if (value) setSessionId(value);
-				else setNotice("无法读取当前会话 ID，可手动输入后锁定");
-			};
-			const showLock = async () => {
+			const showLock = async (id) => {
 				try {
-					const response = await apiJson("/dsh-purge/prompt-profiles?sessionId=" + encodeURIComponent(sessionId));
+					const response = await apiJson("/dsh-purge/prompt-profiles?sessionId=" + encodeURIComponent(id));
+					if (!response?.ok) throw new Error(response?.error || "读取会话锁定失败");
 					setSessionLock(response.sessionLock || null);
 				} catch (error) { setNotice(String(error.message || error)); }
+			};
+			const selectedSession = () => {
+				const value = currentSessionId(rewindSessions);
+				if (value) {
+					setSessionId(value);
+					setSessionLock(null);
+					void showLock(value);
+				} else setNotice("无法读取当前会话 ID，可手动输入后锁定");
 			};
 			return h("section", { className: "dshp-sub", style: { padding: "16px", display: "grid", gap: 14 } },
 				h("h3", null, "智能提示词库"),
@@ -4503,7 +4507,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 							},
 						}, "删除")),
 					) : null,
-				h("h4", null, "规则命中预览"),
+				h("h4", null, "自动规则预览（不考虑会话锁定）"),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
 					h("select", { "aria-label": "预设模式", value: preset, onChange: (event) => setPreset(event.target.value) },
 						["standard", "minimal", "redteam"].map((x) => h("option", { key: x, value: x }, x))),
@@ -4521,7 +4525,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
 					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "会话 ID", onChange: (event) => { setSessionId(event.target.value); setSessionLock(null); } }),
 					h("button", { type: "button", onClick: selectedSession }, "获取当前会话"),
-					h("button", { type: "button", disabled: !sessionId, onClick: showLock }, "查询锁定")),
+					h("button", { type: "button", disabled: !sessionId, onClick: () => showLock(sessionId) }, "查询锁定")),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
 					h("select", { "aria-label": "锁定提示词", value: sessionLock || "", onChange: (event) => setSessionLock(event.target.value || null) },
 						h("option", { value: "" }, "自动选择"),
