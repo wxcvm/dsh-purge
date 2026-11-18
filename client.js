@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "1185db9818844a34";
+		const CLIENT_BUILD_ID = "3f64c20bff1201dd";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4509,143 +4509,201 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 }
 /* __DSH_PURGE_RUNTIME_END__ */
 
+
 		function PromptProfilesSection() {
 			const [profiles, setProfiles] = useState([]);
-			const [active, setActive] = useState("redteam");
+			const [active, setActive] = useState("global");
 			const [draft, setDraft] = useState(null);
 			const [newId, setNewId] = useState("");
 			const [sessionId, setSessionId] = useState("");
 			const [sessionLock, setSessionLock] = useState(null);
+			const [sessionOverrides, setSessionOverrides] = useState({});
 			const [sample, setSample] = useState("");
 			const [preset, setPreset] = useState("standard");
+			const [previewModel, setPreviewModel] = useState("");
+			const [previewProvider, setPreviewProvider] = useState("");
 			const [preview, setPreview] = useState(null);
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState("");
 			const [loadError, setLoadError] = useState("");
+			const parseLines = (value) => String(value || "").split(/[\n,，]+/).map(x => x.trim()).filter(Boolean);
+			const fields = [["models", "模型 ID"], ["providers", "厂商 / Provider ID"],
+				["sessions", "对话 Session ID"], ["presets", "Agent 预设"]];
+			const prepare = (p) => {
+				const copy = { ...p, keywordsText: (p.keywords || []).join("\n"), excludesText: (p.excludes || []).join("\n") };
+				for (const [field] of fields) {
+					copy["allow_" + field] = (p.allowTargets?.[field] || []).join("\n");
+					copy["block_" + field] = (p.blockTargets?.[field] || []).join("\n");
+				}
+				return copy;
+			};
 			const explainError = (error) => {
 				const message = String(error?.message || error);
 				return /\b404\b/.test(message)
-					? "提示词库接口返回 404：当前页面与宿主后端可能不是同一版，或后端路由尚未注册。请完整退出 Harness（包括托盘）并重新打开已安装的同版本插件；仍未恢复请到「诊断中心」核对实际加载的版本。原红队提示词不受影响。"
-					: "提示词库请求失败：" + message;
+					? "提示词规则接口 404：当前前端与后端可能并非同版，或后端路由没有注册。请完全退出 Harness（包括托盘）再打开；如仍失败，到诊断中心核对磁盘插件与已加载后端版本。"
+					: "提示词规则请求失败：" + message;
 			};
-
 			const reload = useCallback(async (chosen) => {
 				try {
 					const response = await apiJson("/dsh-purge/prompt-profiles");
 					if (!response?.ok) throw new Error(response?.error || "读取失败");
 					setProfiles(response.profiles || []);
 					setLoadError("");
-					setActive((old) => chosen || (response.profiles || []).some((p) => p.id === old) && old || response.profiles?.[0]?.id || "");
+					setActive(old => chosen || (response.profiles || []).some(p => p.id === old) && old || response.profiles?.[0]?.id || "");
 				} catch (error) { setLoadError(explainError(error)); }
 			}, []);
 			useEffect(() => { reload(); }, [reload]);
 			useEffect(() => {
-				const current = profiles.find((item) => item.id === active);
-				if (current) setDraft({
-					...current,
-					keywordsText: (current.keywords || []).join("\n"),
-					excludesText: (current.excludes || []).join("\n"),
-				});
+				const current = profiles.find(item => item.id === active);
+				if (current) setDraft(prepare(current));
 			}, [active, profiles]);
 			const perform = async (op, payload, selected) => {
 				setBusy(true); setNotice("");
 				try {
 					const response = await promptProfilesApi(op, payload);
 					if (!response?.ok) throw new Error(response?.error || "操作失败");
-					setNotice("已保存");
 					if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
+					if (op === "pause" || op === "resume") setSessionOverrides(response.sessionOverrides || {});
 					if (op === "delete") setDraft(null);
+					setNotice(op === "delete" ? "规则已删除" : op === "pause" ? "当前会话已暂停这条规则" : op === "resume" ? "已恢复按规则自动选择" : "已保存");
 					await reload(selected);
 				} catch (error) { setNotice(explainError(error)); }
 				finally { setBusy(false); }
 			};
-			const parseLines = (text) => String(text || "").split(/[\n,，]+/).map((x) => x.trim()).filter(Boolean);
 			const save = () => {
 				if (!draft) return;
-				perform("save", { profile: {
-					id: draft.id, name: draft.name, enabled: draft.enabled,
-					priority: Number(draft.priority) || 0,
-					keywords: parseLines(draft.keywordsText),
-					excludes: parseLines(draft.excludesText),
-					...(draft.id === "redteam" ? {} : { body: draft.body }),
+				const targets = (prefix) => Object.fromEntries(fields.map(([field]) => [field, parseLines(draft[prefix + "_" + field])]));
+				void perform("save", { profile: {
+					id: draft.id, name: draft.name, scope: draft.scope || "local",
+					enabled: draft.enabled, priority: Number(draft.priority) || 0,
+					keywords: parseLines(draft.keywordsText), excludes: parseLines(draft.excludesText),
+					allowEnabled: draft.allowEnabled === true, blockEnabled: draft.blockEnabled === true,
+					allowTargets: targets("allow"), blockTargets: targets("block"),
+					...(draft.id === "redteam" ? {} : { body: draft.body || "" }),
 				} }, draft.id);
 			};
 			const create = () => {
-				const id = newId.trim();
-				if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) { setNotice("ID 必须以小写英文字母开头，仅包含字母、数字、下划线和连字符"); return; }
-				if (profiles.some((p) => p.id === id)) { setNotice("同名提示词已存在"); return; }
-				perform("save", { profile: { id, name: id, enabled: true, priority: 30, body: "", keywords: [], excludes: [] } }, id);
+				const id = newId.trim() || "rule-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+				if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) { setNotice("规则 ID 只能使用小写英文字母开头，以及字母、数字、下划线和连字符"); return; }
+				if (profiles.some(p => p.id === id)) { setNotice("同名规则已存在，请换个 ID"); return; }
+				setDraft(prepare({ id, name: "新提示词规则", scope: "local", enabled: true, priority: 30,
+					body: "", keywords: [], excludes: [], allowEnabled: false, blockEnabled: false,
+					allowTargets: {}, blockTargets: {} }));
+				setActive(id);
 				setNewId("");
+				setNotice("新规则已打开：填写正文与适用范围后点击「保存规则」。未保存前不会注入任何内容。");
 			};
 			const showLock = async (id) => {
 				try {
 					const response = await apiJson("/dsh-purge/prompt-profiles?sessionId=" + encodeURIComponent(id));
-					if (!response?.ok) throw new Error(response?.error || "读取会话锁定失败");
+					if (!response?.ok) throw new Error(response?.error || "读取会话设置失败");
 					setSessionLock(response.sessionLock || null);
+					setSessionOverrides(response.sessionOverrides || {});
 				} catch (error) { setNotice(explainError(error)); }
 			};
 			const selectedSession = () => {
-				const value = currentSessionId(rewindSessions);
-				if (value) {
-					setSessionId(value);
-					setSessionLock(null);
-					void showLock(value);
-				} else setNotice("无法读取当前会话 ID，可手动输入后锁定");
+				const id = currentSessionId(rewindSessions);
+				if (!id) { setNotice("无法读取当前会话 ID，可以手动输入"); return; }
+				setSessionId(id); setSessionLock(null); void showLock(id);
 			};
+			const targetInputs = (prefix) => fields.map(([field, label]) =>
+				h("label", { key: prefix + field }, label + "（一行一项，支持 * 通配符）",
+					h("textarea", { className: "dshp-area", rows: 2,
+						"aria-label": (prefix === "allow" ? "白名单" : "黑名单") + label,
+						value: draft[prefix + "_" + field] || "",
+						onChange: e => setDraft({ ...draft, [prefix + "_" + field]: e.target.value }) })));
 			return h("section", { className: "dshp-sub", style: { padding: "16px", display: "grid", gap: 14 } },
-				h("h3", null, "自动匹配提示词"),
-				h("p", { className: "dshp-hint" }, "只在标准/极简模式的任务命中关键词时自动使用对应配置；无匹配就保持 Harness 原生提示词。红队模式始终使用另一页的 prompt-inject.md，不会被这里覆盖。"),
+				h("h3", null, "提示词规则管理"),
+				h("p", { className: "dshp-hint" }, "「全局」是普通会话通用规则，可独立启停；「局部」按关键词或目标匹配，多条可以同时生效。红队模式专用 prompt-inject.md 只在红队预设/明确手动锁定时使用，不等同于全局规则。"),
 				loadError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, loadError) : null,
 				h("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
-					h("select", { "aria-label": "选择提示词", value: active, onChange: (event) => setActive(event.target.value) },
-						profiles.map((item) => h("option", { key: item.id, value: item.id }, item.name + " (" + item.id + ")"))),
-					h("input", { "aria-label": "新提示词 ID", placeholder: "新配置 ID（例如 research）", value: newId, onChange: (event) => setNewId(event.target.value) }),
-					h("button", { type: "button", disabled: busy || Boolean(loadError), onClick: create }, "新建提示词"),
+					h("select", { "aria-label": "选择提示词", value: active, onChange: e => setActive(e.target.value) },
+						profiles.map(p => h("option", { key: p.id, value: p.id }, p.name + " (" + p.id + ")"))),
+					h("input", { "aria-label": "新提示词 ID", placeholder: "可选规则 ID（留空自动生成）", value: newId, onChange: e => setNewId(e.target.value) }),
+					h("button", { type: "button", disabled: busy, onClick: create }, "新建提示词规则"),
 					h("button", { type: "button", disabled: busy, onClick: () => reload() }, "刷新")),
+				notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null,
 				draft ? h("div", { style: { display: "grid", gap: 10 } },
-					h("label", null, "名称", h("input", { style: { width: "100%" }, value: draft.name, onChange: (event) => setDraft({ ...draft, name: event.target.value }) })),
-					h("label", null, "优先级", h("input", { type: "number", value: draft.priority, onChange: (event) => setDraft({ ...draft, priority: event.target.value }) })),
-					h("label", null, h("input", { type: "checkbox", checked: draft.enabled, onChange: (event) => setDraft({ ...draft, enabled: event.target.checked }) }), " 启用自动匹配"),
-					h("label", null, "匹配关键词（每行一条）", h("textarea", { className: "dshp-area", rows: 3, value: draft.keywordsText, onChange: (event) => setDraft({ ...draft, keywordsText: event.target.value }) })),
-					h("label", null, "排除词（每行一条）", h("textarea", { className: "dshp-area", rows: 2, value: draft.excludesText, onChange: (event) => setDraft({ ...draft, excludesText: event.target.value }) })),
+					h("h4", null, "当前规则：" + draft.name + " (" + draft.id + ")"),
+					h("label", null, "名称", h("input", { value: draft.name, onChange: e => setDraft({ ...draft, name: e.target.value }) })),
+					h("label", null, "规则类型（与红队模式无关）",
+						h("select", { "aria-label": "提示词规则类型", value: draft.scope || "local",
+							disabled: draft.id === "redteam" || draft.id === "global",
+							onChange: e => setDraft({ ...draft, scope: e.target.value }) },
+							[["global", "全局（范围内持续注入）"], ["local", "局部（关键词或名单匹配）"], ["redteam", "红队模式专用"]]
+								.map(([v, label]) => h("option", { key: v, value: v }, label)))),
+					h("label", null, h("input", { type: "checkbox", checked: draft.enabled === true,
+						"aria-label": "启用当前提示词规则", onChange: e => setDraft({ ...draft, enabled: e.target.checked }) }),
+						" 独立启用此规则（关闭不影响其他提示词）"),
+					draft.id !== "redteam" ? h("label", null, "优先级（局部规则排序）",
+						h("input", { type: "number", value: draft.priority, onChange: e => setDraft({ ...draft, priority: e.target.value }) })) : null,
+					draft.id !== "redteam" ? h("label", null, "匹配关键词（局部规则可留空，配合白名单仅按目标生效）",
+						h("textarea", { className: "dshp-area", rows: 3, value: draft.keywordsText || "",
+							onChange: e => setDraft({ ...draft, keywordsText: e.target.value }) })) : null,
+					draft.id !== "redteam" ? h("label", null, "排除关键词（每行一项）",
+						h("textarea", { className: "dshp-area", rows: 2, value: draft.excludesText || "",
+							onChange: e => setDraft({ ...draft, excludesText: e.target.value }) })) : null,
 					draft.id === "redteam"
 						? h("p", { className: "dshp-hint" }, "红队正文请切换上方「红队主提示词」页签编辑；原文件不会迁移或被覆盖。")
-						: h("label", null, "提示词正文", h("textarea", { className: "dshp-area", rows: 9, spellCheck: false, value: draft.body || "", onChange: (event) => setDraft({ ...draft, body: event.target.value }) })),
-					h("div", { style: { display: "flex", gap: 8 } },
-						h("button", { type: "button", disabled: busy, onClick: save }, "保存配置"),
-						["redteam", "coding", "writing"].includes(draft.id) ? null : h("button", {
-							type: "button", disabled: busy, onClick: () => {
-								if (window.confirm("删除提示词「" + draft.name + "」？")) perform("delete", { id: draft.id });
-							},
-						}, "删除")),
-					) : null,
-				h("h4", null, "测试自动匹配（不修改当前会话）"),
+						: h("label", null, "提示词正文", h("textarea", { className: "dshp-area", rows: 9,
+							spellCheck: false, value: draft.body || "", onChange: e => setDraft({ ...draft, body: e.target.value }) })),
+					h("details", null, h("summary", null, "适用范围 · 此规则独立黑白名单"),
+						h("p", { className: "dshp-hint" }, "白名单开启时：有配置的维度都需匹配；黑名单开启时：命中任一条就停止此规则。黑名单优先。空白名单不会意外扩大作用域。模型与厂商 ID 由当前宿主提供，无法确认时不会假装匹配。"),
+						h("label", null, h("input", { type: "checkbox", checked: draft.allowEnabled === true,
+							"aria-label": "启用此规则白名单", onChange: e => setDraft({ ...draft, allowEnabled: e.target.checked }) }),
+							" 启用白名单（仅允许以下目标）"),
+						h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 } }, targetInputs("allow")),
+						h("label", null, h("input", { type: "checkbox", checked: draft.blockEnabled === true,
+							"aria-label": "启用此规则黑名单", onChange: e => setDraft({ ...draft, blockEnabled: e.target.checked }) }),
+							" 启用黑名单（排除以下目标）"),
+						h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 8 } }, targetInputs("block"))),
+					h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+						h("button", { type: "button", disabled: busy, onClick: save }, "保存规则"),
+						["redteam", "global", "coding", "writing"].includes(draft.id) ? null : h("button", {
+							type: "button", disabled: busy, onClick: () => { if (window.confirm("删除规则「" + draft.name + "」？")) void perform("delete", { id: draft.id }); }
+						}, "删除规则"),
+						sessionId && draft.id !== "redteam" ? h("button", { type: "button", disabled: busy,
+							onClick: () => perform(sessionOverrides[draft.id] === "off" ? "resume" : "pause", { sessionId, profileId: draft.id }) },
+							sessionOverrides[draft.id] === "off" ? "恢复此会话规则" : "仅在此会话暂停规则") : null)) : null,
+				h("h4", null, "预览实际规则选择（不会发送模型请求）"),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-					h("select", { "aria-label": "预设模式", value: preset, onChange: (event) => setPreset(event.target.value) },
-						[["standard", "标准"], ["minimal", "极简"], ["redteam", "红队"]].map(([id, label]) => h("option", { key: id, value: id }, label))),
+					h("select", { "aria-label": "预设模式", value: preset, onChange: e => setPreset(e.target.value) },
+						[["standard", "标准"], ["minimal", "极简"], ["redteam", "红队"]].map(([v, label]) => h("option", { key: v, value: v }, label))),
+					h("input", { "aria-label": "预览模型 ID", placeholder: "模型 ID，例如 glm-4.7", value: previewModel, onChange: e => setPreviewModel(e.target.value) }),
+					h("input", { "aria-label": "预览厂商 ID", placeholder: "Provider ID，例如 zhipu", value: previewProvider, onChange: e => setPreviewProvider(e.target.value) }),
 					h("button", { type: "button", disabled: busy, onClick: async () => {
 						try {
-							const result = await promptProfilesApi("preview", { preset, text: sample });
-							if (!result.ok) throw new Error(result.error);
-							setPreview(result);
-						} catch (error) { setNotice(String(error.message || error)); }
-					} }, "预览路由")),
-				h("textarea", { className: "dshp-area", rows: 3, placeholder: "输入测试任务（不发送给主模型）", value: sample, onChange: (event) => setSample(event.target.value) }),
-				preview ? h("p", { className: "dshp-hint" }, "命中：" + (preview.selected || "无") + " · 原因：" + preview.reason) : null,
-				preview?.dispatch ? h("p", { className: "dshp-hint" }, "轻量调度建议：" + preview.dispatch.kind + " · " + (preview.dispatch.capabilities || []).map(c => c.id + (c.available === true ? "（已提供）" : "（可用性未知）")).join("、") + (preview.dispatch.subagent === "consider" ? " · 可考虑子代理" : "") + "（仅建议，不自动执行）") : null,
-				h("h4", null, "指定会话的提示词（可选）"),
-				h("p", { className: "dshp-hint" }, "默认由关键词自动选择。只有需要让某个会话固定使用某份提示词时，才获取会话 ID 并应用；「自动选择」会取消手动锁定。"),
+							const result = await promptProfilesApi("preview", { preset, text: sample, model: previewModel,
+								provider: previewProvider, sessionId });
+							if (!result?.ok) throw new Error(result.error);
+							setPreview(result); setNotice("");
+						} catch (error) { setNotice(explainError(error)); }
+					} }, "预览规则")),
+				h("textarea", { className: "dshp-area", rows: 3, placeholder: "输入测试任务，检查命中情况", value: sample,
+					onChange: e => setSample(e.target.value) }),
+				preview ? h("div", { className: "dshp-hint" },
+					h("p", null, "将注入：" + (Array.isArray(preview.selected) && preview.selected.length ? preview.selected.join(" + ") : "无")
+						+ " · " + preview.reason),
+					(preview.decisions || []).map(item => h("p", { key: item.id }, item.id + "："
+						+ ({ matched: "命中", disabled: "已暂停", "allowlist-empty": "白名单为空",
+							"allowlist-miss": "不在白名单", "blocklist-match": "被黑名单排除",
+							"keyword-miss": "关键词未命中", "session-paused": "当前会话已暂停",
+							"redteam-only": "仅用于红队模式" }[item.reason] || item.reason))) ) : null,
+				h("h4", null, "当前会话（可选）"),
+				h("p", { className: "dshp-hint" }, "会话锁定是旧版单规则覆盖方式；上方的「仅在此会话暂停规则」只关闭单条，不影响其他命中规则。"),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "会话 ID", onChange: (event) => { setSessionId(event.target.value); setSessionLock(null); } }),
+					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "Session ID",
+						onChange: e => { setSessionId(e.target.value); setSessionLock(null); setSessionOverrides({}); } }),
 					h("button", { type: "button", onClick: selectedSession }, "获取当前会话"),
 					h("button", { type: "button", disabled: !sessionId, onClick: () => showLock(sessionId) }, "查询锁定")),
 				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-					h("select", { "aria-label": "锁定提示词", value: sessionLock || "", onChange: (event) => setSessionLock(event.target.value || null) },
+					h("select", { "aria-label": "锁定提示词", value: sessionLock || "", onChange: e => setSessionLock(e.target.value || null) },
 						h("option", { value: "" }, "自动选择"),
-						h("option", { value: "none" }, "不注入 Purge 提示词"),
-						profiles.map((p) => h("option", { key: p.id, value: p.id }, p.name))),
-					h("button", { type: "button", disabled: busy || !sessionId, onClick: () => perform(sessionLock ? "lock" : "unlock", sessionLock ? { sessionId, profileId: sessionLock } : { sessionId }) }, "应用锁定")),
-				notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null
+						h("option", { value: "none" }, "不注入任何 Purge 提示词"),
+						profiles.map(p => h("option", { key: p.id, value: p.id }, p.name))),
+					h("button", { type: "button", disabled: busy || !sessionId,
+						onClick: () => perform(sessionLock ? "lock" : "unlock", sessionLock ? { sessionId, profileId: sessionLock } : { sessionId }) },
+						"应用锁定"))
 			);
 		}
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deletePromptProfile, getSessionPromptLock, latestPromptTask, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { deletePromptProfile, getSessionPromptLock, getSessionPromptOverrides, setSessionPromptPause, latestPromptTask, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
 import { isLoopbackRequest } from "../lib/web.js";
 
 function withHome(fn) {
@@ -12,14 +12,15 @@ function withHome(fn) {
 }
 
 test("redteam preset selects existing prompt but standard and minimal do not", () => withHome((home) => {
-  assert.deepEqual(routePrompt({ home, preset: "redteam" }), { id: "redteam", reason: "redteam-preset", body: "" });
+  assert.equal(routePrompt({ home, preset: "redteam" }).id, "redteam");
+  assert.equal(routePrompt({ home, preset: "redteam" }).reason, "redteam-preset");
   for (const preset of ["standard", "minimal", "not-redteam", "非红队"]) {
     assert.equal(routePrompt({ home, preset, text: "今天聊聊天" }).id, null);
   }
 }));
 
 test("task matches are conservative; discussion of redteam does not activate it", () => withHome((home) => {
-  assert.equal(routePrompt({ home, preset: "standard", text: "开展红队演练" }).id, "redteam");
+  assert.equal(routePrompt({ home, preset: "standard", text: "开展红队演练" }).id, null, "redteam task words must not activate redteam mode");
   assert.equal(routePrompt({ home, preset: "standard", text: "讨论开展红队演练的设计" }).id, null);
   assert.equal(routePrompt({ home, preset: "standard", text: "帮我修复代码" }).id, "coding");
   assert.equal(routePrompt({ home, preset: "standard", text: "请翻译这段文字" }).id, "writing");
@@ -129,3 +130,59 @@ test("private prompt storage API accepts only local loopback peers", () => {
   }
   assert.equal(isLoopbackRequest(null), false);
 });
+
+test("global/local prompts remain independent; model + provider allowlist and per-rule blacklist", () => withHome((home) => {
+  savePromptProfile(home, { id: "global", enabled: true, body: "GLOBAL_TEXT" });
+  savePromptProfile(home, { id: "glmroute", enabled: true, scope: "local", priority: 60,
+    body: "GLM_TEXT", allowEnabled: true, allowTargets: { models: ["glm-*"], providers: ["zhipu"] } });
+  savePromptProfile(home, { id: "toolroute", enabled: true, scope: "local", priority: 55, keywords: ["修复代码"], body: "TOOL_TEXT" });
+  const args = { home, preset: "standard", model: "glm-4.7", provider: "zhipu", text: "请修复代码", sessionId: "s1" };
+  let route = routePrompt(args);
+  assert.deepEqual(route.selected, ["global", "glmroute", "toolroute", "coding"]);
+  assert.equal(route.body.split("GLOBAL_TEXT").length - 1, 1);
+  assert.match(route.body, /GLM_TEXT[\s\S]*TOOL_TEXT/);
+  assert.equal(routePrompt({ ...args, model: "other" }).selected.includes("glmroute"), false);
+  assert.equal(routePrompt({ ...args, provider: "" }).selected.includes("glmroute"), false);
+  savePromptProfile(home, { id: "glmroute", blockEnabled: true, blockTargets: { sessions: ["s1"] } });
+  assert.equal(routePrompt(args).selected.includes("glmroute"), false);
+  assert.equal(routePrompt({ ...args, sessionId: "s2" }).selected.includes("glmroute"), true);
+  savePromptProfile(home, { id: "global", enabled: false });
+  assert.equal(routePrompt(args).selected.includes("global"), false);
+  assert.equal(routePrompt(args).selected.includes("toolroute"), true);
+  savePromptProfile(home, { id: "glmroute", enabled: false });
+  assert.equal(routePrompt({ ...args, sessionId: "s2" }).selected.includes("glmroute"), false);
+}));
+
+test("each rule has separate white/blacklist switches and session pause, including redteam off", () => withHome((home) => {
+  savePromptProfile(home, { id: "a", keywords: ["fix"], body: "AAA",
+    allowEnabled: true, allowTargets: { models: ["m1"], presets: ["standard"], sessions: ["s1"] },
+    blockEnabled: true, blockTargets: { providers: ["blocked"] } });
+  savePromptProfile(home, { id: "b", keywords: ["fix"], body: "BBB" });
+  const args = { home, preset: "standard", text: "fix", model: "m1", sessionId: "s1", provider: "other" };
+  assert.deepEqual(routePrompt(args).selected, ["a", "b"]);
+  for (const change of [{ model: "m2" }, { sessionId: "s2" }, { preset: "minimal" }, { provider: "blocked" }]) {
+    const selected = routePrompt({ ...args, ...change }).selected;
+    assert.equal(selected.includes("a"), false);
+    assert.equal(selected.includes("b"), true);
+  }
+  setSessionPromptPause(home, "s1", "a", true);
+  assert.equal(routePrompt(args).selected.includes("a"), false);
+  assert.equal(routePrompt({ ...args, sessionId: "s2" }).selected.includes("b"), true);
+  assert.equal(getSessionPromptOverrides(home, "s1").a, "off");
+  setSessionPromptPause(home, "s1", "a", false);
+  assert.equal(routePrompt(args).selected.includes("a"), true);
+  savePromptProfile(home, { id: "redteam", enabled: false });
+  assert.equal(routePrompt({ home, preset: "redteam" }).id, null);
+  setSessionPromptLock(home, "s1", "redteam");
+  assert.equal(routePrompt({ home, sessionId: "s1" }).id, null);
+}));
+
+test("empty allowlist denies only that rule; blacklist entries do not act unless enabled", () => withHome((home) => {
+  savePromptProfile(home, { id: "x", keywords: ["work"], body: "X", allowEnabled: true });
+  assert.equal(routePrompt({ home, text: "work" }).selected.includes("x"), false);
+  savePromptProfile(home, { id: "x", allowEnabled: false, blockTargets: { models: ["bad"] } });
+  assert.equal(routePrompt({ home, model: "bad", text: "work" }).selected.includes("x"), true);
+  savePromptProfile(home, { id: "x", blockEnabled: true });
+  assert.equal(routePrompt({ home, model: "bad", text: "work" }).selected.includes("x"), false);
+}));
+
