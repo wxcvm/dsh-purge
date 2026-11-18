@@ -45,7 +45,7 @@ Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检�
 | [Actions](https://github.com/wxcvm/dsh-purge/actions) | 查看 CI、构建结果及产物 |
 | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | 追踪变更与回归来源 |
 
-**发布原则：** 以实际 Release 和对应标签为准，区分源码版本、预览版及已发布版本。构建通过不等于 Windows 实机验收通过。
+**发布原则：** [正式版 `.11`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) 的资产校验与实机验收分开记录，详见[交付台账](docs/DELIVERY_STATUS_11.zh-CN.md)。支持目标以[包元数据](package.json)为准；它不是对 Windows Desktop 或 Web 的实测兼容承诺。
 
 **私有交付：** 下载通过已授权的 GitHub 会话完成；本地安装与更新只使用可信的对应版本包。不要将 GitHub 访问令牌写入 README、配置文件或安装包。旧的匿名下载与自动更新链路仍需单独完成适配。
 

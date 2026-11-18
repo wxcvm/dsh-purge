@@ -46,6 +46,30 @@ test('unavailable host coverage and backup do not appear as zero or absent', () 
   assert.match(root, /s\.ok === false \|\| typeof s\.has_backup !== "boolean" \? "—"/)
 })
 
+test('overview keeps frontend identity visible when host status fails and navigates to evidence', () => {
+  const start = root.indexOf('function CleanOverview(')
+  const end = root.indexOf('function PurgifySection(', start)
+  const h = (type, props, ...children) => ({ type, props, children })
+  const render = new Function('h', 'useT', 'CLIENT_BUILD_ID', root.slice(start, end) + '\nreturn CleanOverview;')(h, () => key => key, 'frontend-build')
+  const visited = []
+  const onNavigate = (next) => visited.push(next)
+  const failed = render({ state: { ok: false, plugin_identity: { disk: 'stale-disk' } }, receipt: { phase: 'failed' }, progressUnavailable: true, onNavigate })
+  const text = JSON.stringify(failed)
+  assert.match(text, /frontend-build/)
+  assert.match(text, /diag.overview.unavailable/)
+  assert.match(text, /diag.overview.updateFailed/)
+  assert.match(text, /diag.overview.stale/)
+  assert.doesNotMatch(text, /stale-disk/)
+  failed.children.at(-1).children.forEach(button => button.props.onClick())
+  assert.deepEqual(visited, ['runtime', 'diagnostics'])
+  const current = render({ state: { ok: true, surface: 'desktop', plugin_identity: { disk: 'disk-v2', loaded: 'backend-v1' } }, receipt: { phase: 'awaiting_restart', processRestarted: false }, onNavigate })
+  const currentText = JSON.stringify(current)
+  assert.match(currentText, /surface.desktop/)
+  assert.match(currentText, /disk-v2.*backend-v1.*frontend-build/)
+  assert.match(currentText, /diag.overview.mismatch/)
+  assert.match(currentText, /diag.overview.restart/)
+})
+
 test('client does not overwrite a terminal apply response with late status polling', () => {
   assert.match(root, /const actionTerminal = useRef\(false\)/)
   assert.match(root, /if \(stop \|\| !d \|\| actionTerminal\.current\) return/)
@@ -81,7 +105,8 @@ test('prompt and diagnostics are consolidated into two pages with internal tabs'
   assert.match(settings, /\["library", "自动匹配与会话"\]/);
   assert.match(settings, /\["health", "宿主与故障"\]/);
   assert.match(settings, /\["runtime", "Provider 与运行记录"\]/);
-  assert.match(settings, /section === "prompt" && promptPane === "library" \? h\(PromptProfilesSection/);
+  assert.match(settings, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "prompt" \|\| promptPane !== "library"/);
+  assert.match(settings, /runtimeVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "diagnostics" \|\| diagnosticsPane !== "runtime"/);
 });
 test('patch page explains coverage versus loaded host and treats skips separately', () => {
   assert.match(root, /当前定位宿主的磁盘补丁覆盖情况，不等于当前进程已经加载/);

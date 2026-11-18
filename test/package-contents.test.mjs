@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const repo = fileURLToPath(new URL('../', import.meta.url))
 
-test('npm tarball contains the installed skills and documented maintenance sources', () => {
+test('npm tarball contains the client, diagnostics, registration and documented maintenance sources', () => {
   const packed = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm',
     ['pack', '--dry-run', '--json', '--ignore-scripts'], {
       cwd: repo, encoding: 'utf8', shell: process.platform === 'win32',
@@ -14,7 +14,18 @@ test('npm tarball contains the installed skills and documented maintenance sourc
   const [manifest] = JSON.parse(packed.stdout)
   const files = new Set(manifest.files.map(file => file.path))
   for (const required of [
+    'package.json',
+    'client.js',
+    'cordis.patch.yml',
+    'lib/index.js',
+    'lib/update.js',
+    'lib/workspace/runtime-panel.js',
     'lib/redteam/index.js',
+    'lib/redteam/store-core.js',
+    'scripts/ensure-profile-bundle.mjs',
+    'maintenance/README.md',
+    'LICENSE',
+    'NOTICE',
     'scripts/redteam-setup.sh',
     'skills/redteam/active-scan.md',
     'maintenance/inject-switch/Build.ps1',
