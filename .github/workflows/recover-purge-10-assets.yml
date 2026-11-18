@@ -1,0 +1,60 @@
+name: Recover Purge .10 Release assets
+
+# One-time recovery for the release whose original runner lost GitHub API TLS.
+# This branch intentionally does not match the normal release/v* publish trigger.
+on:
+  push:
+    branches: ["release-assets/v1.1.92-wxcvm.10"]
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    if: github.repository == 'wxcvm/dsh-purge' && github.ref == 'refs/heads/release-assets/v1.1.92-wxcvm.10'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Rebuild and upload immutable .10 release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=v1.1.92-wxcvm.10
+          expected_commit=66ddb75e6303c723f1e970c1c31f26a66497bbbf
+          version=1.1.92-wxcvm.10
+          git fetch origin "refs/tags/${tag}:refs/tags/${tag}"
+          actual_commit="$(git rev-parse "refs/tags/${tag}^{commit}")"
+          test "$actual_commit" = "$expected_commit"
+          current_target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.target_commitish')"
+          test "$current_target" = "$expected_commit"
+          first="$(git show "$actual_commit:release-notes-wxcvm.md" | head -n 1 | tr -d '\r')"
+          test "$first" = "# $version"
+          zip="dsh-purge-$version.zip"
+          git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$actual_commit"
+          test -s "$zip"
+          archived_version="$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")"
+          test "$archived_version" = "$version"
+          for file in client.js lib/redteam/client.js lib/redteam/store-core.js lib/redteam/tools.js lib/redteam/task-context.js lib/artex-knowledge.js lib/redteam/adapters/wsl.js lib/redteam/adapters/ssh-kali.js scripts/update-desktop-fork.ps1; do
+            unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
+          done
+          sha256sum "$zip" > SHA256SUMS.txt
+          # A partial previous upload can be recovered without replacing the tag.
+          success=false
+          for attempt in 1 2 3; do
+            if gh release upload "$tag" "$zip" SHA256SUMS.txt --clobber; then
+              success=true
+              break
+            fi
+            echo "Upload attempt $attempt failed"
+            sleep 5
+          done
+          test "$success" = true
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.assets[].name' | sort > uploaded-assets.txt
+          grep -Fx "$zip" uploaded-assets.txt
+          grep -Fx SHA256SUMS.txt uploaded-assets.txt
