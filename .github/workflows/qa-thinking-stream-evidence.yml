@@ -1,4 +1,4 @@
-name: QA DeepSeek MAX CLI interface probe
+name: QA DeepSeek MAX live baseline
 on:
   push:
     branches: [robin/qa-thinking-stream-evidence-20261116]
@@ -7,11 +7,32 @@ permissions:
 jobs:
   evidence:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
-      - name: Inspect existing headless model controls
+      - name: Call configured DeepSeek account with MAX reasoning in isolated headless task
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          & dsh headless --help 2>&1 | Select-Object -First 130
-          Write-Host "dsh-exit=$LASTEXITCODE"
+          $overlay = Join-Path $env:RUNNER_TEMP 'qa-dsh-max.patch.yml'
+          @'
+          - id: agent-default-model
+            config:
+              provider: deepseek-account
+              model: deepseek-flash
+              reasoningEffort: max
+          '@ | Set-Content -LiteralPath $overlay -Encoding utf8
+          $lines = @(& dsh --profile headless --patch $overlay --json '只进行文本判断，不运行工具。已知任务A未完成，请只回答：任务A未完成。' 2>&1)
+          $exit = $LASTEXITCODE
+          $events = @($lines | ForEach-Object {
+            try { $_ | ConvertFrom-Json -AsHashtable -ErrorAction Stop } catch {}
+          })
+          $kinds = @($events | ForEach-Object { $_.type } | Sort-Object -Unique)
+          $raw = ($lines | ForEach-Object { [string]$_ }) -join '\n'
+          Write-Host "qa.exit=$exit"
+          Write-Host "qa.json.events=$($events.Count)"
+          Write-Host "qa.event.types=$($kinds -join ',')"
+          Write-Host "qa.account.route.mentioned=$($raw.Contains('deepseek-account'))"
+          Write-Host "qa.model.route.mentioned=$($raw.Contains('deepseek-flash'))"
+          Write-Host "qa.answer.marker.mentioned=$($raw.Contains('任务A未完成'))"
+          Remove-Item -LiteralPath $overlay -ErrorAction SilentlyContinue
+          if ($exit -ne 0) { exit $exit }
