@@ -73,23 +73,29 @@ function mount() {
     effectQueue[1]();
     return render();
   }
-  return { render, find, nodes, initialize, actions, apiCalls, profiles };
+  return { render, find, nodes, initialize, actions, apiCalls, profiles, loadEditor: () => effectQueue[1]() };
 }
 
 test("prompt profile UI saves edited independent body through the active API callback", async () => {
   const ui = mount();
   let tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /红队正文仍在左侧/);
   const selector = ui.find(tree, "select", "选择提示词");
   selector.props.onChange({ target: { value: "coding" } });
   ui.render();
-  // The source profile selection effect reinitializes the editor draft.
-  const effects = [];
-  // Re-render by choosing coding through the real select then executing a fresh mount's
-  // effect is unnecessary here: the source editor starts on redteam, so inspect it first.
+  ui.loadEditor();
   tree = ui.render();
-  assert.ok(ui.find(tree, "button", "保存配置"));
-  assert.match(JSON.stringify(tree), /红队正文仍在左侧/);
-  // Leave the UI's full hooks/effect behavior to the dedicated selected-profile test.
+  const editor = ui.nodes(tree).find(n => n.type === "textarea" && n.props.rows === 9);
+  assert.ok(editor, "the selected custom profile exposes a body editor");
+  assert.equal(editor.props.value, "Original development text");
+  editor.props.onChange({ target: { value: "Updated from editor" } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存配置").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(a => a.op === "save");
+  assert.equal(saved.data.profile.id, "coding");
+  assert.equal(saved.data.profile.body, "Updated from editor");
+  assert.equal(ui.profiles.find(p => p.id === "coding").body, "Updated from editor");
 });
 
 test("session picker reads the actual lock and applies explicit off/unlock actions", async () => {
