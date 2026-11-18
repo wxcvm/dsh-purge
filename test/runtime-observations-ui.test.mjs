@@ -221,11 +221,14 @@ test('runtime card shows usage source and separates live and durable totals', ()
 })
 
 
-test('master cleaning workspace mounts runtime diagnostics only on its selected page', () => {
+test('clean workspace combines runtime observations under diagnostics and preserves privacy hooks', () => {
   const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
-  assert.match(source, /id: "runtime", title: "运行诊断"/);
-  assert.match(source, /section === "runtime" \? h\(RuntimeObservationsSection, \{ onNavigate: setSection, active: true \}\)/);
-  assert.match(source, /hidden: section === "rules" \|\| section === "runtime"/);
+  const nav = source.slice(source.indexOf('const sections = [', source.indexOf('function SettingsRoot(props)')));
+  assert.doesNotMatch(nav, /id: "runtime"|id: "profiles"/);
+  assert.match(nav, /id: "diagnostics", title: "诊断中心"/);
+  assert.match(source, /section === "diagnostics" && diagnosticsPane === "runtime" \\? h\\(RuntimeObservationsSection/);
+  assert.match(source, /onNavigate: \\(\\) => setDiagnosticsPane\\("health"\\)/);
+  assert.match(source, /hidden: section === "rules" \\|\\| \\(section === "prompt" && promptPane === "library"\\)/);
   assert.match(source, /api: api, useTemporaryPrivacy: useTemporaryPrivacy/);
 });
 
