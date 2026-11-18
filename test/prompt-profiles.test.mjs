@@ -196,3 +196,46 @@ test("empty global/local bodies are not advertised as injected", () => withHome(
   assert.equal(route.decisions.find(d => d.id === "global").reason, "empty-body");
   assert.equal(route.decisions.find(d => d.id === "empty_local").reason, "empty-body");
 }));
+
+test("each prompt may enable or disable exact Agent presets without affecting other modes", () => withHome(home => {
+  savePromptProfile(home, { id: "global", enabled: true, body: "GLOBAL_PRESET",
+    presetSwitches: { standard: false, ptc: true, minimal: false, cordis: false, redteam: true },
+    injectOtherPresets: false });
+  const route = preset => routePrompt({ home, preset, text: "general" });
+  assert.equal(route("standard").id, null);
+  assert.equal(route("minimal").id, null);
+  assert.equal(route("cordis").id, null);
+  assert.equal(route("ptc").id, "global");
+  assert.equal(route("code").id, "global", "legacy Code preset aliases to PTC");
+  assert.equal(route("custom-preset").id, null);
+  assert.equal(route("").id, null);
+  assert.equal(route("ptc").body, "GLOBAL_PRESET");
+  assert.equal(route("redteam").id, "redteam");
+  assert.deepEqual(route("redteam").selected, ["redteam", "global"]);
+  assert.equal(route("redteam").body, "GLOBAL_PRESET");
+  assert.deepEqual(listPromptProfiles(home).find(p => p.id === "global").presetSwitches,
+    { standard: false, ptc: true, minimal: false, cordis: false, redteam: true });
+}));
+
+test("unlisted preset fallback and ordinary redteam isolation are independent", () => withHome(home => {
+  savePromptProfile(home, { id: "global", enabled: true, body: "GLOBAL_B",
+    presetSwitches: { standard: false }, injectOtherPresets: true });
+  assert.equal(routePrompt({ home, preset: "standard" }).id, null);
+  assert.equal(routePrompt({ home, preset: "my-custom" }).id, "global");
+  assert.equal(routePrompt({ home, preset: "redteam" }).id, "redteam");
+  assert.doesNotMatch(routePrompt({ home, preset: "redteam" }).body, /GLOBAL_B/);
+  savePromptProfile(home, { id: "global", presetSwitches: { standard: false, redteam: true } });
+  assert.match(routePrompt({ home, preset: "redteam" }).body, /GLOBAL_B/);
+  savePromptProfile(home, { id: "global", enabled: false });
+  assert.equal(routePrompt({ home, preset: "redteam" }).body, "");
+}));
+
+test("keyword-free local rule can use explicit preset switches without modifying old keyword routing", () => withHome(home => {
+  savePromptProfile(home, { id: "custom_a", body: "LOCAL_PTC",
+    presetSwitches: { ptc: true, standard: false }, injectOtherPresets: false });
+  assert.equal(routePrompt({ home, preset: "ptc", text: "" }).id, "custom_a");
+  assert.equal(routePrompt({ home, preset: "standard", text: "" }).id, null);
+  assert.equal(routePrompt({ home, preset: "my-mode", text: "" }).id, null);
+  savePromptProfile(home, { id: "custom_a", enabled: false });
+  assert.equal(routePrompt({ home, preset: "ptc" }).id, null);
+}));

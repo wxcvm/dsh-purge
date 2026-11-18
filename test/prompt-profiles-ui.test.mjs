@@ -75,25 +75,17 @@ function mount() {
     await new Promise(resolve => setImmediate(resolve));
     render();
     effectQueue[1]();
+    effectQueue[2]();
     return render();
   }
   return { render, find, nodes, initialize, actions, apiCalls, profiles, loadEditor: () => effectQueue[1]() };
 }
 
-test("prompt profile UI saves edited independent body through the active API callback", async () => {
+test("local editor saves its independent body through the API callback", async () => {
   const ui = mount();
   let tree = await ui.initialize();
-  const redteam = ui.find(tree, "select", "选择提示词");
-  redteam.props.onChange({ target: { value: "redteam" } });
-  ui.render(); ui.loadEditor(); tree = ui.render();
-  assert.match(JSON.stringify(tree), /红队正文请切换上方/);
-  const selector = ui.find(tree, "select", "选择提示词");
-  selector.props.onChange({ target: { value: "coding" } });
-  ui.render();
-  ui.loadEditor();
-  tree = ui.render();
-  const editor = ui.nodes(tree).find(n => n.type === "textarea" && n.props.rows === 9);
-  assert.ok(editor, "the selected custom profile exposes a body editor");
+  const editor = ui.find(tree, "textarea", "局部提示词正文");
+  assert.ok(editor, "the selected coding rule has a body editor");
   assert.equal(editor.props.value, "Original development text");
   editor.props.onChange({ target: { value: "Updated from editor" } });
   tree = ui.render();
@@ -137,29 +129,45 @@ test("missing prompt-profiles API shows an actionable backend-version error", ()
   assert.match(source, /disabled: busy, onClick: create/);
 });
 
-test("new prompt rule opens an editable local draft immediately without a backend write", async () => {
+test("new prompt rule opens a local draft and saves without requiring an ID", async () => {
   const ui = mount();
   let tree = await ui.initialize();
   ui.find(tree, "button", "新建提示词规则").props.onClick();
   tree = ui.render();
   assert.equal(ui.actions.length, 0);
   assert.match(JSON.stringify(tree), /新规则已打开/);
-  const name = ui.nodes(tree).find(n => n.type === "input" && n.props.value === "新提示词规则");
-  assert.ok(name);
-  name.props.onChange({ target: { value: "GLM 局部规则" } });
+  ui.find(tree, "input", "局部规则名称").props.onChange({ target: { value: "GLM 局部规则" } });
   tree = ui.render();
-  ui.find(tree, "input", "启用此规则白名单").props.onChange({ target: { checked: true } });
-  tree = ui.render();
-  ui.find(tree, "textarea", "白名单模型 ID").props.onChange({ target: { value: "glm-*\nglm4" } });
-  tree = ui.render();
-  const body = ui.nodes(tree).find(n => n.type === "textarea" && n.props.rows === 9);
-  body.props.onChange({ target: { value: "GLM local guidance" } });
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "GLM local guidance" } });
   tree = ui.render();
   ui.find(tree, "button", "保存规则").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
-  const saved = ui.actions.find(action => action.op === "save").data.profile;
+  const saved = ui.actions.find(a => a.op === "save").data.profile;
   assert.equal(saved.scope, "local");
-  assert.equal(saved.allowEnabled, true);
-  assert.deepEqual(Array.from(saved.allowTargets.models), ["glm-*", "glm4"]);
   assert.equal(saved.body, "GLM local guidance");
+  assert.equal(saved.presetSwitches.ptc, true);
+  assert.equal(saved.presetSwitches.cordis, true);
+  assert.notEqual(saved.id, "global");
+});
+
+test("global editor has visible preset switches and an independent unknown-preset toggle", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "全局提示词正文").props.onChange({ target: { value: "Global text" } });
+  tree = ui.render();
+  ui.find(tree, "input", "启用全局提示词").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  assert.equal(ui.find(tree, "input", "红队模式注入").props.checked, false);
+  ui.find(tree, "input", "PTC模式注入").props.onChange({ target: { checked: false } });
+  tree = ui.render();
+  ui.find(tree, "input", "未列出的预设也注入").props.onChange({ target: { checked: false } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存全局提示词").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(a => a.op === "save").data.profile;
+  assert.equal(saved.id, "global");
+  assert.equal(saved.enabled, true);
+  assert.equal(saved.presetSwitches.ptc, false);
+  assert.equal(saved.injectOtherPresets, false);
+  assert.equal(saved.body, "Global text");
 });
