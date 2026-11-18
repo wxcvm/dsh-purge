@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const repo = fileURLToPath(new URL('..', import.meta.url));
 const patch = join(repo, 'scripts', 'qa-deepseek-live.patch.yml');
 const root = mkdtempSync(join(tmpdir(), 'dsh-max-injection-'));
-const initial = '这是一项纯文本逻辑核验，不使用工具。项目A只有在X、Y、Z三个子任务都完成时才能标记为已完成。已知X已完成，Y已完成，Z未完成。请认真核对这条规则及其必要条件，最终只输出一行：A=未完成 或 A=已完成。';
+const initial = '这是一项纯文本逻辑核验，不使用工具。完成依赖规则：项目A当且仅当X、Y、Z全部完成。X已经完成；Y当且仅当P和Q均完成，现在P和Q均已完成；Z当且仅当R和S均完成，现在R已完成、S尚未完成。请把这些规则逐条代入，检查必要和充分条件是否同时满足，避免把完成一部分误判为整体完成。最终只输出一行：A=未完成 或 A=已完成。';
 const followup = '只复述上一条助手最终答复中最后出现的A状态，不重新核算原始日志。只输出一行：A=未完成 或 A=已完成。';
 function verdict(value) {
   const text = String(value || '');
@@ -56,10 +56,15 @@ function run(mode, prompt, sessionId) {
 let failed = false;
 try {
   for (const mode of ['control', 'thinking', 'after']) {
-    const first = await run(mode, initial);
-    const { sessionId, ...firstSafe } = first;
-    console.log(JSON.stringify({ mode, stage: 'first', ...firstSafe, sessionCreated: !!sessionId }));
-    if (first.code !== 0 || !sessionId || !first.hook) { failed = true; continue; }
+    let first, attempt = 0;
+    do {
+      attempt++;
+      first = await run(mode, initial);
+      const { sessionId: sid, ...firstSafe } = first;
+      console.log(JSON.stringify({ mode, stage: 'first', attempt, ...firstSafe, sessionCreated: !!sid }));
+    } while (mode === 'thinking' && first.code === 0 && first.hook && !first.hook.injected && attempt < 3);
+    const sessionId = first.sessionId;
+    if (first.code !== 0 || !sessionId || !first.hook || first.hook.route?.provider !== 'deepseek-account' || first.hook.route?.reasoningEffort !== 'max') { failed = true; continue; }
     const follow = await run('off', followup, sessionId);
     const { sessionId: ignored, ...followSafe } = follow;
     console.log(JSON.stringify({ mode, stage: 'followup', ...followSafe }));

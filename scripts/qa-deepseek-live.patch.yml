@@ -5,14 +5,11 @@
   disabled: false
 - id: deepseek-account
   disabled: false
-- id: agent-loop
+- id: agent-default-model
   config:
-    agents:
-      - id: main
-        provider: deepseek-account
-        model: deepseek-flash
-        reasoningEffort: max
-        cwd: !!js process.cwd()
+    provider: deepseek-account
+    model: deepseek-flash
+    reasoningEffort: max
 - id: session-persistence-jsonl
   config:
     root: !!js process.env.QA_SESSIONS_ROOT
