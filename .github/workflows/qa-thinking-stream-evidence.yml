@@ -1,4 +1,4 @@
-name: QA DeepSeek MAX environment probe
+name: QA DeepSeek MAX CLI interface probe
 on:
   push:
     branches: [robin/qa-thinking-stream-evidence-20261116]
@@ -9,16 +9,9 @@ jobs:
     runs-on: [self-hosted, Windows]
     timeout-minutes: 3
     steps:
-      - name: Check existing Harness CLI and profile without reading credentials
+      - name: Identify existing Harness CLI commands only
         shell: pwsh
         run: |
-          $dshRoot = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
-          $commands = @('dsh','pnpm','node','npx')
-          foreach ($name in $commands) {
-            $found = [bool](Get-Command $name -ErrorAction SilentlyContinue)
-            Write-Host "cli.$name=$found"
-          }
-          Write-Host "dsh.home.exists=$(Test-Path -LiteralPath $dshRoot)"
-          Write-Host "dsh.desktop.profile.exists=$(Test-Path -LiteralPath (Join-Path $dshRoot 'profiles/desktop'))"
-          Write-Host "dsh.sessions.exists=$(Test-Path -LiteralPath (Join-Path $dshRoot 'sessions'))"
-          Write-Host "local.web.ready=$([bool](Get-NetTCPConnection -LocalPort 3080 -State Listen -ErrorAction SilentlyContinue))"
+          $ErrorActionPreference = 'Continue'
+          & dsh --help 2>&1 | Select-Object -First 100
+          Write-Host "dsh-exit=$LASTEXITCODE"
