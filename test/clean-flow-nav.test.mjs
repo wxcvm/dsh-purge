@@ -100,9 +100,12 @@ test('prompt and diagnostics are consolidated into two pages with internal tabs'
   const settings = root.slice(root.indexOf('function SettingsRoot(props)'), root.indexOf('const REWIND_CSS'));
   assert.match(settings, /id: "prompt", title: "提示词管理"/);
   assert.match(settings, /id: "diagnostics", title: "诊断中心"/);
+  assert.match(settings, /\[promptPane, setPromptPane\] = useState\("library"\)/);
+  assert.match(settings, /\[profilesVisited, setProfilesVisited\] = useState\(true\)/);
+  assert.ok(settings.indexOf('["library", "通用与局部提示词"]') < settings.indexOf('["source", "红队专用提示词"]'));
   assert.doesNotMatch(settings, /id: "profiles"|id: "runtime"/);
-  assert.match(settings, /\["source", "红队主提示词"\]/);
-  assert.match(settings, /\["library", "自动匹配与会话"\]/);
+  assert.match(settings, /\["source", "红队专用提示词"\]/);
+  assert.match(settings, /\["library", "通用与局部提示词"\]/);
   assert.match(settings, /\["health", "宿主与故障"\]/);
   assert.match(settings, /\["runtime", "Provider 与运行记录"\]/);
   assert.match(settings, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "prompt" \|\| promptPane !== "library"/);
