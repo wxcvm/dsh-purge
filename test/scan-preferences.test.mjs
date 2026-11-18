@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadPlatformConfig, savePlatformConfig, normalizeScanPreferences, privacyDisplayStatus } from '../lib/redteam/platform-config.js'
+import { configPathOf, loadPlatformConfig, savePlatformConfig, normalizeScanPreferences, privacyDisplayStatus } from '../lib/redteam/platform-config.js'
 
 test('scan preferences persist independently without replacing existing tool paths', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'redteam-scan-options-'))
@@ -80,4 +80,23 @@ test('shared display status exposes effective flags only', (t) => {
   assert.deepEqual(privacyDisplayStatus(dir), { ok: true, mode: 'manual', maskHistory: false, maskAssetResults: false })
   savePlatformConfig({ env: { FOFA_KEY: 'fixture-secret' }, privacyManagement: { mode: 'automatic', locked: ['maskHistory'] } }, dir)
   assert.deepEqual(privacyDisplayStatus(dir), { ok: true, mode: 'automatic', maskHistory: false, maskAssetResults: true })
+})
+
+test('invalid existing platform config stays intact and its diagnostics do not expose input', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'redteam-invalid-platform-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = configPathOf(dir)
+  const marker = 'fixture-secret-not-for-diagnostics'
+  for (const raw of [marker, '[]', 'null', '42', '"' + marker + '"']) {
+    const original = Buffer.from(raw)
+    writeFileSync(file, original)
+    const loaded = loadPlatformConfig(dir)
+    assert.equal(loaded.exists, true)
+    assert.ok(loaded.error)
+    assert.equal(loaded.error.includes(marker), false)
+    assert.deepEqual(privacyDisplayStatus(dir), { ok: false, error: 'privacy_config_unavailable' })
+    assert.throws(() => savePlatformConfig({ notes: 'fixture edit' }, dir), value => /未写入/.test(value.message) && !value.message.includes(marker))
+    assert.deepEqual(readFileSync(file), original)
+    assert.equal(readdirSync(dir).length, 1)
+  }
 })

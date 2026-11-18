@@ -4,28 +4,22 @@
 
 > 本页为私有仓库的维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前版本快照 · 2026-11-17
+## 当前版本快照 · 2026-11-18
 
-| 渠道 | 源码版本 | Git 标签 | 状态 |
-| --- | --- | --- | --- |
-| Stable 历史标签 | 1.1.92-wxcvm.6 | [v1.1.92-wxcvm.6](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.6) | 保留旧标签 |
-| Stable 已发布 | 1.1.92-wxcvm.7 | [v1.1.92-wxcvm.7](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.7) | Release 资产与 SHA256 已核验 |
-| Stable 已发布 | 1.1.92-wxcvm.8 | [v1.1.92-wxcvm.8](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.8) | Release 资产与 SHA256 已核验；真实 Desktop 验收仍需单独记录 |
-| 旧 .9 源码标签 | 1.1.92-wxcvm.9 | [v1.1.92-wxcvm.9](https://github.com/wxcvm/dsh-purge/tree/v1.1.92-wxcvm.9) | 标签已存在，指向 `c12a738b`；不是本次 master 的完整源码；Release 资产状态未独立确认 |
-| Stable 发版前候选 | [1.1.92-wxcvm.10](../package.json) | 尚未创建 | 富江 #318–#321、长对话 #317 等已合并，相关 Windows + Ubuntu PR CI 通过；最终 master 联合验收、Release dry-run 及 Desktop 实机验收仍待独立确认 |
-| Beta | [1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 资产与标签状态待独立核验 | 不整体覆盖 master，也不自动提升为 Stable |
+| 渠道 | 版本 | 状态 |
+| --- | --- | --- |
+| Stable | [1.1.92-wxcvm.11](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) | 已发布；ZIP、SHA-256 与提交 `00975bf` 已核对，安装与重启待实机验收 |
+| Stable 历史版本 | [1.1.92-wxcvm.10](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.10) | GitHub 已列出 Release；本轮未重新核对其资产字节 |
+| Stable 历史版本 | [.6–.9](https://github.com/wxcvm/dsh-purge/releases) | 仅按各标签及实际 Release 记录判断，不套用 .11 的验收结果 |
+| Beta | [独立分支](https://github.com/wxcvm/dsh-purge/blob/beta/package.json) | 以该分支与实际 Release 为准，不自动提升为 Stable |
 
-**版本边界：** .8 标签指向提交 `9704f745`；.9 标签已存在并指向 `c12a738b`，在检查时比 master 落后 81 个提交。现有 Release 工作流曾在同名标签存在时选用标签源码打包，故本次使用新版本 .10，并在发布脚本中拒绝“标签指向的提交与目标 master 不一致”。绝不移动或覆盖旧标签。PR #277 记录了 .8 Release 发布成功、ZIP 下载及 SHA256 核验。
+[.11 交付台账](DELIVERY_STATUS_11.zh-CN.md)分别记录发布资产、本地打包、自动化检查和待实机项。这份工作副本上的诊断修复尚未发布，原标签与资产未修改。
 
-**验收边界：** 早期 #278–#281、#283–#290、#296–#297、#282、#295，以及最近的 #317、#318、#319、#320、#321 均已合并。#317、#319–#321 的对应双平台 PR CI 已确认成功，其他更早批次验收记录保留在各 PR；**PR CI 不能替代最终 master 的整体验收**。当前 .10 尚无标签或 Release；发布预演、可下载产物和真实 Windows Desktop 安装/升级/运行验收分别待确认。已有 .9 标签不表示其 Release 资产已经核验。
+## 后续发布预检
 
-## .10 发版前冻结与预演
-
-- **范围冻结**：目前以 master 已合并的富江、长对话及运行时修复为基线，先处理验收暴露的缺陷，不再为 .10 加入无关的大功能；当前候选版本为 `1.1.92-wxcvm.10`。
-- **统一 CI**：以最终集成的 master 提交为准核对 Windows + Ubuntu `Local Compatibility (Windows + WSL)` 工作流、客户端生成包和必要测试；PR 绿色只证明对应 PR 提交通过。
-- **发布包预演（不会发版）**：在仓库 Actions → **Release** → **Run workflow** 中选择 `master`，勾选 `dry_run: true`。此工作流检查发布说明版本、打包 ZIP 的版本与关键文件，并在 Runner 中生成 `SHA256SUMS.txt`，然后退出，不创建标签、不发布 Release、不上传正式资产。预演时日志会显示 ZIP 的 SHA256，但当前工作流未上传 dry-run ZIP 为可下载 artifact，因此日志成功不等于外部已核验可下载资产。
-- **Windows Desktop 实机**：安装候选、启动、重启、切换页面、工具调用与知识搜索/打开、ARTEX 联动、授权更新及回退各自记录宿主版本、运行结果和失败日志。无实机记录时状态保持待验证。
-- **发行前停止点**：本阶段不运行 `dry_run: false`、不创建 `v1.1.92-wxcvm.10` 标签、不上传正式 Release 资产。通过最终验收后，再单独进行正式发布决策；若 master 出现新提交，应复核本次验收是否仍覆盖最新源码。
+- 固定候选提交，确认包内版本、标签、必要运行文件和 SHA-256。已发布版本不使用相同标签替换资产。
+- `dry_run: true` 可在授权的发布工作流中只做归档检查；预检日志不能替代实际下载资产校验。核对候选提交上的 CI，不借用其他提交的结果。
+- Windows Desktop 与 Web 独立记录干净配置安装、现有配置升级、重启重连和故障恢复。真实宿主未跑时明确写「未验收」。
 
 ## 如何判断版本状态
 

@@ -1,3 +1,21 @@
+# 1.1.92-wxcvm.12
+
+## 中文
+
+本次在已发布 .11 基础上整合清洗台导航与诊断修复。使用独立 .12 标签与安装包，不覆盖 .11 标签及资产。
+
+- **提示词与诊断**：合并 #353 的一级入口与子页签设计、提示词 API 404 说明，以及提交 791478b 的版本状态总览、默认折叠运行记录、错误细分和页面切换状态保留。
+- **加载状态与隐私**：分开显示磁盘插件、已加载后端、前端构建；断连或未重启时不再错误显示运行状态已核验；隐私设置未知时默认遮蔽会话标识和本地导入报告。
+- **配置保全**：原平台配置无法解析时拒绝覆盖，不回显原始解析内容。
+- **沙箱兼容**：保留已合并 #354 的 #13/#94 补丁：同级/非扩权请求无需额外审批，允许空 justification；实际已安装 Harness 是否打补丁仍需确认。
+- **验收范围**：合并后的自动化 CI、发布包资产和 Windows Desktop/Web 安装、重启、提示词 API、模型调用须分别核验。模拟测试通过不等于真实宿主通过。
+
+## English
+
+Integrates #353 and commit 791478b on top of .11, preserving #354. Unifies prompt and diagnostics navigation; adds a runtime overview, collapsible observations, separated API failures, preserved editor/filter state, and safe handling of unreadable platform configuration. The previous .11 release remains unchanged. GitHub CI, release artifact availability and real Desktop/Web acceptance are tracked separately.
+
+---
+
 # 1.1.92-wxcvm.11
 
 ## 中文
