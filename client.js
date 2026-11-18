@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "9adc347481c0bcec";
+		const CLIENT_BUILD_ID = "de45a8effff5001e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -107,6 +107,14 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify(Object.assign({ op: op }, extra || {})),
+			});
+		}
+
+		function promptProfilesApi(op, payload) {
+			return apiJson("/dsh-purge/prompt-profiles", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(Object.assign({ op: op }, payload || {})),
 			});
 		}
 
@@ -4226,6 +4234,19 @@ function runtimeRowStatus(row) {
   return { key: 'running', label: row.settlement === 'committed' ? '已提交 · 等待终态' : '等待后续事件' };
 }
 
+const outcomeLabels = {
+  "upstream-policy": "上游策略限制",
+  "provider-failure": "Provider 请求失败（原因未确认）",
+  "explicit-refusal": "回答明确拒答",
+  "no-explicit-refusal": "未观察到明确拒答（不等于任务完成）",
+  incomplete: "输出未完成",
+  uncertain: "证据不足",
+};
+function outcomeLabel(row) {
+  const result = row?.outcomeDiagnosis;
+  return result ? (outcomeLabels[result.kind] || "未分类") + " · " + (result.evidence || "unknown") : "未观测";
+}
+
 function runtimeRouteKey(row) {
   return JSON.stringify([row.provider ?? null, row.model ?? null]);
 }
@@ -4366,6 +4387,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
           detail('用量证据', ({ 'host-stream': '实时流', 'durable-stream': '持久流' }[r.usageSource] || '未观测') + ' · 实时 / 持久总量：' + value(r.liveUsage?.totalTokens) + ' / ' + value(r.durableUsage?.totalTokens)),
           detail('错误代码', value(r.errorCode)),
+          detail('失败/拒答归因', outcomeLabel(r)),
           detail('终态来源', source(r)),
           detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
           detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),
@@ -4383,6 +4405,136 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     report ? h('div', null, h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setReport(null); setReportError(''); } }, '清除报告'), maskRuntime ? h('p', null, '报告已读取，详细内容已隐藏。') : h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, JSON.stringify(report, null, 2))) : null);
 }
 /* __DSH_PURGE_RUNTIME_END__ */
+
+		function PromptProfilesSection() {
+			const [profiles, setProfiles] = useState([]);
+			const [active, setActive] = useState("redteam");
+			const [draft, setDraft] = useState(null);
+			const [newId, setNewId] = useState("");
+			const [sessionId, setSessionId] = useState("");
+			const [sessionLock, setSessionLock] = useState(null);
+			const [sample, setSample] = useState("");
+			const [preset, setPreset] = useState("standard");
+			const [preview, setPreview] = useState(null);
+			const [busy, setBusy] = useState(false);
+			const [notice, setNotice] = useState("");
+
+			const reload = useCallback(async (chosen) => {
+				try {
+					const response = await apiJson("/dsh-purge/prompt-profiles");
+					if (!response?.ok) throw new Error(response?.error || "读取失败");
+					setProfiles(response.profiles || []);
+					setActive((old) => chosen || (response.profiles || []).some((p) => p.id === old) && old || response.profiles?.[0]?.id || "");
+				} catch (error) { setNotice(String(error.message || error)); }
+			}, []);
+			useEffect(() => { reload(); }, [reload]);
+			useEffect(() => {
+				const current = profiles.find((item) => item.id === active);
+				if (current) setDraft({
+					...current,
+					keywordsText: (current.keywords || []).join("\n"),
+					excludesText: (current.excludes || []).join("\n"),
+				});
+			}, [active, profiles]);
+			const perform = async (op, payload, selected) => {
+				setBusy(true); setNotice("");
+				try {
+					const response = await promptProfilesApi(op, payload);
+					if (!response?.ok) throw new Error(response?.error || "操作失败");
+					setNotice("已保存");
+					if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
+					if (op === "delete") setDraft(null);
+					await reload(selected);
+				} catch (error) { setNotice(String(error.message || error)); }
+				finally { setBusy(false); }
+			};
+			const parseLines = (text) => String(text || "").split(/[\n,，]+/).map((x) => x.trim()).filter(Boolean);
+			const save = () => {
+				if (!draft) return;
+				perform("save", { profile: {
+					id: draft.id, name: draft.name, enabled: draft.enabled,
+					priority: Number(draft.priority) || 0,
+					keywords: parseLines(draft.keywordsText),
+					excludes: parseLines(draft.excludesText),
+					...(draft.id === "redteam" ? {} : { body: draft.body }),
+				} }, draft.id);
+			};
+			const create = () => {
+				const id = newId.trim();
+				if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) { setNotice("ID 必须以小写英文字母开头，仅包含字母、数字、下划线和连字符"); return; }
+				if (profiles.some((p) => p.id === id)) { setNotice("同名提示词已存在"); return; }
+				perform("save", { profile: { id, name: id, enabled: true, priority: 30, body: "", keywords: [], excludes: [] } }, id);
+				setNewId("");
+			};
+			const showLock = async (id) => {
+				try {
+					const response = await apiJson("/dsh-purge/prompt-profiles?sessionId=" + encodeURIComponent(id));
+					if (!response?.ok) throw new Error(response?.error || "读取会话锁定失败");
+					setSessionLock(response.sessionLock || null);
+				} catch (error) { setNotice(String(error.message || error)); }
+			};
+			const selectedSession = () => {
+				const value = currentSessionId(rewindSessions);
+				if (value) {
+					setSessionId(value);
+					setSessionLock(null);
+					void showLock(value);
+				} else setNotice("无法读取当前会话 ID，可手动输入后锁定");
+			};
+			return h("section", { className: "dshp-sub", style: { padding: "16px", display: "grid", gap: 14 } },
+				h("h3", null, "智能提示词库"),
+				h("p", { className: "dshp-hint" }, "红队模式仍使用原 prompt-inject.md。标准/极简按规则匹配；无匹配则使用宿主原生提示词。"),
+				h("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
+					h("select", { "aria-label": "选择提示词", value: active, onChange: (event) => setActive(event.target.value) },
+						profiles.map((item) => h("option", { key: item.id, value: item.id }, item.name + " (" + item.id + ")"))),
+					h("input", { "aria-label": "新提示词 ID", placeholder: "新提示词 ID", value: newId, onChange: (event) => setNewId(event.target.value) }),
+					h("button", { type: "button", disabled: busy, onClick: create }, "新建提示词"),
+					h("button", { type: "button", disabled: busy, onClick: () => reload() }, "刷新")),
+				draft ? h("div", { style: { display: "grid", gap: 10 } },
+					h("label", null, "名称", h("input", { style: { width: "100%" }, value: draft.name, onChange: (event) => setDraft({ ...draft, name: event.target.value }) })),
+					h("label", null, "优先级", h("input", { type: "number", value: draft.priority, onChange: (event) => setDraft({ ...draft, priority: event.target.value }) })),
+					h("label", null, h("input", { type: "checkbox", checked: draft.enabled, onChange: (event) => setDraft({ ...draft, enabled: event.target.checked }) }), " 启用自动匹配"),
+					h("label", null, "匹配关键词（每行一条）", h("textarea", { className: "dshp-area", rows: 3, value: draft.keywordsText, onChange: (event) => setDraft({ ...draft, keywordsText: event.target.value }) })),
+					h("label", null, "排除词（每行一条）", h("textarea", { className: "dshp-area", rows: 2, value: draft.excludesText, onChange: (event) => setDraft({ ...draft, excludesText: event.target.value }) })),
+					draft.id === "redteam"
+						? h("p", { className: "dshp-hint" }, "红队正文仍在左侧「提示词」页面编辑，原文件不迁移、不覆盖。")
+						: h("label", null, "提示词正文", h("textarea", { className: "dshp-area", rows: 9, spellCheck: false, value: draft.body || "", onChange: (event) => setDraft({ ...draft, body: event.target.value }) })),
+					h("div", { style: { display: "flex", gap: 8 } },
+						h("button", { type: "button", disabled: busy, onClick: save }, "保存配置"),
+						["redteam", "coding", "writing"].includes(draft.id) ? null : h("button", {
+							type: "button", disabled: busy, onClick: () => {
+								if (window.confirm("删除提示词「" + draft.name + "」？")) perform("delete", { id: draft.id });
+							},
+						}, "删除")),
+					) : null,
+				h("h4", null, "自动规则预览（不考虑会话锁定）"),
+				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+					h("select", { "aria-label": "预设模式", value: preset, onChange: (event) => setPreset(event.target.value) },
+						["standard", "minimal", "redteam"].map((x) => h("option", { key: x, value: x }, x))),
+					h("button", { type: "button", disabled: busy, onClick: async () => {
+						try {
+							const result = await promptProfilesApi("preview", { preset, text: sample });
+							if (!result.ok) throw new Error(result.error);
+							setPreview(result);
+						} catch (error) { setNotice(String(error.message || error)); }
+					} }, "预览路由")),
+				h("textarea", { className: "dshp-area", rows: 3, placeholder: "输入测试任务（不发送给主模型）", value: sample, onChange: (event) => setSample(event.target.value) }),
+				preview ? h("p", { className: "dshp-hint" }, "命中：" + (preview.selected || "无") + " · 原因：" + preview.reason) : null,
+				preview?.dispatch ? h("p", { className: "dshp-hint" }, "轻量调度建议：" + preview.dispatch.kind + " · " + (preview.dispatch.capabilities || []).map(c => c.id + (c.available === true ? "（已提供）" : "（可用性未知）")).join("、") + (preview.dispatch.subagent === "consider" ? " · 可考虑子代理" : "") + "（仅建议，不自动执行）") : null,
+				h("h4", null, "当前会话提示词锁定"),
+				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+					h("input", { "aria-label": "会话 ID", value: sessionId, placeholder: "会话 ID", onChange: (event) => { setSessionId(event.target.value); setSessionLock(null); } }),
+					h("button", { type: "button", onClick: selectedSession }, "获取当前会话"),
+					h("button", { type: "button", disabled: !sessionId, onClick: () => showLock(sessionId) }, "查询锁定")),
+				h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+					h("select", { "aria-label": "锁定提示词", value: sessionLock || "", onChange: (event) => setSessionLock(event.target.value || null) },
+						h("option", { value: "" }, "自动选择"),
+						h("option", { value: "none" }, "不注入 Purge 提示词"),
+						profiles.map((p) => h("option", { key: p.id, value: p.id }, p.name))),
+					h("button", { type: "button", disabled: busy || !sessionId, onClick: () => perform(sessionLock ? "lock" : "unlock", sessionLock ? { sessionId, profileId: sessionLock } : { sessionId }) }, "应用锁定")),
+				notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null
+			);
+		}
 
 		function SettingsRoot(props) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
@@ -4429,7 +4581,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const sections = [
 				{ id: "overview", title: "状态总览", description: "宿主、清洗进度与快捷操作" },
 				{ id: "patches", title: "补丁管理", description: "分类、筛选、检测与诊断" },
-				{ id: "prompt", title: "提示词", description: "编辑、注入与本地配置" },
+				{ id: "prompt", title: "提示词", description: "编辑原红队提示词与本地配置" },
+				{ id: "profiles", title: "提示词库", description: "管理规则、并列配置和会话锁定" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
 				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
 				{ id: "runtime", title: "运行诊断", description: "Provider、模型、流式状态及任务质量" },
@@ -4451,10 +4604,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 						h("h2", null, selected.title),
 						h("p", null, selected.description),
 					),
-					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" },
+					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || section === "runtime" || section === "profiles" },
 						h(PurgifySection, { section })),
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
+					section === "profiles" ? h(PromptProfilesSection, null) : null,
 					section === "runtime" ? h(RuntimeObservationsSection, { onNavigate: setSection, active: true }) : null,
 				),
 			);
