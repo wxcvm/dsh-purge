@@ -1,4 +1,4 @@
-name: QA Thinking Stream Evidence
+name: QA DeepSeek MAX environment probe
 on:
   push:
     branches: [robin/qa-thinking-stream-evidence-20261116]
@@ -9,11 +9,16 @@ jobs:
     runs-on: [self-hosted, Windows]
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - name: Read only the two marked QA turns and their runtime summaries
-        run: node scripts/qa-thinking-stream-evidence.mjs
+      - name: Check existing Harness CLI and profile without reading credentials
+        shell: pwsh
+        run: |
+          $home = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
+          $commands = @('dsh','pnpm','node','npx')
+          foreach ($name in $commands) {
+            $found = [bool](Get-Command $name -ErrorAction SilentlyContinue)
+            Write-Host "cli.$name=$found"
+          }
+          Write-Host "dsh.home.exists=$(Test-Path -LiteralPath $home)"
+          Write-Host "dsh.desktop.profile.exists=$(Test-Path -LiteralPath (Join-Path $home 'profiles/desktop'))"
+          Write-Host "dsh.sessions.exists=$(Test-Path -LiteralPath (Join-Path $home 'sessions'))"
+          Write-Host "local.web.ready=$([bool](Get-NetTCPConnection -LocalPort 3080 -State Listen -ErrorAction SilentlyContinue))"
