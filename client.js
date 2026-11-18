@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "990c1ee53b36726c";
+		const CLIENT_BUILD_ID = "28e95952d9e21989";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4793,7 +4793,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     "preset-unselected": "未选择当前预设", "preset-unobserved": "当前 Agent 预设无法识别", "redteam-only": "红队模式独立",
                                     "allowlist-miss": "白名单未命中", "blocklist-match": "黑名单排除",
                                     "keyword-miss": "关键词未命中", "empty-body": "正文为空" }[item.reason] || item.reason)))
-                            : null)));
+                            : null))));
 
 		}
 
