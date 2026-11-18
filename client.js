@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "3f64c20bff1201dd";
+		const CLIENT_BUILD_ID = "83e4986bfbe22efa";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4687,7 +4687,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					(preview.decisions || []).map(item => h("p", { key: item.id }, item.id + "："
 						+ ({ matched: "命中", disabled: "已暂停", "allowlist-empty": "白名单为空",
 							"allowlist-miss": "不在白名单", "blocklist-match": "被黑名单排除",
-							"keyword-miss": "关键词未命中", "session-paused": "当前会话已暂停",
+							"keyword-miss": "关键词未命中", "empty-body": "正文为空，未注入", "session-paused": "当前会话已暂停",
 							"redteam-only": "仅用于红队模式" }[item.reason] || item.reason))) ) : null,
 				h("h4", null, "当前会话（可选）"),
 				h("p", { className: "dshp-hint" }, "会话锁定是旧版单规则覆盖方式；上方的「仅在此会话暂停规则」只关闭单条，不影响其他命中规则。"),

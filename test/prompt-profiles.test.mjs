@@ -186,3 +186,13 @@ test("empty allowlist denies only that rule; blacklist entries do not act unless
   assert.equal(routePrompt({ home, model: "bad", text: "work" }).selected.includes("x"), false);
 }));
 
+
+test("empty global/local bodies are not advertised as injected", () => withHome(home => {
+  savePromptProfile(home, { id: "global", enabled: true, body: "" });
+  savePromptProfile(home, { id: "empty_local", keywords: ["special task"], body: "" });
+  const route = routePrompt({ home, text: "special task" });
+  assert.equal(route.id, null);
+  assert.equal(route.selected.length, 0);
+  assert.equal(route.decisions.find(d => d.id === "global").reason, "empty-body");
+  assert.equal(route.decisions.find(d => d.id === "empty_local").reason, "empty-body");
+}));
