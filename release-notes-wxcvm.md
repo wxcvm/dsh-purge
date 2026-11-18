@@ -1,3 +1,19 @@
+# 1.1.92-wxcvm.15
+
+## 中文
+
+此版本基于 .14，交付已合并的提示词分类界面修正（PR #365），不覆盖旧版本。
+
+- **分类与默认入口**：清洗台提示词管理默认进入「通用与局部提示词」，保留新版全局/局部编辑、模型/厂商/会话/Agent 预设的独立开关与黑白名单。
+- **红队单独展示**：原 `prompt-inject.md` 编辑界面归类为「红队专用提示词」，不再作为默认页面。
+- **行为不变**：未改提示词正文、既有保存数据、规则路由、Hooks 和注入行为；此次不声称修复模型自身拒答。
+- **验收边界**：PR #365 的 Windows/Ubuntu CI 已通过。发布包、SHA256 与 Windows Harness Desktop 实机安装交互仍需独立核对。
+
+## English
+
+UI-only prompt classification update (#365): general/local rules open by default, while `prompt-inject.md` is labeled Redteam-only. Existing per-rule model/provider/session/Agent preset switches and allow/deny lists remain. No saved prompt body, runtime routing, Hooks, or injection behavior was modified. Automated tests do not establish real Desktop acceptance.
+
+---
 # 1.1.92-wxcvm.14
 
 ## 中文
