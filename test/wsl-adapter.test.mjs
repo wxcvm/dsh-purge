@@ -35,7 +35,7 @@ test('handles UTF-16LE WSL output, default distribution and spaces in distro nam
 test('explicit discovery only lists, never launches WSL distros', async () => {
   let calls = 0
   const result = await discoverEnvironments({
-    platform: 'win32',
+    platform: 'win32', config: { kaliVm: {} },
     execFileFn: (...args) => { calls++; return runList(...args) },
     dockerExecFileFn: (_cmd, _args, _opts, done) => done(null, '', ''),
   })

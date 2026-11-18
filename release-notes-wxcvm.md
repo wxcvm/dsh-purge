@@ -1,3 +1,21 @@
+# 1.1.92-wxcvm.14
+
+## 中文
+
+本次在 .13 基础上改进提示词管理的可用性与 Agent 预设选择，保持旧版本 Release 不变。
+
+- **直观双栏布局**：左侧直接编辑普通全局提示词，右侧展示局部规则清单和选中规则正文；新建规则无需预先设置 ID。常用开关放在正文下方，关键词/模型、厂商黑白名单及会话专属操作默认折叠，避免表单堆叠。
+- **按 Agent 预设启停**：每份提示词独立控制标准、PTC、极简、创造（Cordis）、红队五类模式，并有独立「未列出的预设也注入」开关；已显式关闭的模式不受兜底开关影响。身份未知时不假装匹配。
+- **红队独立管理**：继续保留旧版 `prompt-inject.md` 作为红队专用正文，普通全局/局部提示词只有明确启用红队预设才作为额外正文加入；保留旧会话手动锁定语义。
+- **测试确定性**：环境发现测试显式隔离 Runner 本地 Kali SSH 配置，避免用户已配置的 SSH 环境影响模拟清单测试；不修改实际的 WSL、Docker、ARTEX 发现逻辑。
+- **验收边界**：Windows/Ubuntu CI 及发布打包只验证自动化范围，真实 Windows Harness Desktop 的模型/厂商身份、Agent 预设实时切换、最终提示词组装与交互仍需要独立实机核对。
+
+## English
+
+Redesigns prompt management into an always-visible global editor and compact local rule cards, with per-rule Standard, PTC, Minimal, Creator/Cordis, and Redteam preset switches, plus a separate unlisted-presets fallback. Advanced rule scopes remain collapsible. Redteam's original `prompt-inject.md` is preserved, with ordinary prompts joining Redteam only by explicit opt-in. Environment discovery tests isolate host-specific Kali SSH settings without changing runtime discovery behavior. CI success does not establish physical Desktop acceptance.
+
+---
+
 # 1.1.92-wxcvm.13
 
 ## 中文
