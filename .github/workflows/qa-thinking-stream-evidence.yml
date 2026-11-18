@@ -1,53 +1,20 @@
-name: QA DeepSeek MAX live baseline
+name: QA DeepSeek MAX live stream injection
 on:
   push:
     branches: [robin/qa-thinking-stream-evidence-20261116]
 permissions:
   contents: read
 jobs:
-  evidence:
+  experiment:
     runs-on: [self-hosted, Windows]
-    timeout-minutes: 4
+    timeout-minutes: 9
     steps:
-      - name: Call configured DeepSeek account with MAX reasoning in isolated headless task
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Real DeepSeek-account MAX A/B without exposing prompts or reasoning
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
-          $overlay = Join-Path $env:RUNNER_TEMP 'qa-dsh-max.patch.yml'
-          @'
-          - id: credentials
-            disabled: false
-          - id: authorization
-            disabled: false
-          - id: deepseek-account
-            disabled: false
-          - id: agent-loop
-            config:
-              agents:
-                - id: main
-                  provider: deepseek-account
-                  model: deepseek-flash
-                  reasoningEffort: max
-                  cwd: !!js process.cwd()
-          '@ | Set-Content -LiteralPath $overlay -Encoding utf8
-          $lines = @(& dsh --profile headless --patch $overlay --json '只进行文本判断，不运行工具。已知任务A未完成，请只回答：任务A未完成。' 2>&1)
-          $exit = $LASTEXITCODE
-          $events = @($lines | ForEach-Object {
-            try { $_ | ConvertFrom-Json -AsHashtable -ErrorAction Stop } catch {}
-          })
-          $kinds = @($events | ForEach-Object { $_.type } | Sort-Object -Unique)
-          $raw = ($lines | ForEach-Object { [string]$_ }) -join '\n'
-          Write-Host "qa.exit=$exit"
-          Write-Host "qa.json.events=$($events.Count)"
-          foreach ($e in $events) {
-            if ($e.type -ne 'final') { continue }
-            Write-Host "qa.final.fields=$($e.Keys -join ',')"
-            if ($e.ContainsKey('status')) { Write-Host "qa.final.status=$($e.status)" }
-            if ($e.error -is [System.Collections.IDictionary]) { Write-Host "qa.final.error.code=$($e.error.code)" }
-          }
-          Write-Host "qa.event.types=$($kinds -join ',')"
-          Write-Host "qa.account.route.mentioned=$($raw.Contains('deepseek-account'))"
-          Write-Host "qa.model.route.mentioned=$($raw.Contains('deepseek-flash'))"
-          Write-Host "qa.answer.marker.mentioned=$($raw.Contains('任务A未完成'))"
-          Remove-Item -LiteralPath $overlay -ErrorAction SilentlyContinue
-          if ($exit -ne 0) { exit $exit }
+        run: node scripts/qa-deepseek-live.mjs

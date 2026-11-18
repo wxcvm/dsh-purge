@@ -1,0 +1,22 @@
+# QA-only overlay: use existing stored DeepSeek account; never alter Desktop profile.
+- id: credentials
+  disabled: false
+- id: authorization
+  disabled: false
+- id: deepseek-account
+  disabled: false
+- id: agent-loop
+  config:
+    agents:
+      - id: main
+        provider: deepseek-account
+        model: deepseek-flash
+        reasoningEffort: max
+        cwd: !!js process.cwd()
+- id: session-persistence-jsonl
+  config:
+    root: !!js process.env.QA_SESSIONS_ROOT
+    compression: none
+- insert:
+    - id: qa-deepseek-live-hook
+      name: './qa-deepseek-live-hook.mjs'
