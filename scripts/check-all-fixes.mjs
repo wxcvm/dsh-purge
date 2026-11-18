@@ -178,6 +178,28 @@ await check("GLM 适配层接线", async () => {
   return "wired";
 });
 
+// 17. escalation 降级请求是 no-op（#13）+ 空白 justification 容忍（#94）
+await check("escalation 降级 no-op / 空白 justification 容忍", async () => {
+  const esc = path.join(
+    process.env.DSH_ASAR_APP || "D:\\dsh\\resources\\app\\dsh\\node_modules",
+    "@deepseek-ai", "dsh-sandbox", "lib", "index.js",
+  );
+  if (!fs.existsSync(esc)) return "宿主不在（跳过）";
+  const text = fs.readFileSync(esc, "utf8");
+  const markers = ["[dsh-purge] narrowing escalation is a no-op", "[dsh-purge] blank justification tolerated"];
+  const missing = markers.filter((m) => !text.includes(m));
+  // 没打上不是这次体检的失败项：状态页会显示 skipped，这里只报出来。
+  if (missing.length > 0) return `未应用（缺 ${missing.length} 条 marker）`;
+  const mod = await import(pathToFileURL(esc).href);
+  mod.validateEscalationArgs("workspace-write", "");
+  const mode = await mod.approveEscalation(
+    { requestedMode: "workspace-write", effectiveMode: "danger-full-access", justification: "", subject: "command" },
+    { approver: { request: () => { throw new Error("降级请求走了审批"); } }, agent: {}, callId: "c", toolName: "pwsh" },
+  );
+  expect(mode === "danger-full-access", `降级请求返回 ${mode}`);
+  return "workspace-write@danger-full-access → danger-full-access";
+});
+
 const pad = Math.max(...rows.map((r) => r.name.length));
 let bad = 0;
 for (const r of rows) {
