@@ -88,7 +88,11 @@ test("prompt-disabled and injection-off decisions do not claim workspace injecti
   await toggleCwdSelection(home, fileA, true, projectA);
   assert.equal(planCwdRuleInject(home, projectA, { enabled: false }).decisions[0].reason, "disabled");
   assert.equal(planCwdRuleInject(home, projectA, { injectionOff: true }).decisions[0].reason, "injection-off");
-  await assert.rejects(toggleCwdSelection(home, path.join(home, "other.md"), true, projectA), /current workspace scan/);
+  const outside = path.join(home, "other.md");
+  await toggleCwdSelection(home, outside, true, projectA);
+  assert.equal(readCwdSelections(home, projectA).includes(outside), true,
+    "legacy API may store any selection; the assembly still uses only scanned files");
+  assert.equal(planCwdRuleInject(home, projectA).decisions.some(x => x.path === outside), false);
 });
 
 test("ordinary global prompt can combine workspace rules in the actual assembly", async t => {
