@@ -133,3 +133,23 @@ test('🟡A 内嵌统计：payload 全内嵌 + dict 部分内嵌', async () => {
     assert.equal(r.source, 'embedded', p + ' 应内嵌')
   }
 })
+
+test('Armory availability never claims missing or out-of-index files as local', async (t) => {
+  const { loadEmbeddedFile, probeArmoryFile } = await import('../lib/redteam/armory-index.js')
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const root = mkdtempSync(join(tmpdir(), 'purge-empty-armory-'))
+  const old = process.env.ABOUTSECURITY_REPO
+  process.env.ABOUTSECURITY_REPO = root
+  t.after(() => {
+    if (old === undefined) delete process.env.ABOUTSECURITY_REPO
+    else process.env.ABOUTSECURITY_REPO = old
+    rmSync(root, { recursive: true, force: true })
+  })
+  assert.deepEqual(probeArmoryFile('no/such/file.txt'), { available: false, source: 'none' })
+  assert.equal(loadEmbeddedFile('../package.json').unavailable, true)
+  assert.equal(loadEmbeddedFile('Dic/../../package.json').unavailable, true)
+  assert.deepEqual(probeArmoryFile('Dic/../../package.json'), { available: false, source: 'none' })
+  assert.equal(probeArmoryFile('Payload/sqli/payload.txt').source, 'embedded')
+})
