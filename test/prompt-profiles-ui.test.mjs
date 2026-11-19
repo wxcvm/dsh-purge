@@ -195,3 +195,34 @@ test("prompt routing switches persist through the existing settings API without 
   assert.equal(ui.find(tree, "input", "普通模式识别红队任务").props.checked, true);
   assert.equal(ui.find(tree, "input", "按当前模型家族自动适配").props.checked, true);
 });
+
+test("advanced list controls explain wildcard scope and save GPT exclusion", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  const summary = JSON.stringify(tree);
+  assert.match(summary, /规则如何生效/);
+  assert.match(summary, /黑名单优先于白名单/);
+  assert.match(summary, /仅想排除 GPT/);
+  assert.match(summary, /\*gpt\*/);
+  assert.match(summary, /缺失的实际 ID 不会被当作命中/);
+
+  // The global editor is rendered first; target the selected local rule, not the global rule.
+  const lastControl = (tree, type, label) => ui.nodes(tree)
+    .filter(n => n.type === type && n.props["aria-label"] === label).at(-1);
+  lastControl(tree, "input", "启用此规则黑名单").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  lastControl(tree, "textarea", "黑名单模型 ID").props.onChange({ target: { value: "*gpt*" } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(a => a.op === "save").data.profile;
+  assert.equal(saved.id, "coding");
+  assert.equal(saved.blockEnabled, true);
+  assert.deepEqual(Array.from(saved.blockTargets.models), ["*gpt*"]);
+});
+
+test("advanced rule fields use compact responsive columns instead of full-height prompt editors", () => {
+  assert.match(client, /\.dshp-prompt-advanced textarea\.dshp-area\{[^}]*min-height:68px/);
+  assert.match(client, /\.dshp-prompt-targets\{display:grid/);
+  assert.match(client, /\.dshp-prompt-lists\{display:grid/);
+});
