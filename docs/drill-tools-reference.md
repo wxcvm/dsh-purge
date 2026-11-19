@@ -171,6 +171,8 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 ### `redteam_skill_search`
 【离线只读】检索当前 purge 随包技能，以及按需下载到 `$DSH_HOME/redteam/external-skills/aboutsecurity/skills` 的 AboutSecurity 技能。不需要另外安装 `dsh-prompt-custom` 插件。
 
+社区技能包也会被检索：`$DSH_HOME/redteam/external-skills/community/<pack>/skills/`；可显式执行 `node scripts/install-community-skills.mjs` 安装 Yaklang 的 `hack-skills` 与 `yak-skills`，用 `--source` 选择单包、`--update` 更新、`--home` 指定当前 DSH 主目录。不会在插件启动时自动安装，也不会覆盖随包技能。
+
 参数：`query`（名称/主题/关键词；空值列出）、`limit`（默认 10，上限 50）。
 
 返回稳定 `key`、名称、描述与来源，另外用 `aboutsecurity_installed` 明确该外部技能库是否已找到。没有安装外部技能时仍能搜索内置技能。

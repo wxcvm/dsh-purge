@@ -90,6 +90,14 @@ test('federated search reads the skill catalog once and reports bounded result c
       [23, 20, true], [25, 20, true], [1, 1, false], [null, 1, null],
     ])
     assert.equal(result.groups[0].items.some(x => Object.hasOwn(x, 'body')), false)
+    const personal2 = unifiedKnowledgeRequest(root, {
+      op: 'knowledgeUnifiedSearch', source: 'personal', query: 'reference', offset: 20,
+    }, options).groups[0]
+    assert.deepEqual([personal2.total, personal2.items.length, personal2.offset, personal2.hasMore], [23, 3, 20, false])
+    const browse = unifiedKnowledgeRequest(root, {
+      op: 'knowledgeUnifiedSearch', source: 'personal', query: '',
+    }, options).groups[0]
+    assert.equal(browse.total, 23)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
@@ -208,4 +216,29 @@ test('CVE lookup does not mistake a shorter identifier for a longer one', () => 
   assert.deepEqual(search('CVE-2024-123456').items.map(row => row.id), ['1'])
   assert.deepEqual(search('CVE-2024-12345 CVE-2024-98765').items.map(row => row.id), [])
   assert.deepEqual(search('CVE-2024-12345、CVE-2024-123456').items.map(row => row.id), [])
+})
+
+test('explicit redteam/CVE sources browse without keywords and page through all matches', () => {
+  const skillRows = Array.from({ length: 45 }, (_, i) => ({
+    source: 'redteam', key: 'redteam:community/hack-skills/skill-' + i,
+    name: 'skill-' + i, title: 'Skill ' + i,
+    communitySource: 'hack-skills',
+  }))
+  const cves = Array.from({ length: 23 }, (_, i) => ({
+    title: 'CVE record ' + i, product: 'TestProduct', cve: ['CVE-2025-' + (1000 + i)],
+  }))
+  const opts = { skills: () => skillRows, catalog: () => cves }
+  const search = (source, offset = 0, query = '') => unifiedKnowledgeRequest('/unused',
+    { op: 'knowledgeUnifiedSearch', source, query, offset }, opts).groups[0]
+  const a = search('redteam', 0), b = search('redteam', 20), c = search('redteam', 40)
+  assert.deepEqual([a.total, a.items.length, a.offset, a.hasMore], [45, 20, 0, true])
+  assert.deepEqual([b.total, b.items.length, b.offset, b.hasMore], [45, 20, 20, true])
+  assert.deepEqual([c.total, c.items.length, c.offset, c.hasMore], [45, 5, 40, false])
+  assert.equal(new Set([...a.items, ...b.items, ...c.items].map(item => item.id)).size, 45)
+  assert.equal(a.items[0].community_source, 'hack-skills')
+  const cv1 = search('cve', 0), cv2 = search('cve', 20)
+  assert.deepEqual([cv1.items.length, cv1.hasMore, cv2.items.length, cv2.hasMore], [20, true, 3, false])
+  assert.equal(search('cve', 20, 'TestProduct').items.length, 3)
+  assert.deepEqual(unifiedKnowledgeRequest('/unused',
+    { op: 'knowledgeUnifiedSearch', source: 'all', query: '' }, opts).groups, [])
 })

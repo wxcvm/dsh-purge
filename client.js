@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "78cad00fd04bb71e";
+		const CLIENT_BUILD_ID = "b99a5183a119ea09";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7523,6 +7523,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [external, setExternal] = React.useState(null)
       const [externalError, setExternalError] = React.useState(null)
       const [externalRequest, setExternalRequest] = React.useState(false)
+      const [community, setCommunity] = React.useState(null)
+      const [communityError, setCommunityError] = React.useState(null)
+      const [communityRequest, setCommunityRequest] = React.useState(false)
+      const [communityRemoveArmed, setCommunityRemoveArmed] = React.useState(null)
       const [removeArmed, setRemoveArmed] = React.useState(false)
       const [relatedSkill, setRelatedSkill] = React.useState(null)
       const skillReadSeq = React.useRef(0)
@@ -7557,7 +7561,49 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           else load(true)
         }, (error) => { setExternalRequest(false); setRemoveArmed(false); setExternalError(String((error && error.message) || error)) })
       }
-      React.useEffect(() => { loadExternal() }, [refreshKey])
+      const loadCommunity = () => {
+        api({ op: 'communitySkillStatus' }).then((result) => {
+          if (result && result.ok) { setCommunity(result); setCommunityError(null) }
+          else setCommunityError((result && result.error) || '无法读取社区技能状态')
+        }, (error) => setCommunityError(String((error && error.message) || error)))
+      }
+      const manageCommunity = (pack, update) => {
+        setCommunityRequest(true)
+        setCommunityError(null)
+        api({ op: update ? 'communitySkillUpdate' : 'communitySkillInstall', pack }).then((result) => {
+          setCommunityRequest(false)
+          if (result && result.packs) setCommunity(result)
+          if (!result || !result.ok) setCommunityError((result && result.error) || '社区技能操作未能启动')
+          else if (!result.busy) load(true)
+        }, (error) => { setCommunityRequest(false); setCommunityError(String((error && error.message) || error)) })
+      }
+      const removeCommunity = (pack) => {
+        setCommunityRequest(true)
+        setCommunityError(null)
+        api({ op: 'communitySkillRemove', pack, confirm: true }).then((result) => {
+          setCommunityRequest(false)
+          setCommunityRemoveArmed(null)
+          if (result && result.packs) setCommunity(result)
+          if (!result || !result.ok) setCommunityError((result && result.error) || '卸载失败')
+          else load(true)
+        }, (error) => { setCommunityRequest(false); setCommunityRemoveArmed(null); setCommunityError(String((error && error.message) || error)) })
+      }
+      React.useEffect(() => { loadExternal(); loadCommunity() }, [refreshKey])
+      React.useEffect(() => {
+        if (!community || !community.busy) return
+        const timer = setInterval(() => {
+          api({ op: 'communitySkillStatus' }).then((result) => {
+            if (!result || !result.ok) { setCommunityError((result && result.error) || '读取失败'); return }
+            setCommunity(result)
+            if (!result.busy) {
+              const failed = (result.packs || []).find((item) => item.phase === 'error')
+              if (failed) setCommunityError(failed.label + '：' + failed.error)
+              else { setCommunityError(null); load(true) }
+            }
+          }, (error) => setCommunityError(String((error && error.message) || error)))
+        }, 1500)
+        return () => clearInterval(timer)
+      }, [community && community.busy])
       React.useEffect(() => {
         if (!external || external.busy !== true) return
         const timer = setInterval(() => {
@@ -7623,7 +7669,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       let filtered = needle
         ? items.filter((s) => (s.name + ' ' + s.description + ' ' + s.whenToUse).toLowerCase().indexOf(needle) >= 0)
         : items
-      if (sourceFilter !== 'all') filtered = filtered.filter((s) => (s.library || 'redteam') === sourceFilter)
+      if (sourceFilter === 'community') filtered = filtered.filter(s => s.name.startsWith('community/') && s.library === 'redteam')
+      else if (sourceFilter === 'redteam') filtered = filtered.filter(s => s.library === 'redteam' && !s.name.startsWith('community/'))
+      else if (sourceFilter !== 'all') filtered = filtered.filter((s) => (s.library || 'redteam') === sourceFilter)
       if (categoryFilter !== 'all') filtered = filtered.filter((s) => categoryOf(s) === categoryFilter)
       if (srcOnly) filtered = filtered.filter((s) => s.library !== 'official' && s.fromPlugin === true)
       if (brokenOnly) filtered = filtered.filter((s) => s.library !== 'official' && (s.availability === 'broken' || s.availability === 'unknown'))
@@ -7635,7 +7683,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const renderSkill = (s) => h('div', Object.assign({
         key: (s.library || 'redteam') + ':' + s.name, className: 'rt-item' + (active === ((s.library || 'redteam') + ':' + s.name) ? ' on' : ''),
       }, clickable(() => open(s), { label: '查看技能 ' + s.name, expanded: active === ((s.library || 'redteam') + ':' + s.name) })),
-        h('div', { className: 'rt-item-name' }, s.name,
+        h('div', { className: 'rt-item-name' }, s.name.startsWith('community/')
+          ? s.name.split('/').slice(2).join('/') : s.name,
           s.modelInvocable === false ? h('span', { className: 'rt-tag', style: { marginLeft: 6 } }, '仅人工') : null,
           s.library === 'official'
             ? h('span', { className: 'rt-tag', style: { marginLeft: 6 }, title: '官方技能目录，不按红队工具路径检查' }, '官方')
@@ -7693,6 +7742,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onChange: (e) => setSourceFilter(e.target.value) },
               h('option', { value: 'all' }, '全部来源'),
               h('option', { value: 'redteam' }, '内置红队'),
+              h('option', { value: 'community' }, '社区技能'),
               h('option', { value: 'aboutsecurity' }, 'AboutSecurity'),
               h('option', { value: 'official' }, 'DSH 官方'))),
           h('label', { className: 'rt-kb-check', style: { display: 'flex', margin: '0 0 6px' } },
@@ -7727,7 +7777,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-toolbar' },
             h('span', { style: { fontWeight: 600 } }, detail ? detail.name : '技能目录'),
             h('div', { className: 'rt-spacer' }),
-            h('button', { className: 'rt-btn', disabled: busy, onClick: () => { load(true); loadExternal() } }, busy ? '刷新中…' : '刷新')),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => { load(true); loadExternal(); loadCommunity() } }, busy ? '刷新中…' : '刷新')),
           h('div', { className: 'rt-note', style: { marginBottom: 8 } },
             h('div', { style: { fontWeight: 600, marginBottom: 4 } }, 'AboutSecurity 扩展技能库'),
             h('div', { style: { fontSize: 12, marginBottom: 6 } },
@@ -7757,6 +7807,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { fontSize: 11, marginTop: 6 } },
               '按需从 wgpsec/AboutSecurity 下载 skills/；宿主支持时自动注册，是否成功以「宿主已列出」标记为准。'),
             externalError ? h('div', { className: 'rt-err', style: { marginTop: 6 } }, externalError) : null),
+          h('div', { className: 'rt-note', style: { marginBottom: 8 } },
+            h('div', { style: { fontWeight: 600, marginBottom: 4 } }, 'Yaklang 社区技能包'),
+            h('div', { style: { fontSize: 11, marginBottom: 7 } },
+              '仅在点击安装后下载技能；下方显示本地可读数量，不代表 DSH 已注册为原生技能。'),
+            (community && community.packs || []).map((pack) =>
+              h('div', { key: pack.id, style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '5px 0' } },
+                h('span', { style: { flex: '1 1 120px' } }, pack.label + ' · '
+                  + (pack.busy ? pack.phase === 'updating' ? '更新中…' : '安装中…'
+                    : pack.installed ? pack.skills + ' 条可读' : '未安装')),
+                h('button', { className: 'rt-btn', disabled: communityRequest || pack.busy,
+                  onClick: () => manageCommunity(pack.id, !!pack.installed) },
+                  pack.installed ? '检查更新并拉取' : '安装'),
+                pack.installed
+                  ? h('button', {
+                      className: 'rt-btn', disabled: communityRequest || pack.busy,
+                      style: communityRemoveArmed === pack.id ? { color: 'var(--rt-danger, #d33)' } : undefined,
+                      onBlur: () => setCommunityRemoveArmed(null),
+                      onClick: () => communityRemoveArmed === pack.id ? removeCommunity(pack.id) : setCommunityRemoveArmed(pack.id),
+                    }, communityRemoveArmed === pack.id ? '确认卸载' : '卸载') : null,
+                pack.error ? h('span', { className: 'rt-err' }, pack.error) : null)),
+            !community ? h('span', null, '正在读取社区技能状态…') : null,
+            h('button', { className: 'rt-btn', disabled: communityRequest, onClick: loadCommunity }, '刷新状态'),
+            communityError ? h('div', { className: 'rt-err', style: { marginTop: 6 } }, communityError) : null),
           err
             ? (needRestart
                 ? h('div', { className: 'rt-empty' }, '该模块的宿主代码已更新，需重启一次当前宿主（官方 exe / 社区版 / dsh web）后生效')
@@ -12026,7 +12099,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
     function UnifiedKnowledgeTab({ initialSource = 'all', initialCategory = '' } = {}) {
-      const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+      const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '红队与社区技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+      const browsableSources = ['bundled', 'personal', 'cve', 'redteam', 'aboutsecurity']
       const [query, setQuery] = React.useState('')
       const [submittedQuery, setSubmittedQuery] = React.useState('')
       const [source, setSource] = React.useState(initialSource)
@@ -12053,26 +12127,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const search = (selected = source, selectedCategory = category, offset = 0, term = query) => {
         const keyword = term.trim()
         setDetail(null); setGroups([]); setSearched(false); setSubmittedQuery(keyword)
-        if (!keyword && selected !== 'bundled') return
+        if (!keyword && !browsableSources.includes(selected)) return
         run({ op: 'knowledgeUnifiedSearch', query: keyword, source: selected, category: selected === 'bundled' ? selectedCategory : '', offset }, r => { setGroups(r.groups); setSearched(true); const built = r.groups.find(g => g.source === 'bundled'); if (built?.categories) setCategories(built.categories) })
       }
-      React.useEffect(() => { if (initialSource === 'bundled') search('bundled', initialCategory) }, [initialSource, initialCategory])
+      React.useEffect(() => { if (browsableSources.includes(initialSource)) search(initialSource, initialCategory) }, [initialSource, initialCategory])
       const open = (group, item) => {
         setDetail(null)
         run({ op: 'knowledgeUnifiedGet', source: group.source, id: item.id }, r => setDetail(r.item))
       }
       return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
         h('h4', null, '全库检索'),
-        h('p', null, '内置知识安装即用，留空可浏览全部内置条目；选择全部来源并输入关键词可跨库搜索。每个来源最多展示 20 条。'),
+        h('p', null, '选择某个知识或技能来源，可留空逐页浏览；全部来源需输入关键词。每页展示最多 20 条。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
           h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
           h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); setCategory(''); search(e.target.value, '') } },
             Object.entries(labels).map(([key, label]) => h('option', { key, value: key }, label))),
           source === 'bundled' ? h('select', { className: 'rt-input', 'aria-label': '内置知识分类', value: category, disabled: busy, onChange: e => { setCategory(e.target.value); search('bundled', e.target.value) } },
             h('option', { value: '' }, '全部分类'), categories.map(name => h('option', { key: name, value: name }, name))) : null,
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || (!query.trim() && source !== 'bundled'), onClick: () => search() }, busy ? '读取中…' : '搜索')),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || (!query.trim() && !browsableSources.includes(source)), onClick: () => search() }, busy ? '读取中…' : '搜索')),
         error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
-        !searched && !busy ? h('div', { className: 'rt-empty' }, (source === 'bundled' ? '正在准备内置知识，或点击搜索重新加载' : '输入关键词开始检索')) : null,
+        !searched && !busy ? h('div', { className: 'rt-empty' }, (browsableSources.includes(source) ? '正在准备该来源，或点击搜索重新加载' : '输入关键词开始跨来源检索')) : null,
         searched && query.trim() !== submittedQuery ? h('p', { className: 'rt-ops-subtle' }, '下方为上次检索结果；按搜索更新关键词。') : null,
         groups.map(group => h('div', { key: group.source, style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
           h('h4', null, labels[group.source] + (group.available ? ' · ' + (group.total == null ? '展示 ' + group.items.length : group.total + ' 条') : ' · 不可用')),
@@ -12081,14 +12155,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           group.items.map(item => h('div', { key: item.id, style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '6px 0' } },
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(group, item) }, item.title),
             h('span', { className: 'rt-ops-subtle' }, [item.category, item.description].filter(Boolean).join(' · ')))),
-          group.source === 'bundled' && source === 'all' && group.hasMore ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => { setSource('bundled'); setCategory(''); setQuery(submittedQuery); search('bundled', '', 0, submittedQuery) } }, '查看全部内置匹配') : null,
-          group.source === 'bundled' && source === 'bundled' ? h('div', { className: 'rt-toolbar' },
-            h('button', { className: 'rt-btn', disabled: busy || !group.offset, onClick: () => search('bundled', category, Math.max(0, group.offset - 20), submittedQuery) }, '上一页'),
-            h('span', null, '第 ' + (Math.floor((group.offset || 0) / 20) + 1) + ' 页'),
-            h('button', { className: 'rt-btn', disabled: busy || !group.hasMore, onClick: () => search('bundled', category, (group.offset || 0) + 20, submittedQuery) }, '下一页')) : null)),
+          browsableSources.includes(group.source) && source === 'all' && group.hasMore
+            ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+                setSource(group.source); setCategory(''); setQuery(submittedQuery)
+                search(group.source, '', 0, submittedQuery)
+              } }, '查看该来源全部匹配') : null,
+          browsableSources.includes(group.source) && source === group.source
+            ? h('div', { className: 'rt-toolbar' },
+              h('button', { className: 'rt-btn', disabled: busy || !group.offset,
+                onClick: () => search(group.source, category, Math.max(0, (group.offset || 0) - 20), submittedQuery) }, '上一页'),
+              h('span', null, '第 ' + (Math.floor((group.offset || 0) / 20) + 1) + ' 页'),
+              h('button', { className: 'rt-btn', disabled: busy || !group.hasMore,
+                onClick: () => search(group.source, category, (group.offset || 0) + 20, submittedQuery) }, '下一页')) : null)),
         detail ? h('div', { style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
           h('h4', null, detail.title),
-          h('p', null, '来源：' + labels[detail.origin] + (detail.truncated ? ' · 原文显示已截断' : '')),
+          h('p', null, '来源：' + labels[detail.origin]
+            + (detail.community_source ? ' · ' + detail.community_source : '')
+            + (detail.truncated ? ' · 原文显示已截断' : '')),
+          detail.source_url ? h('a', { href: detail.source_url, target: '_blank', rel: 'noopener noreferrer' }, '查看原始来源') : null,
           h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情'),
           h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文'),
           detail.related?.length ? h('div', null, h('h4', null, '相关内置知识'), detail.related.map(item => h('button', { key: item.id, className: 'rt-btn', disabled: busy, onClick: () => open({ source: 'bundled' }, item) }, item.title))) : null) : null)

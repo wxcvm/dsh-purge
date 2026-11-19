@@ -99,7 +99,7 @@ test('bundled pagination keeps the submitted keyword and federated results can o
   page().find(n=>n.type==='button'&&n.children.includes('搜索')).props.onClick();await settle()
   assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
   page().find(n=>n.type==='select'&&n.props.value==='bundled').props.onChange({target:{value:'all'}});await settle()
-  page().find(n=>n.type==='button'&&n.children.includes('查看全部内置匹配')).props.onClick();await settle()
+  page().find(n=>n.type==='button'&&n.children.includes('查看该来源全部匹配')).props.onClick();await settle()
   assert.equal(calls.at(-1).source,'bundled');assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
 })
 
