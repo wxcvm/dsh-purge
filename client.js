@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "d3fc0792614af99d";
+		const CLIENT_BUILD_ID = "56dc185510d37ded";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4330,6 +4330,29 @@ function outcomeLabel(row) {
   return result ? (outcomeLabels[result.kind] || "未分类") + " · " + (result.evidence || "unknown") : "未观测";
 }
 
+const refusalDecisionLabels = { refusal: '命中拒答信号', 'not-refusal': '未命中', uncertain: '不确定' };
+function refusalDiagnosticSummary(diagnostic) {
+  if (!diagnostic || diagnostic.readOnly !== true) return '未观测';
+  const layers = diagnostic.layers || {};
+  const pairs = [
+    ['响应评估', layers.responseAssessment?.decision],
+    ['操作分类器', layers.operational?.decision],
+    ['正文回放', layers.streamTextReplay?.decision],
+    ['思考回放', layers.thinkingReplay?.decision],
+  ].map(([name, decision]) => `${name}：${refusalDecisionLabels[decision] || '未观测'}`);
+  return `${diagnostic.agreement || 'insufficient-evidence'} · ${pairs.join('；')}`;
+}
+function refusalDiagnosticSignals(diagnostic) {
+  if (!diagnostic || diagnostic.readOnly !== true) return '未观测';
+  const layers = diagnostic.layers || {};
+  const signals = Object.entries(layers).map(([name, layer]) => {
+    const codes = Array.isArray(layer?.reasonCodes) ? layer.reasonCodes.join(', ') : '';
+    return `${name}: ${codes || 'no-hit'}`;
+  });
+  const flags = Array.isArray(diagnostic.flags) ? diagnostic.flags : [];
+  return [...signals, `flags: ${flags.join(', ') || 'none'}`].join(' · ');
+}
+
 function runtimeRouteKey(row) {
   return JSON.stringify([row.provider ?? null, row.model ?? null]);
 }
@@ -4418,11 +4441,19 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
   for (const row of routeItems) counts[runtimeRowStatus(row).key]++;
   const shown = routeItems.filter(row => filter === 'all' || runtimeRowStatus(row).key === filter);
   const evidence = { text: 0, tools: 0, terminal: 0, cancelled: 0 };
+  const refusalDiagnostics = { observed: 0, disagreements: 0, possibleMisses: 0, thinkingSignals: 0 };
   for (const row of routeItems) {
     if (row.firstTextMs != null) evidence.text++;
     if (row.toolCalls > 0 || row.durableToolStarts > 0) evidence.tools++;
     if (row.finishObserved) evidence.terminal++;
     if (row.turnOutcome === 'aborted' || row.finish === 'aborted') evidence.cancelled++;
+    const d = row.refusalDiagnostics;
+    if (d?.readOnly === true) {
+      refusalDiagnostics.observed++;
+      if (d.agreement === 'classifier-disagreement') refusalDiagnostics.disagreements++;
+      if (d.flags?.includes('possible-stream-pattern-gap') || d.flags?.includes('operational-classifier-miss')) refusalDiagnostics.possibleMisses++;
+      if (d.layers?.thinkingReplay?.decision === 'refusal') refusalDiagnostics.thinkingSignals++;
+    }
   }
   const durableTextCount = routeItems.filter(row => row.durableTextObserved === true && row.firstTextMs == null).length;
   const metric = (title, count) => h('div', { className: 'dshp-runtime-metric' },
@@ -4460,6 +4491,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot?.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot?.evicted) + '。计数仅代表当前最多 50 条记录。'),
     h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
     snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
+    snapshot ? h('p', { className: 'dshp-runtime-meta' }, '拒答分类（只读）：观测 ' + refusalDiagnostics.observed + ' · 分类器分歧 ' + refusalDiagnostics.disagreements + ' · 可能漏检线索 ' + refusalDiagnostics.possibleMisses + ' · 思考回放命中 ' + refusalDiagnostics.thinkingSignals + '。分类器输出不是人工判定，正文回放也不代表实时流层命中。') : null,
     snapshot && durableTextCount ? h('p', { className: 'dshp-runtime-meta' }, '另有 ' + durableTextCount + ' 条仅持久流文本证据，未计入首文本计时。') : null,
     snapshot ? h('p', { className: 'dshp-runtime-meta' }, subagents?.observed
       ? '子智能体生命周期（' + (subagents.scope === 'direct-parent' ? '当前父会话' : '全部近期父会话') + '）：启动 ' + subagents.startsObserved + ' · 结束 ' + subagents.endsObserved + ' · 配对 ' + subagents.pairedRuns + ' · 仅启动 ' + subagents.startOnly + ' · 仅结束 ' + subagents.endOnly + ' · 乱序 ' + subagents.outOfOrder + ' · 配对区间峰值重叠 ' + value(subagents.peakPairedOverlap) + '。仅为采集窗口内的事件顺序，不代表实时并发或任务完成；全局已淘汰 ' + subagents.evicted + ' 条。'
@@ -4491,6 +4523,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             detail('用量证据', ({ 'host-stream': '实时流', 'durable-stream': '持久流' }[r.usageSource] || '未观测') + ' · 实时 / 持久总量：' + value(r.liveUsage?.totalTokens) + ' / ' + value(r.durableUsage?.totalTokens)),
             detail('错误代码', value(r.errorCode)),
             detail('失败/拒答归因', outcomeLabel(r)),
+             detail('拒答分类对照', refusalDiagnosticSummary(r.refusalDiagnostics)),
+             detail('各层命中信号 / 漏检线索', refusalDiagnosticSignals(r.refusalDiagnostics)),
             detail('终态来源', source(r)),
             detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
             detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),

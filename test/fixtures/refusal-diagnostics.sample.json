@@ -1,0 +1,20 @@
+[
+  {
+    "id": "synthetic-explicit-refusal",
+    "taskText": "Explain [TOPIC] in a concise technical answer.",
+    "text": "I refuse to complete this request.",
+    "reviewedDecision": "refusal"
+  },
+  {
+    "id": "synthetic-ordinary-answer",
+    "taskText": "Calculate 1 + 1.",
+    "text": "The result is 2.",
+    "reviewedDecision": "not-refusal"
+  },
+  {
+    "id": "synthetic-attributed-quote",
+    "taskText": "Analyze the log excerpt.",
+    "text": "The log contains the sentence ‘I cannot help with this request.’",
+    "reviewedDecision": "not-refusal"
+  }
+]

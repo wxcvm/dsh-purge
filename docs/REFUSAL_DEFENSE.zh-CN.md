@@ -73,10 +73,12 @@ streak ≥ 3        rewrite  不看分数，连续拒到这个数直接改写历
 ## 五、验证
 
 ```powershell
-# 单测（86 项：流层 / 思考期 / 历史改写 / 编排器 / 锚点 / 提示词路由）
+# 防御链回归（分类器、运行快照、离线回放、历史改写、锚点与提示词路由）
 node --test test/stream-guard.test.mjs test/stream-guard-liveness.test.mjs `
             test/obedience.test.mjs test/obedience-cn-refusal.test.mjs `
             test/history-scrub.test.mjs test/refusal-defense.test.mjs `
+            test/refusal-diagnostics.test.mjs test/refusal-diagnostics-runtime.test.mjs `
+            test/refusal-diagnostics-ui.test.mjs `
             test/anchor.test.mjs test/anchor-gate.test.mjs `
             test/prompt-coverage.test.mjs test/prompt-compat.test.mjs `
             test/inject-switch.test.mjs test/preset-compat.test.mjs
@@ -90,7 +92,26 @@ node scripts/scrub-session-refusals.mjs --all
 node scripts/scrub-session-refusals.mjs <session.v4.jsonl.zstd> --write
 ```
 
-## 六、已知边界
+## 六、拒答分类诊断与离线回放（只读）
+
+`lib/refusal-diagnostics.js` 把四个现有分类器对同一条已提交回复的结果并排投影：
+
+- `responseAssessment`：保守响应评估，包含归属过滤、局限和理由码。
+- `operational`：运行时事后分类器 `obedience.classifyRefusal`。
+- `streamTextReplay`：以流层正文规则回放最终正文；它是离线比较，不代表实时流层当时命中。
+- `thinkingReplay`：如果持久 assistant 事件含 reasoning 文本，则回放思考期分类；缺失时标为 `reasoning-not-observed`。
+
+运行诊断快照与页面只保存决定、分数、理由码、分歧/可能漏检标记；不会保存任务文本、回复正文或 reasoning 原文。只读诊断不调用模型、不改变提示词、不触发拦截/重试/历史改写。
+
+```powershell
+# 作战台 / 诊断中心 / 运行记录：打开单条记录查看「拒答分类对照」与「各层命中信号 / 漏检线索」。
+# 对离线样例回放；JSON 输入包含 id/taskText/text，可选 reasoningText/reviewedDecision。
+node scripts/replay-refusal-diagnostics.mjs .\test\fixtures\refusal-diagnostics.sample.json
+```
+
+回放结果仅统计显式人工标注的 `reviewedDecision: "refusal" | "not-refusal"`。未标注样例仅用于分歧分拣，不参与 accuracy/precision/recall；分类器分歧是待复核信号，不直接当作误拒或漏拒真值。
+
+## 七、已知边界
 
 1. **判定器是天花板**：改写、掐断、升级的效力都等于 `classifyRefusal` 的召回率。实测同一段"一直不删"的对话里，三条拒绝只有一条被句式判出来（另两条开头是"先说明…"）。
 2. **改写思考文本无效**：reasoning 到达流层时推理已经发生，替换只影响显示与归档。真正改变下一轮输入的是掐断（删掉"我拒绝过"的锚）、尾部升压与强制重发。
