@@ -112,6 +112,8 @@ test('community Yaklang skill packs are searchable without replacing bundled ent
   writeFileSync(join(hack, 'SKILL.md'), '---\nname: api-security\ndescription: "API 安全审查"\n---\n# API 安全审查\nHACK_SKILL_CONTENT')
   writeFileSync(join(yak, 'SKILL.md'), '---\nname: yaklang-syntax\ndescription: "Yaklang 编程语法"\n---\n# Yaklang 语法\nYAK_SKILL_CONTENT')
   writeFileSync(join(yak, 'README.md'), '# Not a skill')
+  mkdirSync(join(yak, 'examples'), { recursive: true })
+  writeFileSync(join(yak, 'examples', 'usage.md'), '# Example, not a separate skill')
   const all = listLocalSkills({ home })
   assert.ok(all.some(row => row.key === 'redteam:web-injection'))
   const matches = all.filter(row => row.key.startsWith('redteam:community/'))
