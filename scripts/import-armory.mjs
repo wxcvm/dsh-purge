@@ -38,6 +38,8 @@ const checkOnly = args.includes("--check");
 const repoAt = args.indexOf("--repo");
 const repo = path.resolve(repoAt >= 0 ? args[repoAt + 1] : "/opt/aboutsecurity/repository");
 const doEmbed = args.includes("--embed");
+const pocsAt = args.indexOf("--pocs");
+const pocsCsv = pocsAt >= 0 ? args[pocsAt + 1] : null;
 
 const UPSTREAM = "https://github.com/wgpsec/AboutSecurity";
 const UPSTREAM_COMMIT = (() => {
@@ -374,7 +376,27 @@ if (doEmbed) {
   process.stdout.write(`[import-armory] embed: ${embedded} 文件内嵌, ${skippedBig} 大文件跳过\n`);
 }
 
-const vulnCount = artifacts.filter((a) => a.rel.startsWith("cve-catalog/")).reduce((n, a) => n + JSON.parse(a.body).length, 0);
+/* 🟢4 --pocs：nomi-sec/PoC-in-GitHub 风格本地 CSV → poc-links.json 索引 */
+if (pocsCsv) {
+  if (!fs.existsSync(pocsCsv)) die(`--pocs 指向的 CSV 不存在: ${pocsCsv}`);
+  const csv = fs.readFileSync(pocsCsv, "utf8");
+  // PoC-in-GitHub 格式: CVE,Owner/Repo,URL（首行表头跳过）
+  const rows = [];
+  for (const line of csv.split("\n").slice(1)) {
+    const parts = line.split(",").map(x => x.trim().replace(/^"|"$/g, ""));
+    if (parts.length >= 3 && /^CVE-\d{4}-\d+/i.test(parts[0])) {
+      rows.push({ cve: parts[0].toUpperCase(), repo: parts[1], url: parts[2], verified: false });
+    }
+  }
+  if (!rows.length) die("--pocs CSV 里没有可解析的 CVE 行（需 CVE,Owner/Repo,URL 三列）");
+  artifacts.push(renderJson("cve-catalog/poc-links.json", {
+    source: "local-csv", note: "本地 PoC-in-GitHub 风格 CSV 导入；verified=false，仅索引不下载。",
+    count: rows.length, entries: rows,
+  }));
+  process.stdout.write(`[import-armory] pocs: ${rows.length} 条 PoC 链接\n`);
+}
+
+const vulnCount = artifacts.filter((a) => a.rel.startsWith("cve-catalog/") && a.rel !== "cve-catalog/poc-links.json").reduce((n, a) => n + JSON.parse(a.body).length, 0);
 const payloadCount = payloads.reduce((n, g) => n + g.files.length, 0);
 const dictCount = dicts.reduce((n, g) => n + g.files.length, 0);
 

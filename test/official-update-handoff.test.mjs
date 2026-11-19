@@ -194,11 +194,14 @@ test('updater does not start a duplicate Harness when NSIS already relaunched it
 })
 
 test('handoff patch does not substitute installer.exe when verified pending metadata exists', () => {
+  // 补丁数据已拆到 patches-definitions.js（core.js re-export），两处都查
   const core = readFileSync(new URL('../lib/core.js', import.meta.url), 'utf8')
-  assert.match(core, /desktop verified pending installer missing/)
-  assert.match(core, /const infoPath = join\(cache,/)
-  assert.match(core, /if \(existsSync\(infoPath\)\)/)
-  assert.match(core, /cwd: process\.env\.TEMP \|\| dirname\(installer\)/)
+  const patches = readFileSync(new URL('../lib/patches-definitions.js', import.meta.url), 'utf8')
+  const both = core + patches
+  assert.match(both, /desktop verified pending installer missing/)
+  assert.match(both, /const infoPath = join\(cache,/)
+  assert.match(both, /if \(existsSync\(infoPath\)\)/)
+  assert.match(both, /cwd: process\.env\.TEMP \|\| dirname\(installer\)/)
 })
 
 

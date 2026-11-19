@@ -138,3 +138,31 @@ test('🟡B compareMetrics：基线比较三态（first_run/ok/regressed）', as
   assert.equal(better.ok, true)
   assert.ok(better.improvements.length >= 2)
 })
+
+test('🟢3 模型画像：记录/聚合/趋势/无记录', async () => {
+  const { recordModelRun, modelProfile } = await import('../lib/probe-suite.js')
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = mkdtempSync(join(tmpdir(), 'profile-'))
+  // 三次递增 → improving
+  for (let i = 0; i < 3; i++) {
+    recordModelRun('gpt-4o', { pass_rate: 0.5 + i * 0.1, reject_rate: 0.3 - i * 0.05, first_token_compliance: 0.8, selfref_rate: 0.05, drift_round: 5 }, { home })
+  }
+  const p = modelProfile('gpt-4o', { home })
+  assert.equal(p.samples, 3)
+  assert.equal(p.avg.pass_rate, 0.6)
+  assert.equal(p.trend.direction, 'improving')
+  assert.ok(p.trend.pass_rate_delta > 0)
+  assert.equal(p.recent.length, 3)
+  assert.ok(p.last_run)
+  // 无记录
+  assert.equal(modelProfile('claude-none', { home }), null)
+  // 衰退趋势
+  const home2 = mkdtempSync(join(tmpdir(), 'profile2-'))
+  for (let i = 0; i < 4; i++) {
+    recordModelRun('glm-x', { pass_rate: 0.9 - i * 0.1, reject_rate: 0.1, first_token_compliance: 0.9, selfref_rate: 0.02, drift_round: 5 }, { home: home2 })
+  }
+  const p2 = modelProfile('glm-x', { home: home2 })
+  assert.equal(p2.trend.direction, 'declining')
+})
