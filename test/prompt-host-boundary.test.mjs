@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
 import { installAssembleGuard } from "../lib/identity.js";
+import { upstreamSafeAssemblyProbe } from "../lib/upstream-safe-prompt.js";
 
 test("native Cordis host fixture reaches prompt assembly without implying provider delivery", {
   skip: !process.env.DSH_COMPAT_HOST_ROOT && "requires pinned official host fixture",
@@ -51,6 +52,22 @@ test("native Cordis host fixture reaches prompt assembly without implying provid
   const report = getLastInjectReport();
   assert.equal(report.stage, "assembled");
   assert.equal(report.delivery, "unverified");
+
+  // Backup mode must also make it through the official renderer and system-message shape.
+  const backup = rewriteLiveAssembly(
+    { enabled: true, bundledDefault: true, upstreamSafeBackup: true },
+    input, { agent: { session } },
+  );
+  const backupProbe = upstreamSafeAssemblyProbe(backup);
+  assert.equal(backupProbe.assemblyMode, "persona-prefix");
+  assert.equal(backupProbe.injectHead, true);
+  const renderedBackup = renderPrompt(backup);
+  assert.ok(renderedBackup.startsWith(backup.sections[0].text));
+  assert.match(renderedBackup, /native context/);
+  assert.equal(renderedBackup.split(backup.sections[0].text).length - 1, 1);
+  const backupMessage = createSystemMessage(renderedBackup);
+  assert.equal(backupMessage.content[0]?.text, renderedBackup);
+  assert.equal(getLastInjectReport().delivery, "unverified");
 
   // Under plan B the same native renderer must receive the untouched system prompt
   // when no ordinary profile matches and bundledDefault stays disabled.
