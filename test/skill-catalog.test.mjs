@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { aboutSecurityDir, communitySkillsDir, listLocalSkills, readLocalSkill, searchLocalSkills } from '../lib/redteam/skill-catalog.js'
 import { unifiedKnowledgeRequest } from '../lib/redteam/knowledge-unified.js'
@@ -132,4 +134,12 @@ test('community Yaklang skill packs are searchable without replacing bundled ent
   }, { home })
   assert.match(unified.item.body, /YAK_SKILL_CONTENT/)
   assert.throws(() => readLocalSkill('redteam:community/hack-skills/../secret', { home }), /skill not found/)
+})
+
+test('optional community installer help runs without network or a checkout', () => {
+  const script = fileURLToPath(new URL('../scripts/install-community-skills.mjs', import.meta.url))
+  const result = spawnSync(process.execPath, [script, '--help'], { encoding: 'utf8', windowsHide: true })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /--source hack-skills\|yak-skills\|all/)
+  assert.match(result.stdout, /--update/)
 })
