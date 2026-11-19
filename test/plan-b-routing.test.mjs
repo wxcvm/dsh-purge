@@ -277,3 +277,47 @@ test("诊断：redteam 分支同三态结构（ok/stage/leadDrift）", () => {
     assert.ok(typeof report.candidateBytes !== "undefined" || typeof report.fullBytes !== "undefined");
   } finally { delete process.env.DSH_HOME; }
 });
+
+
+test("modelAdaptive switch controls family guidance for matched ordinary and redteam routes", t => {
+  const home = mkHome();
+  const previous = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  t.after(() => {
+    if (previous === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = previous;
+    fs.rmSync(home, { force: true, recursive: true });
+  });
+  savePromptProfile(home, { id: "coding", body: "CODE_RULE_SENTINEL" });
+  const makeContext = (preset, text) => ({ agent: { session: {
+    id: "s-adapt", header: { agentPreset: preset, model: "gpt-6" },
+    events: [{ seq: 1, type: "user/message", data: {
+      source: { kind: "user" }, content: [{ type: "text", text }],
+    } }],
+  } } });
+  const input = { sections: [{ name: "host:x", text: "NATIVE_HOST" }], variables: { model: "gpt-6" } };
+  const body = result => result.sections.map(s => s.text || "").join("\n");
+
+  const ordinary = makeContext("standard", "请修复代码");
+  const off = body(rewriteLiveAssembly({ enabled: true, modelAdaptive: false }, input, ordinary));
+  assert.match(off, /CODE_RULE_SENTINEL/);
+  assert.doesNotMatch(off, /GPT-ADAPT/, "off must not silently append model-specific guidance");
+  const on = body(rewriteLiveAssembly({ enabled: true, modelAdaptive: true }, input, ordinary));
+  assert.match(on, /CODE_RULE_SENTINEL/);
+  assert.match(on, /GPT-ADAPT/, "on adds guidance while preserving the user's rule");
+
+  const redteam = makeContext("redteam", "执行红队演练");
+  const rtOff = body(rewriteLiveAssembly({ enabled: true, modelAdaptive: false }, input, redteam));
+  assert.doesNotMatch(rtOff, /GPT-ADAPT/, "redteam must honor the explicit off switch too");
+  const rtOn = body(rewriteLiveAssembly({ enabled: true, modelAdaptive: true }, input, redteam));
+  assert.match(rtOn, /GPT-ADAPT/);
+});
+
+test("legacy direct assembly helpers preserve their opt-in default unless explicitly overridden", () => {
+  const input = { sections: [{ name: "host:x", text: "NATIVE_HOST" }], variables: { model: "gpt-6" } };
+  const route = { id: "coding", body: "CODE_RULE_SENTINEL" };
+  assert.match(applyPromptRouteToAssembly(input, route).sections[0].text, /GPT-ADAPT/);
+  const off = applyPromptRouteToAssembly(input, route, { modelAdaptive: false });
+  assert.equal(off.sections[0].text, "CODE_RULE_SENTINEL");
+  assert.equal(off.sections[1], input.sections[0], "host-owned sections are preserved");
+});
