@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.17
+
+## 中文
+
+本次在 .16 基础上合入已经完成源码与 Windows/Ubuntu CI 验证的提示词组装、错误分类、社区技能和界面改进，不覆盖任何已发布版本的标签或资产。
+
+- **多模型提示词作用域一致性（#369、#372）**：整合三条注入路径的路由开关及组装证据；修复关闭 `modelAdaptive` 后仍向普通或红队规则追加模型家族专用段的问题。关闭时保留已命中的规则正文，开启后按实际模型选择适配；旧低层 API 的省略参数语义保持兼容。
+- **上游拒答的诊断与重试（#370、#371）**：正确识别 Harness `CONTENT_REFUSED`，不再误归类为普通 Provider 故障，也不对明确拒答触发自动重试或自动续接。普通的超时、网络错误及其他既有技术故障恢复行为保持原状。
+- **提示词管理界面（#373）**：保留三个路由开关，增加全局/局部提示词高级名单的通配符说明、黑白名单优先级说明及紧凑输入布局；没有回灌冲突的旧 `client.js`。
+- **社区技能与统一资料分页（#374）**：合并 Yaklang 两套社区技能索引及手动安装、更新、卸载管理；技能目录与统一知识库能够显示来源、浏览分页和读取详情，不自动拉取第三方技能或改变既有技能源。
+- **宿主边界测试（#369）**：Windows/Ubuntu CI 已通过官方 Cordis 组装、`renderPrompt` 和 `dsh-llm createSystemMessage` 结构验证，并确认生成客户端一致性。
+
+**尚未由 CI 证明**：真实 Windows Desktop 的安装、切模型／预设、重启后技能管理，以及真实 Provider HTTP 请求投递和拒答来源。系统消息构造成功不代表远端已收到，也不代表模型自身的拒答被消除。后续实机验收继续记录在现有 Issues。
+
+## English
+
+Version .17 incorporates verified source/CI changes since .16: prompt route switch consistency and opt-in model-family adaptation (#369/#372); recognition of upstream `CONTENT_REFUSED` without inappropriate automatic retries (#370/#371); compact advanced allow/deny editor guidance preserving the new routing switches (#373); and manually managed community skill packs plus paginated knowledge browsing (#374). Official Cordis assembly, prompt rendering, and neutral LLM system-message construction passed Windows and Ubuntu CI. Provider HTTP delivery, real Windows Desktop interactions, external skill installation and restart behavior are not yet evidenced by CI.
+
+---
+
 # 1.1.92-wxcvm.16
 
 ## 中文
