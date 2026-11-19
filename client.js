@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "b99a5183a119ea09";
+		const CLIENT_BUILD_ID = "75d0abcee20ae7b0";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -962,8 +962,10 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-metric{padding:12px;min-height:64px;display:flex;flex-direction:column;gap:4px;border-radius:8px}
 .dshp-metric b{font-family:inherit;font-size:18px;font-weight:600;line-height:28px}
 .dshp-metric span{font-size:12px;line-height:16px;color:var(--dshp-mute)}
-.dshp-bar{height:4px;border-radius:999px;background:var(--dshp-line);overflow:hidden;margin:8px 0 16px}
+.dshp-bar{height:8px;border-radius:999px;background:var(--dshp-line);overflow:hidden;margin:8px 0 16px}
 .dshp-bar>i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:var(--dshp-accent);transition:transform 500ms var(--dshp-ease)}
+.dshp-bar.is-done>i{background:var(--dshp-ok)}
+.dshp-bar.is-bad>i{background:var(--dshp-bad)}
 .dshp-flow{display:flex;align-items:center;gap:0;margin:0 0 16px;overflow-x:auto;padding:4px 0}
 .dshp-flow-kind{font:12px/16px var(--dshp-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--dshp-mute);margin:0 12px 0 0;flex:0 0 auto}
 .dshp-flow-node{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px;opacity:.42;transition:opacity 500ms var(--dshp-ease),transform 500ms var(--dshp-ease)}
@@ -2948,11 +2950,22 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			const jobSteps = FLOW_STEPS[(job && job.kind) || "apply"] || FLOW_STEPS.apply;
 			const jobIdx = jobSteps.indexOf(job && job.stage === "restart" ? "done" : ((job && job.stage) || "idle"));
 			// The bar tracks the operation, not the ratio of applied patches.
-			const flowFinished = Boolean(job && job.stage === "done" && !job.error && !job.active);
-			const pct = flowFinished ? 100 : jobOn
-				? Math.round(((job && job.stage === "done" ? jobSteps.length : Math.max(jobIdx, 0) + 0.45) / jobSteps.length) * 100)
-				: 0;
+			const flowFinished = Boolean(job && job.stage === "done" && !job.error && !jobOn);
 			const flowInterrupted = Boolean(job && !jobOn && !job.error && job.stage !== "idle" && job.stage !== "done");
+			const flowVisible = Boolean(jobOn || flowFinished || (job && job.error) || flowInterrupted);
+			const phaseCount = Math.max(jobSteps.length - 1, 1); // Exclude the terminal "done" marker.
+			const completedPhases = Math.min(Math.max(jobIdx, 0), phaseCount);
+			// Phase coverage, not a percentage of patch writes or elapsed time.
+			const pct = flowFinished ? 100 : Math.min(99, Math.round(completedPhases / phaseCount * 100));
+			const flowKind = t("flow." + ((job && job.kind) || "apply"));
+			const flowStatus = jobOn ? "正在" + flowKind
+				: flowFinished ? "上次" + flowKind + "已完成"
+				: job && job.error ? "上次" + flowKind + "执行失败"
+				: flowInterrupted ? "上次" + flowKind + "结果未确认"
+				: "空闲";
+			const flowStage = job && job.stage && job.stage !== "idle" && job.stage !== "done"
+				? (jobOn ? "当前" : "最后记录") + "阶段 " + Math.min(completedPhases + 1, phaseCount) + "/" + phaseCount + " · " + flowLabel(job.stage, t)
+				: jobOn ? "等待阶段信息" : flowFinished ? "全部阶段完成" : "未记录阶段";
 			const metricNotes = [];
 			if (tally.pending) metricNotes.push(t("metric.pendingShort", { n: tally.pending }));
 			if (tally.unmatched) metricNotes.push(t("metric.unmatchedShort", { n: tally.unmatched }));
@@ -3100,19 +3113,28 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				cleanGuideOpen ? h("div", null,
 					cleanGuideError ? h("div", { className: "dshp-notice is-error" }, cleanGuideError) : null,
 					h("pre", { className: "dshp-guide-doc" }, cleanGuideText || (cleanGuideError ? "" : "正在读取本地指南…"))) : null),
-				cleanPane(["overview", "patches", "maintenance"], h(ApplyFlow, { progress: s && s.apply_progress, busy: patchBusy || uninstallBusy, t: t }),
-				job && (job.error || (job.active && job.detail)) ? h("p", {
-					className: "dshp-clean-progress-note",
-					role: job.error ? "alert" : "status",
-				}, job.error ? "清洗流程失败：" + job.error : job.detail) : null,
-				flowInterrupted ? h("p", { className: "dshp-clean-progress-note", role: "alert" },
-					"上一次操作没有返回完成状态（最后阶段：" + flowLabel(job.stage, t) + "）。请重新检测并查看错误信息，不要把补丁比例当作流程完成。") : null,
-				h("div", { className: "dshp-clean-progress-note", role: "status" },
-					"清洗流程：" + (flowFinished ? "已完成（100%）" : jobOn ? "执行中（" + pct + "%）" : job && job.error ? "未完整完成" : flowInterrupted ? "结果未确认" : "未执行")
-					+ (located ? " · 补丁已应用 " + applied + "/" + total
-					+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped : " · 补丁状态待检测")),
-				h("div", { className: "dshp-bar", role: "progressbar", "aria-label": "清洗流程进度", "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": pct },
-					h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } }))),
+				cleanPane(["overview", "patches", "maintenance"],
+					h("div", { className: "dshp-clean-progress-note", role: "status" }, "清洗操作：" + flowStatus),
+					flowVisible ? h(ApplyFlow, { progress: job, busy: patchBusy || uninstallBusy, t: t }) : null,
+					job && (job.error || (job.active && job.detail)) ? h("p", {
+						className: "dshp-clean-progress-note",
+						role: job.error ? "alert" : "status",
+					}, job.error ? "清洗流程失败：" + job.error : job.detail) : null,
+					flowInterrupted ? h("p", { className: "dshp-clean-progress-note", role: "alert" },
+						"上一次操作没有返回完成状态（最后阶段：" + flowLabel(job.stage, t) + "）。请重新检测并查看错误信息，不要把补丁比例当作流程完成。") : null,
+					flowVisible ? h("div", { className: "dshp-clean-progress-note", role: "status" },
+						"阶段进度 " + pct + "% · " + flowStage + "（按流程阶段统计，不代表补丁写入比例）") : null,
+					flowVisible ? h("div", {
+						className: "dshp-bar" + ((job && job.error) || flowInterrupted ? " is-bad" : flowFinished ? " is-done" : ""),
+						role: "progressbar", "aria-label": "清洗流程阶段进度",
+						"aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": pct,
+						"aria-valuetext": flowStage + "，阶段进度 " + pct + "%",
+					}, h("i", { style: { transform: "scaleX(" + (pct / 100) + ")" } })) : null,
+					h("div", { className: "dshp-clean-progress-note", role: "status" },
+						located ? "磁盘补丁：已应用 " + applied + "/" + total
+							+ " · 待应用 " + tally.pending + " · 未匹配 " + tally.unmatched + " · 跳过 " + tally.skipped
+							: "磁盘补丁：待检测"),
+				),
 				cleanPane(["overview", "patches", "maintenance"], h("div", { className: "dshp-row dshp-clean-actions", style: { margin: "12px 0" } },
 					h(Btn, { kind: "primary", disabled: jobOn || updateBusy || !overrideLoaded, onClick: () => doAction("apply", "action.apply") }, patchBusy ? t("btn.apply.busy") : t("btn.apply")),
 					h(Btn, { kind: "danger", disabled: jobOn || updateBusy, onClick: () => doAction("revert", "action.revert") }, t("btn.revert")),
