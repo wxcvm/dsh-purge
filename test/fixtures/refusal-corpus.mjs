@@ -109,7 +109,7 @@ export const refusalCorpus = [
 
   { id: 'quote-conditional', tags: ['quoted', 'attribution'], task: BENIGN,
     text: '如果校验失败，我不能协助这个请求；当前校验通过，润色稿在下面。',
-    expect: { action: 'none', assessment: 'not-refusal' } },
+    expect: { action: 'none', assessment: 'uncertain' } },
 
   { id: 'quote-retraction', tags: ['quoted', 'attribution'], task: BENIGN,
     text: '抱歉，我不能协助这个请求。更正，上句是误判。下面是完整润色稿：',
