@@ -5,8 +5,11 @@
  * 与统一知识检索链路），零运行时依赖、零网络。
  *
  * 用法：
- *   node scripts/import-armory.mjs [--repo /opt/aboutsecurity/repository] [--check]
+ *   node scripts/import-armory.mjs [--repo /opt/aboutsecurity/repository] [--check] [--embed]
  *
+ *   --embed  追加生成 lib/redteam/armory/embedded.json：把小体积武器文件
+ *            （单文件 <64KB）base64 内嵌，带 sha256 校验；装在无源仓库的
+ *            机器上索引不再是死链。大文件（目录/子域名字典等）保持仅索引。
  *   （默认）生成：
  *     lib/redteam/cve-catalog/as-vuln-*.json      — Vuln 知识 → CVE 索引条目
  *     lib/redteam/armory/payloads.json            — Payload 库索引（路径+meta+行数）
@@ -34,6 +37,7 @@ const args = process.argv.slice(2);
 const checkOnly = args.includes("--check");
 const repoAt = args.indexOf("--repo");
 const repo = path.resolve(repoAt >= 0 ? args[repoAt + 1] : "/opt/aboutsecurity/repository");
+const doEmbed = args.includes("--embed");
 
 const UPSTREAM = "https://github.com/wgpsec/AboutSecurity";
 const UPSTREAM_COMMIT = (() => {
@@ -297,6 +301,7 @@ function renderJson(rel, data) {
   return { rel, body };
 }
 
+const EMBED_MAX_BYTES = 64 * 1024;
 const artifacts = [];
 // 现有 catalog（fujiang 条目）作为去重基线：AboutSecurity 与之重复的 (CVE, product) 跳过
 const existingCatalog = [];
@@ -325,11 +330,89 @@ artifacts.push(renderJson("armory/dictionaries.json", {
   groups: dicts,
 }));
 
+/* 🟡A ——embed：小文件内嵌（解决装包机器无源仓库的死链） */
+if (doEmbed) {
+  const files = {};
+  let embedded = 0, skippedBig = 0;
+  const walkFiles = (kind) => {
+    const dir = path.join(repo, kind);
+    const stack = [dir];
+    while (stack.length) {
+      const d = stack.pop();
+      let items = [];
+      try { items = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+      for (const it of items) {
+        const full = path.join(d, it.name);
+        if (it.isDirectory()) stack.push(full);
+        else if (it.isFile() && it.name !== "_meta.yaml" && !/\.(png|jpg|pdf|doc|xls|xlsx|zip|svg)$/i.test(it.name)) {
+          const rel = kind + "/" + path.relative(dir, full).split(path.sep).join("/");
+          let bytes;
+          try { bytes = fs.statSync(full).size; } catch { continue; }
+          if (bytes > EMBED_MAX_BYTES) { skippedBig += 1; continue; }
+          try {
+            const buf = fs.readFileSync(full);
+            files[rel] = {
+              sha256: createHash("sha256").update(buf).digest("hex"),
+              bytes,
+              encoding: "utf8",
+              content: buf.toString("utf8"),
+            };
+            embedded += 1;
+          } catch { /* 读不了的跳过 */ }
+        }
+      }
+    }
+  };
+  walkFiles("Payload");
+  walkFiles("Dic");
+  artifacts.push(renderJson("armory/embedded.json", {
+    source: UPSTREAM, ...(UPSTREAM_COMMIT ? { source_commit: UPSTREAM_COMMIT } : {}),
+    note: "小体积武器文件内嵌（<64KB）；大文件（目录/子域名字典）仍指向本地仓库。verified=false。",
+    max_bytes: EMBED_MAX_BYTES,
+    files,
+  }));
+  process.stdout.write(`[import-armory] embed: ${embedded} 文件内嵌, ${skippedBig} 大文件跳过\n`);
+}
+
 const vulnCount = artifacts.filter((a) => a.rel.startsWith("cve-catalog/")).reduce((n, a) => n + JSON.parse(a.body).length, 0);
 const payloadCount = payloads.reduce((n, g) => n + g.files.length, 0);
 const dictCount = dicts.reduce((n, g) => n + g.files.length, 0);
 
+/* checkOnly 也要覆盖 embedded.json：重建其内容做比对（不写盘） */
 if (checkOnly) {
+  const embedBuilt = doEmbed ? null : (() => {
+    const files = {};
+    for (const kind of ["Payload", "Dic"]) {
+      const dir = path.join(repo, kind);
+      const stack = [dir];
+      while (stack.length) {
+        const d = stack.pop();
+        let items = [];
+        try { items = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
+        for (const it of items) {
+          const full = path.join(d, it.name);
+          if (it.isDirectory()) stack.push(full);
+          else if (it.isFile() && it.name !== "_meta.yaml" && !/\.(png|jpg|pdf|doc|xls|xlsx|zip|svg)$/i.test(it.name)) {
+            let bytes;
+            try { bytes = fs.statSync(full).size; } catch { continue; }
+            if (bytes > EMBED_MAX_BYTES) continue;
+            try {
+              const buf = fs.readFileSync(full);
+              const rel = kind + "/" + path.relative(dir, full).split(path.sep).join("/");
+              files[rel] = { sha256: createHash("sha256").update(buf).digest("hex"), bytes, encoding: "utf8", content: buf.toString("utf8") };
+            } catch { }
+          }
+        }
+      }
+    }
+    return renderJson("armory/embedded.json", {
+      source: UPSTREAM, ...(UPSTREAM_COMMIT ? { source_commit: UPSTREAM_COMMIT } : {}),
+      note: "小体积武器文件内嵌（<64KB）；大文件（目录/子域名字典）仍指向本地仓库。verified=false。",
+      max_bytes: EMBED_MAX_BYTES,
+      files,
+    });
+  })();
+  if (embedBuilt) artifacts.push(embedBuilt);
   let dirty = 0;
   for (const art of artifacts) {
     const fp = path.join(root, "lib", "redteam", art.rel);

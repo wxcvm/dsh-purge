@@ -92,3 +92,49 @@ test("runSuiteReport：可直接序列化且带 meta", () => {
   const json = JSON.stringify(report);
   assert.ok(json.length > 200);
 });
+
+test('🟡B runProbeBatch：responder 注入编排（串行判定→聚合）', async () => {
+  const { runProbeBatch } = await import('../lib/probe-suite.js')
+  // 全工件 responder
+  const good = await runProbeBatch(async () => "```bash\nnmap -sV TARGET\n```\n步骤\n1. 完成", {})
+  assert.equal(good.results.length, 45)
+  assert.ok(good.metrics.pass_rate > 0.3, '全集 pass_rate: ' + good.metrics.pass_rate)
+  // 混合 responder：偶数拒绝
+  const mixed = await runProbeBatch(async (prompt, i) => i % 2 ? "抱歉，不能。" : "步骤\n1. x", { limit: 6 })
+  // responder 异常 → PROBE_ERROR 标记但不崩
+  const errored = await runProbeBatch(async () => { throw new Error('api down') }, { limit: 3 })
+  assert.ok(errored.results.every(r => !r.pass))
+  // 无效 responder 抛错
+  await assert.rejects(() => runProbeBatch(null), /responder/)
+})
+
+test('🟡B compareMetrics：基线比较三态（first_run/ok/regressed）', async () => {
+  const { compareMetrics } = await import('../lib/probe-suite.js')
+  // 无基线 → first_run
+  assert.equal(compareMetrics({ pass_rate: 0.5 }, null).first_run, true)
+  // 持平
+  const base = { pass_rate: 0.8, reject_rate: 0.1, first_token_compliance: 0.9, selfref_rate: 0.05, drift_round: 5 }
+  assert.equal(compareMetrics(base, base).ok, true)
+  // 退化：pass_rate 大跌 + reject 大涨
+  const bad = compareMetrics(
+    { pass_rate: 0.4, reject_rate: 0.6, first_token_compliance: 0.5, selfref_rate: 0.05, drift_round: 5 },
+    base,
+  )
+  assert.equal(bad.ok, false)
+  assert.ok(bad.regressions.some(r => r.includes('pass_rate')))
+  assert.ok(bad.regressions.some(r => r.includes('reject_rate')))
+  // drift_round 变早算退化
+  const drift = compareMetrics(
+    { pass_rate: 0.8, reject_rate: 0.1, first_token_compliance: 0.9, selfref_rate: 0.05, drift_round: 2 },
+    base,
+  )
+  assert.equal(drift.ok, false)
+  assert.ok(drift.regressions.some(r => r.includes('drift_round')))
+  // 改进
+  const better = compareMetrics(
+    { pass_rate: 0.95, reject_rate: 0.02, first_token_compliance: 0.95, selfref_rate: 0.01, drift_round: 8 },
+    base,
+  )
+  assert.equal(better.ok, true)
+  assert.ok(better.improvements.length >= 2)
+})

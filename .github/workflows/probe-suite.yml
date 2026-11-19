@@ -1,0 +1,79 @@
+# 🟡B 探针集 CI gate：手动触发跑 45 条探针对比指标基线。
+# 无 PROBE_API_KEY secret 时跳过并提示（不视为失败）。
+name: probe-suite
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: '基线文件 ref（默认取仓库根 probe-baseline.json；不存在时本次结果存为基线）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: [self-hosted, purge-ci]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install deps
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check probe API key
+        id: key
+        run: |
+          if [ -z "${{ secrets.PROBE_API_KEY }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::PROBE_API_KEY 未配置——探针集需要真实模型 API（配置 secret 后重跑）"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run probe suite
+        if: steps.key.outputs.skip == 'false'
+        run: |
+          node --input-type=module - <<'JS'
+          import { runProbeBatch, compareMetrics } from './lib/probe-suite.js'
+          import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+          // responder：调用方注入——这里用 PROBE_API_KEY 走简单 chat completions
+          const key = process.env.PROBE_API_KEY
+          const responder = async (prompt) => {
+            const res = await fetch('https://api.deepseek.com/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+              body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: prompt }], max_tokens: 2048 }),
+            })
+            const data = await res.json()
+            return data.choices?.[0]?.message?.content || ''
+          }
+          const { results, metrics } = await runProbeBatch(responder)
+          const baselinePath = 'probe-baseline.json'
+          const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')).metrics : null
+          const cmp = compareMetrics(metrics, baseline)
+          console.log(JSON.stringify({ metrics, comparison: cmp }, null, 2))
+          if (cmp.first_run || cmp.ok) {
+            writeFileSync(baselinePath, JSON.stringify({ at: new Date().toISOString(), metrics }, null, 2) + '\n')
+            console.log('基线已更新')
+          }
+          if (!cmp.ok) {
+            console.error('PROBE REGRESSION: ' + cmp.regressions.join('; '))
+            process.exit(1)
+          }
+          JS
+        env:
+          PROBE_API_KEY: ${{ secrets.PROBE_API_KEY }}
+      - name: Commit baseline update
+        if: steps.key.outputs.skip == 'false'
+        run: |
+          if git diff --quiet -- probe-baseline.json; then
+            echo "基线无变化"
+          else
+            git config user.name "purge-ci"
+            git config user.email "ci@purge.local"
+            git add probe-baseline.json
+            git commit -m "chore(probe): update baseline metrics"
+            git push
+          fi

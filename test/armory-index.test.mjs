@@ -106,3 +106,30 @@ test('community-indexed CVE source links use the declared immutable revision', a
     assert.equal(row.verified, false)
   }
 })
+
+test('🟡A 内嵌武器文件：读取/校验/回退三态', async () => {
+  const { loadEmbeddedFile, probeArmoryFile } = await import('../lib/redteam/armory-index.js')
+  // 内嵌小文件
+  const embedded = loadEmbeddedFile('Payload/sqli/payload.txt')
+  assert.equal(embedded.source, 'embedded')
+  assert.ok(embedded.bytes > 0 && embedded.bytes <= 65536)
+  assert.ok(embedded.sha256?.length === 64)
+  const { createHash } = await import('node:crypto')
+  assert.equal(createHash('sha256').update(Buffer.from(embedded.content, 'utf8')).digest('hex'), embedded.sha256)
+  // 大文件不在内嵌（>64KB），走本地仓库回退或不可用
+  const big = probeArmoryFile('Dic/web/directory/common.txt')
+  assert.ok(['local', 'none'].includes(big.source), '大文件不内嵌：' + big.source)
+  // 不存在的路径
+  const missing = loadEmbeddedFile('no/such/file.txt')
+  assert.equal(missing.unavailable, true)
+  assert.ok(missing.reason.includes('not-embedded'))
+})
+
+test('🟡A 内嵌统计：payload 全内嵌 + dict 部分内嵌', async () => {
+  const { loadEmbeddedFile } = await import('../lib/redteam/armory-index.js')
+  // 抽查几类 payload 全部可读
+  for (const p of ['Payload/rce/rce.txt', 'Payload/xxe/xml.txt', 'Payload/reverse-shell/bash.txt']) {
+    const r = loadEmbeddedFile(p)
+    assert.equal(r.source, 'embedded', p + ' 应内嵌')
+  }
+})
