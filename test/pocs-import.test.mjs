@@ -9,9 +9,11 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('../', import.meta.url))
 const script = join(root, 'scripts', 'import-armory.mjs')
 
-test('🟢4 --pocs：本地 PoC-in-GitHub 风格 CSV 导入', () => {
+test('🟢4 --pocs：本地 PoC-in-GitHub 风格 CSV 导入', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'pocs-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
   const csv = join(dir, 'pocs.csv')
+  const output = join(dir, 'poc-links.json')
   writeFileSync(csv, [
     'CVE,Owner/Repo,URL',
     'CVE-2021-44228,foo/log4shell-poc,https://github.com/foo/log4shell-poc',
@@ -20,23 +22,23 @@ test('🟢4 --pocs：本地 PoC-in-GitHub 风格 CSV 导入', () => {
     'invalid,line,skip',
     '',
   ].join('\n'))
-  execFileSync('node', [script, '--pocs', csv], { stdio: 'pipe', cwd: root })
-  const out = JSON.parse(readFileSync(join(root, 'lib', 'redteam', 'cve-catalog', 'poc-links.json'), 'utf8'))
+  execFileSync(process.execPath, [script, '--pocs', csv, '--output', output], { stdio: 'pipe', cwd: root })
+  const out = JSON.parse(readFileSync(output, 'utf8'))
   assert.equal(out.count, 3)
   assert.ok(out.entries.every(e => e.verified === false))
   assert.ok(out.entries.some(e => e.cve === 'CVE-2021-44228' && e.repo === 'foo/log4shell-poc'))
-  // 清理：poc-links.json 不应留在默认产物里
-  rmSync(join(root, 'lib', 'redteam', 'cve-catalog', 'poc-links.json'))
-  execFileSync('node', [script], { stdio: 'pipe', cwd: root })
+  // No AboutSecurity checkout is needed, and a PoC object must not pollute the CVE arrays.
+  execFileSync(process.execPath, [script, '--pocs', csv, '--output', output, '--check'], { stdio: 'pipe', cwd: root })
   assert.equal(existsSync(join(root, 'lib', 'redteam', 'cve-catalog', 'poc-links.json')), false)
 })
 
-test('🟢4 --pocs：无效 CSV 报错退出', () => {
+test('🟢4 --pocs：无效 CSV 报错退出', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'pocs-bad-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
   const csv = join(dir, 'bad.csv')
   writeFileSync(csv, 'name,value\nfoo,bar\n')
   let failed = false
-  try { execFileSync('node', [script, '--pocs', csv], { stdio: 'pipe', cwd: root }) }
+  try { execFileSync(process.execPath, [script, '--pocs', csv, '--output', join(dir, 'poc-links.json')], { stdio: 'pipe', cwd: root }) }
   catch { failed = true }
   assert.ok(failed, '无可解析 CVE 行时应报错')
 })

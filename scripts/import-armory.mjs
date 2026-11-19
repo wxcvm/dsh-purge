@@ -6,6 +6,8 @@
  *
  * 用法：
  *   node scripts/import-armory.mjs [--repo /opt/aboutsecurity/repository] [--check] [--embed]
+ *   node scripts/import-armory.mjs --pocs path/to/links.csv [--output path/to/poc-links.json] [--check]
+ *   --pocs  独立生成链接索引，不需要 AboutSecurity 检出，也不写入 CVE catalog。
  *
  *   --embed  追加生成 lib/redteam/armory/embedded.json：把小体积武器文件
  *            （单文件 <64KB）base64 内嵌，带 sha256 校验；装在无源仓库的
@@ -40,6 +42,40 @@ const repo = path.resolve(repoAt >= 0 ? args[repoAt + 1] : "/opt/aboutsecurity/r
 const doEmbed = args.includes("--embed");
 const pocsAt = args.indexOf("--pocs");
 const pocsCsv = pocsAt >= 0 ? args[pocsAt + 1] : null;
+const outputAt = args.indexOf("--output");
+
+const die = (msg) => { process.stderr.write(`[import-armory] FAIL: ${msg}\n`); process.exit(1); };
+const ok = (cond, msg) => { if (!cond) die(msg); };
+
+// PoC links are a standalone local CSV index, not a CVE catalog array.
+// Keep this path independent from AboutSecurity's optional local checkout.
+if (pocsAt >= 0) {
+  if (!pocsCsv || !fs.existsSync(pocsCsv)) die(`--pocs 指向的 CSV 不存在: ${pocsCsv || "(missing)"}`);
+  const csv = fs.readFileSync(pocsCsv, "utf8");
+  const rows = [];
+  for (const line of csv.split(/\r?\n/).slice(1)) {
+    if (!line.trim()) continue;
+    const parts = line.split(",").map(x => x.trim().replace(/^"|"$/g, ""));
+    if (parts.length < 3 || !/^CVE-\d{4}-\d{4,}$/i.test(parts[0])) continue;
+    rows.push({ cve: parts[0].toUpperCase(), repo: parts[1], url: parts[2], verified: false });
+  }
+  if (!rows.length) die("--pocs CSV 里没有可解析的 CVE 行（需 CVE,Owner/Repo,URL 三列）");
+  const out = outputAt >= 0 ? args[outputAt + 1] : path.join(root, "lib", "redteam", "armory", "poc-links.json");
+  if (!out) die("--output 缺少目标路径");
+  const fp = path.resolve(out);
+  const body = JSON.stringify({
+    source: "local-csv", note: "本地 PoC 链接；verified=false，仅索引不下载。",
+    count: rows.length, entries: rows,
+  }, null, 1) + "\n";
+  if (checkOnly) {
+    if (!fs.existsSync(fp) || fs.readFileSync(fp, "utf8") !== body) die("PoC 链接索引未同步");
+  } else {
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
+    fs.writeFileSync(fp, body, "utf8");
+  }
+  process.stdout.write(`[import-armory] pocs: ${rows.length} 条链接 ${checkOnly ? "已核对" : "已导入"}\n`);
+  process.exit(0);
+}
 
 const UPSTREAM = "https://github.com/wgpsec/AboutSecurity";
 const UPSTREAM_COMMIT = (() => {
@@ -52,9 +88,6 @@ const UPSTREAM_COMMIT = (() => {
     } catch { return ""; }
   }
 })();
-
-const die = (msg) => { process.stderr.write(`[import-armory] FAIL: ${msg}\n`); process.exit(1); };
-const ok = (cond, msg) => { if (!cond) die(msg); };
 
 if (!fs.existsSync(path.join(repo, "Vuln"))) die(`Vuln 目录不存在: ${repo}/Vuln（用 --repo 指定 AboutSecurity 仓库）`);
 
@@ -376,27 +409,7 @@ if (doEmbed) {
   process.stdout.write(`[import-armory] embed: ${embedded} 文件内嵌, ${skippedBig} 大文件跳过\n`);
 }
 
-/* 🟢4 --pocs：nomi-sec/PoC-in-GitHub 风格本地 CSV → poc-links.json 索引 */
-if (pocsCsv) {
-  if (!fs.existsSync(pocsCsv)) die(`--pocs 指向的 CSV 不存在: ${pocsCsv}`);
-  const csv = fs.readFileSync(pocsCsv, "utf8");
-  // PoC-in-GitHub 格式: CVE,Owner/Repo,URL（首行表头跳过）
-  const rows = [];
-  for (const line of csv.split("\n").slice(1)) {
-    const parts = line.split(",").map(x => x.trim().replace(/^"|"$/g, ""));
-    if (parts.length >= 3 && /^CVE-\d{4}-\d+/i.test(parts[0])) {
-      rows.push({ cve: parts[0].toUpperCase(), repo: parts[1], url: parts[2], verified: false });
-    }
-  }
-  if (!rows.length) die("--pocs CSV 里没有可解析的 CVE 行（需 CVE,Owner/Repo,URL 三列）");
-  artifacts.push(renderJson("cve-catalog/poc-links.json", {
-    source: "local-csv", note: "本地 PoC-in-GitHub 风格 CSV 导入；verified=false，仅索引不下载。",
-    count: rows.length, entries: rows,
-  }));
-  process.stdout.write(`[import-armory] pocs: ${rows.length} 条 PoC 链接\n`);
-}
-
-const vulnCount = artifacts.filter((a) => a.rel.startsWith("cve-catalog/") && a.rel !== "cve-catalog/poc-links.json").reduce((n, a) => n + JSON.parse(a.body).length, 0);
+const vulnCount = artifacts.filter((a) => a.rel.startsWith("cve-catalog/")).reduce((n, a) => n + JSON.parse(a.body).length, 0);
 const payloadCount = payloads.reduce((n, g) => n + g.files.length, 0);
 const dictCount = dicts.reduce((n, g) => n + g.files.length, 0);
 
