@@ -14,12 +14,12 @@ test("persisted routing switches survive reload while preserving plugin config d
   const home = fixture(t);
   assert.deepEqual(readRouting(home), {});
   assert.deepEqual(effectiveRouting({ bundledDefault: true }), {
-    bundledDefault: true, redteamTaskRoute: false, modelAdaptive: false,
+    bundledDefault: true, redteamTaskRoute: false, modelAdaptive: false, upstreamSafeBackup: false,
   });
   saveRouting(home, { modelAdaptive: true, redteamTaskRoute: false });
-  saveRouting(home, { bundledDefault: true, redteamTaskRoute: true });
+  saveRouting(home, { bundledDefault: true, redteamTaskRoute: true, upstreamSafeBackup: true });
   assert.deepEqual(readRouting(home), {
-    modelAdaptive: true, redteamTaskRoute: true, bundledDefault: true,
+    modelAdaptive: true, redteamTaskRoute: true, bundledDefault: true, upstreamSafeBackup: true,
   });
   assert.equal(fs.readdirSync(path.dirname(routingPath(home))).length, 1);
 });
@@ -37,7 +37,7 @@ test("invalid config cannot silently reset or overwrite existing routing switche
 });
 test("local visual settings page exposes independent switches and assembly diagnostic semantics", () => {
   const page = routingPage();
-  for (const key of ["bundledDefault", "redteamTaskRoute", "modelAdaptive"]) {
+  for (const key of ["bundledDefault", "redteamTaskRoute", "modelAdaptive", "upstreamSafeBackup"]) {
     assert.match(page, new RegExp('id="' + key + '"'));
   }
   assert.match(page, /prompt-routing-settings/);
