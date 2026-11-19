@@ -5,3 +5,15 @@ Source: https://github.com/YuJunZhiXue/dsh-purge
 
 This product is licensed under the Apache License, Version 2.0.
 Derivative works must retain this NOTICE and attribution.
+
+Upstream-safe optional prompt source
+Copyright 2026 CallMeGuLab
+Source project: dsh-purge-safe (CallMeGuLab)
+https://github.com/CallMeGuLab/dsh-purge-safe
+Maintained by CallMeGuLab.
+
+The sealed prompt resource at lib/upstream-safe/asset-table.js is incorporated from
+CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25); the optional persona-prefix adapter
+at lib/upstream-safe-prompt.js is an adaptation of its prompt assembly approach.
+Both are distributed under Apache License, Version 2.0.
+The upstream source and its attribution are retained here.
