@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6548a3c34dbc2a72";
+		const CLIENT_BUILD_ID = "f86238256f46ba38";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7461,6 +7461,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [external, setExternal] = React.useState(null)
       const [externalError, setExternalError] = React.useState(null)
       const [externalRequest, setExternalRequest] = React.useState(false)
+      const [community, setCommunity] = React.useState(null)
+      const [communityError, setCommunityError] = React.useState(null)
+      const [communityRequest, setCommunityRequest] = React.useState(false)
       const [removeArmed, setRemoveArmed] = React.useState(false)
       const [relatedSkill, setRelatedSkill] = React.useState(null)
       const skillReadSeq = React.useRef(0)
@@ -7495,7 +7498,38 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           else load(true)
         }, (error) => { setExternalRequest(false); setRemoveArmed(false); setExternalError(String((error && error.message) || error)) })
       }
-      React.useEffect(() => { loadExternal() }, [refreshKey])
+      const loadCommunity = () => {
+        api({ op: 'communitySkillStatus' }).then((result) => {
+          if (result && result.ok) { setCommunity(result); setCommunityError(null) }
+          else setCommunityError((result && result.error) || '无法读取社区技能状态')
+        }, (error) => setCommunityError(String((error && error.message) || error)))
+      }
+      const manageCommunity = (pack, update) => {
+        setCommunityRequest(true)
+        setCommunityError(null)
+        api({ op: update ? 'communitySkillUpdate' : 'communitySkillInstall', pack }).then((result) => {
+          setCommunityRequest(false)
+          if (result && result.packs) setCommunity(result)
+          if (!result || !result.ok) setCommunityError((result && result.error) || '社区技能操作未能启动')
+          else if (!result.busy) load(true)
+        }, (error) => { setCommunityRequest(false); setCommunityError(String((error && error.message) || error)) })
+      }
+      React.useEffect(() => { loadExternal(); loadCommunity() }, [refreshKey])
+      React.useEffect(() => {
+        if (!community || !community.busy) return
+        const timer = setInterval(() => {
+          api({ op: 'communitySkillStatus' }).then((result) => {
+            if (!result || !result.ok) { setCommunityError((result && result.error) || '读取失败'); return }
+            setCommunity(result)
+            if (!result.busy) {
+              const failed = (result.packs || []).find((item) => item.phase === 'error')
+              if (failed) setCommunityError(failed.label + '：' + failed.error)
+              else { setCommunityError(null); load(true) }
+            }
+          }, (error) => setCommunityError(String((error && error.message) || error)))
+        }, 1500)
+        return () => clearInterval(timer)
+      }, [community && community.busy])
       React.useEffect(() => {
         if (!external || external.busy !== true) return
         const timer = setInterval(() => {
@@ -7561,7 +7595,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       let filtered = needle
         ? items.filter((s) => (s.name + ' ' + s.description + ' ' + s.whenToUse).toLowerCase().indexOf(needle) >= 0)
         : items
-      if (sourceFilter !== 'all') filtered = filtered.filter((s) => (s.library || 'redteam') === sourceFilter)
+      if (sourceFilter === 'community') filtered = filtered.filter(s => s.name.startsWith('community/') && s.library === 'redteam')
+      else if (sourceFilter === 'redteam') filtered = filtered.filter(s => s.library === 'redteam' && !s.name.startsWith('community/'))
+      else if (sourceFilter !== 'all') filtered = filtered.filter((s) => (s.library || 'redteam') === sourceFilter)
       if (categoryFilter !== 'all') filtered = filtered.filter((s) => categoryOf(s) === categoryFilter)
       if (srcOnly) filtered = filtered.filter((s) => s.library !== 'official' && s.fromPlugin === true)
       if (brokenOnly) filtered = filtered.filter((s) => s.library !== 'official' && (s.availability === 'broken' || s.availability === 'unknown'))
@@ -7573,7 +7609,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const renderSkill = (s) => h('div', Object.assign({
         key: (s.library || 'redteam') + ':' + s.name, className: 'rt-item' + (active === ((s.library || 'redteam') + ':' + s.name) ? ' on' : ''),
       }, clickable(() => open(s), { label: '查看技能 ' + s.name, expanded: active === ((s.library || 'redteam') + ':' + s.name) })),
-        h('div', { className: 'rt-item-name' }, s.name,
+        h('div', { className: 'rt-item-name' }, s.name.startsWith('community/')
+          ? s.name.split('/').slice(2).join('/') : s.name,
           s.modelInvocable === false ? h('span', { className: 'rt-tag', style: { marginLeft: 6 } }, '仅人工') : null,
           s.library === 'official'
             ? h('span', { className: 'rt-tag', style: { marginLeft: 6 }, title: '官方技能目录，不按红队工具路径检查' }, '官方')
@@ -7631,6 +7668,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onChange: (e) => setSourceFilter(e.target.value) },
               h('option', { value: 'all' }, '全部来源'),
               h('option', { value: 'redteam' }, '内置红队'),
+              h('option', { value: 'community' }, '社区技能'),
               h('option', { value: 'aboutsecurity' }, 'AboutSecurity'),
               h('option', { value: 'official' }, 'DSH 官方'))),
           h('label', { className: 'rt-kb-check', style: { display: 'flex', margin: '0 0 6px' } },
@@ -7665,7 +7703,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-toolbar' },
             h('span', { style: { fontWeight: 600 } }, detail ? detail.name : '技能目录'),
             h('div', { className: 'rt-spacer' }),
-            h('button', { className: 'rt-btn', disabled: busy, onClick: () => { load(true); loadExternal() } }, busy ? '刷新中…' : '刷新')),
+            h('button', { className: 'rt-btn', disabled: busy, onClick: () => { load(true); loadExternal(); loadCommunity() } }, busy ? '刷新中…' : '刷新')),
           h('div', { className: 'rt-note', style: { marginBottom: 8 } },
             h('div', { style: { fontWeight: 600, marginBottom: 4 } }, 'AboutSecurity 扩展技能库'),
             h('div', { style: { fontSize: 12, marginBottom: 6 } },
@@ -7695,6 +7733,22 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { fontSize: 11, marginTop: 6 } },
               '按需从 wgpsec/AboutSecurity 下载 skills/；宿主支持时自动注册，是否成功以「宿主已列出」标记为准。'),
             externalError ? h('div', { className: 'rt-err', style: { marginTop: 6 } }, externalError) : null),
+          h('div', { className: 'rt-note', style: { marginBottom: 8 } },
+            h('div', { style: { fontWeight: 600, marginBottom: 4 } }, 'Yaklang 社区技能包'),
+            h('div', { style: { fontSize: 11, marginBottom: 7 } },
+              '仅在点击安装后下载技能；下方显示本地可读数量，不代表 DSH 已注册为原生技能。'),
+            (community && community.packs || []).map((pack) =>
+              h('div', { key: pack.id, style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '5px 0' } },
+                h('span', { style: { flex: '1 1 120px' } }, pack.label + ' · '
+                  + (pack.busy ? pack.phase === 'updating' ? '更新中…' : '安装中…'
+                    : pack.installed ? pack.skills + ' 条可读' : '未安装')),
+                h('button', { className: 'rt-btn', disabled: communityRequest || pack.busy,
+                  onClick: () => manageCommunity(pack.id, !!pack.installed) },
+                  pack.installed ? '检查更新并拉取' : '安装'),
+                pack.error ? h('span', { className: 'rt-err' }, pack.error) : null)),
+            !community ? h('span', null, '正在读取社区技能状态…') : null,
+            h('button', { className: 'rt-btn', disabled: communityRequest, onClick: loadCommunity }, '刷新状态'),
+            communityError ? h('div', { className: 'rt-err', style: { marginTop: 6 } }, communityError) : null),
           err
             ? (needRestart
                 ? h('div', { className: 'rt-empty' }, '该模块的宿主代码已更新，需重启一次当前宿主（官方 exe / 社区版 / dsh web）后生效')
