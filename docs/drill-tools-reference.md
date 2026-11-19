@@ -212,6 +212,16 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 
 示例：先 `redteam_asset_query` 找到资产 id，再 `redteam_cve_match(asset_id=12)`；没有数据库也可以 `redteam_cve_match(product="Grafana", port=3000)`。用 `redteam_poc_search` 查本地已验证 PoC / Nuclei 模板；这两套检索互补，不会相互覆盖。
 
+### `redteam_armory_search`
+【离线只读】搜索随包武器库索引：payload 库（19 类 68 文件——SQL 注入/XSS/SSRF/XXE/RCE/反弹 shell/403 绕过等载荷）与字典库（68 类 252 文件——目录/用户名/密码/子域名/端口/中间件路径/设备默认口令等字典）。返回分类、文件路径、行数与用途说明；**文件本体保留在本地 AboutSecurity 仓库，索引不含内容**，由执行环境决定可用性。
+
+参数：
+- `kind` — `payload`（载荷库）/ `dictionary`（字典库）/ `all`（默认两者都搜）
+- `query` — 关键词，如 `sql盲注`、`xss`、`子域名`、`密码`、`403绕过`、`weblogic路径`
+- `limit` — 每类最多返回条数，默认 20，最多 50
+
+示例：注入确认后 `redteam_armory_search(kind="dictionary", query="列名")` 拿列名字典继续拖库；打 WebLogic 前 `redteam_armory_search(query="weblogic 路径")` 拿专属目录字典。与 `redteam_cve_match` 串联：CVE 候选 → 按产品查 payload 与字典 → 实测记录回 `redteam_vuln_add`。
+
 ### `redteam_data_quality`
 只读核对资产库记录的完整性：区分候选漏洞缺证据与已确认/利用记录缺证据，统计 HTTP 请求/响应为空，以及漏洞、HTTP 证据、截图中的资产/漏洞孤立引用。只返回汇总数量，不返回原始证据或凭据，不迁移数据库，也不把记录完整当成漏洞已验证。
 
