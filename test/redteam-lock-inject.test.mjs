@@ -32,7 +32,7 @@ test("普通档 route.id 有值：行为不变（回归守护）", () => {
 test("红队锁路由：锁定后普通预设下 route 仍返回 redteam 锁语义（配合 index.js 的 readInjectFallback 同源注入）", () => {
   const home = mkHome();
   setSessionPromptLock(home, "s1", "redteam");
-  const r = routePromptForSession({ home, preset: "standard", text: "打点 [TARGET_IP]", sessionId: "s1", defaultInjection: true });
+  const r = routePromptForSession({ home, preset: "standard", text: "打点 [TARGET_IP]", sessionId: "s1" });
   assert.equal(r.id, "redteam");
   assert.equal(r.reason, "session-lock");
 });
