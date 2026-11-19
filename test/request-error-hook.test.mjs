@@ -8,10 +8,12 @@ test('request error classification recognizes HTTP statuses and provider aliases
     assert.equal(shouldAutoRetry({ statusCode: String(status) }), false);
     assert.equal(shouldAutoContinue({ kind: 'error', failure: { status } }), false);
   }
-  for (const code of ['context_length_exceeded', 'exceed_context_size_error', 'insufficient_quota', 'invalid_api_key', 'content_filter', 'content_policy_violation', 'policy_violation']) {
+  for (const code of ['context_length_exceeded', 'exceed_context_size_error', 'insufficient_quota', 'invalid_api_key', 'content_filter', 'content_policy_violation', 'policy_violation', 'CONTENT_REFUSED', 'content_refused']) {
     assert.equal(shouldAutoRetry({ code }), false);
     assert.equal(shouldAutoContinue({ kind: 'error', error: { code } }), false);
   }
+  assert.equal(shouldAutoRetry({ code: "CONTENT_REFUSED", status: 503 }), false);
+  assert.equal(shouldAutoContinue({ kind: "error", failure: { code: "CONTENT_REFUSED", status: 503 } }), false);
   assert.equal(shouldAutoRetry({ status: 503, retryable: false }), false);
   assert.equal(shouldAutoContinue({ kind: 'error', error: { status: 503, retryable: false } }), false);
 });
