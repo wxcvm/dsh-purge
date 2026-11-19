@@ -44,6 +44,14 @@
 - 上游 Git tree 检查确认：`yaklang/hack-skills@6fbf0bc8` 恰有 103 份 `SKILL.md`；`yaklang/yak-skills@071464c0` 恰有 12 份。示例文档不作为独立技能。
 - 本批修复仍需最新 Windows/Linux CI 及真实 Windows DSH Desktop 安装/更新/卸载/搜索/读取验收。**不把已提交或早前的绿色 CI 说成实机完成。**
 
+## 知识检索与展示回归修正
+
+原 `knowledgeUnifiedSearch` 对 redteam/aboutsecurity/CVE 等来源只返回前 20 条，且空关键词不能浏览；接入 115 份社区技能后，会出现「已安装但页面找不到」的体验问题。本批对来源明确选择时支持空关键词浏览，并为 **bundled / personal / cve / redteam / aboutsecurity** 增加稳定 `offset` 分页。全部来源模式仍按关键词分别显示每个来源的首批匹配，更多结果可跳转对应来源翻页。个人资料复用 `knowledgeList` 现有 OFFSET 查询，不另建库。CVE 保留原有 `verified:false` 和精确编号匹配。ARTEX 搜索适配器当前不支持 OFFSET，保持原只读搜索和未知总数，不虚报「可翻页」。
+
+- 前端 `UnifiedKnowledgeTab` 已加入上述来源的浏览、分页、来源详情链接；`client.js` 重新生成。
+- 增加多页无重复、空关键词、来源 URL 和边界结果的回归断言。
+- 实测/CI 尚以对应提交为准；本记录不把文件数或模拟测试视为 Desktop 真机加载结果。
+
 ## 后续批次（与现有 Issues 对接）
 
 1. **知识覆盖**（#344）：检查 AboutSecurity、Yaklang、Community、Fujiang 与 ARTEX 来源间的重合；按缺口扩充防御配置、证据分析、兼容排障和工具使用条目，保留独立来源及版本。
