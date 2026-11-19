@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "25ba6743b3c56869";
+		const CLIENT_BUILD_ID = "8728e114333385d5";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12038,7 +12038,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
     function UnifiedKnowledgeTab({ initialSource = 'all', initialCategory = '' } = {}) {
       const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '红队与社区技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
-      const browsableSources = ['bundled', 'cve', 'redteam', 'aboutsecurity']
+      const browsableSources = ['bundled', 'personal', 'cve', 'redteam', 'aboutsecurity']
       const [query, setQuery] = React.useState('')
       const [submittedQuery, setSubmittedQuery] = React.useState('')
       const [source, setSource] = React.useState(initialSource)
@@ -12075,7 +12075,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
         h('h4', null, '全库检索'),
-        h('p', null, '选择内置知识、CVE 或技能来源，可留空逐页浏览；全部来源需输入关键词。每页展示最多 20 条。'),
+        h('p', null, '选择某个知识或技能来源，可留空逐页浏览；全部来源需输入关键词。每页展示最多 20 条。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
           h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
           h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); setCategory(''); search(e.target.value, '') } },
