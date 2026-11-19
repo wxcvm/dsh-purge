@@ -18,7 +18,8 @@ export function buildCaseEvents(c) {
 
 /** Map the obedience verdict onto the action a well-formed host would take. */
 export function actionOf(verdict) {
-  if (!verdict.refusal) return 'none';
+  // No text at all is a hollow stop, not an ordinary answer: resume delivery.
+  if (!verdict.refusal) return verdict.category === 'empty' ? 'continue' : 'none';
   return verdict.retryable ? 'review-once' : 'log-only';
 }
 

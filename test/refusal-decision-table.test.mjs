@@ -17,7 +17,7 @@ const rows = evaluateCorpus(refusalCorpus);
 const byId = new Map(rows.map(r => [r.id, r]));
 
 /** Ceiling of known mismatches. Lower it when a gap is fixed; raising it needs a reason. */
-const GAP_BUDGET = 2;
+const GAP_BUDGET = 0;
 
 for (const c of refusalCorpus) {
   test(`decision table: ${c.id} [${c.tags.join(',')}]`, (t) => {
@@ -120,6 +120,48 @@ test('hook: a genuine soft refusal in a benign task still gets exactly one reche
   runtime.dispose();
   assert.equal(sent.length, 1);
   assert.match(sent[0].content[0].text, /重新评估原始用户请求一次/);
+});
+
+test('hook: a hollow stop gets exactly one continuation, never a second', async () => {
+  const ctx = fakeCtx();
+  const sent = [];
+  const agent = {
+    id: 's-hollow', status: 'idle',
+    session: { id: 's-hollow', events: [
+      { seq: 1, type: 'user/message', data: { message: { role: 'user', content: [{ type: 'text', text: '把这段周报润色通顺。' }], source: { kind: 'user' } } } },
+      { seq: 2, type: 'assistant/message', data: { message: { role: 'assistant', content: [{ type: 'reasoning', text: '先看一下段号再动手。' }] } } },
+      { seq: 3, type: 'turn/end', data: { reason: { kind: 'completed' } } },
+    ] },
+    followup: msg => sent.push(msg),
+  };
+  const runtime = installObedience(ctx, { getSettings: () => loadObedienceSettings('Z:/none', { retryDelayMs: 1 }) });
+  ctx.fire('agent/status', { agent, status: 'idle' });
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(sent.length, 1, 'hollow stop resumes once');
+  assert.match(sent[0].content[0].text, /空心续跑/);
+  ctx.fire('agent/status', { agent, status: 'idle' });
+  await new Promise(resolve => setTimeout(resolve, 25));
+  runtime.dispose();
+  assert.equal(sent.length, 1, 'budget prevents a second continuation');
+});
+
+test('hook: a turn aborted by the user is not resumed', async () => {
+  const ctx = fakeCtx();
+  const sent = [];
+  const agent = {
+    id: 's-aborted', status: 'idle',
+    session: { id: 's-aborted', events: [
+      { seq: 1, type: 'user/message', data: { message: { role: 'user', content: [{ type: 'text', text: '把这段周报润色通顺。' }], source: { kind: 'user' } } } },
+      { seq: 2, type: 'assistant/message', data: { message: { role: 'assistant', content: [] } } },
+      { seq: 3, type: 'turn/end', data: { reason: { kind: 'aborted', reason: 'user' } } },
+    ] },
+    followup: msg => sent.push(msg),
+  };
+  const runtime = installObedience(ctx, { getSettings: () => loadObedienceSettings('Z:/none', { retryDelayMs: 1 }) });
+  ctx.fire('agent/status', { agent, status: 'idle' });
+  await new Promise(resolve => setTimeout(resolve, 25));
+  runtime.dispose();
+  assert.equal(sent.length, 0);
 });
 
 test('invariant: reasoning blocks never enter the text classifier', () => {
