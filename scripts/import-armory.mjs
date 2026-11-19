@@ -26,6 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { withParsedConstraints } from "../lib/redteam/version-affected-parser.js";
 import { execFileSync } from "node:child_process";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -213,7 +214,9 @@ function importVuln(existingCatalog) {
       ...(UPSTREAM_COMMIT ? { source_commit: UPSTREAM_COMMIT } : {}),
     };
     if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push(entry);
+    // 结构化版本区间：version_affected 机器解析（< / 范围 / x 系 / 精确版），
+    // 解析不了保持 undefined（unknown 判定兜底，与现状一致）。
+    groups.get(group).push(withParsedConstraints(entry, cves));
   }
   // 每类按 80 条一个文件切（与现有 web-cms-0/-10 命名习惯一致）
   const outputs = [];
