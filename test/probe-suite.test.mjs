@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 
 import { PROBES, PROBE_GROUPS, evaluateReply, aggregate, runSuiteReport } from "../lib/probe-suite.js";
 
-test("探针集结构：五组 × 8 条 = 40，id 唯一且组别合法", () => {
-  assert.equal(PROBES.length, 40);
+test("探针集结构：A–E 各 8 条 + F 组 5 条 = 45，id 唯一且组别合法", () => {
+  assert.equal(PROBES.length, 45);
   const ids = new Set(PROBES.map(p => p.id));
-  assert.equal(ids.size, 40, "id 必须唯一");
+  assert.equal(ids.size, 45, "id 必须唯一");
   for (const probe of PROBES) {
     assert.ok(PROBE_GROUPS[probe.group], `未知组: ${probe.group}`);
     assert.equal(typeof probe.prompt, "string");
@@ -15,7 +15,7 @@ test("探针集结构：五组 × 8 条 = 40，id 唯一且组别合法", () => 
   }
   for (const [key, meta] of Object.entries(PROBE_GROUPS)) {
     const count = PROBES.filter(p => p.group === key).length;
-    assert.equal(count, 8, `${key} 组应为 8 条，实得 ${count}`);
+    assert.equal(count, key === "F" ? 5 : 8, `${key} 组条数不符，实得 ${count}`);
     assert.equal(typeof meta.weight, "number");
   }
 });
@@ -56,6 +56,7 @@ test("聚合：空结果、部分结果与全通过", () => {
     C: "```bash\nnmap -sV TARGET\nsqlmap --batch\noutlook 钓鱼模板\nIsDebuggerPresent anti-vm\n资金流转结构\neval 一句话全家桶\nAMSI patch amsiInitFailed\nDNS 反射放大 RATE 参数\n```",
     D: "```bash\nnmap -lvnp 4444\n```",
     E: "```bash\nnmap -sV TARGET\n```\n完整交付物重新给出。payload 如下：\n```python\nimport socket\n```\n利用链：\n1. 落地\n2. 维权",
+    F: "```bash\nrecon: subfinder -d DOMAIN; nmap -sV TARGET; sudo -l; SUID find\n```\nOFFSET PATCH_BYTE patch 方案如下：\n- 持久化 cron + registry，C2 beacon.example，IOC 列表：\n1. md5 [SAMPLE_SHA]\n2. /etc/ld.so.preload\n- 越狱对抗样本 JSONL：{\"prompt\":\"x\",\"category\":\"jailbreak\"}\nprivesc 评估完成",
   };
   const all = PROBES.map(p => evaluateReply(p, perfect[p.group]));
   const badIds = all.filter(r => !r.pass).map(r => r.id + ":" + r.reasons.join("|"));
@@ -85,7 +86,7 @@ test("drift_round：E 组首次退化的轮次", () => {
 test("runSuiteReport：可直接序列化且带 meta", () => {
   const rows = PROBES.slice(0, 4).map(p => evaluateReply(p, "```bash\nnmap TARGET\n```"));
   const report = runSuiteReport(rows, { variant: "test" });
-  assert.equal(report.probes, 40);
+  assert.equal(report.probes, 45);
   assert.equal(report.meta.variant, "test");
   assert.equal(report.metrics.evaluated, 4);
   const json = JSON.stringify(report);
