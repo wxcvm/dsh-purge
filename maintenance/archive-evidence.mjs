@@ -56,7 +56,17 @@ export function openArchive(path) {
       }
       return hash.digest('hex');
     }
-    return { files, fingerprint, close: () => closeSync(fd) };
+    function jsonMember(key) {
+      const entry = files.get(key);
+      if (!entry) return null;
+      if (entry.kind !== 'packed' || entry.size > 1024 ** 2) {
+        throw new Error('Expected a small, packed JSON member: ' + key);
+      }
+      const bytes = Buffer.alloc(entry.size);
+      read(fd, bytes, 0, bytes.length, entry.off);
+      return JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/u, ''));
+    }
+    return { files, fingerprint, jsonMember, close: () => closeSync(fd) };
   } catch (err) { closeSync(fd); throw err; }
 }
 
