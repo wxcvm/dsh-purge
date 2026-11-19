@@ -1,5 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
+import { setSessionPromptLock } from "../lib/prompt-profiles.js";
 import {
   BACKUP_BEGIN, BACKUP_END, readUpstreamSafePrompt, chooseUpstreamSafeSource,
   foldUpstreamSafePrompt, stripUpstreamSafeFold, upstreamSafeAssemblyProbe,
@@ -75,4 +80,57 @@ test("reused upstream-folded assemblies do not stack and no-match has no new pay
   assert.doesNotMatch(next.sections[0].text, /Injected payload/);
   const noMatch = foldUpstreamSafePrompt(stripUpstreamSafeFold(first));
   assert.equal(upstreamSafeAssemblyProbe(noMatch).assembledBytes, 0);
+});
+
+test("real Purge routing selects the backup only after an explicit switch, and session none still wins", t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-upstream-safe-"));
+  const old = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  t.after(() => {
+    if (old === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = old;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const input = {
+    sections: [
+      { name: "deployment:persona-prefix", text: "Native persona" },
+      { name: "workspace-native", text: "Native workspace" },
+    ],
+    contexts: [{ name: "native-context", text: "Native context" }],
+    tools: [{ name: "native-tool" }],
+    variables: { model: "gpt-6" },
+  };
+  const session = {
+    id: "safe-backup-fixture",
+    header: { agentPreset: "standard", model: "gpt-6" },
+    events: [{ seq: 1, type: "user/message",
+      data: { source: { kind: "user" }, content: [{ type: "text", text: "你好" }] } }],
+  };
+  const context = { agent: { session } };
+
+  const original = rewriteLiveAssembly({ enabled: true, bundledDefault: true }, input, context);
+  assert.equal(original.sections[0].name, "dsh-purge");
+  assert.equal(getLastInjectReport().promptEngine, "primary");
+
+  const alternate = rewriteLiveAssembly({
+    enabled: true, bundledDefault: true, upstreamSafeBackup: true,
+  }, input, context);
+  assert.equal(alternate.sections[0].name, "deployment:persona-prefix");
+  assert.equal(upstreamSafeAssemblyProbe(alternate).injectHead, true);
+  assert.equal(getLastInjectReport().promptSource, "upstream-safe");
+  assert.equal(getLastInjectReport().delivery, "unverified");
+  assert.deepEqual(alternate.contexts, input.contexts);
+  assert.deepEqual(alternate.tools, input.tools);
+
+  // Turning off the backup cleans the old folded source even when the host
+  // reuses its last assembled object, and does not create a new implicit route.
+  const restored = rewriteLiveAssembly({ enabled: true }, alternate, context);
+  assert.equal(upstreamSafeAssemblyProbe(restored).assembledBytes, 0);
+  assert.equal(restored.sections.some(section => section.name === "dsh-purge"), false);
+  setSessionPromptLock(home, session.id, "none");
+  const blocked = rewriteLiveAssembly({
+    enabled: true, bundledDefault: true, upstreamSafeBackup: true,
+  }, input, context);
+  assert.equal(upstreamSafeAssemblyProbe(blocked).assembledBytes, 0);
+  assert.equal(getLastInjectReport().routeReason, "session-locked-off");
 });
