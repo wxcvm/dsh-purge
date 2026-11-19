@@ -66,8 +66,8 @@ test('clean controls precede the patch list and respect host and update activity
 })
 
 test('unavailable host coverage and backup do not appear as zero or absent', () => {
-  assert.match(root, /\(located \? " · 补丁已应用 "/)
-  assert.match(root, /: " · 补丁状态待检测"\)/)
+  assert.match(root, /located \? "磁盘补丁：已应用 "/)
+  assert.match(root, /: "磁盘补丁：待检测"/)
   assert.match(root, /s\.ok === false \|\| typeof s\.has_backup !== "boolean" \? "—"/)
 })
 
