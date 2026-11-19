@@ -106,3 +106,10 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 设置通过同源 `/dsh-purge/prompt-routing-settings` 读写，落盘 `$DSH_HOME/dsh-purge/prompt-routing.json`，保存后立即更新当前插件运行实例，重启重新加载；无需编辑已有提示词规则。旧版宿主若不支持插件 Web 路由，该页面不可用，不能据此推断设置已经生效。
 
 诊断报告中的 `stage=assembled` 只表示此插件返回的 sections 中注入段非空且置顶；`delivery=unverified` 表示还没有从模型实际请求边界得到证据。不能把这两者混为一谈。
+
+
+## 宿主渲染边界的实测证据（#369）
+
+CI 的 `test/prompt-host-boundary.test.mjs` 现在使用固定版本宿主依赖，实际执行官方 Cordis 的 `system-prompt/assemble` 事件，再通过官方 `@deepseek-ai/dsh-system-prompt` 的 `renderPrompt` 渲染。验证注入段在渲染文本中置顶、仅出现一次，原生宿主段保留；普通会话无命中时渲染文本与原生文本一致。
+
+注意：此结果只证明**宿主事件和系统提示词渲染**，不是实际 Provider HTTP 请求，更不能凭它给 `delivery` 标记成功。真实 Windows Harness Desktop 的最后一次请求体需在受控本机环境验证，避免暴露 Key、完整提示词或用户会话内容。

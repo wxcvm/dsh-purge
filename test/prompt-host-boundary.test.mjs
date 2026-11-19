@@ -12,6 +12,7 @@ test("native Cordis host fixture reaches prompt assembly without implying provid
 }, async t => {
   const req = createRequire(path.join(process.env.DSH_COMPAT_HOST_ROOT, "package.json"));
   const { Context } = await import(pathToFileURL(req.resolve("@deepseek-ai/cordis")).href);
+  const { renderPrompt } = await import(pathToFileURL(req.resolve("@deepseek-ai/dsh-system-prompt")).href);
   const ctx = new Context();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-host-boundary-"));
   const prev = process.env.DSH_HOME;
@@ -33,8 +34,21 @@ test("native Cordis host fixture reaches prompt assembly without implying provid
   await ctx.emit("system-prompt/assemble", input, { agent: { session } });
   assert.ok(result && result.sections[0]?.name === "dsh-purge");
   assert.ok(result.sections.some(s => s.name === "native-host"));
+  const purgeSection = result.sections[0];
+  assert.equal(purgeSection.interpolate, false, "plugin text must stay literal at host render stage");
+  const rendered = renderPrompt(result); // Actual official host renderer; not a simulated concatenation.
+  assert.ok(rendered.startsWith(purgeSection.text), "plugin section must render first");
+  assert.match(rendered, /native context/);
+  assert.equal(rendered.split(purgeSection.text).length - 1, 1, "prompt must render exactly once");
   const report = getLastInjectReport();
   assert.equal(report.stage, "assembled");
   assert.equal(report.delivery, "unverified");
-  // Actual Cordis dispatch is verified; there is intentionally no model request.
+
+  // Under plan B the same native renderer must receive the untouched system prompt
+  // when no ordinary profile matches and bundledDefault stays disabled.
+  const noMatch = rewriteLiveAssembly({ enabled: true }, input, { agent: { session } });
+  assert.ok(noMatch.sections.every(s => s.name !== "dsh-purge"));
+  assert.equal(renderPrompt(noMatch), renderPrompt(input));
+  assert.equal(getLastInjectReport().stage, "no-candidate");
+  // Cordis event dispatch + official renderPrompt passed; no provider transport was invoked.
 });
