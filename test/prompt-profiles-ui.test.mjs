@@ -182,9 +182,12 @@ test("advanced list controls explain wildcard scope and save GPT exclusion", asy
   assert.match(summary, /\*gpt\*/);
   assert.match(summary, /缺失的实际 ID 不会被当作命中/);
 
-  ui.find(tree, "input", "启用此规则黑名单").props.onChange({ target: { checked: true } });
+  // The global editor is rendered first; target the selected local rule, not the global rule.
+  const lastControl = (tree, type, label) => ui.nodes(tree)
+    .filter(n => n.type === type && n.props["aria-label"] === label).at(-1);
+  lastControl(tree, "input", "启用此规则黑名单").props.onChange({ target: { checked: true } });
   tree = ui.render();
-  ui.find(tree, "textarea", "黑名单模型 ID").props.onChange({ target: { value: "*gpt*" } });
+  lastControl(tree, "textarea", "黑名单模型 ID").props.onChange({ target: { value: "*gpt*" } });
   tree = ui.render();
   ui.find(tree, "button", "保存规则").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
