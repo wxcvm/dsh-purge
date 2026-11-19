@@ -6,13 +6,38 @@ const root = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 const rt = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
 
 test('cleaning bar measures workflow progress and shows patch coverage separately', () => {
-  assert.match(root, /const flowFinished = Boolean\(job && job\.stage === "done" && !job\.error && !job\.active\)/)
-  assert.match(root, /const pct = flowFinished \? 100 : jobOn/)
+  assert.match(root, /const flowFinished = Boolean\(job && job\.stage === "done" && !job\.error && !jobOn\)/)
+  assert.match(root, /const pct = flowFinished \? 100 : Math\.min\(99/)
   assert.doesNotMatch(root, /:\s*\(located && total \? Math\.round\(\(applied \/ total\)/)
-  assert.match(root, /清洗流程：/)
-  assert.match(root, /补丁已应用/)
-  assert.match(root, /role: "progressbar", "aria-label": "清洗流程进度"/)
+  assert.match(root, /清洗操作：/)
+  assert.match(root, /磁盘补丁：已应用/)
+  assert.match(root, /role: "progressbar", "aria-label": "清洗流程阶段进度"/)
   assert.match(root, /flowInterrupted \? h\("p"/)
+})
+
+
+test('clean phase bar is hidden at idle, preserves progress and reaches 100 only on success', () => {
+  const visiblePredicate = root.match(/const flowVisible = Boolean\(([^\n]+)\);/)
+  assert.ok(visiblePredicate)
+  const visible = new Function('jobOn', 'flowFinished', 'job', 'flowInterrupted',
+    'return Boolean(' + visiblePredicate[1] + ')')
+  assert.equal(visible(false, false, null, false), false)
+  assert.equal(visible(true, false, null, false), true)
+  assert.equal(visible(false, false, { error: 'failed' }, false), true)
+  assert.equal(visible(false, false, { stage: 'patch' }, true), true)
+  assert.equal(visible(false, true, { stage: 'done' }, false), true)
+  const pctExpression = root.match(/const pct = ([^\n]+);/)
+  assert.ok(pctExpression)
+  const pct = new Function('flowFinished', 'completedPhases', 'phaseCount',
+    'return ' + pctExpression[1])
+  assert.equal(pct(false, 0, 7), 0)
+  assert.equal(pct(false, 3, 7), 43)
+  assert.equal(pct(false, 7, 7), 99)
+  assert.equal(pct(true, 7, 7), 100)
+  assert.match(root, /flowVisible \? h\(ApplyFlow/)
+  assert.match(root, /aria-valuetext/)
+  assert.match(root, /按流程阶段统计，不代表补丁写入比例/)
+  assert.match(root, /dshp-bar\.is-bad>i/)
 })
 
 test('interrupted cleaning is not reported as idle or as an explicit failure', () => {
@@ -25,7 +50,7 @@ test('interrupted cleaning is not reported as idle or as an explicit failure', (
   assert.equal(interrupted({ stage: 'patch', active: true }, true), false)
   assert.equal(interrupted({ stage: 'patch', error: 'failed' }, false), false)
   assert.equal(interrupted({ stage: 'patch', active: false }, false), true)
-  assert.match(root, /job && job\.error \? "未完整完成" : flowInterrupted \? "结果未确认" : "未执行"/)
+  assert.match(root, /job && job\.error \? "上次" \+ flowKind \+ "执行失败"/)
 })
 
 test('clean controls precede the patch list and respect host and update activity', () => {
