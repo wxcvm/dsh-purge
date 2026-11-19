@@ -90,6 +90,14 @@ test('federated search reads the skill catalog once and reports bounded result c
       [23, 20, true], [25, 20, true], [1, 1, false], [null, 1, null],
     ])
     assert.equal(result.groups[0].items.some(x => Object.hasOwn(x, 'body')), false)
+    const personal2 = unifiedKnowledgeRequest(root, {
+      op: 'knowledgeUnifiedSearch', source: 'personal', query: 'reference', offset: 20,
+    }, options).groups[0]
+    assert.deepEqual([personal2.total, personal2.items.length, personal2.offset, personal2.hasMore], [23, 3, 20, false])
+    const browse = unifiedKnowledgeRequest(root, {
+      op: 'knowledgeUnifiedSearch', source: 'personal', query: '',
+    }, options).groups[0]
+    assert.equal(browse.total, 23)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
