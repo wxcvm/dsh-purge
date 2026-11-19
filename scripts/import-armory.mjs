@@ -26,6 +26,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = process.argv.slice(2);
@@ -35,10 +36,14 @@ const repo = path.resolve(repoAt >= 0 ? args[repoAt + 1] : "/opt/aboutsecurity/r
 
 const UPSTREAM = "https://github.com/wgpsec/AboutSecurity";
 const UPSTREAM_COMMIT = (() => {
-  try {
-    const m = JSON.parse(fs.readFileSync("/opt/aboutsecurity/manifest.json", "utf8"));
-    return m?.upstream?.commit || "";
-  } catch { return ""; }
+  try { return execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(); }
+  catch {
+    // Legacy offline manifest when the specified source has no Git metadata.
+    try {
+      const m = JSON.parse(fs.readFileSync("/opt/aboutsecurity/manifest.json", "utf8"));
+      return m?.upstream?.commit || "";
+    } catch { return ""; }
+  }
 })();
 
 const die = (msg) => { process.stderr.write(`[import-armory] FAIL: ${msg}\n`); process.exit(1); };
@@ -201,7 +206,7 @@ function importVuln(existingCatalog) {
         ...(Array.isArray(fm.fingerprint) ? fm.fingerprint : list(fm.fingerprint)).map((f) => String(f).toLowerCase()),
       ])].filter((k) => k && k.length >= 3).slice(0, 12),
       verified: false,
-      source_url: `${UPSTREAM}/blob/master/Vuln/${rel}`,
+      source_url: `${UPSTREAM}/blob/${UPSTREAM_COMMIT || "master"}/Vuln/${rel}`,
       source_versions: fm.version_affected ? String(fm.version_affected) : "",
       advisory_status: "community-indexed",
       advisory_note: "AboutSecurity 社区离线知识；verified=false，命中后按正文前置条件独立验证。",
