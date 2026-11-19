@@ -42,7 +42,8 @@
     "postinstall": "node scripts/ensure-profile-bundle.mjs",
     "test": "node --test \"test/*.test.*\" \"maintenance/*.test.mjs\" \"maintenance/desktop-tools/*.test.mjs\"",
     "test:pending": "node --test test-pending/*.mjs",
-    "test:all": "node --test \"test/*.test.*\" \"maintenance/*.test.mjs\" \"maintenance/desktop-tools/*.test.mjs\" \"test-pending/*.mjs\""
+    "test:all": "node --test \"test/*.test.*\" \"maintenance/*.test.mjs\" \"maintenance/desktop-tools/*.test.mjs\" \"test-pending/*.mjs\"",
+    "baseline:refusal": "node scripts/refusal-baseline.mjs"
   },
   "license": "Apache-2.0",
   "keywords": [
