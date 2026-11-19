@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { aboutSecurityDir, listLocalSkills, readLocalSkill, searchLocalSkills } from '../lib/redteam/skill-catalog.js'
+import { aboutSecurityDir, communitySkillsDir, listLocalSkills, readLocalSkill, searchLocalSkills } from '../lib/redteam/skill-catalog.js'
+import { unifiedKnowledgeRequest } from '../lib/redteam/knowledge-unified.js'
 
 test('内建 redteam 技能可检索，无 AboutSecurity 时不影响原有技能', (t) => {
   const home = mkdtempSync(join(tmpdir(), 'purge-skill-search-'))
@@ -98,4 +99,35 @@ test('内建技能的 frontmatter 描述参与目录展示与检索', () => {
   assert.ok(result.items.some(row => row.key === 'redteam:business-security-controls'))
   const api = rows.find(row => row.key === 'redteam:api-attack')
   assert.ok(api.description.length > 0)
+})
+
+test('community Yaklang skill packs are searchable without replacing bundled entries', (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'purge-community-skills-'))
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+  const community = communitySkillsDir(home)
+  const hack = join(community, 'hack-skills', 'skills', 'api-security')
+  const yak = join(community, 'yak-skills', 'skills', 'yaklang-syntax')
+  mkdirSync(hack, { recursive: true })
+  mkdirSync(yak, { recursive: true })
+  writeFileSync(join(hack, 'SKILL.md'), '---\nname: api-security\ndescription: "API 安全审查"\n---\n# API 安全审查\nHACK_SKILL_CONTENT')
+  writeFileSync(join(yak, 'SKILL.md'), '---\nname: yaklang-syntax\ndescription: "Yaklang 编程语法"\n---\n# Yaklang 语法\nYAK_SKILL_CONTENT')
+  writeFileSync(join(yak, 'README.md'), '# Not a skill')
+  const all = listLocalSkills({ home })
+  assert.ok(all.some(row => row.key === 'redteam:web-injection'))
+  const matches = all.filter(row => row.key.startsWith('redteam:community/'))
+  assert.deepEqual(matches.map(row => row.key).sort(), [
+    'redteam:community/hack-skills/api-security',
+    'redteam:community/yak-skills/yaklang-syntax',
+  ])
+  assert.equal(matches.some(row => row.name === 'README'), false)
+  const result = searchLocalSkills('Yaklang', { home })
+  assert.equal(result.items[0].key, 'redteam:community/yak-skills/yaklang-syntax')
+  assert.equal(result.items[0].community_source, 'yak-skills')
+  const detail = readLocalSkill('redteam:community/hack-skills/api-security', { home })
+  assert.match(detail.content, /HACK_SKILL_CONTENT/)
+  const unified = unifiedKnowledgeRequest(home, {
+    op: 'knowledgeUnifiedGet', source: 'redteam', id: 'redteam:community/yak-skills/yaklang-syntax',
+  }, { home })
+  assert.match(unified.item.body, /YAK_SKILL_CONTENT/)
+  assert.throws(() => readLocalSkill('redteam:community/hack-skills/../secret', { home }), /skill not found/)
 })
