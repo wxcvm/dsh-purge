@@ -63,7 +63,7 @@ test("backup delivery folds once, leaves native context/tools untouched, and is 
   assert.deepEqual(first.variables, assembly.variables);
   assert.deepEqual(assembly, original, "original host assembly must not mutate");
   const clean = stripUpstreamSafeFold(first);
-  assert.equal(clean.sections[0].text, "Native persona");
+  assert.deepEqual(clean.sections[0], assembly.sections[0], "native order/interpolate must survive exact restore");
   assert.equal(clean.sections[0].text.includes(BACKUP_END), false);
   assert.equal(upstreamSafeAssemblyProbe(clean).assembledBytes, 0);
 });
@@ -152,6 +152,13 @@ test("native persona whitespace survives on/off and templated host persona stays
   assert.equal(fallback.sections[1].interpolate, true);
   assert.equal(upstreamSafeAssemblyProbe(fallback).assemblyMode, "native-section");
   assert.equal(upstreamSafeAssemblyProbe(fallback).injectHead, true);
+  const implicit = fixture();
+  implicit.sections[0].text = "working in {{cwd}}";
+  delete implicit.sections[0].interpolate; // Native host defaults to interpolation.
+  const implicitOut = foldUpstreamSafePrompt(implicit);
+  assert.equal(implicitOut.sections[0].name, "dsh-purge");
+  assert.equal(implicitOut.sections[1].text, "working in {{cwd}}");
+  assert.equal(Object.hasOwn(implicitOut.sections[1], "interpolate"), false);
 });
 
 test("redteam backup is routed through real Purge assembly once and can return to primary", t => {
@@ -196,4 +203,65 @@ test("redteam backup is routed through real Purge assembly once and can return t
   assert.equal(getLastInjectReport().promptEngine, "primary");
   assert.equal(primary.sections[0].name, "dsh-purge");
   assert.equal(upstreamSafeAssemblyProbe(primary).assemblyMode, "native-section");
+});
+
+test("backup restores all native persona properties after a serialized reused assembly", () => {
+  for (const persona of [
+    { name: "deployment:persona-prefix", text: "HOST", order: 913, interpolate: true },
+    { name: "persona-prefix", text: "HOST", order: 0, interpolate: false },
+    { name: "deployment:persona-prefix", text: "HOST" },
+    { name: "deployment:persona-prefix", text: "\nNative whitespace  \n", order: -5 },
+  ]) {
+    const assembly = { sections: [
+      { ...persona },
+      { name: "dsh-purge", text: "SELECTED_BODY", order: -100000 },
+      { name: "native-runtime", text: "KEEP" },
+    ], tools: [{ name: "hostTool" }], contexts: [{ name: "nativeContext" }] };
+    const folded = foldUpstreamSafePrompt(assembly);
+    assert.equal(folded.sections[0].order, -100000);
+    const restored = stripUpstreamSafeFold(JSON.parse(JSON.stringify(folded)));
+    assert.deepEqual(restored.sections[0], persona);
+    assert.deepEqual(restored.sections[1], assembly.sections[2]);
+    assert.deepEqual(restored.tools, assembly.tools);
+    assert.deepEqual(restored.contexts, assembly.contexts);
+    assert.deepEqual(assembly.sections[0], persona, "host-owned section stays untouched");
+    assert.equal(restored.sections[0].__dshPurgeUpstreamSafePersona, undefined);
+  }
+});
+
+test("backup creates no phantom host persona when the original assembly had none", () => {
+  const assembly = { sections: [
+    { name: "dsh-purge", text: "SELECTED_BODY" },
+    { name: "host:default", text: "native" },
+  ], contexts: [{ name: "policy:one", text: "original" }] };
+  const folded = foldUpstreamSafePrompt(assembly);
+  assert.equal(folded.sections[0].name, "deployment:persona-prefix");
+  const restored = stripUpstreamSafeFold(JSON.parse(JSON.stringify(folded)));
+  assert.deepEqual(restored.sections, [assembly.sections[1]]);
+  assert.deepEqual(restored.contexts, assembly.contexts);
+});
+
+test("the original host template survives a real backup to primary switch", t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-safe-reuse-"));
+  const previous = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  t.after(() => {
+    if (previous === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = previous;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const native = { name: "deployment:persona-prefix", text: "Native persona", order: 998, interpolate: true };
+  const assembly = { sections: [native], contexts: [{ name: "native", text: "KEEP" }],
+    variables: { model: "gpt-6" } };
+  const session = { id: "switch-restore", header: { agentPreset: "standard" },
+    events: [{ type: "user/message", data: { source: { kind: "user" },
+      content: [{ type: "text", text: "你好" }] } }] };
+  const context = { agent: { session } };
+  const backup = rewriteLiveAssembly({ enabled: true, bundledDefault: true, upstreamSafeBackup: true },
+    assembly, context);
+  assert.equal(backup.sections[0].order, -100000);
+  const restored = rewriteLiveAssembly({ enabled: true }, JSON.parse(JSON.stringify(backup)), context);
+  assert.equal(upstreamSafeAssemblyProbe(restored).assembledBytes, 0);
+  assert.deepEqual(restored.sections, [native]);
+  assert.deepEqual(restored.contexts, assembly.contexts);
 });

@@ -42,5 +42,7 @@ test("local visual settings page exposes independent switches and assembly diagn
   }
   assert.match(page, /prompt-routing-settings/);
   assert.match(page, /unverified/);
+  assert.match(page, /backup-health/);
+  assert.match(page, /备用来源可读取/);
   assert.match(page, /保存并立即生效/);
 });
