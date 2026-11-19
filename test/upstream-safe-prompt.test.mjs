@@ -192,7 +192,8 @@ test("redteam backup is routed through real Purge assembly once and can return t
   assert.equal(second.sections[0].text.split(BACKUP_BEGIN).length - 1, 1);
   assert.equal(upstreamSafeAssemblyProbe(second).assembledBytes, firstProbe.assembledBytes);
   const primary = rewriteLiveAssembly({ enabled: true }, first, context);
-  assert.equal(upstreamSafeAssemblyProbe(primary).assembledBytes, 0);
+  assert.equal(primary.sections.some(section => String(section.text || "").includes(BACKUP_BEGIN)), false);
   assert.equal(getLastInjectReport().promptEngine, "primary");
   assert.equal(primary.sections[0].name, "dsh-purge");
+  assert.equal(upstreamSafeAssemblyProbe(primary).assemblyMode, "native-section");
 });
