@@ -93,3 +93,16 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 - PR #330 已合并。新布局修复需独立 PR 和对应 CI 核验；不能沿用旧 PR 的绿灯宣称新布局已通过。
 - 需使用目标版本的实机安装包，确认前后端接口同时更新，并核对清洗台与实际宿主版本；GitHub CI 不能替代 Desktop 实机验收。
 - Purge 与 ARTEX 联合发版仍须依照既有 `docs/JOINT_RELEASE_PURGE_ARTEX_20261117.zh-CN.md` 进行双端、资产、升级和回退验收；本文不宣称完成那部分工作。
+
+
+## 本机可视化路由开关（#369）
+
+在当前 Harness Web/桌面宿主的本机 HTTP 地址访问 `/dsh-purge/prompt-routing`，可分别设置：
+
+- `bundledDefault`：普通预设无规则匹配时使用内置稿，默认关闭。
+- `redteamTaskRoute`：在普通预设下按任务识别红队规则，仍遵循已有的会话暂停、预设及模型/Provider 黑白名单，默认关闭。
+- `modelAdaptive`：只在当前请求可识别的模型家族下启用自适应回退，默认关闭。未知模型不会自动兜底。
+
+设置通过同源 `/dsh-purge/prompt-routing-settings` 读写，落盘 `$DSH_HOME/dsh-purge/prompt-routing.json`，保存后立即更新当前插件运行实例，重启重新加载；无需编辑已有提示词规则。旧版宿主若不支持插件 Web 路由，该页面不可用，不能据此推断设置已经生效。
+
+诊断报告中的 `stage=assembled` 只表示此插件返回的 sections 中注入段非空且置顶；`delivery=unverified` 表示还没有从模型实际请求边界得到证据。不能把这两者混为一谈。

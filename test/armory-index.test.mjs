@@ -80,3 +80,29 @@ test('随包 CVE 索引扩充后仍满足现有匹配链路', async () => {
     assert.equal(row.advisory_status, 'community-indexed')
   }
 })
+
+test('AboutSecurity payload and dictionary indexes are pinned to the same commit and have unique safe paths', () => {
+  const payload = loadPayloadIndex(), dictionaries = loadDictionaryIndex()
+  assert.match(payload.source_commit, /^[0-9a-f]{40}$/)
+  assert.equal(payload.source_commit, dictionaries.source_commit)
+  for (const [data, prefix] of [[payload, 'Payload/'], [dictionaries, 'Dic/']]) {
+    const seen = new Set()
+    for (const group of data.groups) for (const file of group.files) {
+      assert.ok(file.path.startsWith(prefix))
+      assert.ok(!file.path.includes('..') && !file.path.includes('\\') && !file.path.startsWith('/'))
+      assert.equal(seen.has(file.path), false, file.path)
+      seen.add(file.path)
+    }
+  }
+})
+
+test('community-indexed CVE source links use the declared immutable revision', async () => {
+  const { loadCveCatalog } = await import('../lib/redteam/cve-knowledge.js')
+  const entries = loadCveCatalog().filter(row => row.source_url.includes('wgpsec/AboutSecurity'))
+  assert.ok(entries.length >= 500)
+  for (const row of entries) {
+    assert.match(row.source_commit, /^[0-9a-f]{40}$/)
+    assert.ok(row.source_url.includes('/blob/' + row.source_commit + '/'), row.source_url)
+    assert.equal(row.verified, false)
+  }
+})
