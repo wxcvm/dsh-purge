@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 
 import { scrubClaimedMessages } from "../lib/index.js";
 import { scrubTargets } from "../lib/target-scrub.js";
@@ -9,8 +8,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const require = createRequire(import.meta.url);
-const { deepFreeze, snapshotJsonValue } = require("/app/node_modules/@deepseek-ai/dsh-util-values/lib/index.js");
+// Offline reproduction of the host's JSON snapshot + recursive freeze contract.
+// Do not rely on the host package's installation path in cross-platform unit tests.
+const snapshotJsonValue = value => JSON.parse(JSON.stringify(value));
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
+}
 
 /** 复刻宿主冻结链：user 消息经 snapshotJsonValue（深拷贝）+ deepFreeze 进 inbox。 */
 function frozenMessage(text, id = "m1") {

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { routePrompt, routePromptForSession, setSessionPromptLock, savePromptProfile } from "../lib/prompt-profiles.js";
+import { routePrompt, routePromptForSession, setSessionPromptLock, setSessionPromptPause, savePromptProfile } from "../lib/prompt-profiles.js";
 import { applyPromptRouteToAssembly } from "../lib/prompt-assembly-router.js";
 import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
 
@@ -49,7 +49,7 @@ test("bundledDefault=true：无命中注入内置提示词（用户主动开启�
   assert.ok(r.body.length > 1000, "加密槽全文");
 });
 
-test("bundledDefault=true：主链路 delivered 三态正确", () => {
+test("bundledDefault=true：主链路组装 三态正确", () => {
   const home = mkHome();
   process.env.DSH_HOME = home;
   try {
@@ -60,7 +60,7 @@ test("bundledDefault=true：主链路 delivered 三态正确", () => {
     const report = getLastInjectReport();
     assert.equal(report.injectionState, "prompt");
     assert.equal(report.ok, true);
-    assert.equal(report.stage, "delivered");
+    assert.equal(report.stage, "assembled");
     assert.ok(report.candidateBytes > 0);
     assert.ok(report.assembledBytes > 0);
   } finally { delete process.env.DSH_HOME; }
@@ -114,7 +114,7 @@ test("redteamTaskRoute=true：主链路 full 与红队同源（readInjectFallbac
     const report = getLastInjectReport();
     assert.equal(report.route, "redteam-task");
     assert.equal(report.ok, true);
-    assert.equal(report.stage, "delivered");
+    assert.equal(report.stage, "assembled");
   } finally { delete process.env.DSH_HOME; }
 });
 
@@ -129,6 +129,30 @@ test("redteamTaskRoute 与 bundledDefault 互相独立", () => {
   assert.equal(b.reason, "bundled-default");
 });
 
+test("redteamTaskRoute respects model/provider allow-deny policy", () => {
+  const home = mkHome();
+  const task = "开展红队演练";
+  savePromptProfile(home, { id: "redteam", blockEnabled: true, blockTargets: { models: ["*gpt*"] } });
+  assert.equal(routePrompt({ home, preset: "standard", text: task, redteamTaskRoute: true, model: "gpt-6" }).id, null);
+  assert.equal(routePrompt({ home, preset: "standard", text: task, redteamTaskRoute: true, model: "claude-sonnet" }).reason, "redteam-task");
+
+  savePromptProfile(home, { id: "redteam", blockEnabled: false,
+    allowEnabled: true, allowTargets: { providers: ["deepseek*"] } });
+  assert.equal(routePrompt({ home, preset: "standard", text: task, redteamTaskRoute: true, provider: "openai" }).id, null);
+  assert.equal(routePrompt({ home, preset: "standard", text: task, redteamTaskRoute: true, provider: "deepseek-account" }).reason, "redteam-task");
+});
+
+test("redteamTaskRoute respects session pause and disabled Agent preset", () => {
+  const home = mkHome();
+  const task = "开展红队演练";
+  setSessionPromptPause(home, "s1", "redteam", true);
+  assert.equal(routePrompt({ home, preset: "standard", text: task, sessionId: "s1", redteamTaskRoute: true }).id, null);
+  setSessionPromptPause(home, "s1", "redteam", false);
+  assert.equal(routePrompt({ home, preset: "standard", text: task, sessionId: "s1", redteamTaskRoute: true }).reason, "redteam-task");
+  savePromptProfile(home, { id: "redteam", presetSwitches: { standard: false } });
+  assert.equal(routePrompt({ home, preset: "standard", text: task, sessionId: "s1", redteamTaskRoute: true }).id, null);
+});
+
 /* ---------- 4) redteam 预设不受任何开关影响 ---------- */
 
 test("redteam 预设：全开关关闭仍默认注入（profile 路由固有行为）", () => {
@@ -138,7 +162,7 @@ test("redteam 预设：全开关关闭仍默认注入（profile 路由固有行�
   assert.equal(r.reason, "redteam-preset");
 });
 
-test("redteam 预设：主链路 delivered（角色段/协议/加密槽全套）", () => {
+test("redteam 预设：主链路组装（角色段/协议/加密槽全套）", () => {
   const home = mkHome();
   process.env.DSH_HOME = home;
   try {
@@ -147,7 +171,7 @@ test("redteam 预设：主链路 delivered（角色段/协议/加密槽全套）
     assert.equal(out.sections[0]?.name, "dsh-purge");
     const report = getLastInjectReport();
     assert.equal(report.route, "redteam");
-    assert.equal(report.stage, "delivered");
+    assert.equal(report.stage, "assembled");
     assert.equal(report.ok, true);
   } finally { delete process.env.DSH_HOME; }
 });
@@ -213,12 +237,12 @@ test("诊断三态：candidate-dropped（路由有正文但组装层清零）", 
     const report = getLastInjectReport();
     // bundled 档正文含巡逻词被按行剥离 → candidateBytes>0 但可能 assembled=0 或保留
     // 无论哪种，报告必须给出三态之一而非笼统 ok
-    assert.ok(["delivered", "candidate-dropped", "assembled-not-delivered"].includes(report.stage));
+    assert.ok(["assembled", "candidate-dropped", "assembled-not-leading"].includes(report.stage));
     assert.notEqual(report.candidateBytes, report.assembledBytes !== undefined ? undefined : report.candidateBytes);
   } finally { delete process.env.DSH_HOME; }
 });
 
-test("诊断三态：ok 只认 delivered（宿主真实收到）", () => {
+test("诊断三态：ok 仅表示组装有效（宿主真实收到）", () => {
   const home = mkHome();
   process.env.DSH_HOME = home;
   try {
@@ -227,7 +251,7 @@ test("诊断三态：ok 只认 delivered（宿主真实收到）", () => {
     rewriteLiveAssembly({ enabled: true, bundledDefault: true }, asm(), ctx);
     const ok = getLastInjectReport();
     assert.equal(ok.ok, true);
-    assert.equal(ok.stage, "delivered");
+    assert.equal(ok.stage, "assembled");
     assert.ok(ok.assembledBytes > 0);
     assert.ok(ok.candidateBytes > 0);
     // 失败路径：候选为空
@@ -248,7 +272,7 @@ test("诊断：redteam 分支同三态结构（ok/stage/leadDrift）", () => {
     const report = getLastInjectReport();
     assert.equal(report.route, "redteam");
     assert.equal(report.ok, true);
-    assert.equal(report.stage, "delivered");
+    assert.equal(report.stage, "assembled");
     assert.ok(typeof report.leadDrift !== "undefined");
     assert.ok(typeof report.candidateBytes !== "undefined" || typeof report.fullBytes !== "undefined");
   } finally { delete process.env.DSH_HOME; }
