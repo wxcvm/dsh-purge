@@ -78,3 +78,29 @@ test('判定一致性：fastjson AS 条目与 fujiang 约束语义一致', () =>
   const asHigh = high.items.find(x => x.advisory_status === 'community-indexed')
   assert.equal(asHigh?.version_applicability?.status, 'not_affected', 'AS 条目 1.2.83 判 not_affected')
 })
+
+test('ambiguous versions stay unknown instead of dropping operators, components or clauses', () => {
+  assert.deepEqual(parseVersionAffected('WordPress Duplicator <= 1.3.26'),
+    [{ min: '0.0.0', max: '1.3.26' }]);
+  assert.deepEqual(parseVersionAffected('systeminformation < 5.3.1'),
+    [{ min: '0.0.0', max: '5.3.1', max_exclusive: true }]);
+  assert.equal(parseVersionAffected('12.2.1.4'), null);
+  assert.equal(parseVersionAffected('< 5.2.2.1, < 5.1.6.2'), null);
+  assert.equal(parseVersionAffected('< 1.0.0, 2.0.0 及以上'), null);
+  assert.equal(parseVersionAffected('FortiOS 7.0.0-7.0.6, FortiProxy 7.0.0-7.0.6'), null);
+});
+test('unnumbered source entries do not create empty version_constraints objects', () => {
+  const row = withParsedConstraints({ cve: ['未编号'], source_versions: '<1.2.0' }, []);
+  assert.deepEqual(row.version_constraints['未编号'], [{ min: '0.0.0', max: '1.2.0', max_exclusive: true }]);
+  assert.equal(withParsedConstraints({ source_versions: '<1.2.0' }, []).version_constraints, undefined);
+});
+
+test('imported structured ranges are non-empty and never silently truncate vendor versions', () => {
+  const catalog = loadCveCatalog().filter(row => row.advisory_status === 'community-indexed');
+  for (const row of catalog) {
+    if (!row.version_constraints) continue;
+    assert.ok(Object.keys(row.version_constraints).length > 0, row.title);
+    assert.ok(row.cve.some(id => Array.isArray(row.version_constraints[id]) && row.version_constraints[id].length), row.title);
+    assert.ok(!/\d+(?:\.\d+){3,}/.test(row.source_versions || ''), row.title);
+  }
+});
