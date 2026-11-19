@@ -120,6 +120,16 @@ test("official complete section overrides waterfall but final assemble guard res
   assert.equal(guarded.sections[0]?.name, "dsh-purge");
   assert.match(renderPrompt(guarded), /HOST_COMPLETE_ONLY/);
   assert.equal(renderPrompt(guarded).split(guarded.sections[0].text).length - 1, 1);
+  const backupDisposer = installAssembleGuard(ctx.systemPrompt, (assembly, context) =>
+    rewriteLiveAssembly({ ...config, upstreamSafeBackup: true }, assembly, context));
+  assert.equal(typeof backupDisposer, "function");
+  const backup = await ctx.systemPrompt.assemble(assembleContext);
+  const renderedBackup = renderPrompt(backup);
+  assert.equal(backup.sections[0]?.name, "deployment:persona-prefix");
+  assert.match(renderedBackup, /HOST_COMPLETE_ONLY/);
+  assert.ok(renderedBackup.startsWith(backup.sections[0].text));
+  assert.equal(renderedBackup.split(backup.sections[0].text).length - 1, 1);
+  assert.equal(getLastInjectReport().promptSource, "upstream-safe");
   assert.equal(getLastInjectReport().delivery, "unverified",
     "an official assembled result still is not proof of an LLM request or HTTP dispatch");
 });
