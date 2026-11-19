@@ -345,3 +345,56 @@ test("loadStreamGuardSettings: 文件 > 覆盖 > 默认", () => {
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+/* -------------------------------------------------- 思考期不消耗判定预算 */
+
+function slowSource(chunks, delayMs) {
+  return {
+    [Symbol.asyncIterator]: () => {
+      let i = 0;
+      return {
+        async next() {
+          if (i >= chunks.length) return { done: true, value: undefined };
+          await new Promise((r) => setTimeout(r, delayMs));
+          return { done: false, value: chunks[i++] };
+        },
+        async return() { return { done: true, value: undefined }; },
+      };
+    },
+  };
+}
+
+test("思考很长（累计超过 holdMs）时，正文里的拒绝仍被掐断", async () => {
+  const { ctx, guard } = withGuard({ holdMs: 80, thinkingChars: 8000 });
+  const chunks = [
+    { type: "block-start", index: 0, blockType: "reasoning" },
+    { type: "reasoning-delta", index: 0, text: "先想一下这件事的性质，这段要够长免得被判成短思考。" },
+    { type: "reasoning-delta", index: 0, text: "再想一层：用户换了个说法，内容还是同一件事。" },
+    { type: "block-start", index: 1, blockType: "text" },
+    { type: "text-delta", index: 1, text: "这条我还是不做。" },
+    done,
+  ];
+  const out = await drain(ctx.call("llm/stream", { sessionId: "s-think-long", tools: [{ name: "bash" }] }, () => slowSource(chunks, 60)));
+  guard.dispose();
+  assert.equal(out.filter((c) => c.type === "text-delta").length, 0, "拒绝正文不该漏出去");
+  const finish = out.at(-1);
+  assert.equal(finish.type, "finish");
+  assert.equal(finish.reason.failure.code, "PURGE_REFUSAL");
+});
+
+test("思考很长但正文是交付物：正常放行，不误杀", async () => {
+  const { ctx, guard } = withGuard({ holdMs: 80, thinkingChars: 8000, releaseChars: 10, sentenceRelease: 1 });
+  const chunks = [
+    { type: "block-start", index: 0, blockType: "reasoning" },
+    { type: "reasoning-delta", index: 0, text: "先规划一下步骤，这段够长以超过 holdMs 预算。" },
+    { type: "reasoning-delta", index: 0, text: "确认工具与参数，然后直接给命令。" },
+    { type: "block-start", index: 1, blockType: "text" },
+    { type: "text-delta", index: 1, text: "```bash\nnmap -sV -p 80 TARGET\n```\n端口扫描结果见下。" },
+    done,
+  ];
+  const out = await drain(ctx.call("llm/stream", { sessionId: "s-think-ok", tools: [{ name: "bash" }] }, () => slowSource(chunks, 60)));
+  guard.dispose();
+  const joined = out.filter((c) => c.type === "text-delta").map((c) => c.text).join("");
+  assert.match(joined, /nmap/);
+  assert.equal(out.some((c) => c.type === "finish" && c.reason?.failure), false, "不该出现拒答终止");
+});
