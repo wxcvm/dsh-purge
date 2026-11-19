@@ -76,7 +76,9 @@ test("current request route beats process defaults and tolerates typed descripto
     assert.equal(isGlmModel({ variables: { model: { id: "deepseek-chat" }, provider: { id: "zhipu" } } }), false);
     assert.equal(isGlmModel({ variables: { model: {} }, context: { modelId: "glm-4.7" } }), true);
     assert.equal(isGlmModel({ variables: { provider: { id: "zhipu" } } }), true);
-    assert.equal(isGlmModel({}), true);
+    // 修复后：没有本次请求的 model/provider 证据就不判 GLM。
+    // 旧实现回退 process.env.DSH_MODEL，GLM 常驻进程里任何缺元数据的请求都会被误判。
+    assert.equal(isGlmModel({}), false);
   } finally {
     for (const [key, value] of [["DSH_MODEL", before.model], ["DSH_PROVIDER", before.provider]]) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
