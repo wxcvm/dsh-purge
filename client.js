@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6548a3c34dbc2a72";
+		const CLIENT_BUILD_ID = "ce19e37da359e480";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4615,6 +4615,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState("");
 			const [loadError, setLoadError] = useState("");
+            const [routingDraft, setRoutingDraft] = useState({ bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false });
+            const [routingDiag, setRoutingDiag] = useState(null);
 			const parseLines = (value) => String(value || "").split(/[\n,，]+/).map(x => x.trim()).filter(Boolean);
 			const fields = [["models", "模型 ID"], ["providers", "厂商 / Provider ID"],
 				["sessions", "对话 Session ID"], ["presets", "Agent 预设"]];
@@ -4638,6 +4640,12 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					const response = await apiJson("/dsh-purge/prompt-profiles");
 					if (!response?.ok) throw new Error(response?.error || "读取失败");
 					setProfiles(response.profiles || []);
+                    setRoutingDraft({
+                        bundledDefault: response.routingSettings?.bundledDefault === true,
+                        redteamTaskRoute: response.routingSettings?.redteamTaskRoute === true,
+                        modelAdaptive: response.routingSettings?.modelAdaptive === true,
+                    });
+                    setRoutingDiag(response.lastAssembly || null);
 					setLoadError("");
 					setActive(old => chosen || ((response.profiles || []).some(p => p.id === old) && old) ||
                     response.profiles?.find(p => p.scope === "local")?.id || "");
@@ -4665,6 +4673,16 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				} catch (error) { setNotice(explainError(error)); }
 				finally { setBusy(false); }
 			};
+            const saveRouting = async () => {
+                setBusy(true); setNotice("");
+                try {
+                    const result = await promptProfilesApi("routing-settings", { settings: routingDraft });
+                    if (!result?.ok) throw new Error(result?.error || "保存失败");
+                    setNotice("路由开关已保存并立即生效");
+                    await reload(active);
+                } catch (error) { setNotice(explainError(error)); }
+                finally { setBusy(false); }
+            };
             const saveProfile = value => {
                 if (!value) return;
                 const targets = prefix => Object.fromEntries(fields.map(([field]) => [field, parseLines(value[prefix + "_" + field])]));
@@ -4757,6 +4775,25 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     "正文直接编辑；每份提示词下方选择生效的 Agent 预设。复杂规则折叠收起，红队专用提示词单独管理。"),
                 loadError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, loadError) : null,
                 notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null,
+                h("section", { className: "dshp-routing-switches", style: panel },
+                    h("h4", { style: { margin: "0 0 10px" } }, "注入路由 · 三个独立开关"),
+                    h("p", { className: "dshp-hint" }, "普通会话默认按匹配注入。三个开关互不依赖，仍遵守会话锁定和规则黑白名单。"),
+                    [
+                        ["bundledDefault", "无匹配时注入内置提示词", "无规则命中时才兜底；默认关闭"],
+                        ["redteamTaskRoute", "普通模式识别红队任务", "按任务词和对应规则范围识别；默认关闭"],
+                        ["modelAdaptive", "按当前模型家族自动适配", "只对识别成功的当前模型生效；默认关闭"],
+                    ].map(([key, title, hint]) => h("label", { key, style: { display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0" } },
+                        h("input", { type: "checkbox", "aria-label": title, checked: routingDraft[key] === true,
+                            disabled: busy || Boolean(loadError),
+                            onChange: e => setRoutingDraft({ ...routingDraft, [key]: e.target.checked }) }),
+                        h("span", null, h("strong", null, title),
+                            h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
+                    h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
+                        h("button", { type: "button", disabled: busy || Boolean(loadError),
+                            onClick: saveRouting }, "保存路由开关"),
+                        routingDiag ? h("span", { className: "dshp-hint" },
+                            "最近组装：" + (routingDiag.stage || "未观测")
+                            + " · 模型投递：" + (routingDiag.delivery || "未验证")) : null)),
                 h("div", { className: "dshp-prompt-columns",
                     style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
                         gap: 16, alignItems: "start" } },

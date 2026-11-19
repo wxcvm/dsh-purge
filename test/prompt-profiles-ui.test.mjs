@@ -17,6 +17,7 @@ function mount() {
     { id: "writing", name: "写作", enabled: true, priority: 40, keywords: ["翻译"], excludes: [], body: "Writing instructions" },
   ];
   const apiCalls = [], actions = [], values = [], effectQueue = [];
+  const routingSettings = { bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false };
   let stateIndex = 0, sessionLock = "writing";
   const context = vm.createContext({
     useState(initial) {
@@ -30,10 +31,13 @@ function mount() {
     apiJson: async url => {
       apiCalls.push(url);
       return { ok: true, profiles: structuredClone(profiles),
+        routingSettings: structuredClone(routingSettings),
+        lastAssembly: { stage: "assembled", delivery: "unverified" },
         sessionLock: url.includes("sessionId=") ? sessionLock : null };
     },
     promptProfilesApi: async (op, data) => {
       actions.push({ op, data });
+      if (op === "routing-settings") Object.assign(routingSettings, data.settings);
       if (op === "save") {
         const at = profiles.findIndex(p => p.id === data.profile.id);
         if (at >= 0) profiles[at] = { ...profiles[at], ...data.profile };
@@ -41,7 +45,7 @@ function mount() {
       }
       if (op === "lock") sessionLock = data.profileId;
       if (op === "unlock") sessionLock = null;
-      return { ok: true, sessionLock };
+      return { ok: true, sessionLock, routingSettings: structuredClone(routingSettings) };
     },
     rewindSessions: {},
     currentSessionId: () => "current-host-session",
@@ -78,7 +82,7 @@ function mount() {
     effectQueue[2]();
     return render();
   }
-  return { render, find, nodes, initialize, actions, apiCalls, profiles, loadEditor: () => effectQueue[1]() };
+  return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings, loadEditor: () => effectQueue[1]() };
 }
 
 test("local editor saves its independent body through the API callback", async () => {
@@ -170,4 +174,24 @@ test("global editor has visible preset switches and an independent unknown-prese
   assert.equal(saved.presetSwitches.ptc, false);
   assert.equal(saved.injectOtherPresets, false);
   assert.equal(saved.body, "Global text");
+});
+
+test("prompt routing switches persist through the existing settings API without changing other rules", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  assert.equal(ui.find(tree, "input", "无匹配时注入内置提示词").props.checked, false);
+  ui.find(tree, "input", "普通模式识别红队任务").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  ui.find(tree, "input", "按当前模型家族自动适配").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  await ui.find(tree, "button", "保存路由开关").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(item => item.op === "routing-settings");
+  assert.equal(saved.data.settings.bundledDefault, false);
+  assert.equal(saved.data.settings.redteamTaskRoute, true);
+  assert.equal(saved.data.settings.modelAdaptive, true);
+  assert.equal(ui.routingSettings.redteamTaskRoute, true);
+  tree = ui.render();
+  assert.equal(ui.find(tree, "input", "普通模式识别红队任务").props.checked, true);
+  assert.equal(ui.find(tree, "input", "按当前模型家族自动适配").props.checked, true);
 });
