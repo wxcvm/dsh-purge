@@ -12,3 +12,10 @@
 ## 技术范围
 
 引入从上游借鉴的独立 sealed source、persona-prefix 折叠与重复清理；保留我方 `prompt-profiles.js` 决策引擎，不引入新的 prompt policy 或额外限制。不是把对方 `lib/identity.js` 与宿主全局补丁整包覆盖过来。完整系统兼容性对账继续跟踪 Issue #347。
+
+## 备用来源状态与回退验证（2026-11-20）
+
+- 本地配置接口 `/dsh-purge/prompt-routing-settings` 仅返回 `backupSource.ready/code/bytes/version`，不返回提示词正文。页面明确区分“资源可读取”和“已组装/实际模型投递”。
+- 备用正文折叠进入原生 `persona-prefix` 时，在当前组装对象上临时记录原生 `order/interpolate` 的原值；再次组装/关闭备用会精确恢复原生属性（包括原本不存在的字段），不保留伪造的空 `persona-prefix`。重用或 JSON 克隆后仍可恢复。
+- 含 `{{cwd}}` 等宿主插值模板的原生段继续采用独立 `dsh-purge` 提示词段，不改变宿主插值约定；日志里的 `assemblyMode=native-section` 为有效兼容模式，不应被当成注入失败。
+- 单元与官方 Harness 渲染测试只证明 assembled/rendered 的有效性，仍需在真实 Windows Desktop 对 Provider 实际请求体做只读核对后，才能把最终投递标记为验证成功。
