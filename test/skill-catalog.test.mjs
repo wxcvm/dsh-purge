@@ -133,6 +133,12 @@ test('community Yaklang skill packs are searchable without replacing bundled ent
     op: 'knowledgeUnifiedGet', source: 'redteam', id: 'redteam:community/yak-skills/yaklang-syntax',
   }, { home })
   assert.match(unified.item.body, /YAK_SKILL_CONTENT/)
+  assert.equal(unified.item.community_source, 'yak-skills')
+  assert.equal(unified.item.source_url, 'https://github.com/yaklang/yak-skills')
+  const found = unifiedKnowledgeRequest(home, {
+    op: 'knowledgeUnifiedSearch', source: 'redteam', query: 'Yaklang',
+  }, { home })
+  assert.equal(found.groups[0].items[0].category, 'community/yak-skills')
   assert.throws(() => readLocalSkill('redteam:community/hack-skills/../secret', { home }), /skill not found/)
 })
 
