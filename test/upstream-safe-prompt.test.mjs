@@ -152,6 +152,13 @@ test("native persona whitespace survives on/off and templated host persona stays
   assert.equal(fallback.sections[1].interpolate, true);
   assert.equal(upstreamSafeAssemblyProbe(fallback).assemblyMode, "native-section");
   assert.equal(upstreamSafeAssemblyProbe(fallback).injectHead, true);
+  const implicit = fixture();
+  implicit.sections[0].text = "working in {{cwd}}";
+  delete implicit.sections[0].interpolate; // Native host defaults to interpolation.
+  const implicitOut = foldUpstreamSafePrompt(implicit);
+  assert.equal(implicitOut.sections[0].name, "dsh-purge");
+  assert.equal(implicitOut.sections[1].text, "working in {{cwd}}");
+  assert.equal(Object.hasOwn(implicitOut.sections[1], "interpolate"), false);
 });
 
 test("redteam backup is routed through real Purge assembly once and can return to primary", t => {
