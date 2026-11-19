@@ -64,9 +64,11 @@ test('判定跃迁：AS 独有条目从 unknown → affected/not_affected', () =
   assert.equal(affected.items[0].version_applicability.status, 'affected')
   const notAffected = matchCveCandidates({ cve: 'CVE-2024-3104', version: '2.0.0' })
   assert.equal(notAffected.items[0].version_applicability.status, 'not_affected')
-  // comfyui 精确版 3.38.0
-  const exact = matchCveCandidates({ cve: 'CVE-2025-67303', version: '3.38.0' })
-  assert.equal(exact.items[0].version_applicability.status, 'affected')
+  // 上游写明 ComfyUI-Manager < v3.38：3.38.0 已到不受影响的上界。
+  const inRange = matchCveCandidates({ cve: 'CVE-2025-67303', version: '3.37.9' })
+  assert.equal(inRange.items[0].version_applicability.status, 'affected')
+  const boundary = matchCveCandidates({ cve: 'CVE-2025-67303', version: '3.38.0' })
+  assert.equal(boundary.items[0].version_applicability.status, 'not_affected')
 })
 
 test('判定一致性：fastjson AS 条目与 fujiang 约束语义一致', () => {
