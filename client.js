@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f86238256f46ba38";
+		const CLIENT_BUILD_ID = "1e70bd38899ac2ad";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7464,6 +7464,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [community, setCommunity] = React.useState(null)
       const [communityError, setCommunityError] = React.useState(null)
       const [communityRequest, setCommunityRequest] = React.useState(false)
+      const [communityRemoveArmed, setCommunityRemoveArmed] = React.useState(null)
       const [removeArmed, setRemoveArmed] = React.useState(false)
       const [relatedSkill, setRelatedSkill] = React.useState(null)
       const skillReadSeq = React.useRef(0)
@@ -7513,6 +7514,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!result || !result.ok) setCommunityError((result && result.error) || '社区技能操作未能启动')
           else if (!result.busy) load(true)
         }, (error) => { setCommunityRequest(false); setCommunityError(String((error && error.message) || error)) })
+      }
+      const removeCommunity = (pack) => {
+        setCommunityRequest(true)
+        setCommunityError(null)
+        api({ op: 'communitySkillRemove', pack, confirm: true }).then((result) => {
+          setCommunityRequest(false)
+          setCommunityRemoveArmed(null)
+          if (result && result.packs) setCommunity(result)
+          if (!result || !result.ok) setCommunityError((result && result.error) || '卸载失败')
+          else load(true)
+        }, (error) => { setCommunityRequest(false); setCommunityRemoveArmed(null); setCommunityError(String((error && error.message) || error)) })
       }
       React.useEffect(() => { loadExternal(); loadCommunity() }, [refreshKey])
       React.useEffect(() => {
@@ -7745,6 +7757,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('button', { className: 'rt-btn', disabled: communityRequest || pack.busy,
                   onClick: () => manageCommunity(pack.id, !!pack.installed) },
                   pack.installed ? '检查更新并拉取' : '安装'),
+                pack.installed
+                  ? h('button', {
+                      className: 'rt-btn', disabled: communityRequest || pack.busy,
+                      style: communityRemoveArmed === pack.id ? { color: 'var(--rt-danger, #d33)' } : undefined,
+                      onBlur: () => setCommunityRemoveArmed(null),
+                      onClick: () => communityRemoveArmed === pack.id ? removeCommunity(pack.id) : setCommunityRemoveArmed(pack.id),
+                    }, communityRemoveArmed === pack.id ? '确认卸载' : '卸载') : null,
                 pack.error ? h('span', { className: 'rt-err' }, pack.error) : null)),
             !community ? h('span', null, '正在读取社区技能状态…') : null,
             h('button', { className: 'rt-btn', disabled: communityRequest, onClick: loadCommunity }, '刷新状态'),
