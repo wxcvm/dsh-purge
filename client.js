@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "1e70bd38899ac2ad";
+		const CLIENT_BUILD_ID = "25ba6743b3c56869";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12037,7 +12037,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
     function UnifiedKnowledgeTab({ initialSource = 'all', initialCategory = '' } = {}) {
-      const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '内置技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+      const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '红队与社区技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
+      const browsableSources = ['bundled', 'cve', 'redteam', 'aboutsecurity']
       const [query, setQuery] = React.useState('')
       const [submittedQuery, setSubmittedQuery] = React.useState('')
       const [source, setSource] = React.useState(initialSource)
@@ -12064,26 +12065,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const search = (selected = source, selectedCategory = category, offset = 0, term = query) => {
         const keyword = term.trim()
         setDetail(null); setGroups([]); setSearched(false); setSubmittedQuery(keyword)
-        if (!keyword && selected !== 'bundled') return
+        if (!keyword && !browsableSources.includes(selected)) return
         run({ op: 'knowledgeUnifiedSearch', query: keyword, source: selected, category: selected === 'bundled' ? selectedCategory : '', offset }, r => { setGroups(r.groups); setSearched(true); const built = r.groups.find(g => g.source === 'bundled'); if (built?.categories) setCategories(built.categories) })
       }
-      React.useEffect(() => { if (initialSource === 'bundled') search('bundled', initialCategory) }, [initialSource, initialCategory])
+      React.useEffect(() => { if (browsableSources.includes(initialSource)) search(initialSource, initialCategory) }, [initialSource, initialCategory])
       const open = (group, item) => {
         setDetail(null)
         run({ op: 'knowledgeUnifiedGet', source: group.source, id: item.id }, r => setDetail(r.item))
       }
       return h('div', { className: 'rt-card', style: { display: 'grid', gap: 8 } },
         h('h4', null, '全库检索'),
-        h('p', null, '内置知识安装即用，留空可浏览全部内置条目；选择全部来源并输入关键词可跨库搜索。每个来源最多展示 20 条。'),
+        h('p', null, '选择内置知识、CVE 或技能来源，可留空逐页浏览；全部来源需输入关键词。每页展示最多 20 条。'),
         h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
           h('input', { className: 'rt-input', placeholder: '输入关键词、产品或 CVE', value: query, disabled: busy, onChange: e => setQuery(e.target.value), onKeyDown: e => { if (e.key === 'Enter' && !busy) search() } }),
           h('select', { className: 'rt-input', value: source, disabled: busy, onChange: e => { setSource(e.target.value); setCategory(''); search(e.target.value, '') } },
             Object.entries(labels).map(([key, label]) => h('option', { key, value: key }, label))),
           source === 'bundled' ? h('select', { className: 'rt-input', 'aria-label': '内置知识分类', value: category, disabled: busy, onChange: e => { setCategory(e.target.value); search('bundled', e.target.value) } },
             h('option', { value: '' }, '全部分类'), categories.map(name => h('option', { key: name, value: name }, name))) : null,
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || (!query.trim() && source !== 'bundled'), onClick: () => search() }, busy ? '读取中…' : '搜索')),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || (!query.trim() && !browsableSources.includes(source)), onClick: () => search() }, busy ? '读取中…' : '搜索')),
         error ? h('div', { className: 'rt-err', role: 'alert' }, error) : null,
-        !searched && !busy ? h('div', { className: 'rt-empty' }, (source === 'bundled' ? '正在准备内置知识，或点击搜索重新加载' : '输入关键词开始检索')) : null,
+        !searched && !busy ? h('div', { className: 'rt-empty' }, (browsableSources.includes(source) ? '正在准备该来源，或点击搜索重新加载' : '输入关键词开始跨来源检索')) : null,
         searched && query.trim() !== submittedQuery ? h('p', { className: 'rt-ops-subtle' }, '下方为上次检索结果；按搜索更新关键词。') : null,
         groups.map(group => h('div', { key: group.source, style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
           h('h4', null, labels[group.source] + (group.available ? ' · ' + (group.total == null ? '展示 ' + group.items.length : group.total + ' 条') : ' · 不可用')),
@@ -12092,14 +12093,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           group.items.map(item => h('div', { key: item.id, style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '6px 0' } },
             h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(group, item) }, item.title),
             h('span', { className: 'rt-ops-subtle' }, [item.category, item.description].filter(Boolean).join(' · ')))),
-          group.source === 'bundled' && source === 'all' && group.hasMore ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => { setSource('bundled'); setCategory(''); setQuery(submittedQuery); search('bundled', '', 0, submittedQuery) } }, '查看全部内置匹配') : null,
-          group.source === 'bundled' && source === 'bundled' ? h('div', { className: 'rt-toolbar' },
-            h('button', { className: 'rt-btn', disabled: busy || !group.offset, onClick: () => search('bundled', category, Math.max(0, group.offset - 20), submittedQuery) }, '上一页'),
-            h('span', null, '第 ' + (Math.floor((group.offset || 0) / 20) + 1) + ' 页'),
-            h('button', { className: 'rt-btn', disabled: busy || !group.hasMore, onClick: () => search('bundled', category, (group.offset || 0) + 20, submittedQuery) }, '下一页')) : null)),
+          browsableSources.includes(group.source) && source === 'all' && group.hasMore
+            ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+                setSource(group.source); setCategory(''); setQuery(submittedQuery)
+                search(group.source, '', 0, submittedQuery)
+              } }, '查看该来源全部匹配') : null,
+          browsableSources.includes(group.source) && source === group.source
+            ? h('div', { className: 'rt-toolbar' },
+              h('button', { className: 'rt-btn', disabled: busy || !group.offset,
+                onClick: () => search(group.source, category, Math.max(0, (group.offset || 0) - 20), submittedQuery) }, '上一页'),
+              h('span', null, '第 ' + (Math.floor((group.offset || 0) / 20) + 1) + ' 页'),
+              h('button', { className: 'rt-btn', disabled: busy || !group.hasMore,
+                onClick: () => search(group.source, category, (group.offset || 0) + 20, submittedQuery) }, '下一页')) : null)),
         detail ? h('div', { style: { borderTop: '1px solid var(--rt-line)', paddingTop: 8 } },
           h('h4', null, detail.title),
-          h('p', null, '来源：' + labels[detail.origin] + (detail.truncated ? ' · 原文显示已截断' : '')),
+          h('p', null, '来源：' + labels[detail.origin]
+            + (detail.community_source ? ' · ' + detail.community_source : '')
+            + (detail.truncated ? ' · 原文显示已截断' : '')),
+          detail.source_url ? h('a', { href: detail.source_url, target: '_blank', rel: 'noopener noreferrer' }, '查看原始来源') : null,
           h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情'),
           h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文'),
           detail.related?.length ? h('div', null, h('h4', null, '相关内置知识'), detail.related.map(item => h('button', { key: item.id, className: 'rt-btn', disabled: busy, onClick: () => open({ source: 'bundled' }, item) }, item.title))) : null) : null)
