@@ -134,3 +134,65 @@ test("real Purge routing selects the backup only after an explicit switch, and s
   assert.equal(upstreamSafeAssemblyProbe(blocked).assembledBytes, 0);
   assert.equal(getLastInjectReport().routeReason, "session-locked-off");
 });
+
+
+test("native persona whitespace survives on/off and templated host persona stays interpolatable", () => {
+  const a = fixture();
+  a.sections[0].text = "\n  Native persona  \n";
+  const folded = foldUpstreamSafePrompt(a);
+  const cleaned = stripUpstreamSafeFold(folded);
+  assert.equal(cleaned.sections[0].text, "\n  Native persona  \n");
+
+  const b = fixture();
+  b.sections[0].text = "working in {{cwd}}";
+  b.sections[0].interpolate = true;
+  const fallback = foldUpstreamSafePrompt(b);
+  assert.equal(fallback.sections[0].name, "dsh-purge");
+  assert.equal(fallback.sections[1].text, "working in {{cwd}}");
+  assert.equal(fallback.sections[1].interpolate, true);
+  assert.equal(upstreamSafeAssemblyProbe(fallback).assemblyMode, "native-section");
+  assert.equal(upstreamSafeAssemblyProbe(fallback).injectHead, true);
+});
+
+test("redteam backup is routed through real Purge assembly once and can return to primary", t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-safe-redteam-"));
+  const old = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  t.after(() => {
+    if (old === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = old;
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+  const session = { id: "fixture-redteam", header: { agentPreset: "redteam", model: "gpt-6" },
+    events: [{ seq: 1, type: "user/message",
+      data: { source: { kind: "user" }, content: [{ type: "text", text: "演练流程总结" }] } }] };
+  const context = { agent: { session } };
+  const assembly = {
+    sections: [
+      { name: "deployment:persona-prefix", text: "Native persona", interpolate: false },
+      { name: "workspace:default", text: "Native workspace" },
+    ],
+    contexts: [{ name: "native-context", text: "Native context" }],
+    tools: [{ name: "native-tool" }],
+    variables: { model: "gpt-6" },
+  };
+  const first = rewriteLiveAssembly({ enabled: true, upstreamSafeBackup: true }, assembly, context);
+  const firstProbe = upstreamSafeAssemblyProbe(first);
+  assert.equal(firstProbe.assemblyMode, "persona-prefix");
+  assert.equal(firstProbe.injectHead, true);
+  assert.ok(firstProbe.assembledBytes > 100);
+  assert.equal(first.sections[0].text.split(BACKUP_BEGIN).length - 1, 1);
+  assert.equal(first.sections.some(x => x.name === "dsh-purge"), false);
+  assert.equal(getLastInjectReport().promptSource, "upstream-safe");
+  assert.equal(getLastInjectReport().stage, "assembled");
+  assert.deepEqual(first.contexts, assembly.contexts);
+  assert.deepEqual(first.tools, assembly.tools);
+
+  const second = rewriteLiveAssembly({ enabled: true, upstreamSafeBackup: true }, first, context);
+  assert.equal(second.sections[0].text.split(BACKUP_BEGIN).length - 1, 1);
+  assert.equal(upstreamSafeAssemblyProbe(second).assembledBytes, firstProbe.assembledBytes);
+  const primary = rewriteLiveAssembly({ enabled: true }, first, context);
+  assert.equal(upstreamSafeAssemblyProbe(primary).assembledBytes, 0);
+  assert.equal(getLastInjectReport().promptEngine, "primary");
+  assert.equal(primary.sections[0].name, "dsh-purge");
+});
