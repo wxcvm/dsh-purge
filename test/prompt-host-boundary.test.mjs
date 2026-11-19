@@ -13,6 +13,7 @@ test("native Cordis host fixture reaches prompt assembly without implying provid
   const req = createRequire(path.join(process.env.DSH_COMPAT_HOST_ROOT, "package.json"));
   const { Context } = await import(pathToFileURL(req.resolve("@deepseek-ai/cordis")).href);
   const { renderPrompt } = await import(pathToFileURL(req.resolve("@deepseek-ai/dsh-system-prompt")).href);
+  const { createSystemMessage } = await import(pathToFileURL(req.resolve("@deepseek-ai/dsh-llm")).href);
   const ctx = new Context();
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-host-boundary-"));
   const prev = process.env.DSH_HOME;
@@ -40,6 +41,12 @@ test("native Cordis host fixture reaches prompt assembly without implying provid
   assert.ok(rendered.startsWith(purgeSection.text), "plugin section must render first");
   assert.match(rendered, /native context/);
   assert.equal(rendered.split(purgeSection.text).length - 1, 1, "prompt must render exactly once");
+  // Construct the actual provider-neutral LLM message type used by Harness.
+  // This verifies the generated content block but does not invoke an adapter or network.
+  const modelMessage = createSystemMessage(rendered);
+  assert.equal(modelMessage.role, "system");
+  assert.equal(modelMessage.content[0]?.type, "text");
+  assert.equal(modelMessage.content[0]?.text, rendered);
   const report = getLastInjectReport();
   assert.equal(report.stage, "assembled");
   assert.equal(report.delivery, "unverified");
