@@ -61,6 +61,6 @@ test("连续 IPv4 URL 都归为 IP，不受全局正则 lastIndex 影响", () =>
 });
 
 test("混合 IPv4 URL 与域名 URL 仍正确分类", () => {
-  const r = scrubTargets("攻击 https://192.0.2.7/a、https://example.org/x 和 https://198.51.100.9/b");
-  assert.equal(r.text, "攻击 [TARGET_IP]、[DOMAIN] 和 [TARGET_IP]");
+  const r = scrubTargets("攻击 https://192.0.2.7/a，https://example.org/x 和 https://198.51.100.9/b");
+  assert.equal(r.text, "攻击 [TARGET_IP]，[DOMAIN] 和 [TARGET_IP]");
 });
