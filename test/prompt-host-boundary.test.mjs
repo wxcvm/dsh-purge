@@ -6,6 +6,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
+import { installAssembleGuard } from "../lib/identity.js";
 
 test("native Cordis host fixture reaches prompt assembly without implying provider delivery", {
   skip: !process.env.DSH_COMPAT_HOST_ROOT && "requires pinned official host fixture",
@@ -58,4 +59,50 @@ test("native Cordis host fixture reaches prompt assembly without implying provid
   assert.equal(renderPrompt(noMatch), renderPrompt(input));
   assert.equal(getLastInjectReport().stage, "no-candidate");
   // Cordis event dispatch + official renderPrompt passed; no provider transport was invoked.
+});
+
+test("official complete section overrides waterfall but final assemble guard restores the requested plugin section", {
+  skip: !process.env.DSH_COMPAT_HOST_ROOT && "requires pinned official host fixture",
+}, async t => {
+  const req = createRequire(path.join(process.env.DSH_COMPAT_HOST_ROOT, "package.json"));
+  const { Context } = await import(pathToFileURL(req.resolve("@deepseek-ai/cordis")).href);
+  const { default: SystemPrompt, renderPrompt } = await import(
+    pathToFileURL(req.resolve("@deepseek-ai/dsh-system-prompt")).href
+  );
+  const ctx = new Context();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-complete-boundary-"));
+  const oldHome = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  t.after(async () => {
+    if (oldHome === undefined) delete process.env.DSH_HOME;
+    else process.env.DSH_HOME = oldHome;
+    fs.rmSync(home, { recursive: true, force: true });
+    await ctx.fiber.dispose();
+  });
+  await ctx.plugin(SystemPrompt, { includeHarnessIdentity: false, includeRuntimeContext: false });
+  ctx.systemPrompt.section({ name: "host:complete", text: "HOST_COMPLETE_ONLY", order: 0, complete: true });
+  const session = {
+    id: "complete-fixture",
+    header: { agentPreset: "standard", model: "gpt-6", provider: "fixture" },
+    events: [{ seq: 1, type: "user/message",
+      data: { source: { kind: "user" }, content: [{ type: "text", text: "你好" }] } }],
+  };
+  const assembleContext = { agent: { session }, modelSelection: { model: "gpt-6", provider: "fixture" } };
+  const config = { enabled: true, bundledDefault: true };
+  ctx.on("system-prompt/assemble", async (assembly, context, next) =>
+    rewriteLiveAssembly(config, await next(), context));
+  // The official service restores a complete section *after* the waterfall.
+  const unguarded = await ctx.systemPrompt.assemble(assembleContext);
+  assert.deepEqual(unguarded.sections.map(s => s.name), ["host:complete"]);
+  assert.equal(renderPrompt(unguarded), "HOST_COMPLETE_ONLY");
+
+  const dispose = installAssembleGuard(ctx.systemPrompt, (assembly, context) =>
+    rewriteLiveAssembly(config, assembly, context));
+  assert.equal(typeof dispose, "function", "the official host must permit final-result guarding");
+  const guarded = await ctx.systemPrompt.assemble(assembleContext);
+  assert.equal(guarded.sections[0]?.name, "dsh-purge");
+  assert.match(renderPrompt(guarded), /HOST_COMPLETE_ONLY/);
+  assert.equal(renderPrompt(guarded).split(guarded.sections[0].text).length - 1, 1);
+  assert.equal(getLastInjectReport().delivery, "unverified",
+    "an official assembled result still is not proof of an LLM request or HTTP dispatch");
 });
