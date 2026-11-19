@@ -34,6 +34,16 @@
 - 可按需执行 `node scripts/install-community-skills.mjs` 安装两个 Yaklang 包；使用 `--source hack-skills` 或 `--source yak-skills` 单独安装，使用 `--update` 更新；`--home` 指定对应 DSH profile 主目录。脚本不在启动、postinstall 或更新宿主时自动执行。
 - 源目录下的其他代码和 examples **不会被 Purge 作为命令执行**；所有文件内容由用户主动调用技能读取工具时作为参考返回。
 
+## 第一批后续闭环（2026-11-19，PR #368）
+
+- 增加 `lib/redteam/community-skills-manager.js`，让 CLI 与宿主操作共用一套按需 Git sparse checkout 逻辑，不在插件启动时安装。宿主桥接支持 `communitySkillStatus/Install/Update/Remove`，管理两个明确来源。
+- 现有「技能库」面板增加 Yaklang 社区包安装、更新、二次确认卸载、来源过滤、每包已读取数量/失败状态；`client.js` 同步生成，不只改了开发源文件。
+- 社区包使用独立名称 `community/<pack>/<id>`，可从面板打开正文；未被原生技能注册时依然明确显示「未列入宿主/待确认」，不伪装成 DSH 原生已注册。
+- 统一知识检索的社区技能条目返回 `community_source` 与固定上游仓库 URL，详情复用已有只读 `knowledgeUnifiedGet`。
+- CLI: `node scripts/install-community-skills.mjs [--source hack-skills|yak-skills|all] [--home DSH_HOME] [--update|--remove]`。仅删除明确来源的 Git 检出，不覆盖或删掉其他目录。
+- 上游 Git tree 检查确认：`yaklang/hack-skills@6fbf0bc8` 恰有 103 份 `SKILL.md`；`yaklang/yak-skills@071464c0` 恰有 12 份。示例文档不作为独立技能。
+- 本批修复仍需最新 Windows/Linux CI 及真实 Windows DSH Desktop 安装/更新/卸载/搜索/读取验收。**不把已提交或早前的绿色 CI 说成实机完成。**
+
 ## 后续批次（与现有 Issues 对接）
 
 1. **知识覆盖**（#344）：检查 AboutSecurity、Yaklang、Community、Fujiang 与 ARTEX 来源间的重合；按缺口扩充防御配置、证据分析、兼容排障和工具使用条目，保留独立来源及版本。
