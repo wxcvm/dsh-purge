@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { communitySkillsDir } from '../lib/redteam/skill-catalog.js'
 import {
-  communitySkillStatus, startCommunitySkillPack, installCommunitySkillPack,
+  communitySkillStatus, startCommunitySkillPack, installCommunitySkillPack, removeCommunitySkillPack,
 } from '../lib/redteam/community-skills-manager.js'
 import { handleCommunitySkillOp } from '../lib/redteam/ui.js'
 
@@ -85,4 +85,41 @@ test('panel operations expose explicit status and reject invalid install', t => 
   assert.equal(handleCommunitySkillOp({ op: 'communitySkillStatus' }).packs.length, 2)
   assert.equal(handleCommunitySkillOp({ op: 'communitySkillInstall', pack: '../../elsewhere' }).ok, false)
   assert.equal(handleCommunitySkillOp({ op: 'notACommunitySkillOp' }), undefined)
+})
+
+test('uninstall removes only selected Git checkout, leaves other packs and user folder untouched', t => {
+  const home = fixture(t)
+  const root = communitySkillsDir(home)
+  const hack = join(root, 'hack-skills'), yak = join(root, 'yak-skills')
+  mkdirSync(join(hack, '.git'), { recursive: true })
+  mkdirSync(join(yak, '.git'), { recursive: true })
+  putSkill(hack)
+  putSkill(yak)
+  const removed = removeCommunitySkillPack({ home, pack: 'hack-skills' })
+  assert.equal(removed.ok, true)
+  assert.equal(removed.removed, true)
+  assert.equal(existsSync(hack), false)
+  assert.equal(existsSync(yak), true)
+  const invalid = removeCommunitySkillPack({ home, pack: '../elsewhere' })
+  assert.equal(invalid.ok, false)
+  const custom = join(root, 'hack-skills')
+  mkdirSync(custom, { recursive: true })
+  writeFileSync(join(custom, 'user-notes.md'), 'keep me')
+  const protectedResult = removeCommunitySkillPack({ home, pack: 'hack-skills' })
+  assert.equal(protectedResult.ok, false)
+  assert.equal(existsSync(join(custom, 'user-notes.md')), true)
+})
+
+test('panel removal requires explicit confirmation', t => {
+  const home = fixture(t)
+  const old = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  t.after(() => { if (old === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = old })
+  const target = join(communitySkillsDir(home), 'yak-skills')
+  mkdirSync(join(target, '.git'), { recursive: true })
+  putSkill(target)
+  assert.equal(handleCommunitySkillOp({ op: 'communitySkillRemove', pack: 'yak-skills' }).ok, false)
+  assert.equal(existsSync(target), true)
+  assert.equal(handleCommunitySkillOp({ op: 'communitySkillRemove', pack: 'yak-skills', confirm: true }).removed, true)
+  assert.equal(existsSync(target), false)
 })
