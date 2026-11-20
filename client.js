@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "eb26b12315ca6df3";
+		const CLIENT_BUILD_ID = "035db9c79b72dc2f";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -15093,6 +15093,45 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			return page === "clean" ? h(SettingsRoot, { t, workspace: true }) : h(__dshPurgeDrill.Panel, { embedded: true });
 		}
 		// Saved display settings only; temporary session masking has its own marker.
+		function installPurgeCaptionPalette(doc, Observer) {
+			const body = doc.body;
+			const root = doc.documentElement;
+			if (!body || !root) return;
+			const style = body.style;
+			const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
+			const previous = new Map();
+			const restore = () => {
+				for (const [name, saved] of previous) {
+					// A host change not yet observed belongs to the host, not Purge.
+					if (style.getPropertyValue(name).trim() !== saved.color || style.getPropertyPriority(name)) continue;
+					if (saved.value) style.setProperty(name, saved.value, saved.priority);
+					else style.removeProperty(name);
+				}
+				previous.clear();
+			};
+			const sync = () => {
+				if (!root.hasAttribute("data-windows-titlebar")) {
+					restore();
+					return;
+				}
+				for (const [name, color] of palette) {
+					const value = style.getPropertyValue(name);
+					if (value.trim() === color) continue;
+					previous.set(name, { color, value, priority: style.getPropertyPriority(name) });
+					style.setProperty(name, color);
+				}
+			};
+			// Only the two native caption inputs are changed; unrelated body
+			// style mutations do not cause a write or a repaint loop.
+			const observer = new Observer(sync);
+			observer.observe(root, { attributes: true, attributeFilter: ["data-windows-titlebar"] });
+			observer.observe(body, { attributes: true, attributeFilter: ["style"] });
+			sync();
+			return () => {
+				observer.disconnect();
+				restore();
+			};
+		}
 		function workspacePrivacySummary(status) {
 			if (status?.ok !== true || typeof status.maskHistory !== "boolean" || typeof status.maskAssetResults !== "boolean") {
 				return { label: "隐私 · 未知", detail: "未取得已保存的展示保护状态" };
@@ -15129,24 +15168,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				return () => { live = false; document.removeEventListener("dsh-purge-privacy-saved", refresh); };
 			}, [page, workspaceVisible]);
 			const privacySummary = workspacePrivacySummary(privacyStatus);
-			// Desktop's Windows preload observes body.style and re-colors Electron's
-			// native caption overlay from these two palette tokens.
+			// Follow native Windows caption availability even when the host mounts it late.
+			// Restore only the palette values that Purge itself still owns.
 			useEffect(() => {
-				if (!workspaceVisible || !document.body || !document.documentElement.hasAttribute("data-windows-titlebar")) return;
-				const style = document.body.style;
-				const palette = [["--dsw-specific-sidebar-fill", "#101c2d"], ["--dsw-alias-label-primary", "#e5eefb"]];
-				const previous = palette.map(([name, color]) => ({
-					name, color, value: style.getPropertyValue(name), priority: style.getPropertyPriority(name),
-				}));
-				for (const { name, color } of previous) style.setProperty(name, color);
-				return () => {
-					for (const { name, color, value, priority } of previous) {
-						// Don't overwrite a newer host theme written while Purge was open.
-						if (style.getPropertyValue(name).trim() !== color) continue;
-						if (value) style.setProperty(name, value, priority);
-						else style.removeProperty(name);
-					}
-				};
+				if (!workspaceVisible || typeof MutationObserver !== "function") return;
+				return installPurgeCaptionPalette(document, MutationObserver);
 			}, [workspaceVisible]);
 			const workspaceRef = useRef(null);
 			const [immersive, setImmersive] = useState(false);
