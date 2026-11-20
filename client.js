@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "0f239cb2f95db71e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4037,19 +4037,24 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		function detectHostTheme() {
+			let schemes = [];
 			try {
 				if (typeof document !== "undefined") {
 					const root = document.documentElement;
 					if (document.body?.hasAttribute("data-ds-dark-theme") || root?.hasAttribute("data-ds-dark-theme")) return "dusk";
-					const scheme = (root.style.colorScheme || getComputedStyle(root).colorScheme || getComputedStyle(root).getPropertyValue("color-scheme") || "").toLowerCase();
-					if (scheme.includes("dark")) return "dusk";
-					if (scheme.includes("light")) return "white";
+					const inline = root?.style?.colorScheme;
+					const style = !inline && root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+					schemes = (inline || style?.colorScheme || style?.getPropertyValue?.("color-scheme") || "")
+						.toLowerCase().split(/\s+/).filter((scheme) => scheme === "light" || scheme === "dark");
+					const dark = schemes.includes("dark");
+					if (dark !== schemes.includes("light")) return dark ? "dusk" : "white";
 				}
-				if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-					return "dusk";
-				}
-			} catch { /* ignore */ }
-			return "white";
+			} catch { /* Some host views restrict computed style; try the media preference. */ }
+			try {
+				const matches = typeof window === "undefined" ? undefined : window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+				if (typeof matches === "boolean") return matches ? "dusk" : "white";
+			} catch { /* Fall back to the first scheme advertised by the host. */ }
+			return schemes[0] === "dark" ? "dusk" : "white";
 		}
 
 		function readTheme() {
@@ -15217,6 +15222,83 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					+ "；测绘与 ARTEX 联动展示 " + (status.maskAssetResults ? "遮蔽" : "显示")
 			};
 		}
+		function createWorkspaceFullscreen(document, showError) {
+			let entering = null;
+			let leaving = null;
+			const owns = (element) => !!element && document.fullscreenElement === element;
+			const leave = (element, silent = false) => {
+				if (leaving?.element === element) {
+					if (silent) leaving.silent = true;
+					return;
+				}
+				if (!owns(element) || typeof document.exitFullscreen !== "function") return;
+				const attempt = { element, silent };
+				leaving = attempt;
+				const settle = (failed) => {
+					if (leaving !== attempt) return;
+					leaving = null;
+					if (failed && !attempt.silent) showError("退出全屏失败，可以使用 Esc");
+				};
+				try {
+					Promise.resolve(document.exitFullscreen()).then(() => settle(false), () => settle(true));
+				} catch { settle(true); }
+			};
+			return {
+				owns,
+				toggle(element) {
+					if (!element || entering || leaving) return;
+					showError("");
+					if (owns(element)) return leave(element);
+					if (document.fullscreenElement) {
+						showError("请先退出其他内容的全屏");
+						return;
+					}
+					if (typeof element.requestFullscreen !== "function") {
+						showError("当前宿主不支持此全屏方式，可试试 F11");
+						return;
+					}
+					const attempt = { element, cancelled: false };
+					entering = attempt;
+					const settle = (error) => {
+						entering = null;
+						if (attempt.cancelled) {
+							// A request may succeed after the user already left.
+							// Never exit another component's fullscreen session.
+							if (!error) leave(element, true);
+						} else if (error) {
+							showError(error);
+						}
+					};
+					try {
+						// Keep the native request inside the button's user gesture.
+						Promise.resolve(element.requestFullscreen()).then(
+							() => settle(""),
+							() => settle("宿主不允许全屏，可试试 F11 或最大化 DSH 窗口")
+						);
+					} catch { settle("全屏切换被宿主拒绝，可试试 F11"); }
+				},
+				release(element) {
+					if (entering?.element === element) entering.cancelled = true;
+					leave(element, true);
+				},
+			};
+		}
+		const WORKSPACE_TABS = ["clean", "drill"];
+		function handleWorkspaceTabKey(event, key, open) {
+			if (event.altKey || event.ctrlKey || event.metaKey) return;
+			const index = WORKSPACE_TABS.indexOf(key);
+			const size = WORKSPACE_TABS.length;
+			let next;
+			if (event.key === "ArrowRight") next = (index + 1) % size;
+			else if (event.key === "ArrowLeft") next = (index + size - 1) % size;
+			else if (event.key === "Home") next = 0;
+			else if (event.key === "End") next = size - 1;
+			else return;
+			event.preventDefault();
+			const target = WORKSPACE_TABS[next];
+			event.currentTarget.parentElement?.querySelector('[data-workspace-tab="' + target + '"]')?.focus();
+			open(target);
+		}
 		function PurgeWorkspacePage() {
 			const t = useT();
 			useLayoutEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
@@ -15252,36 +15334,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			const [immersive, setImmersive] = useState(false);
 			const [fullscreenError, setFullscreenError] = useState("");
 			const [navigationError, setNavigationError] = useState("");
-			useEffect(() => {
+			const fullscreenRef = useRef(null);
+			if (!fullscreenRef.current) fullscreenRef.current = createWorkspaceFullscreen(document, setFullscreenError);
+			const fullscreen = fullscreenRef.current;
+			useLayoutEffect(() => {
+				if (!workspaceVisible) return;
+				const element = workspaceRef.current;
 				const onChange = () => {
-					setImmersive(document.fullscreenElement === workspaceRef.current);
+					setImmersive(fullscreen.owns(element));
 					setFullscreenError("");
 				};
+				onChange();
 				document.addEventListener("fullscreenchange", onChange);
-				return () => document.removeEventListener("fullscreenchange", onChange);
-			}, []);
-			const toggleImmersive = () => {
-				const el = workspaceRef.current;
-				if (!el) return;
-				setFullscreenError("");
-				try {
-					if (document.fullscreenElement === el) {
-						const result = document.exitFullscreen();
-						if (result && typeof result.catch === "function") {
-							result.catch(() => setFullscreenError("退出全屏失败，可以使用 Esc"));
-						}
-					} else if (typeof el.requestFullscreen === "function") {
-						const result = el.requestFullscreen();
-						if (result && typeof result.catch === "function") {
-							result.catch(() => setFullscreenError("宿主不允许全屏，可试试 F11 或最大化 DSH 窗口"));
-						}
-					} else {
-						setFullscreenError("当前宿主不支持此全屏方式，可试试 F11");
-					}
-				} catch {
-					setFullscreenError("全屏切换被宿主拒绝，可试试 F11");
-				}
-			};
+				return () => {
+					document.removeEventListener("fullscreenchange", onChange);
+					fullscreen.release(element);
+				};
+			}, [workspaceVisible, fullscreen]);
+			const toggleImmersive = () => fullscreen.toggle(workspaceRef.current);
 			useEffect(() => {
 				const fn = (next) => { setPage(next); setWorkspaceVisible(true); setNavigationError(""); };
 				purgeWorkspaceBus.listeners.add(fn);
@@ -15294,18 +15364,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}, [page]);
 			const open = (next) => selectPurgeWorkspacePage(next);
 			const back = () => {
-				// Leave the browser's fullscreen top layer before returning to the host.
-				if (document.fullscreenElement === workspaceRef.current && typeof document.exitFullscreen === "function") {
-					try {
-						const result = document.exitFullscreen();
-						if (result && typeof result.catch === "function") result.catch(() => {});
-					} catch { /* The host may already have exited fullscreen. */ }
-				}
 				// Do not blank the workspace if the host refuses the navigation.
 				if (!selectPurgeHostPanel(null)) {
 					setNavigationError("暂时无法返回会话，请重试。");
 					return;
 				}
+				fullscreen.release(workspaceRef.current);
 				setNavigationError("");
 				__dshPurgeDrill.setTemporaryPrivacy(null);
 				setWorkspaceVisible(false);
@@ -15322,9 +15386,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				h("header", { className: "dshp-workspace-nav" },
 					h("strong", null, "Purge"),
 					h("nav", { className: "dshp-workspace-tabs", role: "tablist", "aria-label": "Purge 工作区" },
-						["clean", "drill"].map((key) => h("button", {
+						WORKSPACE_TABS.map((key) => h("button", {
 							type: "button", key, role: "tab",
+							id: "dshp-workspace-tab-" + key,
+							"data-workspace-tab": key,
 							"aria-selected": String(page === key),
+							"aria-controls": "dshp-workspace-panel-" + key,
+							tabIndex: page === key ? 0 : -1,
+							onKeyDown: (event) => handleWorkspaceTabKey(event, key, open),
 							onClick: () => open(key),
 						}, key === "clean" ? "清洗台" : "作战台"))),
 					h("button", { type: "button", className: "dshp-workspace-privacy",
@@ -15337,8 +15406,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 						onClick: toggleImmersive }, immersive ? "退出系统全屏" : "系统全屏"),
 					fullscreenError || navigationError ? h("span", { className: "dshp-workspace-fullscreen-error",
 						role: "status" }, navigationError || fullscreenError) : null),
-				h("div", { className: "dshp-dock-body" },
-					h(PurgeWorkspaceBoundary, { key: page }, h(PurgeWorkspaceContent, { page, t }))));
+				WORKSPACE_TABS.map((key) => h("div", {
+					className: "dshp-dock-body", key, role: "tabpanel",
+					id: "dshp-workspace-panel-" + key,
+					"aria-labelledby": "dshp-workspace-tab-" + key,
+					hidden: page !== key,
+					style: page === key ? undefined : { display: "none" },
+				}, page === key ? h(PurgeWorkspaceBoundary, { key: page }, h(PurgeWorkspaceContent, { page, t })) : null)));
 			// Portal escapes the Harness main-panel layout and its sidebar/clipping container.
 			// Keep the same React state and host API; no separate browser window.
 			try {

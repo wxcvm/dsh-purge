@@ -27,7 +27,7 @@ test("workspace styles are installed before paint and back releases fullscreen",
   assert.match(source, /useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/);
   const back = source.match(/const back = \(\) => \{([\s\S]*?)\n\t\t\t\};\n\t\t\tif \(!workspaceVisible\)/);
   assert.ok(back, "workspace back handler must exist");
-  assert.match(back[1], /document\.exitFullscreen\(\)[\s\S]*selectPurgeHostPanel\(null\)[\s\S]*setWorkspaceVisible\(false\)/);
+  assert.match(back[1], /selectPurgeHostPanel\(null\)[\s\S]*fullscreen\.release\(workspaceRef\.current\)[\s\S]*setWorkspaceVisible\(false\)/);
 });
 
 test("host layout failures fall back to the Dock instead of escaping", () => {
@@ -36,7 +36,7 @@ test("host layout failures fall back to the Dock instead of escaping", () => {
 });
 
 test("failed host navigation keeps the workspace visible", () => {
-  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*setNavigationError\(""\);\s*__dshPurgeDrill\.setTemporaryPrivacy\(null\);\s*setWorkspaceVisible\(false\)/);
+  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*fullscreen\.release\(workspaceRef\.current\);\s*setNavigationError\(""\);\s*__dshPurgeDrill\.setTemporaryPrivacy\(null\);\s*setWorkspaceVisible\(false\)/);
 });
 
 test("a page render failure leaves navigation available and supports retry", () => {
