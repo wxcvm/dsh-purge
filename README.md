@@ -11,6 +11,7 @@
 <p align="center">
   <a href="docs/RELEASE_CENTER.zh-CN.md">版本中心</a> &nbsp;·&nbsp;
   <a href="docs/DEVELOPMENT_STATUS.zh-CN.md">开发进度</a> &nbsp;·&nbsp;
+  <a href="docs/CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md">Codex 上游吸收总方案</a> &nbsp;·&nbsp;
   <a href="https://github.com/wxcvm/dsh-purge/actions">构建记录</a> &nbsp;·&nbsp;
   <a href="https://github.com/wxcvm/dsh-purge/pulls">开发审查</a> &nbsp;·&nbsp;
   <a href="https://github.com/wxcvm/dsh-purge/issues">问题追踪</a>
@@ -45,9 +46,13 @@ Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检�
 | [Actions](https://github.com/wxcvm/dsh-purge/actions) | 查看 CI、构建结果及产物 |
 | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | 追踪变更与回归来源 |
 
-**发布原则：** [正式版 `.11`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) 的资产校验与实机验收分开记录，详见[交付台账](docs/DELIVERY_STATUS_11.zh-CN.md)。支持目标以[包元数据](package.json)为准；它不是对 Windows Desktop 或 Web 的实测兼容承诺。
+**发布状态（2026-11-20 核对）：** 最新可见 Release 为 [`.17`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)，而主线在该标签后又合并了多个 PR，**已合并源码不等于 `.17` 包含这些功能**。较早 [`.11`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) 的资产与实机验收另见[历史交付台账](docs/DELIVERY_STATUS_11.zh-CN.md)，不能移用到 `.17`。当前详情见[版本中心](docs/RELEASE_CENTER.zh-CN.md)；支持目标以[包元数据](package.json)为准，不等于 Windows Desktop 或 Web 已通过实机兼容验收。
 
 **私有交付：** 下载通过已授权的 GitHub 会话完成；本地安装与更新只使用可信的对应版本包。不要将 GitHub 访问令牌写入 README、配置文件或安装包。旧的匿名下载与自动更新链路仍需单独完成适配。
+
+## Codex / DSH 任务交接
+
+直接从 [`AGENTS.md`](AGENTS.md) 开始，阅读 [接手版上游吸收的完整计划、原始源码与验收清单](docs/CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md)。相关进度仍写在已有的 [#347 上游追踪](https://github.com/wxcvm/dsh-purge/issues/347) 与 [#351 全项目总台账](https://github.com/wxcvm/dsh-purge/issues/351)，无需创建重复总台账。文档状态、PR/CI、真实 Desktop 验收和 Release 必须分别核查。
 
 ## 03 / 开发导航
 
@@ -87,7 +92,7 @@ npm run test:all
 
 ## 06 / 许可证与来源
 
-本仓库基于 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 维护。原作者：YuJunZhiXue。保留 [Apache License 2.0](LICENSE)、[NOTICE](NOTICE) 与原作者署名。原作者要求不得转售原始构建、衍生项目必须注明来源。私有仓库可见性不撤销既有开源许可，也不改变已有第三方代码的授权义务。
+本仓库沿用 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的历史来源与署名（该原始 GitHub URL 于 2026-11-20 查询返回 404，可能已私有、迁移或下架，并非仍可直接获取源码的保证）。原作者署名：YuJunZhiXue。保留 [Apache License 2.0](LICENSE)、[NOTICE](NOTICE) 与原作者署名。原作者要求不得转售原始构建、衍生项目必须注明来源。私有仓库可见性不撤销既有开源许可，也不改变已有第三方代码的授权义务。
 
 <p align="center">
   <sub>PURGE / WXCVM · PRIVATE DEVELOPMENT</sub>

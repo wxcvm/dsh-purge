@@ -52,3 +52,15 @@ test("CIDR 整体替换成 [TARGET_IP]，不拆成 [TARGET_IP]/24", () => {
   assert.equal(r.text.includes("/24"), false);
   assert.match(r.text, /\[TARGET_IP\]/);
 });
+
+test("连续 IPv4 URL 都归为 IP，不受全局正则 lastIndex 影响", () => {
+  const r = scrubTargets("攻击 http://192.0.2.7/admin 和 http://198.51.100.9/test");
+  assert.equal(r.text, "攻击 [TARGET_IP] 和 [TARGET_IP]");
+  assert.equal(r.replaced.length, 2);
+  assert.ok(r.replaced.every(item => item.kind === "url"));
+});
+
+test("混合 IPv4 URL 与域名 URL 仍正确分类", () => {
+  const r = scrubTargets("攻击 https://192.0.2.7/a，https://example.org/x 和 https://198.51.100.9/b");
+  assert.equal(r.text, "攻击 [TARGET_IP]，[DOMAIN] 和 [TARGET_IP]");
+});

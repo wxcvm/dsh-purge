@@ -6,6 +6,8 @@
  *
  * 用法：
  *   node scripts/import-armory.mjs [--repo /opt/aboutsecurity/repository] [--check]
+ *   node scripts/import-armory.mjs --pocs links.csv [--output poc-links.json] [--check]
+ *   --pocs only indexes local links and does not require an AboutSecurity checkout.
  *
  *   （默认）生成：
  *     lib/redteam/cve-catalog/as-vuln-*.json      — Vuln 知识 → CVE 索引条目
@@ -27,12 +29,69 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { withParsedConstraints } from "../lib/redteam/version-affected-parser.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = process.argv.slice(2);
 const checkOnly = args.includes("--check");
 const repoAt = args.indexOf("--repo");
 const repo = path.resolve(repoAt >= 0 ? args[repoAt + 1] : "/opt/aboutsecurity/repository");
+const pocsAt = args.indexOf("--pocs");
+const outputAt = args.indexOf("--output");
+const die = (msg) => { process.stderr.write(`[import-armory] FAIL: \${msg}\n`); process.exit(1); };
+const ok = (cond, msg) => { if (!cond) die(msg); };
+
+// Parse local CSV (including quoted commas and escaped quotes), without
+// fetching or executing any links. Keep this wholly separate from CVE arrays.
+function csvRecords(input) {
+  const records = [];
+  let fields = [], value = "", quoted = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (input[i + 1] === '"') { value += '"'; i++; }
+        else quoted = false;
+      } else value += ch;
+    } else if (ch === '"' && value === "") quoted = true;
+    else if (ch === ",") { fields.push(value.trim()); value = ""; }
+    else if (ch === "\n") {
+      fields.push(value.trim()); value = "";
+      if (fields.some(Boolean)) records.push(fields);
+      fields = [];
+    } else if (ch !== "\r") value += ch;
+  }
+  if (quoted) die("CSV 引号未闭合");
+  fields.push(value.trim());
+  if (fields.some(Boolean)) records.push(fields);
+  return records;
+}
+
+if (pocsAt >= 0) {
+  const csv = args[pocsAt + 1];
+  if (!csv || !fs.existsSync(csv)) die("--pocs 缺少可读取的本地 CSV 文件");
+  const entries = csvRecords(fs.readFileSync(csv, "utf8")).slice(1)
+    .filter(row => /^CVE-\d{4}-\d{4,}$/i.test(row[0] || "") && row[1] && row[2])
+    .map(row => ({ cve: row[0].toUpperCase(), repo: row[1], url: row[2], verified: false }));
+  if (!entries.length) die("本地 CSV 没有可解析的 CVE,Owner/Repo,URL 记录");
+  const output = outputAt >= 0 ? args[outputAt + 1]
+    : path.join(root, "lib", "redteam", "armory", "poc-links.json");
+  if (!output) die("--output 缺少目标文件");
+  const file = path.resolve(output);
+  const body = JSON.stringify({
+    source: "local-csv", note: "第三方 PoC 链接未核实，索引不下载也不执行",
+    count: entries.length, entries,
+  }, null, 1) + "\n";
+  if (checkOnly) {
+    if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== body) die("PoC 链接索引未同步");
+  } else {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, body, "utf8");
+  }
+  process.stdout.write(`[import-armory] pocs: \${entries.length} 条链接\${checkOnly ? " 已核对" : " 已导入"}\n`);
+  process.exit(0);
+}
+
 
 const UPSTREAM = "https://github.com/wgpsec/AboutSecurity";
 const UPSTREAM_COMMIT = (() => {
@@ -45,9 +104,6 @@ const UPSTREAM_COMMIT = (() => {
     } catch { return ""; }
   }
 })();
-
-const die = (msg) => { process.stderr.write(`[import-armory] FAIL: ${msg}\n`); process.exit(1); };
-const ok = (cond, msg) => { if (!cond) die(msg); };
 
 if (!fs.existsSync(path.join(repo, "Vuln"))) die(`Vuln 目录不存在: ${repo}/Vuln（用 --repo 指定 AboutSecurity 仓库）`);
 
@@ -213,7 +269,8 @@ function importVuln(existingCatalog) {
       ...(UPSTREAM_COMMIT ? { source_commit: UPSTREAM_COMMIT } : {}),
     };
     if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push(entry);
+    // Keep unverifiable vendor/version descriptions unknown rather than guessing a match.
+    groups.get(group).push(withParsedConstraints(entry, cves));
   }
   // 每类按 80 条一个文件切（与现有 web-cms-0/-10 命名习惯一致）
   const outputs = [];
