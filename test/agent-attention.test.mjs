@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DDL, RedteamStore, dispatch } from "../lib/redteam/store-core.js";
+import { DDL, DEFAULT_PROMPTS, RedteamStore, dispatch } from "../lib/redteam/store-core.js";
 import { parseAgentAttention } from "../lib/redteam/agent-attention.js";
 import { createReservations, reservedUsage } from "../lib/redteam/agent-reservations.js";
 
@@ -150,4 +150,12 @@ test("needs are scrubbed at the database storage boundary too", () => {
       { kind: "credential", detail: "api_key=[REDACTED_SECRET]" },
     ]);
   } finally { db.close(); }
+});
+
+test("default redteam role handoffs expose the explicit structured report footer", () => {
+  for (const role of ["recon", "assess", "vuln-scan", "exploit", "internal"]) {
+    assert.match(DEFAULT_PROMPTS[role], /redteamReport:/);
+    assert.match(DEFAULT_PROMPTS[role], /blocked_reason/);
+  }
+  assert.match(DEFAULT_PROMPTS.plan, /redteam_attention\(action=list\)/);
 });
