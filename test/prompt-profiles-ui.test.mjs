@@ -264,7 +264,7 @@ test("model selector supports removing picks without deleting manually entered w
   tree = ui.render();
   ui.find(tree, "button", "添加白名单模型 ID deepseek-flash").props.onClick();
   tree = ui.render();
-  assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*\\ndeepseek-flash");
+  assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*\ndeepseek-flash");
   ui.find(tree, "button", "移除模型 ID deepseek-flash").props.onClick();
   tree = ui.render();
   assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*");
