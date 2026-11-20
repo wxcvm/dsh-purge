@@ -16,11 +16,11 @@ const report = (id, fields = {}) => ({
 })
 const queue = (engagement, items, more = {}) => ({ ok: true, engagement, total: items.length, items, ...more })
 
-function mount(engagement, api) {
+function mount(engagement, api, onReceipt) {
   const states = [], refs = []
   let state = 0, ref = 0, effect, dispose, unmountedWrites = 0, unmounted = false
   const ctx = vm.createContext({
-    engagement,
+    engagement, onReceipt,
     api: request => api(structuredClone(request)),
     React: {
       useState(initial) {
@@ -37,7 +37,7 @@ function mount(engagement, api) {
     h: (type, props, ...children) => ({ type, props: props || {}, children }),
   })
   vm.runInContext(client.slice(start, end), ctx)
-  const render = () => { state = ref = 0; return vm.runInContext('AgentReports({engagement})', ctx) }
+  const render = () => { state = ref = 0; return vm.runInContext('AgentReports({engagement,onReceipt})', ctx) }
   render()
   dispose = effect()
   return { render, unmount() { dispose?.(); unmounted = true }, unmountedWrites: () => unmountedWrites }
@@ -67,13 +67,15 @@ test('report pane scopes reads to a selected project; empty is not a completion 
 
 test('an explicit receipt sends exactly one original project and report ID and trusts the refreshed view', async () => {
   const requests = []
+  const receipts = []
   let resolveAck
   const ui = mount('documents', request => {
     requests.push(request)
     if (request.op === 'attention') return Promise.resolve(queue('documents', [report(10), report(11)]))
     return new Promise(resolve => { resolveAck = resolve })
-  })
+  }, response => receipts.push(response.total))
   await setImmediate()
+  assert.deepEqual(receipts, [], 'visiting the pane does not confirm a report')
   assert.match(content(ui), /等待回复.*document-review-10.*请提供附录/)
   const onClick = button(ui, '将回报 #10 标为已阅').props.onClick
   const update = onClick()
@@ -83,6 +85,7 @@ test('an explicit receipt sends exactly one original project and report ID and t
     { op: 'attentionAck', engagement: 'documents', report_id: 10 }])
   resolveAck(queue('documents', [report(11)], { ack: { report_id: 10, acknowledged: true } }))
   await update
+  assert.deepEqual(receipts, [1], 'the manual receipt updates the workspace count')
   assert.ok(!button(ui, '将回报 #10 标为已阅'))
   assert.ok(button(ui, '将回报 #11 标为已阅'))
   assert.match(content(ui), /已标为已阅/)
@@ -108,7 +111,7 @@ test('failed acknowledgement can be retried; a stale receipt does not acknowledg
 
 test('project-keyed pane discards a response after leaving the original project', async () => {
   let resolveAck
-  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng \}\)/)
+  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt \}\)/)
   const first = mount('first', request => request.op === 'attention'
     ? Promise.resolve(queue('first', [report(31)]))
     : new Promise(resolve => { resolveAck = resolve }))

@@ -16,6 +16,7 @@ function fixture(dbs) {
     recordAgentReport: RedteamStore.prototype.recordAgentReport,
     attentionQueue: RedteamStore.prototype.attentionQueue,
     acknowledgeAgentReport: RedteamStore.prototype.acknowledgeAgentReport,
+    consoleDigest: RedteamStore.prototype.consoleDigest,
     activeEngagementId() { return "a"; },
   };
 }
@@ -65,6 +66,44 @@ test("attention is one per latest child and never resurrects older after ack", (
     assert.deepEqual(dispatch(store, { op: "attention", engagement: "a", limit: 1 }).items.map(x => x.id), [third.id]);
     assert.equal(dispatch(store, { op: "attentionAck", engagement: "a", report_id: third.id }).ack.acknowledged, true);
     assert.equal(store.attentionQueue("a").total, 0);
+  } finally { a.close(); b.close(); }
+});
+
+test("opt-in console digest counts only current-project pending reports without returning their details", () => {
+  const a = new DatabaseSync(":memory:"), b = new DatabaseSync(":memory:");
+  const store = fixture({ a, b });
+  const digestOf = (engagement, options) => dispatch(store, { op: "consoleDigest", engagement, ...options });
+  const countOf = engagement => digestOf(engagement, { includeAttention: true }).pendingAgentReports;
+  try {
+    a.exec(DDL); b.exec(DDL);
+    assert.equal(countOf("a"), 0);
+    assert.equal(countOf("b"), 0);
+    const old = store.recordAgentReport("a", report("old-review", "waiting", "document-review"));
+    const newest = store.recordAgentReport("a", report("new-review", "waiting", "document-review",
+      "outline-review", { blocked_reason: "Draft appendix", needs: [{ kind: "other", detail: "Please attach notes" }] }));
+    store.recordAgentReport("a", report("second-review", "progress", "second-document-review"));
+    store.recordAgentReport("b", report("separate-project", "ready", "outline-review"));
+
+    const plain = digestOf("a");
+    assert.deepEqual(Object.keys(plain), ["ok", "engagement", "at", "sections"]);
+    assert.equal(plain.ok, true);
+    assert.equal(plain.engagement, "a");
+    assert.equal(Object.hasOwn(digestOf("a", { includeAttention: "true" }), "pendingAgentReports"), false);
+    const withCount = digestOf("a", { includeAttention: true });
+    assert.deepEqual(Object.keys(withCount), [...Object.keys(plain), "pendingAgentReports"]);
+    assert.deepEqual(withCount.sections, plain.sections);
+    assert.equal(withCount.pendingAgentReports, store.attentionQueue("a").total);
+    assert.equal(withCount.pendingAgentReports, 2);
+    assert.doesNotMatch(JSON.stringify(withCount), /document-review|outline-review|Draft appendix|Please attach notes/);
+
+    assert.equal(dispatch(store, { op: "attentionAck", engagement: "a", report_id: old.id }).ack.acknowledged, false);
+    assert.equal(countOf("a"), 2);
+    assert.equal(dispatch(store, { op: "attentionAck", engagement: "a", report_id: newest.id }).ack.acknowledged, true);
+    assert.equal(countOf("a"), 1, "acknowledging the latest report must not revive the previous one");
+    const [last] = store.attentionQueue("a").items;
+    assert.equal(dispatch(store, { op: "attentionAck", engagement: "a", report_id: last.id }).ack.acknowledged, true);
+    assert.equal(countOf("a"), 0);
+    assert.equal(countOf("b"), 1);
   } finally { a.close(); b.close(); }
 });
 
