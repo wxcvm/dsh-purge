@@ -42,6 +42,11 @@ for (const name of [
   '@deepseek-ai/dsh-sandbox-policy',
   '@deepseek-ai/dsh-user-approval',
   '@deepseek-ai/dsh-jobs',
+  // Runtime peers loaded by the published pwsh/subprocess/shell-env packages.
+  '@deepseek-ai/dsh-subprocess',
+  '@deepseek-ai/dsh-http-proxy',
+  '@deepseek-ai/dsh-home-paths',
+  '@deepseek-ai/dsh-timeout',
 ]) dependencies[name] = version;
 // rc.2+ dsh-llm imports dsh-error at runtime. The fixture deliberately installs
 // with --legacy-peer-deps, so explicitly pin this official peer/module.
