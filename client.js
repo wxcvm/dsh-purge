@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f647902c90aa7223";
+		const CLIENT_BUILD_ID = "211c251a0f3e5793";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -15561,12 +15561,33 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function loadDockGeom() {
 			try {
 				const raw = JSON.parse(window.localStorage.getItem(DOCK_GEOM_KEY) || "null");
-				if (raw && typeof raw === "object") return clampDockGeom(raw);
+				if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
 			} catch { /* ignore */ }
-			return clampDockGeom(defaultDockGeom());
+			return null;
 		}
 		function saveDockGeom(g) {
-			try { window.localStorage.setItem(DOCK_GEOM_KEY, JSON.stringify(clampDockGeom(g))); } catch { /* ignore */ }
+			try { window.localStorage.setItem(DOCK_GEOM_KEY, JSON.stringify(g)); } catch { /* ignore */ }
+		}
+		function useDockGeometry() {
+			const [{ preferred, edited }, setPreference] = useState(() => ({ preferred: loadDockGeom(), edited: false }));
+			const [, renderViewport] = useState(0);
+			const visible = clampDockGeom(preferred || defaultDockGeom());
+			useEffect(() => {
+				const onResize = () => renderViewport((revision) => revision + 1);
+				window.addEventListener("resize", onResize);
+				return () => window.removeEventListener("resize", onResize);
+			}, []);
+			useEffect(() => { if (edited) saveDockGeom(preferred); }, [preferred, edited]);
+			// Browser resize only affects the projection. A drag or resize
+			// gesture persists just the fields the user actually changed.
+			const edit = (patch) => setPreference((previous) => {
+				const base = previous.preferred || defaultDockGeom();
+				const next = clampDockGeom({ ...clampDockGeom(base), ...patch });
+				const updated = { ...base };
+				for (const key of Object.keys(patch)) updated[key] = next[key];
+				return { preferred: updated, edited: true };
+			});
+			return [visible, edit];
 		}
 
 		function WelcomeNotice() {
@@ -16082,7 +16103,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function PurgeDock() {
 			const t = useT();
 			const st = useDock();
-			const [geom, setGeom] = useState(() => loadDockGeom());
+			const [geom, editGeom] = useDockGeometry();
 			const [dockTheme, setDockTheme] = useState(detectHostTheme);
 			useEffect(() => {
 				const sync = () => setDockTheme(detectHostTheme());
@@ -16102,15 +16123,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				return () => { widthTag.remove(); };
 			}, []);
 			useEffect(() => {
-				saveDockGeom(geom);
 				const tag = document.querySelector('style[data-dsh-purge-dock-w="1"]');
 				if (tag) tag.textContent = ":root{--dshp-dock-w:" + geom.w + "px;--dshp-dock-h:" + geom.h + "px}";
-			}, [geom]);
-			useEffect(() => {
-				const onResize = () => setGeom((g) => clampDockGeom(g));
-				window.addEventListener("resize", onResize);
-				return () => window.removeEventListener("resize", onResize);
-			}, []);
+			}, [geom.w, geom.h]);
 			useEffect(() => {
 				if (st.tab === "drill" && readDrillAuth() && __dshPurgeDrill && __dshPurgeDrill.setUI) {
 					try { __dshPurgeDrill.setUI({ open: true }); } catch { /* ignore */ }
@@ -16128,7 +16143,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				const sy = e.clientY;
 				const ox = geom.x;
 				const oy = geom.y;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: ox + (ev.clientX - sx), y: oy + (ev.clientY - sy), w: g.w, h: g.h }));
+				const move = (ev) => editGeom({ x: ox + (ev.clientX - sx), y: oy + (ev.clientY - sy) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
@@ -16144,7 +16159,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				const sy = e.clientY;
 				const ow = geom.w;
 				const oh = geom.h;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: g.x, y: g.y, w: ow + (ev.clientX - sx), h: oh + (ev.clientY - sy) }));
+				const move = (ev) => editGeom({ w: ow + (ev.clientX - sx), h: oh + (ev.clientY - sy) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
@@ -16161,7 +16176,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				const ow = geom.w;
 				const move = (ev) => {
 					const dx = ev.clientX - sx;
-					setGeom((g) => clampDockGeom({ x: ox + dx, y: g.y, w: ow - dx, h: g.h }));
+					editGeom({ x: ox + dx, w: ow - dx });
 				};
 				const up = () => {
 					window.removeEventListener("mousemove", move);
@@ -16176,7 +16191,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				e.stopPropagation();
 				const sx = e.clientX;
 				const ow = geom.w;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: g.x, y: g.y, w: ow + (ev.clientX - sx), h: g.h }));
+				const move = (ev) => editGeom({ w: ow + (ev.clientX - sx) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
@@ -16190,7 +16205,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				e.stopPropagation();
 				const sy = e.clientY;
 				const oh = geom.h;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: g.x, y: g.y, w: g.w, h: oh + (ev.clientY - sy) }));
+				const move = (ev) => editGeom({ h: oh + (ev.clientY - sy) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
