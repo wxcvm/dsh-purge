@@ -23,6 +23,16 @@ const dependencies = {
   '@deepseek-ai/dsh-llm': version,
   '@deepseek-ai/cordis': cordis,
 };
+// P0 request-boundary test mounts the official Agent Loop, session and an inert LLM adapter.
+// These are published host packages, not a live Desktop installation or model connection.
+for (const name of [
+  '@deepseek-ai/dsh-agent',
+  '@deepseek-ai/dsh-agent-loop',
+  '@deepseek-ai/dsh-session',
+  '@deepseek-ai/dsh-session-persistence',
+  '@deepseek-ai/dsh-session-projection',
+  '@deepseek-ai/dsh-tool-executor-native',
+]) dependencies[name] = version;
 // rc.2+ dsh-llm imports dsh-error at runtime. The fixture deliberately installs
 // with --legacy-peer-deps, so explicitly pin this official peer/module.
 if (version === '0.2.2-rc.2' || version === latestHost) {
