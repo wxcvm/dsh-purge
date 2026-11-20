@@ -12,6 +12,7 @@
 - 工具与分片：chunks 为实时分片序号覆盖（最大 index + 1），observedChunks 为实际收到的实时分片数；有缺口时两者可能不同。toolCalls 是实时工具 block-start 计数，durableToolStarts 是匹配持久流中的同类计数（无持久分片为 null）。两者不能相加，也不证明工具已执行。durableTextObserved 仅表示持久流中看到文本，不用于补算首文本延迟。
 - Token：实时与持久流分别保留最近的有效 usage 快照及来源。优先使用有总 Token 的持久最终快照，其次是有总 Token 的实时快照；两者不合并字段。空快照不覆盖已观测数据，缺少字段为 null，缓存计费和总 Token 不混称。
 - Provider / 模型归因：分别标明 request-header、request-context、assistant-event 或 not-observed。部分 context 不会清除同一次请求头中的已知字段；流开始时消费该请求证据，迟到的持久事件仅用其自身来源补充，不借用新请求路由。没有新证据的 attempt 保持未知。
+- 用户原消息：`taskContinuity` 仍只描述会话历史视图。新的 `taskRequestSurface` 在实时流开始时记录关联用户消息序号和它是否属于当时的宿主消息上下文（`present` / `absent` / `unknown`）。压缩后原消息可能仍在历史而不在上下文，摘要仍可能保留它的内容。未观测流开始、找不到关联消息或宿主未提供视图时不回填；这不是 Provider 投递证明。
 - 子智能体生命周期：单独保留最多 200 条近期 run 的启动/结束事件，以直接父会话和 run ID 精确配对。重复事件不重复计数，仅启动、仅结束及乱序单独统计；峰值重叠只计算顺序正确的已配对区间。按会话筛选时仅统计该直接父会话，不推测孙级关系。未观测结束不等于仍在运行，已结束也不等于任务成功；淘汰数是全局窗口的缺失提示。不返回子智能体标识、提示或结果，不改变派活、预约或并发策略。
 - Provider 原始终态：rc.3 没有稳定透传保证，本版为 null；不解析私有 replayState 或错误正文。
 
@@ -38,6 +39,10 @@ GET `/dsh-purge/runtime-observations?sessionId=<id>&limit=50` 复用原路由保
 这是格式示例，不是三组真实实验。firstResponse/repeatedExecutions 必须独立采集，不从重复事件推导。
 review.verdict 可为 not-refused/refused/unknown。误拒统计只使用已人工复核的正常回复，技术故障和取消排除；没有复核时比率为 null。
 不得仅靠关键词、空文本或协议过滤终态判断误拒。上下文诊断只报告重复/冲突事件、工具配对与压缩边界的采集覆盖，不据此宣称丢失。
+
+## 官方宿主夹具回归
+
+CI 默认使用官方 `0.2.2-rc.5` npm 模块，不启动宿主或请求模型。`node scripts/prepare-host-fixture.mjs 0.2.2-rc.3` 可显式选用旧基线；对脚本打印的目录运行 `npm install --prefix <fixture> --registry=https://registry.npmjs.org --ignore-scripts --legacy-peer-deps --prefer-online --omit=optional` 后，设置 `DSH_COMPAT_HOST_ROOT` 为该目录，再运行 `node --test test/runtime-observations-host.test.mjs`。夹具安装或测试通过不表示桌面或 Provider 已验收。
 
 ## 可复现真实采集
 

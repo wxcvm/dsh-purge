@@ -48,8 +48,8 @@ test('native panel source renders abstention and missing delivery evidence indep
 test('runtime cards separate missing evidence, cancellation and observed transport errors', () => {
   const rows = [
     { generation: 1, attemptId: 'pending', settlement: 'pending', firstTextMs: null },
-    { generation: 1, attemptId: 'finished', finishObserved: true, finish: 'stop', hostReason: 'stop', streamEnded: true, reasonSource: 'host-stream', firstTextMs: 0 },
-    { generation: 1, attemptId: 'cancelled', finish: 'aborted', turnOutcome: 'aborted' },
+    { generation: 1, attemptId: 'finished', finishObserved: true, finish: 'stop', hostReason: 'stop', streamEnded: true, reasonSource: 'host-stream', firstTextMs: 0, taskRequestSurface: { status: 'absent' } },
+    { generation: 1, attemptId: 'cancelled', finish: 'aborted', turnOutcome: 'aborted', taskRequestSurface: { status: 'present' } },
     { generation: 1, attemptId: 'lost', settlement: 'unobserved-end', finishObserved: false },
     { generation: 1, attemptId: 'failed', finish: 'error', errorCode: 'ECONNRESET', httpStatus: 503, terminalConflict: true, reasonSource: 'host-stream' },
   ];
@@ -82,6 +82,9 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
   assert.match(body, /结束未观测/);
   assert.match(body, /ECONNRESET/);
   assert.match(body, /503/);
+  assert.match(body, /关联用户原消息不在（摘要仍可能保留其内容）/);
+  assert.match(body, /关联用户原消息仍在/);
+  assert.match(body, /未观测；不代表 Provider 实际收到的内容/);
   assert.match(body, /终态证据冲突/);
   assert.equal(render('attention').cards.length, 2);
   assert.equal(render('running').cards.length, 1);

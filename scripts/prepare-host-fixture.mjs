@@ -4,9 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Single reviewed daily CI baseline; update when the next official host is released.
-const latestHost = '0.2.2-rc.3';
+const latestHost = '0.2.2-rc.5';
 const version = process.argv[2] || latestHost;
-if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2', latestHost].includes(version)) {
+const versionsWithErrorPeer = ['0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', '0.2.2-rc.5'];
+if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', ...versionsWithErrorPeer].includes(version)) {
   throw new Error('Select one of the explicitly reviewed fixture versions.');
 }
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -18,6 +19,7 @@ const cordis = String(metadata.peerDependencies?.['@deepseek-ai/cordis'] || '').
 if (!/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(cordis)) throw new Error('Expected an exact Cordis fixture baseline.');
 const dependencies = {
   '@deepseek-ai/dsh-tools': version,
+  '@deepseek-ai/dsh-session': version,
   '@deepseek-ai/dsh-system-prompt': version,
   '@deepseek-ai/dsh-scope': version,
   '@deepseek-ai/dsh-llm': version,
@@ -25,7 +27,7 @@ const dependencies = {
 };
 // rc.2+ dsh-llm imports dsh-error at runtime. The fixture deliberately installs
 // with --legacy-peer-deps, so explicitly pin this official peer/module.
-if (version === '0.2.2-rc.2' || version === latestHost) {
+if (versionsWithErrorPeer.includes(version)) {
   dependencies['@deepseek-ai/dsh-error'] = version;
 }
 // Legacy tools import sandbox utilities; the 0.2.2 tool provider no longer does.

@@ -48,7 +48,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
       - name: Install isolated fixture dependencies
-        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+        # A persistent runner can have a cached package listing from before an rc was published.
+        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --registry=https://registry.npmjs.org --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-online --omit=optional
       - name: Check generated bundle
         run: node scripts/build-client.mjs --check
       - name: Check syntax
