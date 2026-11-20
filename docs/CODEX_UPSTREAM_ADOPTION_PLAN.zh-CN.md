@@ -6,32 +6,32 @@
 
 ## 0. 开工前实时核对与首轮工作（2026-11-20）
 
-**先读本节，再读第 1–6 节。** 以下为 [master@977358a7](https://github.com/wxcvm/dsh-purge/commit/977358a7cd3ed60284d8294b9d6a6e9424e7d121) 的任务快照；仓库可能继续变化，以当前 GitHub/本地 \`origin/master\`、PR 状态与对应提交 CI 为准。
+**先读本节，再读第 1–6 节。** 以下为 [master@977358a7](https://github.com/wxcvm/dsh-purge/commit/977358a7cd3ed60284d8294b9d6a6e9424e7d121) 的任务快照；仓库可能继续变化，以当前 GitHub/本地 `origin/master`、PR 状态与对应提交 CI 为准。
 
 | 模块 / 原 PR | 2026-11-20 已核对情况 | 不要做的重复工作 / 下一步 |
 | --- | --- | --- |
 | [#382/#383 提示词](https://github.com/wxcvm/dsh-purge/pull/383)、[#384 Team](https://github.com/wxcvm/dsh-purge/pull/384) | 已合并 | 不重建路由/Team；真实 Windows Desktop 和 Provider 仍需独立验收 |
-| [#385 Agent attention](https://github.com/wxcvm/dsh-purge/pull/385) | **已合并**、[Windows/Linux CI 通过](https://github.com/wxcvm/dsh-purge/actions/runs/44646881605)，当前数据表名 \`agent_attention\` | 不重写已合并的回报/ack 后端。剩余是 [#343](https://github.com/wxcvm/dsh-purge/issues/343) 智能体待办 UI、真实 \`subagent/end\` / 用户界面闭环。PR 描述较早写 \`agent_report\`，不是最新代码 |
+| [#385 Agent attention](https://github.com/wxcvm/dsh-purge/pull/385) | **已合并**、[Windows/Linux CI 通过](https://github.com/wxcvm/dsh-purge/actions/runs/44646881605)，当前数据表名 `agent_attention` | 不重写已合并的回报/ack 后端。剩余是 [#343](https://github.com/wxcvm/dsh-purge/issues/343) 智能体待办 UI、真实 `subagent/end` / 用户界面闭环。PR 描述较早写 `agent_report`，不是最新代码 |
 | [#386 LLM 最终请求](https://github.com/wxcvm/dsh-purge/pull/386) | 已合并；测试在隔离官方 Agent Loop 到达**惰性模拟适配器** | 不重造冻结请求测试；仍缺真实网络 Provider 与用户实际 Desktop |
 | [#387 CVE 范围](https://github.com/wxcvm/dsh-purge/pull/387) | 已合并，从开放的 [#378](https://github.com/wxcvm/dsh-purge/pull/378) 选择性吸收 | #378 其他功能逐项对账；**禁止整包合并重复版本区间代码** |
-| [#388 质量采集](https://github.com/wxcvm/dsh-purge/pull/388) | 已合并，从开放的 [#254](https://github.com/wxcvm/dsh-purge/pull/254) 选择性吸收 | #254 仍指向 \`beta\`，不可整包合并旧客户端/旧知识模块；真实模型三组验收未完成 |
-| [#389 沙箱审批](https://github.com/wxcvm/dsh-purge/pull/389)、[#390 Windows PowerShell 工具](https://github.com/wxcvm/dsh-purge/pull/390) | 已合并隔离宿主/Runner 回归 | 不视为用户 Windows Desktop 上 \`sandbox_permissions\` / 空 \`justification\` 的真实问题已解决，见 #355 |
-| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | **开放 Draft，Windows/Linux 检查失败**；\`scripts/prepare-host-fixture.mjs\` 默认仍为 \`0.2.2-rc.3\` | **建议 Codex 的第一项小任务**：最小化复现/解决 rc.5 依赖安装失败（特别核对 \`dsh-error\` 精确可取得的版本），只修改 fixture/测试，保留 rc.3 回归，不改产品默认或发布 |
+| [#388 质量采集](https://github.com/wxcvm/dsh-purge/pull/388) | 已合并，从开放的 [#254](https://github.com/wxcvm/dsh-purge/pull/254) 选择性吸收 | #254 仍指向 `beta`，不可整包合并旧客户端/旧知识模块；真实模型三组验收未完成 |
+| [#389 沙箱审批](https://github.com/wxcvm/dsh-purge/pull/389)、[#390 Windows PowerShell 工具](https://github.com/wxcvm/dsh-purge/pull/390) | 已合并隔离宿主/Runner 回归 | 不视为用户 Windows Desktop 上 `sandbox_permissions` / 空 `justification` 的真实问题已解决，见 #355 |
+| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | **开放 Draft，Windows/Linux 检查失败**；`scripts/prepare-host-fixture.mjs` 默认仍为 `0.2.2-rc.3` | **建议 Codex 的第一项小任务**：最小化复现/解决 rc.5 依赖安装失败（特别核对 `dsh-error` 精确可取得的版本），只修改 fixture/测试，保留 rc.3 回归，不改产品默认或发布 |
 
-**当前交付边界**：最近发布标签是 [\`v1.1.92-wxcvm.17\`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)；\`package.json\` 版本仍为 \`1.1.92-wxcvm.17\`。**后续合并不代表 .17 ZIP 包已更新**。CI 用 Node **24**、依赖 \`node:sqlite\`；不要因 \`engines: >=18\` 而在 Node 18 上误判测试失败。常规使用 \`npm test\` + \`node scripts/build-client.mjs --check\`，\`npm run test:all\` 含 \`test-pending\` 预期未完成检查，并非日常必绿门槛。
+**当前交付边界**：最近发布标签是 [`v1.1.92-wxcvm.17`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)；`package.json` 版本仍为 `1.1.92-wxcvm.17`。**后续合并不代表 .17 ZIP 包已更新**。CI 用 Node **24**、依赖 `node:sqlite`；不要因 `engines: >=18` 而在 Node 18 上误判测试失败。常规使用 `npm test` + `node scripts/build-client.mjs --check`，`npm run test:all` 含 `test-pending` 预期未完成检查，并非日常必绿门槛。
 
 **只读启动命令**（前提是已有授权的仓库克隆，不能在有未提交改动时盲目 reset/clean）：
 
-\`\`\`sh
+```sh
 git status --short --branch
 git fetch origin
 git log -1 --format='%h %s' origin/master
 gh pr list -R wxcvm/dsh-purge --state open
 gh issue view 347 -R wxcvm/dsh-purge
 gh issue view 351 -R wxcvm/dsh-purge
-\`\`\`
+```
 
-若没有 \`gh\`、GitHub 授权或远程工具，先报告访问缺口，继续可执行的本地检查；**不要猜最新 PR 状态**。根目录 \`AGENTS.md\` 存在于 Git 仓库，但不在当前 npm package 的 \`files\` 白名单内；仅拿到发行 ZIP 或安装好的插件，不一定拥有完整交接文档。
+若没有 `gh`、GitHub 授权或远程工具，先报告访问缺口，继续可执行的本地检查；**不要猜最新 PR 状态**。根目录 `AGENTS.md` 存在于 Git 仓库，但不在当前 npm package 的 `files` 白名单内；仅拿到发行 ZIP 或安装好的插件，不一定拥有完整交接文档。
 
 ## 1. 关系与决策（不要混同）
 
