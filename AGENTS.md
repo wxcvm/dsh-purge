@@ -11,7 +11,7 @@
 
 ## 开发时的基线
 
-- **本仓库**：<https://github.com/wxcvm/dsh-purge>；**重点维护上游**：<https://github.com/CallMeGuLab/dsh-purge-safe>，2026-11-20 审查固定提交 `d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec`；**官方宿主**：<https://github.com/deepseek-ai/deepseek-harness>。
+- **本仓库**：<https://github.com/wxcvm/dsh-purge>；**重点维护上游**：<https://github.com/CallMeGuLab/dsh-purge-safe>，2026-11-20 审查固定提交 `cc881fbd68b891772330c6b0d275b0c971794e00`；**官方宿主**：<https://github.com/deepseek-ai/deepseek-harness>。
 - 打开任务前核对**当前** `master`、开放 PR、对应 CI 与 Issue，不要把文档历史快照当作今天的代码或发布状态；也不要重复实现已经合并的功能。
 - 对上游功能执行**来源原文件 → 我方现有实现 → 真实缺口 → 最小充分改动 → 相关测试 → PR/CI → 必要实机验收**的证据链。不要因为名字相似便整包替换 `lib/` 或 `client.js`。
 - 用户希望尽量零新增费用、避免过度设计和不必要的多轮同义核查；只解决证实的根因，复用已有 SQLite、任务/Agent 状态、提示词路由、技能索引和宿主工具服务。
@@ -24,7 +24,7 @@
 - **实时开发状态**：在写代码前查询 [开放 PR](https://github.com/wxcvm/dsh-purge/pulls?q=is%3Apr+is%3Aopen)、[最新 master 提交](https://github.com/wxcvm/dsh-purge/commits/master/) 和对应 CI。历史 #385（Agent attention）、#386（官方 LLM 请求边界）、#387/#388（区间解析/质量采集）、#389/#390（审批/PowerShell 合约）、#391/#392（从 #378 拆出的精确 CVE 历史排序、本地 PoC 链接索引）均已合并；仍需按各项的**真实 Desktop/Provider 证据边界**验收。别把已合并 PR 当成待写代码。
 - 记录原始上游 URL / commit SHA、受影响路径、问题与建议、测试/CI 链接、是否在 Desktop/Provider 验收；不要通过新增重复 Issue 或修改旧公告来掩盖未完成项。
 
-**继续工作请从 [完整执行方案](docs/CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md) 的第 4 节开始。**
+**继续工作请从 [完整执行方案](docs/CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md) 第 0 节确认基线，再按第 7 节的总表认领专题。**
 
 
 ## Codex 启动前的最小操作清单
