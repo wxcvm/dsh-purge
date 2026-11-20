@@ -81,6 +81,7 @@ npm run test:all
 | --- | --- |
 | [清洗台指南](docs/CLEANING_GUIDE.zh-CN.md) | 界面、状态检查、维护和恢复 |
 | [作战台指南](docs/OPERATIONS_GUIDE.zh-CN.md) | 项目记录、证据管理与授权范围 |
+| [真实任务质量验收](docs/CLEAN_EFFECT_VALIDATION.zh-CN.md) | 三组对照、零调用预检、离线评分与断点续测 |
 | [全部项目文档](docs/) | 现有维护指南、技术说明与历史记录 |
 
 ## 05 / 维护约定
