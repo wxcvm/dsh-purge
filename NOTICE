@@ -17,3 +17,9 @@ CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25); the optional persona-prefix adapte
 at lib/upstream-safe-prompt.js is an adaptation of its prompt assembly approach.
 Both are distributed under Apache License, Version 2.0.
 The upstream source and its attribution are retained here.
+
+Native Agent Teams integration
+Source: CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25)
+Source file: lib/redteam/team-mode.js
+Adapted file: lib/redteam/native-team-mode.js
+License: Apache-2.0; retains upstream attribution.
