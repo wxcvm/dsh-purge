@@ -5,7 +5,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DDL, DEFAULT_PROMPTS, RedteamStore, dispatch } from "../lib/redteam/store-core.js";
-import { parseAgentAttention } from "../lib/redteam/agent-attention.js";
+import { parseAgentAttention, captureAgentEndReport } from "../lib/redteam/agent-attention.js";
+import { bindSession } from "../lib/redteam/session-bindings.js";
 import { createReservations, reservedUsage } from "../lib/redteam/agent-reservations.js";
 
 function fixture(dbs) {
@@ -158,4 +159,50 @@ test("default redteam role handoffs expose the explicit structured report footer
     assert.match(DEFAULT_PROMPTS[role], /blocked_reason/);
   }
   assert.match(DEFAULT_PROMPTS.plan, /redteam_attention\(action=list\)/);
+});
+
+test("host end correlates real bound target, writes once, and still releases the original slot", () => {
+  const a = new DatabaseSync(":memory:"), b = new DatabaseSync(":memory:");
+  try {
+    a.exec(DDL); b.exec(DDL);
+    const store = fixture({ a, b });
+    bindSession(store, { agent: { session: { id: "root-a" } } }, "a", { persist: false });
+    const book = createReservations();
+    book.acquire("root-a", "root-a", "handoff", 1, "TASK");
+    book.start({ runId: "run-1", parentSessionId: "root-a", id: "child-1" });
+    const info = { runId: "run-1", parentSessionId: "root-a", id: "child-1",
+      stopReason: "completed", lastAssistantMessage: [{ type: "text",
+        text: 'final response\nredteamReport: {"status":"waiting","needs":[{"kind":"tool","detail":"missing binary"}]}' }] };
+    const first = captureAgentEndReport(store, book, info);
+    assert.equal(first.recorded, true);
+    assert.deepEqual(book.list("root-a"), []);
+    assert.equal(store.attentionQueue("a").awaiting_person, 1);
+    assert.equal(store.attentionQueue("b").total, 0);
+    assert.equal(captureAgentEndReport(store, book, info).recorded, false,
+      "duplicate delivery must not create a second row");
+    assert.equal(store.attentionQueue("a").total, 1);
+
+    const unrelated = { ...info, runId: "foreign-run", parentSessionId: "unknown-root", id: "other" };
+    assert.equal(captureAgentEndReport(store, book, unrelated), null);
+    assert.equal(store.attentionQueue("a").total, 1);
+  } finally { a.close(); b.close(); }
+});
+
+test("no explicit report marker means no derived waiting state, but slots still release", () => {
+  const a = new DatabaseSync(":memory:");
+  try {
+    a.exec(DDL);
+    const store = fixture({ a });
+    bindSession(store, { agent: { session: { id: "root" } } }, "a", { persist: false });
+    const book = createReservations();
+    book.acquire("root", "root", "handoff", 1, "KEY");
+    book.start({ runId: "r", parentSessionId: "root", id: "child" });
+    const result = captureAgentEndReport(store, book, {
+      runId: "r", parentSessionId: "root", id: "child",
+      lastAssistantMessage: [{ type: "text", text: "I might be blocked; no verified result yet." }],
+    });
+    assert.equal(result, null);
+    assert.equal(store.attentionQueue("a").total, 0);
+    assert.deepEqual(book.list("root"), []);
+  } finally { a.close(); }
 });
