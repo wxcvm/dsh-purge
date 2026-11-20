@@ -4,7 +4,17 @@
 
 > 本页为私有仓库的维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前版本快照 · 2026-11-18
+## 当前 Release 查询快照 · 2026-11-20
+
+| 渠道 | 最新可见版本 | 证据与边界 |
+| --- | --- | --- |
+| Latest listed Release | [v1.1.92-wxcvm.17](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17) | GitHub Release 发布于 2026-11-19；此处只确认标签/Release 可见，**不宣称本轮下载了资产或校验了 SHA-256** |
+| 当前 master | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | **已经包含在 .17 发布之后合并的代码**；提交 SHA、CI 与功能实机结果必须另按当前分支核对 |
+| 源码包版本 | [package.json](../package.json) | 当前仍标为 `1.1.92-wxcvm.17`，**不能用这个版本字段推断 .17 已发布包具有最新 master 功能** |
+
+有关上游接手版和 Codex 实施：[根目录 AGENTS.md](../AGENTS.md)、[上游吸收执行方案](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md)。发布前仍须执行当前提交的打包、干净配置、Windows Desktop / Web 安装与恢复检查，不能拿 CI 或 .11 的校验结果替代。
+
+## .11 历史验证快照 · 2026-11-18
 
 | 渠道 | 版本 | 状态 |
 | --- | --- | --- |
