@@ -57,6 +57,38 @@ test('mixed host messages are not silently removed with unrelated global instruc
   assert.equal(result.mixed, 1)
 })
 
+
+test('mixed upstream frame removes only the exact deselected file section', async t => {
+  const { home, cwd, file } = fixture(t)
+  await toggleCwdSelection(home, file, false, cwd)
+  const globalBody = 'GLOBAL still applies'
+  const original = native(['$DSH_HOME/AGENTS.md', 'AGENTS.local.md'])
+  const nativeFrame = '<system-reminder>\\nIntro\\n\\nInstructions from: $DSH_HOME/AGENTS.md\\n\\n'
+    + globalBody + '\\n\\nInstructions from: AGENTS.local.md\\n\\n'
+    + fs.readFileSync(file, 'utf8') + '\\n</system-reminder>'
+  original.content = [{ type: 'text', text: nativeFrame }]
+  const result = filterDeselectedNativeInstructionMessages(home, cwd, [original, user])
+  assert.equal(result.suppressed, 0)
+  assert.equal(result.pruned, 1)
+  assert.equal(result.mixed, 0)
+  assert.equal(result.messages.length, 2)
+  assert.match(result.messages[0].content[0].text, /GLOBAL still applies/)
+  assert.doesNotMatch(result.messages[0].content[0].text, /Native file content/)
+  assert.deepEqual(result.messages[0].source.changes.map(row => row.path), ['$DSH_HOME/AGENTS.md'])
+  assert.equal(result.messages[1], user)
+})
+
+test('stale or altered native frame is retained instead of guessing section boundaries', async t => {
+  const { home, cwd, file } = fixture(t)
+  await toggleCwdSelection(home, file, false, cwd)
+  const message = native(['$DSH_HOME/AGENTS.md', 'AGENTS.local.md'])
+  message.content = [{ type: 'text', text: '<system-reminder>\\nIntro\\n\\nInstructions from: AGENTS.local.md\\n\\nDIFFERENT CONTENT\\n</system-reminder>' }]
+  const result = filterDeselectedNativeInstructionMessages(home, cwd, [message, user])
+  assert.equal(result.pruned, 0)
+  assert.equal(result.mixed, 1)
+  assert.equal(result.messages[0], message)
+})
+
 test('typed source and exact project file identity are required', async t => {
   const { home, cwd, file } = fixture(t)
   await toggleCwdSelection(home, file, false, cwd)
