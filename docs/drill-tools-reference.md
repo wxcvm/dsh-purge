@@ -59,6 +59,17 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - 需要主动探测、漏洞验证、凭据操作、利用、隧道或内网操作的任务不属于此只读批次，仍按既有依赖顺序推进。
 - `child_writes_allowed=false` 表示子智能体不得直接修改事实库；主会话必须核对记录 ID、证据引用和推理依据。
 
+### `redteam_attention`
+【只读回报/显式确认】从**当前靶标的同一份 SQLite 事实库**列出子 Agent 最后一条尚未处理的结构化回报。
+仅当子 Agent 最终消息末尾明确包含 `redteamReport: {"status":"waiting|blocked|ready|progress|failed|dropped", "blocked_reason":"…", "needs":[{"kind":"…","detail":"…"}]}` 时才记录；普通自然语言不推断状态，也不保存完整消息正文。
+
+- `action=list`（默认）：查询 `items`，每项有 `id/session_id/status/blocked_reason/needs/created_at`；`awaiting_person` 统计 `waiting/blocked`。
+- `action=ack` + `report_id`：**精确确认一次**，不会清掉同一子会话随后新增的新回报；确认后旧回报不复活。
+- `engagement`：可选；省略按当前会话的靶标绑定解析；不同靶标之间不混排。
+- `limit`：默认 20，最大 100。
+
+不使用这项回报更改 `redteam_agent_slot` 并发计数或释放正在运行的子 Agent。没有结构化回报时展示 0 项，不声称无人等待或所有任务已完成。只保存经过基本凭据遮蔽与长度裁剪的状态/需求摘要；不要把凭据原文写在需求字段中。
+
 ### `redteam_agent_slot`
 【主会话派活前后用】执行智能体的并发闸门：同一靶标的有效上限由 settings.json / REDTEAM_MAX_AGENTS 控制（默认 3，用户可调整）。action=status 返回有效 max、used 和 free；action=acquire 占一个名额（满了会直接拒绝）；action=release 释放（子智能体结束时服务端也会自动释放）。
 

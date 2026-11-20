@@ -18,6 +18,7 @@
   "redteam_attack_file_add",
   "redteam_attack_file_list",
   "redteam_attack_path",
+  "redteam_attention",
   "redteam_candidate_queue",
   "redteam_chain",
   "redteam_chain_add",

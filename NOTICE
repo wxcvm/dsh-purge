@@ -23,3 +23,9 @@ Source: CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25)
 Source file: lib/redteam/team-mode.js
 Adapted file: lib/redteam/native-team-mode.js
 License: Apache-2.0; retains upstream attribution.
+
+Structured Agent attention / report acknowledgement
+Source: CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25)
+Reference files: lib/redteam/tools.js, store-core.js, schema.js
+Adapted implementation: lib/redteam/agent-attention.js and existing Purge store/tools
+License: Apache-2.0; retain upstream attribution.
