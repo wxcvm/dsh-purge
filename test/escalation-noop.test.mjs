@@ -118,3 +118,57 @@ test("escalation 补丁：已应用到宿主时，降级请求是 no-op、空白
   );
   assert.equal(same, "danger-full-access");
 });
+
+test("escalation 补丁：权限扩大仍必须有审批，拒绝或不可用不能执行", {
+  skip: applied ? false : "宿主还没打上这两条补丁",
+}, async () => {
+  const mod = await import(pathToFileURL(ESC).href);
+  const request = {
+    requestedMode: "workspace-write",
+    effectiveMode: "read-only",
+    justification: "Read a harmless fixture in the isolated workspace",
+    subject: "command",
+  };
+  const approval = {
+    agent: { id: "approval-fixture" },
+    callId: "approval-call",
+    toolName: "pwsh",
+  };
+  await assert.rejects(
+    mod.approveEscalation(request, { ...approval, approver: undefined }),
+    /requires approval/,
+    "没有审批服务时真实扩权不能自动执行",
+  );
+
+  let approvalCalls = 0;
+  const granted = await mod.approveEscalation(request, {
+    ...approval,
+    approver: { async request(value) {
+      approvalCalls++;
+      assert.match(value.reason, /workspace-write/);
+      assert.match(value.reason, /harmless fixture/);
+      return "allowed-once";
+    } },
+  });
+  assert.equal(granted, "workspace-write");
+  assert.equal(approvalCalls, 1, "真实扩权恰好请求一次审批");
+
+  await assert.rejects(
+    mod.approveEscalation(request, {
+      ...approval,
+      approver: { async request() { return "rejected"; } },
+    }),
+    /rejected/,
+    "用户拒绝不得返回已授权模式",
+  );
+  await assert.rejects(
+    mod.approveEscalation({
+      ...request, requestedMode: "read-only", effectiveMode: "workspace-write",
+    }, {
+      ...approval,
+      approver: { async request() { throw new Error("降级不应触发审批"); } },
+    }),
+    /not strictly wider/,
+    "保留当前补丁对非扩大模式的既有拒绝语义",
+  );
+});
