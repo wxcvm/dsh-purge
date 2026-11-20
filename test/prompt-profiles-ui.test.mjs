@@ -33,6 +33,8 @@ function mount() {
       return { ok: true, profiles: structuredClone(profiles),
         routingSettings: structuredClone(routingSettings),
         lastAssembly: { stage: "assembled", delivery: "unverified" },
+        observedTargets: [{ model: "deepseek-flash", provider: "deepseek-account",
+          sessionId: "current-host-session", preset: "standard" }],
         sessionLock: url.includes("sessionId=") ? sessionLock : null };
     },
     promptProfilesApi: async (op, data) => {
@@ -226,3 +228,45 @@ test("advanced rule fields use compact responsive columns instead of full-height
   assert.match(client, /\.dshp-prompt-targets\{display:grid/);
   assert.match(client, /\.dshp-prompt-lists\{display:grid/);
 });
+
+test("advanced targets offer observed local choices and retain manual bulk editing", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  assert.ok(ui.find(tree, "button", "添加白名单模型 ID deepseek-flash"));
+  assert.ok(ui.find(tree, "button", "添加白名单厂商 / Provider ID deepseek-account"));
+  assert.ok(ui.find(tree, "button", "添加白名单对话 Session ID current-host-session"));
+  assert.ok(ui.find(tree, "button", "添加白名单Agent 预设 cordis"));
+  assert.ok(ui.find(tree, "textarea", "白名单模型 ID"), "manual entry remains available");
+  assert.ok(ui.find(tree, "aside", "当前环境与命中预览"), "right-hand environment panel is present");
+
+  ui.find(tree, "button", "添加白名单模型 ID deepseek-flash").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "deepseek-flash");
+  ui.find(tree, "button", "添加白名单厂商 / Provider ID deepseek-account").props.onClick();
+  tree = ui.render();
+  ui.find(tree, "button", "添加白名单对话 Session ID current-host-session").props.onClick();
+  tree = ui.render();
+  ui.find(tree, "button", "添加白名单Agent 预设 cordis").props.onClick();
+  tree = ui.render();
+  ui.find(tree, "button", "保存全局提示词").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(action => action.op === "save");
+  assert.deepEqual(Array.from(saved.data.profile.allowTargets.models), ["deepseek-flash"]);
+  assert.deepEqual(Array.from(saved.data.profile.allowTargets.providers), ["deepseek-account"]);
+  assert.deepEqual(Array.from(saved.data.profile.allowTargets.sessions), ["current-host-session"]);
+  assert.deepEqual(Array.from(saved.data.profile.allowTargets.presets), ["cordis"]);
+});
+
+test("model selector supports removing picks without deleting manually entered wildcard targets", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "白名单模型 ID").props.onChange({ target: { value: "*gpt*" } });
+  tree = ui.render();
+  ui.find(tree, "button", "添加白名单模型 ID deepseek-flash").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*\\ndeepseek-flash");
+  ui.find(tree, "button", "移除模型 ID deepseek-flash").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*");
+});
+
