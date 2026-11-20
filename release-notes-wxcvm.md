@@ -1,3 +1,26 @@
+# 1.1.92-wxcvm.18
+
+## 中文
+
+本次版本将 .17 之后已经整合至主线的改动集中交付。发布范围以对应标签的源码提交为准，不修改 .17 及之前的 Release/标签/资产。
+
+- **提示词与模型兼容**：新增默认关闭、可切换的上游 dsh-purge-safe v2 提示词备用方案，并修复切换后的原生 persona 恢复（#382、#383）；加强官方 Harness rc.5 / rc.3 宿主契约、真实请求冻结边界和 Windows PowerShell 工具运行测试（#376、#386、#390）。测试覆盖宿主组装与工具边界，不等于远端 Provider 已实际接收或模型不再拒答。
+- **拒答与流式观测**：建立带引用归因、尾部判定与真正限制豁免的拒答判定表和基线（#381）；增加受限预算下的空心停止恢复、推理趋势观察、上游适配画像及日志指标。这些用于可观测与受控恢复，不承诺消除模型安全策略。
+- **红队 Agent 协同**：接入官方 Agent Teams 的红队根会话模式；以既有 engagement SQLite 持久化结构化子智能体汇报、关注队列与精确 ID 确认，兼容同名上游表并校验存储内容（#384、#385）。
+- **本地知识、探针与任务质量**：引入保守的 AboutSecurity 受影响版本范围、离线漏洞历史辅助优先级、独立本地 PoC 链接索引（#387、#391、#392）；补充手动探针运行与只读候选清单（#397、#398），不自动执行候选；加入可选的真实任务质量记录及继续能力（#388）。
+- **清洗台 / 工作区 UI**：修正「未执行」进度展示，恢复更有意义的操作进度（#377）；修复工作区原生规则取消勾选后仍进入组装的路径，提供模型、Provider、会话与 Agent 的本地快捷选择，并修整右侧留白（#400）；恢复隐私状态快捷入口（#401）。
+- **维护与发布**：拆分字节等价的补丁定义模块（#394），整合上游跟踪与 Codex 执行指引，新增回归测试。Windows 与 Linux 的主线兼容性 CI 已在提交 d93d7203 上通过；本次发布提交还需独立通过版本变更后的 CI 和发布工作流。
+
+**验收边界 / 已知待办**：Windows Desktop 真机安装、升级/回退与重启加载、实际 Provider HTTP 投递、跨页面配置持久化、作战台完整接口与真实 ARTEX 联动仍未凭本次 CI 全部证实，继续跟踪 #336、#337、#339、#341、#343、#361。请勿将自动化测试、界面勾选或本地目录存在误判为这些实机功能已验收。
+
+## English
+
+Consolidated release of post-.17 master changes: opt-in successor-upstream prompt backup with native persona restoration; rc.5/rc.3 host contract and Windows pwsh tests; refusal decision tables and bounded observation/recovery; official red-team Agent Teams plus durable exact-ID handoff attention; conservative offline CVE version ranges, local PoC link index, review-only probe candidates and optional task-quality capture; improved operation progress, workspace-rule opt-out behavior, local target pickers and privacy navigation. Existing published tags/assets remain unchanged.
+
+The Windows/Linux source and host-contract CI is **not** a substitute for real Windows Desktop installation/update/rollback, Provider HTTP delivery, end-to-end UI persistence or ARTEX acceptance. Those remain tracked in the existing issues.
+
+---
+
 # 1.1.92-wxcvm.17
 
 ## 中文
