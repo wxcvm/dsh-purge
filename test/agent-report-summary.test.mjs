@@ -149,3 +149,24 @@ test('overview and header show counts only, and their buttons navigate without a
   assert.match(client, /h\(AgentReportSummary, \{ total: props\.pendingAgentReports, onOpen: \(\) => goto\('agents'\) \}\)/)
   assert.match(client, /h\(AgentReportReminder, \{ total: pendingAgentReports, onOpen: openReportPage \}\)/)
 })
+
+test('the explicit navigation places keyboard focus in the requested project section only once', () => {
+  const focusAgentReports = vm.runInNewContext(fragment('function focusAgentReports(', 'function AgentReportSummary(') +
+    '; focusAgentReports')
+  const request = { current: null }
+  let focused = 0
+  const node = { focus() { focused++ } }
+  focusAgentReports(node, 'docs', request)
+  assert.equal(focused, 0, 'ordinary navigation does not steal focus')
+  request.current = 'docs'
+  focusAgentReports(null, 'docs', request)
+  focusAgentReports(node, 'other-project', request)
+  assert.deepEqual(request, { current: 'docs' })
+  focusAgentReports(node, 'docs', request)
+  focusAgentReports(node, 'docs', request)
+  assert.equal(focused, 1)
+  assert.deepEqual(request, { current: null })
+  assert.match(client, /'aria-label': '待阅回报', tabIndex: -1, ref: props\.onSectionReady/)
+  assert.match(client, /reportFocus\.current = eng\s+markTabSeen\('agents'\)/)
+  assert.match(client, /onReportSectionReady: \(node\) => focusAgentReports\(node, eng, reportFocus\)/)
+})

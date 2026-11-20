@@ -111,7 +111,7 @@ test('failed acknowledgement can be retried; a stale receipt does not acknowledg
 
 test('project-keyed pane discards a response after leaving the original project', async () => {
   let resolveAck
-  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt \}\)/)
+  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt,\s+onSectionReady: props\.onReportSectionReady \}\)/)
   const first = mount('first', request => request.op === 'attention'
     ? Promise.resolve(queue('first', [report(31)]))
     : new Promise(resolve => { resolveAck = resolve }))
