@@ -161,14 +161,11 @@ test("escalation 补丁：权限扩大仍必须有审批，拒绝或不可用不
     /rejected/,
     "用户拒绝不得返回已授权模式",
   );
-  await assert.rejects(
-    mod.approveEscalation({
-      ...request, requestedMode: "read-only", effectiveMode: "workspace-write",
-    }, {
-      ...approval,
-      approver: { async request() { throw new Error("降级不应触发审批"); } },
-    }),
-    /not strictly wider/,
-    "保留当前补丁对非扩大模式的既有拒绝语义",
-  );
+  const unchanged = await mod.approveEscalation({
+    ...request, requestedMode: "read-only", effectiveMode: "workspace-write",
+  }, {
+    ...approval,
+    approver: { async request() { throw new Error("降级不应触发审批"); } },
+  });
+  assert.equal(unchanged, "workspace-write", "保留 #13 现有的降级 no-op 语义");
 });
