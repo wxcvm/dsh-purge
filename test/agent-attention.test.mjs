@@ -121,3 +121,33 @@ test("unknown or stale report identifiers are never silently acknowledged", () =
     assert.deepEqual(store.attentionQueue("a", { limit: 1 }).items, []);
   } finally { db.close(); }
 });
+
+test("existing upstream agent_report table is untouched and does not collide with our view", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec("CREATE TABLE agent_report (id INTEGER PRIMARY KEY, session_id TEXT, status TEXT, acknowledged_at TEXT)");
+    db.exec("INSERT INTO agent_report(session_id,status) VALUES ('upstream-child','blocked')");
+    db.exec(DDL);
+    const store = fixture({ a: db });
+    const row = store.recordAgentReport("a", report("r1", "ready"));
+    assert.equal(store.attentionQueue("a").items[0].id, row.id);
+    assert.equal(db.prepare("SELECT status FROM agent_report WHERE session_id = 'upstream-child'").get()?.status, "blocked");
+    assert.notEqual(db.prepare("SELECT name FROM sqlite_master WHERE name = 'agent_attention'").get(), undefined);
+  } finally { db.close(); }
+});
+
+test("needs are scrubbed at the database storage boundary too", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(DDL);
+    const store = fixture({ a: db });
+    store.recordAgentReport("a", report("r1", "waiting", "child", "root", {
+      needs: [{ kind: "credential", detail: "api_key=SUPERSECRET" }],
+    }));
+    const stored = db.prepare("SELECT needs FROM agent_attention WHERE run_id = 'r1'").get().needs;
+    assert.doesNotMatch(stored, /SUPERSECRET/);
+    assert.deepEqual(store.attentionQueue("a").items[0].needs, [
+      { kind: "credential", detail: "api_key=[REDACTED_SECRET]" },
+    ]);
+  } finally { db.close(); }
+});
