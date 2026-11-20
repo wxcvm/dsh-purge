@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "3051af98371e2eaf";
+		const CLIENT_BUILD_ID = "0fb58b1c8c32a149";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3417,12 +3417,13 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
                         "当前项目：只有没有匹配的 Purge 提示词时，才尝试使用勾选文件。"),
                     h("p", { className: "dshp-block-hint" },
                         "取消选择会停止 Purge 附加此文件。Harness 原生 agent-instructions 是另一条消息注入路径；",
-                        "本插件只在原生消息完全来自已取消的文件时剔除它，混合其他有效文件时保留并报告，避免误删。",
+                        "本插件会剔除只含已取消文件的原生消息；混合其他文件时，只移除能够与本机文件正文和原生边界精确对账的片段，无法确认的仍保留。",
                         "已进入会话历史的旧消息不会被删除；以新的请求实际消息为准。"),
                     st?.native_instruction_filter ? h("p", { className: "dshp-block-hint", role: "status" },
                         "原生规则最近检查：" + (st.native_instruction_filter.suppressed ?
-                        ("已剔除 " + st.native_instruction_filter.suppressed + " 条独立消息") : "没有可单独剔除的消息") +
-                        (st.native_instruction_filter.mixed ? ("；有 " + st.native_instruction_filter.mixed + " 条混合消息仍保留") : "") +
+                        ("已剔除 " + st.native_instruction_filter.suppressed + " 条独立消息") : "无整条剔除") +
+                        (st.native_instruction_filter.pruned ? ("；精确移除 " + st.native_instruction_filter.pruned + " 个文件片段") : "") +
+                        (st.native_instruction_filter.mixed ? ("；另有 " + st.native_instruction_filter.mixed + " 条混合消息未完全移除") : "") +
                         " · " + st.native_instruction_filter.at) : null,
                     h("div", { className: "dshp-block-head" },
                         h("h4", null, t("cwd.title")),
