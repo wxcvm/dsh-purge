@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "b12b50d344c8620e";
+		const CLIENT_BUILD_ID = "7165eadcbf986a6a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -15272,6 +15272,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		// Use the same native main-panel slots as Armory: navigation stays in the DSH shell.
 		const PURGE_PANEL_ID = "dsh-purge-workspace";
 		let purgeWorkspaceCtx = null;
+		let purgeReportNavigationCtx = null;
 		const purgeWorkspaceBus = { page: "drill", listeners: new Set() };
 		function selectPurgeWorkspacePage(page) {
 			purgeWorkspaceBus.page = page === "clean" ? "clean" : "drill";
@@ -15400,6 +15401,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				}
 			} catch { /* The host may not expose the native view services. */ }
 			return null;
+		}
+		function installPurgeReportNavigation(ctx) {
+			ctx.effect(() => {
+				purgeReportNavigationCtx = ctx;
+				return () => { if (purgeReportNavigationCtx === ctx) purgeReportNavigationCtx = null; };
+			}, "dsh-purge: report session navigation");
 		}
 		function openPurgeReportSession(ctx, sessionId) {
 			const navigation = purgeReportNavigation(ctx);
@@ -15572,9 +15579,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			};
 			if (!workspaceVisible) return null;
 			const maskReportOrigin = temporaryPrivacy?.maskHistory === true || privacyStatus?.ok !== true || privacyStatus.maskHistory !== false;
-			const onOpenReportSession = !maskReportOrigin && purgeReportNavigation(purgeWorkspaceCtx) ?
+			const onOpenReportSession = !maskReportOrigin && purgeReportNavigation(purgeReportNavigationCtx) ?
 				(sessionId) => {
-					const result = openPurgeReportSession(purgeWorkspaceCtx, sessionId);
+					const result = openPurgeReportSession(purgeReportNavigationCtx, sessionId);
 					// The native navigation already reveals the selected conversation.
 					if (result === "opened") leaveWorkspace();
 					return result;
@@ -16852,6 +16859,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
 		function apply(ctx) {
 			purgeWorkspaceCtx = ctx;
+			if (typeof ctx.inject === "function") {
+				ctx.inject(["uiWorkspace", "workspaces", "sessions"], installPurgeReportNavigation);
+			}
 			if (typeof ctx.inject === "function") ctx.inject(["commandUi", "sessions", "remote", "remote.commands"], installTargetBindingPicker);
 			ctx.slots.inject("main", () => ctx.slots.register({
 				name: "main", key: PURGE_PANEL_ID, label: "Purge 工作区",
