@@ -21,7 +21,7 @@
 ## 把结果写回哪里
 
 - **接手版上游/Agent/知识/UI 的源码差异**：优先更新 [#347](https://github.com/wxcvm/dsh-purge/issues/347) 和对应现有模块 Issue；全项目优先级在 [#351](https://github.com/wxcvm/dsh-purge/issues/351)。
-- **实时开发状态**：在写代码前查询 [开放 PR](https://github.com/wxcvm/dsh-purge/pulls?q=is%3Apr+is%3Aopen)、[最新 master 提交](https://github.com/wxcvm/dsh-purge/commits/master/) 和对应 CI。历史 #385（Agent attention）、#386（官方 LLM 请求边界）、#387/#388（区间解析/质量采集）、#389/#390（审批/PowerShell 合约）已合并；仍需按各项的**真实 Desktop/Provider 证据边界**验收。别把已合并 PR 当成待写代码。
+- **实时开发状态**：在写代码前查询 [开放 PR](https://github.com/wxcvm/dsh-purge/pulls?q=is%3Apr+is%3Aopen)、[最新 master 提交](https://github.com/wxcvm/dsh-purge/commits/master/) 和对应 CI。历史 #385（Agent attention）、#386（官方 LLM 请求边界）、#387/#388（区间解析/质量采集）、#389/#390（审批/PowerShell 合约）、#391/#392（从 #378 拆出的精确 CVE 历史排序、本地 PoC 链接索引）均已合并；仍需按各项的**真实 Desktop/Provider 证据边界**验收。别把已合并 PR 当成待写代码。
 - 记录原始上游 URL / commit SHA、受影响路径、问题与建议、测试/CI 链接、是否在 Desktop/Provider 验收；不要通过新增重复 Issue 或修改旧公告来掩盖未完成项。
 
 **继续工作请从 [完整执行方案](docs/CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md) 的第 4 节开始。**
