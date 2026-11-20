@@ -51,9 +51,7 @@ for (const name of [
 // rc.2+ dsh-llm imports dsh-error at runtime. The fixture deliberately installs
 // with --legacy-peer-deps, so explicitly pin this official peer/module.
 if (['0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', latestHost].includes(version)) {
-  // Official dsh-error@0.2.2-rc.5 is not published (CI: npm ETARGET).
-  // Retain the available rc.3 peer for the isolated rc.5 host fixture.
-  dependencies['@deepseek-ai/dsh-error'] = version === latestHost ? '0.2.2-rc.3' : version;
+  dependencies['@deepseek-ai/dsh-error'] = version;
 }
 // Legacy tools import sandbox utilities; the 0.2.2 tool provider no longer does.
 if (metadata.peerDependencies?.['@deepseek-ai/dsh-sandbox']) {

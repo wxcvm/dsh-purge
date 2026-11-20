@@ -15,6 +15,8 @@ concurrency:
 
 jobs:
   api-contracts:
+    env:
+      DSH_COMPAT_TOOLS_MODULE: '' # Always load the compiler from the selected fixture.
     strategy:
       fail-fast: false
       matrix:
@@ -48,7 +50,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
       - name: Install isolated fixture dependencies
-        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+        # A self-hosted runner can retain packuments from before the rc was published.
+        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify installed rc.5 packages and peers
+        run: node .github/scripts/check-host-fixture.mjs 0.2.2-rc.5
+      - name: Prepare and install the independent rc.3 regression fixture
+        env:
+          NODE_USE_ENV_PROXY: '1'
+        run: >-
+          node scripts/prepare-host-fixture.mjs 0.2.2-rc.3 &&
+          npm install --prefix "${{ github.workspace }}/.scratch/hosts/0.2.2-rc.3" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify rc.3 pins and run the original host contracts
+        env:
+          DSH_COMPAT_HOST_ROOT: ${{ github.workspace }}/.scratch/hosts/0.2.2-rc.3
+        run: >-
+          node .github/scripts/check-host-fixture.mjs 0.2.2-rc.3 &&
+          node --test test/host-compat.test.mjs test/native-redteam-team-host.test.mjs
+          test/prompt-host-boundary.test.mjs test/prompt-real-request-boundary.test.mjs
+          test/pwsh-real-tool-host.test.mjs test/request-error-hook-host.test.mjs
+          test/runtime-observations-host.test.mjs
       - name: Check generated bundle
         run: node scripts/build-client.mjs --check
       - name: Check syntax
