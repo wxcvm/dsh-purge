@@ -4,9 +4,38 @@
 >
 > **Codex 先读**：仓库根目录 [`AGENTS.md`](../AGENTS.md) → 本文 → [#347 接手版/社区上游追踪](https://github.com/wxcvm/dsh-purge/issues/347) → [#351 全项目总台账](https://github.com/wxcvm/dsh-purge/issues/351)。随后检查最新 `master`、未合并 PR、CI 和目标文件；旧文档中的 commit SHA 和技能数量都是当时的快照，不能替代最新核查。
 
+## 0. 开工前实时核对与首轮工作（2026-11-20）
+
+**先读本节，再读第 1–6 节。** 以下为 [master@977358a7](https://github.com/wxcvm/dsh-purge/commit/977358a7cd3ed60284d8294b9d6a6e9424e7d121) 的任务快照；仓库可能继续变化，以当前 GitHub/本地 \`origin/master\`、PR 状态与对应提交 CI 为准。
+
+| 模块 / 原 PR | 2026-11-20 已核对情况 | 不要做的重复工作 / 下一步 |
+| --- | --- | --- |
+| [#382/#383 提示词](https://github.com/wxcvm/dsh-purge/pull/383)、[#384 Team](https://github.com/wxcvm/dsh-purge/pull/384) | 已合并 | 不重建路由/Team；真实 Windows Desktop 和 Provider 仍需独立验收 |
+| [#385 Agent attention](https://github.com/wxcvm/dsh-purge/pull/385) | **已合并**、[Windows/Linux CI 通过](https://github.com/wxcvm/dsh-purge/actions/runs/44646881605)，当前数据表名 \`agent_attention\` | 不重写已合并的回报/ack 后端。剩余是 [#343](https://github.com/wxcvm/dsh-purge/issues/343) 智能体待办 UI、真实 \`subagent/end\` / 用户界面闭环。PR 描述较早写 \`agent_report\`，不是最新代码 |
+| [#386 LLM 最终请求](https://github.com/wxcvm/dsh-purge/pull/386) | 已合并；测试在隔离官方 Agent Loop 到达**惰性模拟适配器** | 不重造冻结请求测试；仍缺真实网络 Provider 与用户实际 Desktop |
+| [#387 CVE 范围](https://github.com/wxcvm/dsh-purge/pull/387) | 已合并，从开放的 [#378](https://github.com/wxcvm/dsh-purge/pull/378) 选择性吸收 | #378 其他功能逐项对账；**禁止整包合并重复版本区间代码** |
+| [#388 质量采集](https://github.com/wxcvm/dsh-purge/pull/388) | 已合并，从开放的 [#254](https://github.com/wxcvm/dsh-purge/pull/254) 选择性吸收 | #254 仍指向 \`beta\`，不可整包合并旧客户端/旧知识模块；真实模型三组验收未完成 |
+| [#389 沙箱审批](https://github.com/wxcvm/dsh-purge/pull/389)、[#390 Windows PowerShell 工具](https://github.com/wxcvm/dsh-purge/pull/390) | 已合并隔离宿主/Runner 回归 | 不视为用户 Windows Desktop 上 \`sandbox_permissions\` / 空 \`justification\` 的真实问题已解决，见 #355 |
+| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | **开放 Draft，Windows/Linux 检查失败**；\`scripts/prepare-host-fixture.mjs\` 默认仍为 \`0.2.2-rc.3\` | **建议 Codex 的第一项小任务**：最小化复现/解决 rc.5 依赖安装失败（特别核对 \`dsh-error\` 精确可取得的版本），只修改 fixture/测试，保留 rc.3 回归，不改产品默认或发布 |
+
+**当前交付边界**：最近发布标签是 [\`v1.1.92-wxcvm.17\`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)；\`package.json\` 版本仍为 \`1.1.92-wxcvm.17\`。**后续合并不代表 .17 ZIP 包已更新**。CI 用 Node **24**、依赖 \`node:sqlite\`；不要因 \`engines: >=18\` 而在 Node 18 上误判测试失败。常规使用 \`npm test\` + \`node scripts/build-client.mjs --check\`，\`npm run test:all\` 含 \`test-pending\` 预期未完成检查，并非日常必绿门槛。
+
+**只读启动命令**（前提是已有授权的仓库克隆，不能在有未提交改动时盲目 reset/clean）：
+
+\`\`\`sh
+git status --short --branch
+git fetch origin
+git log -1 --format='%h %s' origin/master
+gh pr list -R wxcvm/dsh-purge --state open
+gh issue view 347 -R wxcvm/dsh-purge
+gh issue view 351 -R wxcvm/dsh-purge
+\`\`\`
+
+若没有 \`gh\`、GitHub 授权或远程工具，先报告访问缺口，继续可执行的本地检查；**不要猜最新 PR 状态**。根目录 \`AGENTS.md\` 存在于 Git 仓库，但不在当前 npm package 的 \`files\` 白名单内；仅拿到发行 ZIP 或安装好的插件，不一定拥有完整交接文档。
+
 ## 1. 关系与决策（不要混同）
 
-1. 原始 Purge 项目：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)；本仓库已有其 LICENSE/NOTICE 及历史署名。
+1. 原始 Purge 历史署名：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)；本仓库保留 LICENSE/NOTICE。**2026-11-20 GitHub API 对该历史 URL 返回 404**（可能私有、迁移或下架，不推定其不存在）。不能将此 URL 当作当前可直接拉取的上游；现用可访问的接手版固定 SHA 与我方源码核查。
 2. **指定重点维护上游 / 本轮主要差异来源**：[CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe)；用户已明确选择将它作为未来优先跟踪对象。已审查基线：[`main@d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec)（上游 v2.0.0、文档描述目标 DSH 0.2.2-rc.3）。
 3. 官方宿主：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)；**Harness API/真实服务事实以目标宿主源码与运行时为准**。其中 [Agent Teams](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/team/agent-team)、[Team 工具](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/team/tool-agent-team)、[流式接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/llm-streaming.md) 属于独立权威依据。
 4. “作为上游”指**持续比较、记录出处和有选择吸收**；**不意味着**改 Git remote、自动同步、覆盖我方完整源码、默认启用所有功能或改变发布频道。不是把继任关系当作已被 GitHub 独立核实的授权凭证。
@@ -23,7 +52,7 @@
 | Agent 运行与占用 | 已有 `agent-status`、`agent-reservations`、`task-context`、`task_block`、持久 handoff 摘要 | [源码](../lib/redteam/agent-reservations.js)、[Issue #345](https://github.com/wxcvm/dsh-purge/issues/345)；不要复制另一套任务/并发账本 |
 | 统一知识/技能、ARTEX 联动和已有 UI | 已有来源适配、分页、项目/资产/证据、状态接口 | [社区吸收记录](COMMUNITY_ABSORPTION_20261119.zh-CN.md)、[#344](https://github.com/wxcvm/dsh-purge/issues/344)、[#346](https://github.com/wxcvm/dsh-purge/issues/346)；新来源不要重建数据库 |
 
-**当前在审 PR（2026-11-20 08:56 CST）：** [#385 Agent attention/ack](https://github.com/wxcvm/dsh-purge/pull/385) 为 **Draft、未合并**；其头提交 `e188f5adcb76cf8c72c8693cc6351c22f76c69fd` 的 [Windows/Linux CI 已通过](https://github.com/wxcvm/dsh-purge/actions/runs/44646881605)。这不等于正式安装包更新或 Desktop 验收。另有 [#386 官方 Provider 最终请求证据](https://github.com/wxcvm/dsh-purge/pull/386) 开放；须独立核对其最新代码、CI 与覆盖范围。
+**当前状态已更新（见第 0 节）**：#385/#386/#387/#388/#389/#390 已合并。#376/#378/#254 等仍开放但可能与已合并部分重叠。不能把这份快照当作实时 PR 列表。
 
 ## 3. 按原始上游源码逐项吸收（有明确文件入口）
 
@@ -33,7 +62,7 @@
 | --- | --- | --- | --- |
 | A · 已合并 | [`lib/identity.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/identity.js)、[`lib/asset-table.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/asset-table.js) | [`lib/upstream-safe-prompt.js`](../lib/upstream-safe-prompt.js)、[`lib/upstream-safe/asset-table.js`](../lib/upstream-safe/asset-table.js)，PR #382/#383 | 只导入默认提示词备份和组装适配，遵循现有路由；**不从上游批量复制 tool-gate/subagent-control** |
 | B · 已合并 | [`lib/redteam/team-mode.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/team-mode.js) | [`lib/redteam/native-team-mode.js`](../lib/redteam/native-team-mode.js)，PR #384 | 只启用宿主官方 Team 模式；不要重复注册 `team_task_*`、覆盖已有 `team/mode` |
-| C · **待验收/待合并** | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js)、[`store-core.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/store-core.js)、[`schema.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/schema.js) | PR #385：新的 `agent_attention` **表位于已有靶标 SQLite**；`redteam_attention(action=list\|ack)`、`subagent/end` 报告解析、精确 `report_id` 确认 | 上游 `agent_report` 与我方表结构不同，**不能直接共用表名**；旧报告不能因确认新报告而重新出现；无结构化信息不能凭空推断 waiting |
+| C · **代码已合并、实机/界面待验收** | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js)、[`store-core.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/store-core.js)、[`schema.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/schema.js) | PR #385：新的 `agent_attention` **表位于已有靶标 SQLite**；`redteam_attention(action=list\|ack)`、`subagent/end` 报告解析、精确 `report_id` 确认 | 上游 `agent_report` 与我方表结构不同，**不能直接共用表名**；旧报告不能因确认新报告而重新出现；无结构化信息不能凭空推断 waiting |
 | D · 暂不导入停泊算法 | [`lib/redteam/slot-state.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/slot-state.js) | 我方 [`agent-reservations.js`](../lib/redteam/agent-reservations.js)、[`agent-status.js`](../lib/redteam/agent-status.js) | **waiting/blocked 是回报，不证明宿主已释放真实运行资源**；不把 “parked” 从已观察 running 里直接扣除。free 未验证时维持 unknown/null |
 | E · 下一批 | [`lib/redteam/bootstrap-runtime.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/bootstrap-runtime.js)、[`kev.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/kev.js) | #344/#360：与现有 Nuclei 模板搜索、CVE / KEV 来源管理比对 | 补增量仅在缺口存在时做；优先**状态可见 + 显式手动刷新**，避免照搬启动时 `download:true, background:true` 造成隐式联网 |
 | F · 下一批 | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js) 内 `redteam_batch`、`redteam_cleanup` | #352/#345：检查我们现有批量导入、任务记录去重与清理入口 | 先对比数据主键/事务/幂等/删除实际影响；只移植缺失能力，不建立第二套批处理引擎 |
@@ -46,14 +75,14 @@
 ### P0. 先验证真实宿主请求与发布链（优先于宣称“已修”）
 
 - **目标**：确认真实 Windows Desktop + 指定 Harness 版本下，Purge 当前加载的是哪个代码、补丁实际是否有效、Provider 收到的最终 System Prompt 是否符合预期。
-- **位置**：[#336 安装/回退](https://github.com/wxcvm/dsh-purge/issues/336)、[#337 应用→重启→重连](https://github.com/wxcvm/dsh-purge/issues/337)、[#339 pack 合约](https://github.com/wxcvm/dsh-purge/issues/339)、[#340 提示词](https://github.com/wxcvm/dsh-purge/issues/340)、[#341 流式](https://github.com/wxcvm/dsh-purge/issues/341)、[PR #386](https://github.com/wxcvm/dsh-purge/pull/386)。
-- **核验链**：`source-readable → router-selected → assembled → official rendered → final provider request`，并分别记录实际请求/结果、宿主版本、活动 Profile/插件版本、重启后加载路径；**assembled 不等于 delivered**。
+- **位置**：[#336 安装/回退](https://github.com/wxcvm/dsh-purge/issues/336)、[#337 应用→重启→重连](https://github.com/wxcvm/dsh-purge/issues/337)、[#339 pack 合约](https://github.com/wxcvm/dsh-purge/issues/339)、[#340 提示词](https://github.com/wxcvm/dsh-purge/issues/340)、[#341 流式](https://github.com/wxcvm/dsh-purge/issues/341)、[已合并的 #386 惰性 Provider 请求测试](https://github.com/wxcvm/dsh-purge/pull/386)及[仍失败的 #376 rc.5 fixture](https://github.com/wxcvm/dsh-purge/pull/376)。
+- **核验链**：`source-readable → router-selected → assembled → official rendered → frozen llm/stream request（#386 已有隔离夹具）→ 实际 Provider 网络请求（仍未验收）`。分别记录宿主版本、活动 Profile/插件版本、重启后加载路径和实际请求结果。**冻结请求、惰性适配器和真实 HTTP 投递不等价**。
 - **矩阵**：红队/普通/minimal/自定义预设 × 主/备用切换 × 有/无 `{{cwd}}` 插值 × 用户全局/局部开关与 Session 锁定 × 子代理/根会话。逐案验证只注入一次、原生上下文/工具保留、无额外默认启用。
 - **完成标准**：真实宿主的只读证据、前后对照、相应测试、明确的未测 Provider 列表；不要仅凭 CI、UI 显示或旧版安装包称完成。
 
-### P1-A. PR #385 结构化 Agent 待办闭环
+### P1-A. #385 已合并后的 Agent 待办 UI 与实机闭环
 
-- **先做**：检查 [PR #385](https://github.com/wxcvm/dsh-purge/pull/385) 最新 diff、Windows/Linux checks、与 `master` 的代码冲突及 SQL schema；审查后才决定合并，不把 Draft 当已合并。
+- **先做**：以 master 已合并的 [PR #385](https://github.com/wxcvm/dsh-purge/pull/385) 的 `agent_attention` 表、`redteam_attention` 工具、`subagent/end` 捕获为起点；专注尚未验收的 UI、会话关联与真实宿主行为，**不要重做/再合并后端**。PR 早期正文仍写 `agent_report`，属于改名前过时描述，以最新源码为准。
 - **数据模型**：原有靶标 DB 中的 `agent_attention` 与上游 `agent_report` 分开；字段仅存来源子会话、root/run ID、状态、必要摘要与 `acknowledged_at`，不复制完整用户/助手消息。保持用户编辑的原有角色稿不被自动覆盖。
 - **事件**：在 `subagent/end` 记录有结构化 `redteamReport:` 的最后消息；对同一 run 幂等，未命中则不假装存在回报；异常不阻断当前预留释放。
 - **工具/界面**：`redteam_attention list/ack` 返回当前靶标最新未处理回报、来源、所需资源；作战台「智能体」页增加可直接查看/确认的卡片，显示 waiting/blocked/ready 与“尚未观测”区别，避免只有 JSON。**点击确认只处理对应 report_id**，不自动视为资产验收。
@@ -110,4 +139,4 @@
 
 ### 可直接交给 Codex 的第一条任务
 
-> 阅读根目录 `AGENTS.md`、`docs/CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md`、Issue #347/#351。核对当前 master、所有相关开放 PR 与最新 CI；从本方案**最高优先级且未完成**的最小任务开始。逐项查上游固定 SHA 的原始源码和本仓库现有实现，定位根因、做必要改动并跑相关测试，提交到对应旧 Issue/PR。不要重复造数据库/路由/Agent Teams，也不要把 CI、模拟渲染或界面提示冒充真实 Provider/Windows Desktop 验收；保留可核对的来源链接、改动路径与剩余缺口。只在证据充分时推进合并或发布。
+> 阅读 `AGENTS.md`、本文第 0 节和 Issue #347/#351；核对最新 master、PR、CI。首选 **#376 rc.5 夹具安装失败**这一独立 P0 小任务：定位 npm 依赖实际可用版本与失败根因，在不影响 rc.3 的前提下做最小修改并跑 Windows/Linux 相关测试；如果环境无法复现或缺凭据/依赖，留下具体阻塞并转到 #343 基于已合并 #385 的 Agent 待办 UI。不要重复合并 #385/#386/#387/#388/#389/#390，不整包合并 #378/#254。每轮提交来源链接、受影响文件、CI 与 Desktop 未验收项，不自动发版。
