@@ -74,18 +74,16 @@ test('Purge renders an opaque dark workspace before entering system fullscreen',
 })
 
 
-test('Windows native caption palette follows the workspace and restores the host on exit', () => {
+test('Windows native caption palette follows late mount and restores host-owned values', () => {
   const client = read('client.js')
-  const section = client.slice(client.indexOf('function PurgeWorkspacePage() {'), client.indexOf('const toggleImmersive = () =>'))
-  assert.match(section, /document\.documentElement\.hasAttribute\("data-windows-titlebar"\)/)
-  assert.match(section, /\["--dsw-specific-sidebar-fill", "#101c2d"\]/)
-  assert.match(section, /\["--dsw-alias-label-primary", "#e5eefb"\]/)
-  assert.match(section, /style\.setProperty\(name, color\)/)
-  assert.match(section, /return \(\) => \{/)
-  assert.match(section, /style\.getPropertyValue\(name\)\.trim\(\) !== color/)
-  assert.match(section, /style\.setProperty\(name, value, priority\)/)
-  assert.match(section, /style\.removeProperty\(name\)/)
-  assert.match(section, /\}, \[workspaceVisible\]\)/)
+  const workspace = client.slice(client.indexOf('function PurgeWorkspacePage() {'), client.indexOf('const toggleImmersive = () =>'))
+  const helper = client.slice(client.indexOf('function installPurgeCaptionPalette('), client.indexOf('function workspacePrivacySummary('))
+  assert.match(workspace, /installPurgeCaptionPalette\(document, MutationObserver\)/)
+  assert.match(helper, /attributeFilter: \["data-windows-titlebar"\]/)
+  assert.match(helper, /attributeFilter: \["style"\]/)
+  assert.match(helper, /style\.getPropertyValue\(name\)\.trim\(\) !== saved\.color/)
+  assert.match(helper, /style\.setProperty\(name, saved\.value, saved\.priority\)/)
+  assert.match(helper, /observer\.disconnect\(\)/)
 })
 
 
