@@ -16,7 +16,7 @@
 | [#387 CVE 范围](https://github.com/wxcvm/dsh-purge/pull/387) | 已合并，从开放的 [#378](https://github.com/wxcvm/dsh-purge/pull/378) 选择性吸收 | #378 其他功能逐项对账；**禁止整包合并重复版本区间代码** |
 | [#388 质量采集](https://github.com/wxcvm/dsh-purge/pull/388) | 已合并，从开放的 [#254](https://github.com/wxcvm/dsh-purge/pull/254) 选择性吸收 | #254 仍指向 `beta`，不可整包合并旧客户端/旧知识模块；真实模型三组验收未完成 |
 | [#389 沙箱审批](https://github.com/wxcvm/dsh-purge/pull/389)、[#390 Windows PowerShell 工具](https://github.com/wxcvm/dsh-purge/pull/390) | 已合并隔离宿主/Runner 回归 | 不视为用户 Windows Desktop 上 `sandbox_permissions` / 空 `justification` 的真实问题已解决，见 #355 |
-| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | **开放 Draft，Windows/Linux 检查失败**；`scripts/prepare-host-fixture.mjs` 默认仍为 `0.2.2-rc.3` | **建议 Codex 的第一项小任务**：最小化复现/解决 rc.5 依赖安装失败（特别核对 `dsh-error` 精确可取得的版本），只修改 fixture/测试，保留 rc.3 回归，不改产品默认或发布 |
+| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | **开放 Draft，Windows/Linux 检查失败**；`scripts/prepare-host-fixture.mjs` 默认仍为 `0.2.2-rc.3` | **建议 Codex 的第一项小任务**：Windows [失败日志](https://github.com/wxcvm/dsh-purge/actions/runs/44646823221/job/135991416873) 已证实 `npm ETARGET: No matching version found for @deepseek-ai/dsh-llm@0.2.2-rc.5`。PR #376 已对缺失的 `dsh-error@rc.5` 回退 rc.3；**当前直接阻塞包是 `dsh-llm`**。核对官方实际发布的版本及 peer 契约，再最小修复 fixture/测试、保留 rc.3 回归，不修改生产运行时或发布；Linux 同 run 也失败但日志读取不可用，不能推断同一错误栈 |
 
 **当前交付边界**：最近发布标签是 [`v1.1.92-wxcvm.17`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)；`package.json` 版本仍为 `1.1.92-wxcvm.17`。**后续合并不代表 .17 ZIP 包已更新**。CI 用 Node **24**、依赖 `node:sqlite`；不要因 `engines: >=18` 而在 Node 18 上误判测试失败。常规使用 `npm test` + `node scripts/build-client.mjs --check`，`npm run test:all` 含 `test-pending` 预期未完成检查，并非日常必绿门槛。
 
@@ -139,4 +139,4 @@ gh issue view 351 -R wxcvm/dsh-purge
 
 ### 可直接交给 Codex 的第一条任务
 
-> 阅读 `AGENTS.md`、本文第 0 节和 Issue #347/#351；核对最新 master、PR、CI。首选 **#376 rc.5 夹具安装失败**这一独立 P0 小任务：定位 npm 依赖实际可用版本与失败根因，在不影响 rc.3 的前提下做最小修改并跑 Windows/Linux 相关测试；如果环境无法复现或缺凭据/依赖，留下具体阻塞并转到 #343 基于已合并 #385 的 Agent 待办 UI。不要重复合并 #385/#386/#387/#388/#389/#390，不整包合并 #378/#254。每轮提交来源链接、受影响文件、CI 与 Desktop 未验收项，不自动发版。
+> 阅读 `AGENTS.md`、本文第 0 节和 Issue #347/#351；核对最新 master、PR、CI。首选 **#376 rc.5 夹具安装失败**这一独立 P0 小任务：从 [Windows 已证实的 `@deepseek-ai/dsh-llm@0.2.2-rc.5` ETARGET](https://github.com/wxcvm/dsh-purge/actions/runs/44646823221/job/135991416873) 出发，查明官方 npm 子包发布版本/peer 组合，最小修改 fixture，保留 rc.3 兼容并在 Windows/Linux 跑相应测试；不要为了 CI 绿灯捏造不存在的 rc.5 包；如果环境无法复现或缺凭据/依赖，留下具体阻塞并转到 #343 基于已合并 #385 的 Agent 待办 UI。不要重复合并 #385/#386/#387/#388/#389/#390，不整包合并 #378/#254。每轮提交来源链接、受影响文件、CI 与 Desktop 未验收项，不自动发版。
