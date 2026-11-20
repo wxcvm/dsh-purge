@@ -16,7 +16,7 @@ test('Purge uses the native main panel and matching global sidebar entry', () =>
 })
 
 test('the main page reuses real clean and redteam components instead of a mockup', () => {
-  assert.match(client, /page === "clean" \? h\(SettingsRoot, \{ t, workspace: true \}\) : h\(__dshPurgeDrill\.Panel, \{ embedded: true \}\)/)
+  assert.match(client, /page === "clean" \? h\(SettingsRoot, \{ t, workspace: true \}\)\s*: h\(__dshPurgeDrill\.Panel, \{ embedded: true, onOpenReportSession, maskReportOrigin \}\)/)
   assert.match(client, /"data-workspace": page === "clean" \? "clean" : "redteam"/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
   assert.match(client, /showPurgeWorkspace\("drill"\)/)

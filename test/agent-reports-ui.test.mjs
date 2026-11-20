@@ -16,11 +16,11 @@ const report = (id, fields = {}) => ({
 })
 const queue = (engagement, items, more = {}) => ({ ok: true, engagement, total: items.length, items, ...more })
 
-function mount(engagement, api, onReceipt) {
+function mount(engagement, api, onReceipt, opts = {}) {
   const states = [], refs = []
   let state = 0, ref = 0, effect, dispose, unmountedWrites = 0, unmounted = false
   const ctx = vm.createContext({
-    engagement, onReceipt,
+    engagement, onReceipt, opts,
     api: request => api(structuredClone(request)),
     React: {
       useState(initial) {
@@ -37,7 +37,7 @@ function mount(engagement, api, onReceipt) {
     h: (type, props, ...children) => ({ type, props: props || {}, children }),
   })
   vm.runInContext(client.slice(start, end), ctx)
-  const render = () => { state = ref = 0; return vm.runInContext('AgentReports({engagement,onReceipt})', ctx) }
+  const render = () => { state = ref = 0; return vm.runInContext('AgentReports({engagement,onReceipt,...opts})', ctx) }
   render()
   dispose = effect()
   return { render, unmount() { dispose?.(); unmounted = true }, unmountedWrites: () => unmountedWrites }
@@ -111,7 +111,7 @@ test('failed acknowledgement can be retried; a stale receipt does not acknowledg
 
 test('project-keyed pane discards a response after leaving the original project', async () => {
   let resolveAck
-  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt,\s+onSectionReady: props\.onReportSectionReady \}\)/)
+  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt,\s+onSectionReady: props\.onReportSectionReady,/)
   const first = mount('first', request => request.op === 'attention'
     ? Promise.resolve(queue('first', [report(31)]))
     : new Promise(resolve => { resolveAck = resolve }))
@@ -127,4 +127,35 @@ test('project-keyed pane discards a response after leaving the original project'
   assert.equal(first.unmountedWrites(), 0)
   assert.match(content(second), /other-project/)
   assert.ok(button(second, '将回报 #31 标为已阅'))
+})
+
+test('source navigation uses the exact child, does not acknowledge, and leaves errors retryable', async () => {
+  const requests = [], open = []
+  const saved = report(50, { session_id: 'source-child', parent_session: 'reservation-owner' })
+  const api = async request => { requests.push(request); return queue('docs', [saved]) }
+  const options = { onOpenReportSession: id => { open.push(id); return open.length === 1 ? 'archived' : 'unavailable' } }
+  const ui = mount('docs', api, undefined, options)
+  await setImmediate()
+  assert.deepEqual(open, [])
+  const label = '查看回报 #50 的来源会话'
+  button(ui, label).props.onClick()
+  assert.match(content(ui), /已归档/)
+  button(ui, label).props.onClick()
+  assert.match(content(ui), /待阅状态未更改/)
+  assert.deepEqual(open, ['source-child', 'source-child'])
+  assert.ok(button(ui, '将回报 #50 标为已阅'))
+  assert.deepEqual(requests, [{ op: 'attention', engagement: 'docs' }])
+})
+
+test('the existing privacy projection hides report identifiers, notes and navigation but not receipts', async () => {
+  const item = report(51, { session_id: 'hidden-child', parent_session: 'hidden-owner', blocked_reason: 'hidden-note' })
+  const api = async () => queue('docs', [item])
+  const ui = mount('docs', api, undefined, { maskReportOrigin: true, onOpenReportSession() { assert.fail('masked') } })
+  const standalone = mount('docs', api)
+  await setImmediate()
+  assert.doesNotMatch(content(ui), /hidden-child|hidden-owner|hidden-note|请提供附录/)
+  assert.equal(button(ui, '查看回报 #51 的来源会话'), undefined)
+  assert.ok(button(ui, '将回报 #51 标为已阅'))
+  assert.match(content(standalone), /hidden-child/)
+  assert.equal(button(standalone, '查看回报 #51 的来源会话'), undefined)
 })
