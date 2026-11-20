@@ -63,9 +63,9 @@ test('mixed upstream frame removes only the exact deselected file section', asyn
   await toggleCwdSelection(home, file, false, cwd)
   const globalBody = 'GLOBAL still applies'
   const original = native(['$DSH_HOME/AGENTS.md', 'AGENTS.local.md'])
-  const nativeFrame = '<system-reminder>\\nIntro\\n\\nInstructions from: $DSH_HOME/AGENTS.md\\n\\n'
-    + globalBody + '\\n\\nInstructions from: AGENTS.local.md\\n\\n'
-    + fs.readFileSync(file, 'utf8') + '\\n</system-reminder>'
+  const nativeFrame = '<system-reminder>\nIntro\n\nInstructions from: $DSH_HOME/AGENTS.md\n\n'
+    + globalBody + '\n\nInstructions from: AGENTS.local.md\n\n'
+    + fs.readFileSync(file, 'utf8') + '\n</system-reminder>'
   original.content = [{ type: 'text', text: nativeFrame }]
   const result = filterDeselectedNativeInstructionMessages(home, cwd, [original, user])
   assert.equal(result.suppressed, 0)
@@ -82,7 +82,7 @@ test('stale or altered native frame is retained instead of guessing section boun
   const { home, cwd, file } = fixture(t)
   await toggleCwdSelection(home, file, false, cwd)
   const message = native(['$DSH_HOME/AGENTS.md', 'AGENTS.local.md'])
-  message.content = [{ type: 'text', text: '<system-reminder>\\nIntro\\n\\nInstructions from: AGENTS.local.md\\n\\nDIFFERENT CONTENT\\n</system-reminder>' }]
+  message.content = [{ type: 'text', text: '<system-reminder>\nIntro\n\nInstructions from: AGENTS.local.md\n\nDIFFERENT CONTENT\n</system-reminder>' }]
   const result = filterDeselectedNativeInstructionMessages(home, cwd, [message, user])
   assert.equal(result.pruned, 0)
   assert.equal(result.mixed, 1)
