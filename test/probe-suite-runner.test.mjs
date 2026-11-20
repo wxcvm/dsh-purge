@@ -11,6 +11,16 @@ test('explicit callback executes only selected probes and emits no raw replies',
   assert.ok(!JSON.stringify(report).includes('sample text'))
 })
 
+test('partial suite pass rate uses evaluated rows, not all 45 available probes', async () => {
+  const subset = PROBES.slice(0, 2)
+  const { aggregate } = await import('../lib/probe-suite.js')
+  const metrics = aggregate(subset.map(probe => ({ id: probe.id, group: probe.group, pass: true, reasons: [] })))
+  assert.equal(metrics.evaluated, 2)
+  assert.equal(metrics.pass_rate, 1)
+  assert.equal(metrics.reject_rate, 0)
+  assert.equal(metrics.weighted_score, 100)
+})
+
 test('callback failure is observable without exposing provider error text', async () => {
   const result = await runProbeBatch(async () => { throw Error('TOKEN_AND_PRIVATE_TRACE') }, { probes: [PROBES[0]] })
   assert.deepEqual(result.results[0].reasons, ['responder-error'])
