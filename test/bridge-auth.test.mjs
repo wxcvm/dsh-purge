@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { authorizeBridgeRequest, isLocalBridgePeer, bridgePrivacyPosture } from '../lib/redteam/bridge-auth.js'
+import { authorizeBridgeRequest, isLocalBridgePeer, isTrustedLocalRequest, bridgePrivacyPosture } from '../lib/redteam/bridge-auth.js'
 
 function req(remoteAddress, host, token) {
   return {
@@ -19,6 +19,19 @@ test('local desktop API works without remote credentials', () => {
     assert.equal(isLocalBridgePeer(request), true)
     assert.deepEqual(authorizeBridgeRequest(request, { token: '' }), { ok: true, local: true })
   }
+})
+
+test('local write requests require a same-origin browser request or the private Desktop cookie', () => {
+  const host = '127.0.0.1:53380'
+  const base = { socket: { remoteAddress: '127.0.0.1' } }
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'http://127.0.0.1:53380' } }), true)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, cookie: 'dsh-desktop-session=private-test-cookie' } }), true)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'null', 'content-type': 'text/plain' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'https://malicious.example' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: {
+    host, cookie: 'dsh-desktop-session=private-test-cookie', 'x-forwarded-for': '203.0.113.5',
+  } }), false)
 })
 
 test('non-local API is closed by default, including localhost reverse proxies', () => {

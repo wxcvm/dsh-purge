@@ -131,6 +131,23 @@ test("private prompt storage API accepts only local loopback peers", () => {
   assert.equal(isLoopbackRequest(null), false);
 });
 
+test("prompt write endpoints require trusted local origin before parsing request bodies", () => {
+  const source = fs.readFileSync(new URL("../lib/index.js", import.meta.url), "utf8");
+  for (const marker of [
+    'path: "/dsh-purge/prompt-routing-settings"',
+    'path: "/dsh-purge/prompt-profiles"',
+  ]) {
+    const start = source.indexOf(marker);
+    assert.ok(start >= 0, marker);
+    const end = source.indexOf('      }, "dsh-purge:', start);
+    assert.ok(end > start, marker);
+    const handler = source.slice(start, end);
+    const guard = handler.indexOf("isTrustedLocalRequest(request)");
+    const body = handler.indexOf("readJsonBody(request)");
+    assert.ok(guard >= 0 && body > guard, marker + " must guard before parsing a write body");
+  }
+});
+
 test("global/local prompts remain independent; model + provider allowlist and per-rule blacklist", () => withHome((home) => {
   savePromptProfile(home, { id: "global", enabled: true, body: "GLOBAL_TEXT" });
   savePromptProfile(home, { id: "glmroute", enabled: true, scope: "local", priority: 60,
