@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { DDL, RedteamStore, dispatch } from '../lib/redteam/store-core.js'
+import { migrate } from '../lib/redteam/schema.js'
 
 const methods = {
   db(id) { return this.databases[id] },
@@ -150,4 +151,73 @@ test('explicit review feedback export preserves source IDs and inspected version
   assert.equal(out.feedback.reviews[0].status, 'needs_evidence')
   assert.equal(out.feedback.reviews[1].evidence_version, null)
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, 0)
+})
+
+test('manual review retries are idempotent; concurrent and stale writes preserve the saved note', t => {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  db.exec(DDL)
+  const store = { ...methods, databases: { lab: db } }
+  const input = { op: 'artexReviewSave', engagement: 'lab', finding_id: 24,
+    task_id: 3, evidence_version: 7, expected_revision: 0, status: 'in_progress', note: 'Initial review' }
+  const first = dispatch(store, input)
+  assert.equal(first.review.revision, 1)
+  assert.deepEqual(dispatch(store, input).review, first.review, 'lost-response retry changes nothing')
+  const change = { ...input, note: 'Reviewer A update', expected_revision: 1, evidence_version: 8 }
+  const updated = dispatch(store, change)
+  assert.equal(updated.review.revision, 2)
+  assert.deepEqual(dispatch(store, change).review, updated.review)
+  const conflict = dispatch(store, { ...change, note: 'Reviewer B stale draft' })
+  assert.equal(conflict.ok, false)
+  assert.equal(conflict.code, 'artex_review_conflict')
+  assert.deepEqual(conflict.current, updated.review)
+  for (const evidence_version of [7, null]) {
+    const stale = dispatch(store, { ...change, evidence_version, expected_revision: 2 })
+    assert.equal(stale.ok, false)
+    assert.equal(stale.code, 'artex_review_stale_evidence')
+    assert.deepEqual(stale.current, updated.review)
+  }
+  assert.deepEqual(store.listArtexReviews('lab', [24]), [updated.review])
+  const deliberate = dispatch(store, { ...change, expected_revision: 2, note: 'Compared then saved' })
+  assert.equal(deliberate.review.revision, 3)
+  assert.equal(deliberate.review.note, 'Compared then saved')
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, 0)
+})
+
+test('migration preserves saved legacy review and supplies its first revision', t => {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  db.exec("CREATE TABLE artex_review(source_finding_id INTEGER PRIMARY KEY, source_task_id INTEGER, evidence_version INTEGER, status TEXT, note TEXT, updated_at TEXT)")
+  db.prepare('INSERT INTO artex_review VALUES (24, 3, 7, ?, ?, ?)').run('reviewed', 'Keep this', '2026-11-21T00:00:00.000Z')
+  db.exec(DDL)
+  migrate(db)
+  migrate(db)
+  const store = { ...methods, databases: { lab: db } }
+  const row = store.listArtexReviews('lab', [24])[0]
+  assert.equal(row.note, 'Keep this')
+  assert.equal(row.status, 'reviewed')
+  assert.equal(row.revision, 1)
+})
+
+test('manual comparison applies only the matching report and saved row; draft input is independent', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const start = source.indexOf('    function applyArtexReviewSnapshot(')
+  const end = source.indexOf('    function ArtexTab(props)', start)
+  assert.ok(start >= 0 && end > start)
+  const apply = runInNewContext(source.slice(start, end) + '\napplyArtexReviewSnapshot')
+  const report = {}
+  const previous = { _report: report, engagement: 'lab', items: [
+    { source_finding_id: 24, revision: 1 }, { source_finding_id: 25, revision: 1 },
+  ] }
+  const row = { source_finding_id: 24, revision: 2, note: 'saved elsewhere' }
+  assert.equal(apply(previous, {}, 'lab', 24, row), previous)
+  assert.equal(apply(previous, report, 'other', 24, row), previous)
+  const snapshot = apply(previous, report, 'lab', 24, row)
+  assert.equal(snapshot.items.filter(item => item.source_finding_id === 25).length, 1)
+  assert.equal(snapshot.items.find(item => item.source_finding_id === 24).revision, 2)
+  const compare = source.slice(source.indexOf('const useSavedReviewForComparison'), source.indexOf('const saveReview ='))
+  assert.match(compare, /setReviewProgress/)
+  assert.doesNotMatch(compare, /setReviewNotes|api\(/)
+  assert.match(source, /expected_revision: progressByFinding/)
+  assert.match(source, /用已保存版本比对（保留草稿）/)
 })
