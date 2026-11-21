@@ -38,8 +38,8 @@ jobs:
           zip="dsh-purge-$version.zip"
           # This recovery job is historical. Do not replace .10 assets already published.
           existing_assets="$(gh release view "$tag" --json assets --jq '.assets[].name')"
-          if printf '%s\\n' "$existing_assets" | grep -Fxq "$zip" ||
-             printf '%s\\n' "$existing_assets" | grep -Fxq SHA256SUMS.txt; then
+          if printf '%s\n' "$existing_assets" | grep -Fxq "$zip" ||
+             printf '%s\n' "$existing_assets" | grep -Fxq SHA256SUMS.txt; then
             echo "::error::Existing .10 release assets are immutable; do not overwrite ZIP or checksums."
             exit 1
           fi
