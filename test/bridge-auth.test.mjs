@@ -28,6 +28,11 @@ test('local write requests require a same-origin browser request or the private 
   assert.equal(isTrustedLocalRequest({ ...base, headers: { host, cookie: 'dsh-desktop-session=private-test-cookie' } }), true)
   assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'null', 'content-type': 'text/plain' } }), false)
   assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'https://malicious.example' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'app://dsh' } }), true)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'app://unrelated' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: {
+    host, origin: 'app://unrelated', cookie: 'dsh-desktop-session=private-test-cookie',
+  } }), false)
   assert.equal(isTrustedLocalRequest({ ...base, headers: { host } }), false)
   assert.equal(isTrustedLocalRequest({ ...base, headers: {
     host, cookie: 'dsh-desktop-session=private-test-cookie', 'x-forwarded-for': '203.0.113.5',
