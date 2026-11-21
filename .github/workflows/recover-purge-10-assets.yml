@@ -51,7 +51,7 @@ jobs:
             unzip -Z1 "$zip" | grep -Fx "dsh-purge-$version/$file" >/dev/null
           done
           sha256sum "$zip" > SHA256SUMS.txt
-          # A partial previous upload can be recovered without replacing the tag.
+          # Retry only transient upload failures. Partial uploads require manual recovery; existing assets are never replaced.
           success=false
           for attempt in 1 2 3; do
             if gh release upload "$tag" "$zip" SHA256SUMS.txt; then
