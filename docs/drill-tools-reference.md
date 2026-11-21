@@ -70,6 +70,24 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 不使用这项回报更改 `redteam_agent_slot` 并发计数或释放正在运行的子 Agent。没有结构化回报时展示 0 项，不声称无人等待或所有任务已完成。只保存经过基本凭据遮蔽与长度裁剪的状态/需求摘要；不要把凭据原文写在需求字段中。
 
+### `redteam_work_item`
+【SuperAgent 持久任务与执行轮次】使用当前演练已经存在的 SQLite，记录同一任务多次分派、精确运行 ID、状态和历史；**不创建真实子会话、不会自动执行、不会替代官方 Agent Teams 任务板或** `redteam_attention`。它的结果是「已记录的工作状态」，不是实际宿主或目标任务已经完成的证明。
+
+参数：
+
+- `action` — 必填：`create` 登记任务；`list` 分页；`get` 查看单条及最多 100 次历史；`assign` 将确切 `session_id/run_id` 记为本轮执行；`report` 结算本轮；`close` 显式收口；`recovery` 列出需核对的持久化运行记录。
+- `engagement` — 当前靶标，默认会话绑定；不同靶标隔离。
+- `task_key / role / objective` — `create` 必填。相同 task_key 不覆盖已有记录，重复操作幂等。
+- `task_id` — `get / assign / report / close` 必填。
+- `session_id / run_id` — `assign / report` 必填，防止前一轮迟到报告覆盖新轮次。
+- `status / summary` — `report`：`waiting|ready|blocked|failed|interrupted` 和结果摘要；摘要进行有限的凭据文本遮蔽。
+- `outcome / reason` — `close`：`done|dropped` 和明确原因；`done` 需要先有 `ready` 回报，禁止直接将 running 当作完成。
+- `limit / offset` — 分页查询，最多 100 条。
+
+宿主真实 `subagent/end` 事件到达时，若演练绑定及 `session_id/run_id` 精确匹配本任务的已登记 Assignment，将仅补记 `host_end_at/host_stop_reason`，不会自动完成或重新执行任务。详情见 [第二阶段真实事件对账](SUPERAGENT_DURABLE_TASKS.zh-CN.md#第二阶段真实子智能体结束事件对账本-pr-增量)。
+
+恢复语义：宿主重启后 `recovery` 显示 `host_activity=unverified`，**并不推断原子智能体已退出**；必须先核对其真实会话和执行状态，再显式记 `interrupted` 并分配新轮次。没有自动重启、自动重派、自动批准或后台任务。本轮完整使用说明见 [SuperAgent 持久任务阶段一](SUPERAGENT_DURABLE_TASKS.zh-CN.md)。
+
 ### `redteam_agent_slot`
 【主会话派活前后用】执行智能体的并发闸门：同一靶标的有效上限由 settings.json / REDTEAM_MAX_AGENTS 控制（默认 3，用户可调整）。action=status 返回有效 max、used 和 free；action=acquire 占一个名额（满了会直接拒绝）；action=release 释放（子智能体结束时服务端也会自动释放）。
 
