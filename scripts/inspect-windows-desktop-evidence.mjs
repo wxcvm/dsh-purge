@@ -120,7 +120,7 @@ function classifyLink(target, home, profileDir, repositoryRoot) {
 function confinedFile(file, root) {
   try { return inside(root, fs.realpathSync(file)); } catch { return false; }
 }
-function profileEvidence(home, name, root) {
+function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } = {}) {
   const dir = path.join(home, 'profiles', name);
   const installed = path.join(dir, 'node_modules', 'dsh-purge');
   const output = {
@@ -143,12 +143,21 @@ function profileEvidence(home, name, root) {
       output.linkTargetScope = 'unresolved';
       installedRoot = fs.realpathSync(installed);
       const verified = verifiedPnpmLinkTarget(home, dir, installedRoot);
-      if (!verified) {
-        output.linkTargetScope = classifyLink(installedRoot, home, dir, root);
-        return output;
+      if (verified) {
+        output.linkTargetScope = verified;
+        output.installation = 'present-pnpm-link';
+      } else {
+        // Unknown DSH_HOME links remain metadata-only in every automatic CI.
+        // This path is inspected ONLY when the operator explicitly opted in.
+        const homeReal = realDirectory(home);
+        if (!inspectHomeLinkedPlugin || !homeReal || !inside(homeReal, installedRoot)
+            || !ordinaryDirectory(installedRoot)) {
+          output.linkTargetScope = classifyLink(installedRoot, home, dir, root);
+          return output;
+        }
+        output.linkTargetScope = 'operator-opted-in-dsh-home-link';
+        output.installation = 'present-operator-home-link';
       }
-      output.linkTargetScope = verified;
-      output.installation = 'present-pnpm-link';
     } else if (!stat.isDirectory()) {
       output.installation = 'invalid';
       return output;
@@ -163,7 +172,8 @@ function profileEvidence(home, name, root) {
     output.installation = 'invalid-manifest';
     return output;
   }
-  if (output.installation !== 'present-pnpm-link') output.installation = 'present';
+  if (!['present-pnpm-link', 'present-operator-home-link'].includes(output.installation))
+    output.installation = 'present';
   output.version = version(pkg.version);
   for (const rel of CHECK_FILES) {
     const source = path.join(root, rel);
@@ -194,6 +204,7 @@ export function inspectReadOnlyDesktopEvidence({
   home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh'),
   root = repository, exe,
   findExe = findDesktopAppExecutable, probeProcesses = false,
+  inspectHomeLinkedPlugin = false,
 } = {}) {
   const candidate = safeJson(path.join(root, 'package.json'));
   const evidence = {
@@ -208,7 +219,7 @@ export function inspectReadOnlyDesktopEvidence({
       unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
     },
     process: probeProcesses ? processEvidence() : { observed: null, reason: 'not-requested', loadedPluginVerified: false },
-    profiles: PROFILES.map(p => profileEvidence(home, p, root)),
+    profiles: PROFILES.map(p => profileEvidence(home, p, root, { inspectHomeLinkedPlugin })),
   };
   let selected = typeof exe === 'string' ? exe : '';
   if (exe === undefined) {
@@ -235,6 +246,7 @@ export function inspectReadOnlyDesktopEvidence({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const data = inspectReadOnlyDesktopEvidence({ probeProcesses: true });
+  const inspectHomeLinkedPlugin = process.argv.slice(2).includes('--inspect-home-plugin-link');
+  const data = inspectReadOnlyDesktopEvidence({ probeProcesses: true, inspectHomeLinkedPlugin });
   process.stdout.write(JSON.stringify(data, null, 2) + '\n');
 }
