@@ -53,8 +53,9 @@ const required = [
 for (const file of required) assert.ok(files.has(file), `required package file missing: ${file}`);
 for (const file of files) {
   assert.notEqual(file, 'lib/default-prompt-inject.md', 'sealed default prompt must not be packed');
-  assert.ok(!/^maintenance\\/.+\\/dist\\//.test(file), `generated maintenance dist must not be packed: ${file}`);
-  assert.ok(!/^(?:test|test-pending|\.github)\\//.test(file), `development-only path must not be packed: ${file}`);
+  assert.ok(!(file.startsWith('maintenance/') && file.includes('/dist/')), `generated maintenance dist must not be packed: ${file}`);
+  assert.ok(!['test/', 'test-pending/', '.github/'].some(prefix => file.startsWith(prefix)),
+    `development-only path must not be packed: ${file}`);
 }
 assert.equal(item.entryCount, files.size, 'entryCount must match the reported file list');
 console.log(`npm pack contract passed: ${item.filename}; ${files.size} files; required runtime, skills, maintenance and docs present; sealed prompt and development files excluded.`);
