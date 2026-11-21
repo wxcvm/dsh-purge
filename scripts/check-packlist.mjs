@@ -7,6 +7,12 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+const releaseTag = `v${manifest.version}`;
+assert.equal(manifest.dsh?.install?.preferred, 'tarball', 'preferred install format must be explicit');
+for (const [label, value] of [['tarball', manifest.dsh?.install?.tarball], ['zip', manifest.dsh?.install?.zip]]) {
+  assert.ok(typeof value === 'string' && new URL(value).pathname.endsWith(`/refs/tags/${releaseTag}`),
+    `${label} install URL must point at ${releaseTag}`);
+}
 const command = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const result = spawnSync(command, ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   cwd: root,
