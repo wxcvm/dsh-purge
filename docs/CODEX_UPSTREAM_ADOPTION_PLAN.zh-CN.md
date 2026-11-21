@@ -91,6 +91,8 @@ gh issue view 351 -R wxcvm/dsh-purge
 
 ### P1-B. 官方 Agent Teams 与任务效率
 
+后续按 [Super Agent 实施路线与验收](SUPER_AGENT_IMPLEMENTATION.zh-CN.md) 核对官方原型和指定维护上游，并区分持久台账与真实宿主执行。
+
 - 对 [PR #384](https://github.com/wxcvm/dsh-purge/pull/384) **只做实机补证**：确认 `team/mode`、官方 `team_task_create/list/get/update` 在真实红队根会话可用；检查普通预设、手动 off、会话 fork、快速预设切换、子 Agent 的隔离。
 - 与现有 `task_context` / `agent-reservations` 的身份对应仅做关联显示；官方 Team 任务和本地证据/待办是不同含义，不做双写任务表。用真实完成/重复派发/Token/等待时间对照评估是否真的更有效；见 #345。
 - 已存在 [PR #291–#294](https://github.com/wxcvm/dsh-purge/pulls?q=is%3Apr+is%3Aopen+%22qa%22) 等模型质量实验，先去重其范围；不得凭模拟结果声称真实模型工作有效。

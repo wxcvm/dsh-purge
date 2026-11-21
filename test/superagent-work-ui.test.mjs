@@ -12,7 +12,7 @@ assert.match(client, /h\(WorkItemsPanel, \{ key: 'agent-work:' \+ \(eng \|\| ''\
 
 const item = (overrides = {}) => ({
   id: 1, task_key: 'doc-review', role: 'review', objective: 'Review sample', status: 'running',
-  attempt: 1, last_outcome: null,
+  attempt: 1, revision: 3, last_outcome: null,
   assignment: { id: 1, attempt: 1, session_id: 'child-1', run_id: 'run-1', status: 'running', host_end_at: null },
   registry_activity: { state: 'not-in-active-snapshot', exact_run_verified: false },
   ...overrides,
@@ -156,7 +156,7 @@ test('retry controls bind only an existing host session; approving ready require
   control(accepted, 'input', '收尾依据').props.onChange({ target: { value: 'Evidence reviewed manually' } })
   await control(accepted, 'button', '确认完成').props.onClick()
   assert.deepEqual(receipts.find(req => req.op === 'workItemClose'), {
-    op: 'workItemClose', task_id: 1, outcome: 'done', reason: 'Evidence reviewed manually', engagement: 'one',
+    op: 'workItemClose', task_id: 1, expected_revision: 3, outcome: 'done', reason: 'Evidence reviewed manually', engagement: 'one',
   })
   accepted.unmount()
 })
@@ -295,4 +295,33 @@ test('manual action finishing after switching the list filter does not leave con
   await open()
   assert.equal(control(ui, 'button', '确认完成').props.disabled, false)
   ui.unmount()
+})
+
+test('returning reviewed work shows durable feedback and does not issue a launch or acknowledgement', async () => {
+  let state = full({ status: 'ready', revision: 3 })
+  const requests = []
+  const ui = mount('docs', async req => {
+    requests.push(req)
+    if (req.op === 'workItemReview') return list('docs', [state])
+    if (req.op === 'workItemGet') return { ok: true, engagement: 'docs', item: state }
+    assert.deepEqual(req, { op: 'workItemRequestChanges', engagement: 'docs', task_id: 1,
+      expected_revision: 3, reason: 'Please add the appendix' })
+    const assignment = { ...state.assignment, status: 'ready', review_feedback: req.reason,
+      review_returned_at: '2026-11-22T08:00:00Z' }
+    state = { ...state, assignment, history: [assignment], status: 'waiting', revision: 4 }
+    return { ok: true, engagement: 'docs', returned: true, item: state }
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  assert.equal(control(ui, 'button', '要求补充').props.disabled, true)
+  control(ui, 'input', '收尾依据').props.onChange({ target: { value: 'Please add the appendix' } })
+  await control(ui, 'button', '要求补充').props.onClick()
+  assert.match(content(ui), /待补充/)
+  assert.match(content(ui), /人工要求补充：Please add the appendix/)
+  assert.equal(control(ui, 'button', '确认完成'), undefined)
+  assert.ok(control(ui, 'button', '记录已有执行'))
+  assert.deepEqual(requests.map(req => req.op), [
+    'workItemReview', 'workItemGet', 'workItemRequestChanges', 'workItemReview', 'workItemGet',
+  ])
 })

@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "de7ab6ef078a6182";
+		const CLIENT_BUILD_ID = "365b1377c1d83493";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -14112,7 +14112,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           const result = await api({ ...request, engagement: eng })
           if (active.current !== scope || !scope.live) return
           if (!result || result.ok !== true) throw Error(result?.error || '任务操作失败')
-          if (result.recorded === false || result.assigned === false || result.closed === false) {
+          if (result.recorded === false || result.assigned === false || result.closed === false || result.returned === false) {
             setNotice({ error: true, text: '操作未更新：' + (result.reason || '状态已变化') + '，请刷新后核对。' })
           } else {
             setNotice({ text: label + '已记录；请核对列表和真实宿主执行状态。' })
@@ -14150,9 +14150,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         query.startsWith('#') ? String(item.id) === query.slice(1)
           : String(item.id) === query || [item.task_key, item.role].some(
             value => typeof value === 'string' && value.toLowerCase().includes(query))) : visible?.items
-      const statusLabels = { queued: '待关联执行', running: '已登记执行·待核对', waiting: '等待资源',
+      const statusLabels = { queued: '待关联执行', running: '已登记执行·待核对', waiting: '等待资源／补充',
         ready: '可人工验收', blocked: '阻塞', failed: '失败待处理', interrupted: '已记中断',
         done: '人工验收完成', dropped: '已人工放弃' }
+      const taskStatus = item => item.status === 'waiting' && item.assignment?.review_returned_at
+        ? '待补充' : statusLabels[item.status] || item.status || '未知'
       const registryLabels = {
         'exact-run-end-observed': '已收到本次 run 的宿主结束事件，仍需结算',
         'session-active-observed': '宿主当前观测到同 ID 会话在运行；未证实是本次 run',
@@ -14199,7 +14201,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         query && visible?.items.length && !rows.length ? h('p', { className: 'rt-note' },
           '本页没有匹配项。可清除搜索或换页，其他页没有加入搜索。') : null,
         rows?.map(item => h('article', { key: item.id, className: 'rt-card', style: { marginTop: 8, overflowWrap: 'anywhere' } },
-          h('strong', null, '#' + item.id + ' · ' + (statusLabels[item.status] || '未知') + ' · 第 ' + item.attempt + ' 次'),
+          h('strong', null, '#' + item.id + ' · ' + taskStatus(item) + ' · 第 ' + item.attempt + ' 次'),
           !masked ? h('div', null, item.task_key + ' · ' + item.role) : null,
           !masked ? h('div', { className: 'rt-note' }, item.objective) : null,
           item.status === 'running' ? h('div', { className: 'rt-note' },
@@ -14225,7 +14227,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onClick: () => select(detailRead.id) }, '重试读取详情') : null,
           h('button', { className: 'rt-btn', type: 'button', onClick: closeDetail }, '取消查看')) : null,
         record && !masked ? h('div', { className: 'rt-card', style: { marginTop: 10, overflowWrap: 'anywhere' } },
-          h('h4', null, '任务 #' + record.id + ' · ' + (statusLabels[record.status] || record.status)),
+          h('h4', null, '任务 #' + record.id + ' · ' + taskStatus(record)),
           h('div', null, record.task_key + ' / ' + record.role + ' · ' + record.objective),
           record.last_outcome ? h('p', { className: 'rt-note' }, '最近记录：' + record.last_outcome) : null,
           assignment ? h('div', { className: 'rt-note' },
@@ -14238,7 +14240,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('b', null, '第 ' + at.attempt + ' 次 · ' + at.status),
             h('div', null, at.session_id + ' / ' + at.run_id,
               h(WorkAttemptEvidence, { attempt: at, onOpenSession: props.onOpenSession }),
-              at.summary ? h('div', null, at.summary) : null)))
+              at.summary ? h('div', null, at.summary) : null,
+              at.review_feedback ? h('div', null, '人工要求补充：' + at.review_feedback) : null)))
             : h('p', { className: 'rt-note' }, '尚未绑定任何运行。'),
           canSettle ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
             h('h4', null, '人工结算当前 run'),
@@ -14259,13 +14262,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('button', { className: 'rt-btn', disabled: Boolean(busy) || !session.trim() || !run.trim(),
               onClick: () => mutate({ op: 'workItemAssign', task_id: record.id, session_id: session, run_id: run }, '绑定', record.id) }, '记录已有执行')) : null,
           record.status === 'ready' || canReassign ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
-            h('h4', null, '人工收尾'),
-            h('input', { className: 'rt-input', 'aria-label': '收尾依据', placeholder: '写明人工复核结果', value: reason, onChange: e => setReason(e.target.value) }),
-            h('div', { style: { display: 'flex', gap: 8 } },
+            h('h4', null, record.status === 'ready' ? '验收结果' : '人工收尾'),
+            h('input', { className: 'rt-input', 'aria-label': '收尾依据', placeholder: '写明验收结论、需补充的内容或放弃原因', value: reason, onChange: e => setReason(e.target.value) }),
+            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
               record.status === 'ready' ? h('button', { className: 'rt-btn rt-btn-primary', disabled: Boolean(busy) || !reason.trim(),
-                onClick: () => mutate({ op: 'workItemClose', task_id: record.id, outcome: 'done', reason }, '确认完成', record.id) }, '确认完成') : null,
+                onClick: () => mutate({ op: 'workItemClose', task_id: record.id, expected_revision: record.revision, outcome: 'done', reason }, '确认完成', record.id) }, '确认完成') : null,
+              record.status === 'ready' ? h('button', { className: 'rt-btn', disabled: Boolean(busy) || !reason.trim(),
+                onClick: () => mutate({ op: 'workItemRequestChanges', task_id: record.id, expected_revision: record.revision, reason }, '要求补充', record.id) }, '要求补充') : null,
               h('button', { className: 'rt-btn', disabled: Boolean(busy) || !reason.trim(),
-                onClick: () => mutate({ op: 'workItemClose', task_id: record.id, outcome: 'dropped', reason }, '放弃', record.id) }, '放弃任务'))) : null,
+                onClick: () => mutate({ op: 'workItemClose', task_id: record.id, expected_revision: record.revision, outcome: 'dropped', reason }, '放弃', record.id) }, '放弃任务'))) : null,
           h('button', { className: 'rt-btn', onClick: closeDetail }, '关闭详情')) : null)
     }
 
