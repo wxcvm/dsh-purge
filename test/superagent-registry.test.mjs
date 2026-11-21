@@ -104,3 +104,27 @@ test('review respects target selection and never reads registry for an empty pag
     assert.equal(await handleWorkItemReview(store, { op: 'notWorkItemReview' }, () => registry), undefined)
   } finally { db.close() }
 })
+
+test('modern catalog lookup gaps preserve unknown SuperAgent reconciliation', async () => {
+  const { store, db } = fixture()
+  let disposed = 0
+  const ctx = {
+    sessions: { list: () => [{ id: 'root-1', header: {} }] },
+    sessionQuery: { observeSession: () => ({
+      projections: { values: { subagentCatalog: [{ id: 'active', mode: 'continuable' }] } },
+      [Symbol.dispose]() { disposed++ },
+    }) },
+    agents: { get: () => undefined },
+  }
+  try {
+    const result = await handleWorkItemReview(store, { op: 'workItemReview', engagement: 'one' },
+      () => collectAgentStatus(ctx))
+    assert.equal(result.registry.available, false)
+    assert.equal(result.registry.partial, true)
+    assert.equal(result.items.find(item => item.task_key === 'active').registry_activity.state, 'unknown')
+    assert.equal(result.items.find(item => item.task_key === 'unmatched').registry_activity.state, 'unknown')
+    assert.equal(result.items.find(item => item.task_key === 'ended').registry_activity.state, 'exact-run-end-observed')
+    assert.equal(disposed, 1)
+    assert.equal(store.getWorkItem('one', result.items[0].id).status, 'running')
+  } finally { db.close() }
+})
