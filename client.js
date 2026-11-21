@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "30ee1aacdcd562c6";
+		const CLIENT_BUILD_ID = "c54f24beea676cbe";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -283,7 +283,11 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"update.checking": "正在检测更新…",
 			"update.applying": "正在更新…",
 			"update.switching": "正在切换版本…",
-			"update.latest": "已是最新（{version}）",
+			"update.noHigherVersion": "未发现更高版本（本机 {version}，通道 {remote}）。",
+			"update.versionUnverified": "未能读取完整版本号，不能判断是否有更高版本（本机 {version}，通道 {remote}）。",
+			"update.revisionsDiffer": "版本号同为 {version}，但记录的提交不同：本机 {localSha}，通道 {remoteSha}。未执行更新。",
+			"update.revisionsUnknown": "版本号同为 {version}，但缺少可核对的提交记录。",
+			"update.revisionsMatch": "本机记录与通道提交一致（{remoteSha}）；不代表当前进程已加载。",
 			"update.available": "有新版本 {remote}，当前 {local}",
 			"update.pinned": "已固定在 {version}，通道最新是 {remote}",
 			"update.done": "已更新到 {version}",
@@ -668,7 +672,11 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"update.checking": "Checking for updates…",
 			"update.applying": "Updating…",
 			"update.switching": "Switching version…",
-			"update.latest": "Up to date ({version})",
+			"update.noHigherVersion": "No higher version found (installed {version}; channel {remote}).",
+			"update.versionUnverified": "A version number is unavailable; update status is unverified (installed {version}; channel {remote}).",
+			"update.revisionsDiffer": "Both report {version}, but their recorded commits differ: installed {localSha}; channel {remoteSha}. No update was applied.",
+			"update.revisionsUnknown": "Both report {version}, but a commit record is missing or unverified.",
+			"update.revisionsMatch": "The installation record matches the channel commit ({remoteSha}); this does not verify the running process.",
 			"update.available": "Update {remote} available (now {local})",
 			"update.pinned": "Pinned at {version}; channel latest is {remote}",
 			"update.done": "Updated to {version}.",
@@ -2468,11 +2476,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				if (d.versions && d.versions.length) syncPicks(d);
 				if (kind === "check") setCanApplyUpdate(Boolean(d.hasUpdate) && !d.error);
 				else if (kind === "done" || kind === "switched" || kind === "channel") setCanApplyUpdate(false);
-				const version = d.localVersion || d.localSha || "—";
-				const remote = d.remoteVersion || d.remoteSha || "—";
-				let text = tr("update.latest", { version });
-				if (d.hasUpdate) text = tr("update.available", { remote, local: version });
-				if (d.pinned && d.hasUpdate) text = tr("update.pinned", { version, remote });
+				let text = updateCheckNotice(d, tr);
 				if (kind === "switched" || kind === "channel") text = tr("update.switched", { version: d.localVersion || d.remoteVersion || "—" });
 				if (kind === "done") text = tr("update.done", { version: d.localVersion || d.remoteVersion || "—" });
 				if (d.error) text = d.error;
@@ -3658,10 +3662,34 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				|| null;
 		}
 
+		function updateCheckNotice(info, tr) {
+			const d = info || {};
+			const version = d.localVersion || d.localSha || "—";
+			const remote = d.remoteVersion || d.remoteSha || "—";
+			if (d.hasUpdate) return d.pinned
+				? tr("update.pinned", { version, remote })
+				: tr("update.available", { remote, local: version });
+			const lane = d.lanes?.[d.channel || "stable"];
+			const remoteVersion = lane?.version ?? d.remoteVersion;
+			const validVersion = value => /^v?\d+\.\d+\.\d+(?:[-+][0-9a-z.+-]+)?$/i.test(value || "");
+			if (!validVersion(d.localVersion) || !validVersion(remoteVersion)) {
+				return tr("update.versionUnverified", { version, remote });
+			}
+			if (d.localVersion.replace(/^v/i, "") !== remoteVersion.replace(/^v/i, "")) {
+				return tr("update.noHigherVersion", { version, remote });
+			}
+			const revisionStatus = lane?.revisionStatus;
+			const ids = { version, localSha: d.localSha || "—", remoteSha: d.remoteSha || "—" };
+			if (revisionStatus === "differs") return tr("update.revisionsDiffer", ids);
+			if (revisionStatus === "matches") return tr("update.revisionsMatch", ids);
+			return tr("update.revisionsUnknown", ids);
+		}
+
 		function versionChoiceLabel(item, tr) {
 			const ver = String((item && item.version) || "").replace(/^v/i, "");
-			const base = ver ? ("v" + ver) : ((item && (item.label || item.ref)) || "—");
-			if (item && item.current) return base + " · " + tr("update.current");
+			const name = ver ? ("v" + ver) : ((item && (item.label || item.ref)) || "—");
+			const base = item?.shaShort ? name + " · " + item.shaShort : name;
+			if (item?.current && (item.revisionStatus === "matches" || item.kind === "local")) return base + " · " + tr("update.current");
 			if (item && item.latest) return base + " · " + tr("update.tip");
 			return base;
 		}
