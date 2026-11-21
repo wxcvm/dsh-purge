@@ -186,3 +186,93 @@ test('nested directory link escaping a verified pnpm store cannot disclose priva
   assert.ok(!JSON.stringify(result).includes('DO_NOT_READ_PRIVATE_MARKER'));
   assert.ok(!JSON.stringify(result).includes(outside));
 });
+
+test('shared DSH profiles virtual-store link proves installed version and exact source bytes', t => {
+  const f = workspace(t);
+  const target = path.join(f.home, 'profiles', 'node_modules', '.pnpm',
+    'dsh-purge@1.1.92-wxcvm.18', 'node_modules', 'dsh-purge');
+  const destination = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.writeFileSync(path.join(target, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '1.1.92-wxcvm.18' }));
+  for (const rel of sampleFiles) {
+    fs.mkdirSync(path.dirname(path.join(f.root, rel)), { recursive: true });
+    fs.mkdirSync(path.dirname(path.join(target, rel)), { recursive: true });
+    fs.writeFileSync(path.join(f.root, rel), 'identical-' + rel);
+    fs.writeFileSync(path.join(target, rel), 'identical-' + rel);
+  }
+  try { fs.symlinkSync(target, destination, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create symlinks: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'present-pnpm-link');
+  assert.equal(result.profiles[0].linkTargetScope, 'verified-shared-profile-pnpm-store');
+  assert.equal(result.profiles[0].version, '1.1.92-wxcvm.18');
+  assert.equal(result.profiles[0].sourceBytesEqual, true);
+  assert.equal(result.runtimeLoadVerified, false);
+  assert.ok(!JSON.stringify(result).includes(f.home));
+  // Version string equality alone cannot pass the file byte comparison.
+  fs.writeFileSync(path.join(target, 'lib', 'prompt-profiles.js'), 'old-prompt-routing-code');
+  const changed = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(changed.profiles[0].sourceBytesEqual, false);
+  assert.equal(changed.profiles[0].sourceFileComparison['lib/prompt-profiles.js'], 'different');
+});
+
+test('a shared .pnpm lookalike with unrelated package identity stays unread', t => {
+  const f = workspace(t);
+  const target = path.join(f.home, 'profiles', 'node_modules', '.pnpm',
+    'not-purge@1.0.0', 'node_modules', 'dsh-purge');
+  const destination = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.writeFileSync(path.join(target, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '99.99.99' }));
+  try { fs.symlinkSync(target, destination, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create symlinks: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'linked-uninspected');
+  assert.equal(result.profiles[0].linkTargetScope, 'dsh-home-shared-pnpm-untrusted');
+  assert.equal(result.profiles[0].version, null);
+  assert.equal(result.profiles[0].sourceBytesEqual, null);
+  assert.ok(!JSON.stringify(result).includes(target));
+});
+
+test('shared store with nested junction escape is not allowed to hash private content', t => {
+  const f = workspace(t);
+  const target = path.join(f.home, 'profiles', 'node_modules', '.pnpm',
+    'dsh-purge@1.1.92-wxcvm.18', 'node_modules', 'dsh-purge');
+  const destination = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  const privateDir = path.join(f.base, 'private-nested');
+  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.mkdirSync(privateDir);
+  fs.writeFileSync(path.join(target, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '1.1.92-wxcvm.18' }));
+  fs.writeFileSync(path.join(privateDir, 'index.js'), 'PRIVATE_VALUE_NOT_FOR_DIAGNOSTICS');
+  try {
+    fs.symlinkSync(privateDir, path.join(target, 'lib'), process.platform === 'win32' ? 'junction' : 'dir');
+    fs.symlinkSync(target, destination, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) { t.skip('host cannot create junctions: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'present-pnpm-link');
+  assert.equal(result.profiles[0].sourceFileComparison['lib/index.js'], 'missing');
+  assert.equal(result.runtimeLoadVerified, false);
+  assert.ok(!JSON.stringify(result).includes(privateDir));
+  assert.ok(!JSON.stringify(result).includes('PRIVATE_VALUE_NOT_FOR_DIAGNOSTICS'));
+});
+
+test('DSH_HOME private checkout link stays uninspected even with a valid manifest', t => {
+  const f = workspace(t);
+  const target = path.join(f.home, 'dsh-purge-developer-checkout');
+  const destination = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.writeFileSync(path.join(target, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '1.1.92-wxcvm.18' }));
+  try { fs.symlinkSync(target, destination, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create symlinks: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'linked-uninspected');
+  assert.equal(result.profiles[0].linkTargetScope, 'inside-dsh-home-untrusted');
+  assert.equal(result.profiles[0].version, null);
+});
