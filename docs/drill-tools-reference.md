@@ -78,7 +78,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `action` — 必填：`create` 登记任务；`list` 分页；`get` 查看单条及最多 100 次历史；`assign` 将确切 `session_id/run_id` 记为本轮执行；`report` 在精确宿主结束事件已观察后登记本轮结算；`recovery` 列出需核对的持久化运行记录。
 - `engagement` — 当前靶标，默认会话绑定；不同靶标隔离。
 - `task_key / role / objective` — `create` 必填。相同 task_key 不覆盖已有记录，重复操作幂等。
-- `task_id` — `get / assign / report / close` 必填。
+- `task_id` — `get / assign / report` 必填。
 - `session_id / run_id` — `assign / report` 必填，防止前一轮迟到报告覆盖新轮次。
 - `status / summary` — `report`：`waiting|ready|blocked|failed|interrupted` 和结果摘要；摘要进行有限的凭据文本遮蔽。
 - `done/dropped` 的最终收口改由工作台人工复核后通过本机 UI 接口完成；模型工具不允许代替操作者关闭任务。
