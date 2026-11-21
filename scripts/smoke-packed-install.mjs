@@ -76,6 +76,7 @@ try {
     'the host API fixture version must be explicitly pinned');
   command(npm, [
     'install', '--prefix', home, archive, '@deepseek-ai/dsh-tools@' + hostToolsVersion,
+    '@deepseek-ai/dsh-error@' + hostToolsVersion, '@deepseek-ai/cordis@4.0.1',
     '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund',
     '--no-save', '--package-lock=false', '--omit=optional', '--prefer-offline',
   ], temp);
@@ -106,8 +107,14 @@ try {
   const probe = [
     "import assert from 'node:assert/strict';",
     "import path from 'node:path';",
+    "import { createRequire } from 'node:module';",
     "import { pathToFileURL } from 'node:url';",
     "const root = process.env.PURGE_PACK_SMOKE_INSTALLED;",
+    "const hostRequire = createRequire(path.join(root, 'lib/redteam/tools.js'));",
+    "let hostModule;",
+    "try { hostModule = hostRequire('@deepseek-ai/dsh-tools'); }",
+    "catch (error) { throw new Error('host tools fixture import: ' + String(error?.stack || error)); }",
+    "assert.equal(typeof (hostModule?.defineTool || hostModule?.default?.defineTool), 'function', 'host tools fixture must export defineTool');",
     "const modules = [",
     "  ['lib/index.js', 'dsh-purge'],",
     "  ['lib/redteam/index.js', 'dsh-purge-redteam'],",
