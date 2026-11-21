@@ -36,6 +36,13 @@ jobs:
           first="$(git show "$actual_commit:release-notes-wxcvm.md" | sed -n '1p' | tr -d '\r')"
           test "$first" = "# $version"
           zip="dsh-purge-$version.zip"
+          # This recovery job is historical. Do not replace .10 assets already published.
+          existing_assets="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+          if printf '%s\\n' "$existing_assets" | grep -Fxq "$zip" ||
+             printf '%s\\n' "$existing_assets" | grep -Fxq SHA256SUMS.txt; then
+            echo "::error::Existing .10 release assets are immutable; do not overwrite ZIP or checksums."
+            exit 1
+          fi
           git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$actual_commit"
           test -s "$zip"
           archived_version="$(unzip -p "$zip" "dsh-purge-$version/package.json" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).version)")"
@@ -47,7 +54,7 @@ jobs:
           # A partial previous upload can be recovered without replacing the tag.
           success=false
           for attempt in 1 2 3; do
-            if gh release upload "$tag" "$zip" SHA256SUMS.txt --clobber; then
+            if gh release upload "$tag" "$zip" SHA256SUMS.txt; then
               success=true
               break
             fi
