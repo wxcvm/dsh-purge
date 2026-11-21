@@ -99,13 +99,17 @@ jobs:
             cat SHA256SUMS.txt
             exit 0
           fi
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            case "$version" in
-              *beta*|*alpha*|*rc*)
-                gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" --prerelease ;;
-              *)
-                gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" ;;
-            esac
+          # A published release is immutable: never replace its archives, even on a rerun.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Release $tag already exists; refusing to overwrite immutable assets. Use a new version."
+            exit 1
           fi
-          gh release upload "$tag" "$zip" SHA256SUMS.txt --clobber
+          case "$version" in
+            *beta*|*alpha*|*rc*)
+              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" --prerelease ;;
+            *)
+              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" ;;
+          esac
+          # GitHub must reject any existing asset name instead of silently replacing it.
+          gh release upload "$tag" "$zip" SHA256SUMS.txt
           echo "published https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
