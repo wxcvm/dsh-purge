@@ -53,7 +53,7 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
     { generation: 1, attemptId: 'pending', settlement: 'pending', firstTextMs: null },
     { generation: 1, attemptId: 'finished', finishObserved: true, finish: 'stop', hostReason: 'stop', streamEnded: true, reasonSource: 'host-stream', firstTextMs: 0 },
     { generation: 1, attemptId: 'cancelled', finish: 'aborted', turnOutcome: 'aborted' },
-    { generation: 1, attemptId: 'lost', settlement: 'unobserved-end', finishObserved: false },
+    { generation: 1, attemptId: 'lost', settlement: 'unobserved-end', finishObserved: false, durableArrival: 'exact-late' },
     { generation: 1, attemptId: 'failed', finish: 'error', errorCode: 'ECONNRESET', httpStatus: 503, terminalConflict: true, reasonSource: 'host-stream' },
   ];
   const panel = runtimePanel();
@@ -92,6 +92,7 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
   assert.match(body, /0 \/ 未观测 ms/);
   assert.match(body, /已取消/);
   assert.match(body, /结束未观测/);
+  assert.match(body, /按同一会话的已提交序号关联/);
   assert.match(body, /ECONNRESET/);
   assert.match(body, /503/);
   assert.match(body, /终态证据冲突/);
