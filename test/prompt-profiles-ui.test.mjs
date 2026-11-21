@@ -9,7 +9,7 @@ const end = client.indexOf("function SettingsRoot(props)", start);
 assert.ok(start > 0 && end > start, "profile component must be included in the generated client");
 const source = client.slice(start, end);
 
-function mount({ querySession, readSettings, requestPreview, fullWriteResponse = false } = {}) {
+function mount({ querySession, readSettings, requestPreview, requestWrite, fullWriteResponse = false } = {}) {
   const profiles = [
     { id: "global", name: "全局", scope: "global", enabled: false, priority: 0, keywords: [], excludes: [], body: "" },
     { id: "redteam", name: "红队", enabled: true, priority: 100, keywords: ["红队演练"], excludes: [], body: "" },
@@ -41,6 +41,7 @@ function mount({ querySession, readSettings, requestPreview, fullWriteResponse =
     },
     promptProfilesApi: async (op, data) => {
       actions.push({ op, data });
+      if (op === "save" && requestWrite) return requestWrite(op, data, profiles, snapshot);
       if (op === "preview" && requestPreview) return requestPreview(data);
       if (op === "routing-settings") Object.assign(routingSettings, data.settings);
       if (op === "save") {
@@ -540,4 +541,43 @@ test("recent picker distinguishes no observations, every ID added, and a stale s
   assert.equal(add.props.disabled, true);
   add.props.onClick();
   assert.equal(ui.find(ui.render(), "textarea", "白名单模型 ID").props.value, "");
+});
+
+test("ordinary editor reads back a stale-save conflict without overwriting or losing its draft", async () => {
+  const a = "a".repeat(64), b = "b".repeat(64), c = "c".repeat(64);
+  const ui = mount({
+    readSettings: snapshot => {
+      if (!snapshot.profiles.find(row => row.id === "coding").revision)
+        snapshot.profiles.find(row => row.id === "coding").revision = a;
+      return snapshot;
+    },
+    requestWrite(op, data, profiles, snapshot) {
+      assert.equal(op, "save");
+      const row = profiles.find(row => row.id === "coding");
+      if (!row.revision) {
+        assert.equal(data.expectedRevision, a);
+        Object.assign(row, { body: "Body saved in another window", revision: b });
+        throw Object.assign(new Error("stale"), { code: "prompt_profile_conflict" });
+      }
+      assert.equal(data.expectedRevision, b);
+      Object.assign(row, { body: data.profile.body, revision: c });
+      return snapshot();
+    },
+  });
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "My local draft" } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "局部提示词正文").props.value, "My local draft");
+  assert.equal(ui.find(tree, "textarea", "已保存正文 coding").props.value, "Body saved in another window");
+  assert.equal(ui.profiles.find(row => row.id === "coding").body, "Body saved in another window");
+  ui.find(tree, "button", "采用已保存版本作为比对基线 coding").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.actions.length, 1, "comparison does not save");
+  assert.equal(ui.find(tree, "textarea", "局部提示词正文").props.value, "My local draft");
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ui.profiles.find(row => row.id === "coding").body, "My local draft");
 });
