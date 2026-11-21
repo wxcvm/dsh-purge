@@ -1,6 +1,6 @@
-<p align="center"><img src="docs/banner.svg" alt="PURGE — Private Workspace" width="960"></p>
+<p align="center"><img src="docs/banner.svg" alt="PURGE — Personal Workspace" width="960"></p>
 
-# PURGE · Private Workspace
+# PURGE · Personal Workspace
 
 Personal development workspace for the DeepSeek Harness extension. [中文首页](README.md)
 
@@ -19,7 +19,7 @@ Personal development workspace for the DeepSeek Harness extension. [中文首页
 
 [Release center (中文)](docs/RELEASE_CENTER.zh-CN.md) · [Development status (中文)](docs/DEVELOPMENT_STATUS.zh-CN.md)
 
-This repository is private. Access source and release assets through an authorized GitHub account. Anonymous download links from the former public repository are no longer a supported installation path. Private update and installation compatibility must be validated separately.
+This repository is public. Verify published assets against the corresponding Release; the main branch is not itself a release. Private deployment and update compatibility remain separate checks.
 
 - [Package metadata](package.json): source version, dependencies, runtime requirements and scripts.
 - [Releases](https://github.com/wxcvm/dsh-purge/releases): published versions and available assets.
@@ -36,4 +36,4 @@ Desktop and Web host environments are tested separately. Security assessments mu
 
 ## License & attribution
 
-Based on [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge). Copyright 2026 YuJunZhiXue. Retain [Apache License 2.0](LICENSE), [NOTICE](NOTICE) and attribution. The original author requests that the original build not be resold and that derivative works credit the upstream project. Private repository visibility does not revoke existing licenses or third-party obligations.
+Based on [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge). Copyright 2026 YuJunZhiXue. Retain [Apache License 2.0](LICENSE), [NOTICE](NOTICE) and attribution. The original author requests that the original build not be resold and that derivative works credit the upstream project. Changes to repository visibility do not revoke existing licenses or third-party obligations.

@@ -2,7 +2,13 @@
 
 [返回工作台](../README.md) · [版本中心](RELEASE_CENTER.zh-CN.md) · [PR 列表](https://github.com/wxcvm/dsh-purge/pulls) · [问题追踪](https://github.com/wxcvm/dsh-purge/issues)
 
-> 历史快照日期：2026-11-12。当前工作见 [#351 总台账](https://github.com/wxcvm/dsh-purge/issues/351) 和[完整实施总表](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md#7-总计划及专题进度)，已发布版本看[版本中心](RELEASE_CENTER.zh-CN.md)。下文为历史记录，不用于判断最新工作是否完成。
+## 当前对账 · 2026-11-21
+
+- 主线 `748192d` 的 [Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44901063903) 通过；[合并 PR #429](https://github.com/wxcvm/dsh-purge/pull/429) 已统一通用/局部提示词工作区，加入模型范围操作和独立 Super Agent 页面，不再重复合并旧 PR。
+- 最新正式版 .18 与最新预览版 .7-beta.11 均已按下载资产、校验清单、标签提交和包内关键文件核对；不把后续主线功能或验收归到该资产。详见[版本中心](RELEASE_CENTER.zh-CN.md)。本次查验时仓库为公开；下方私有迁移属于旧快照。
+- 当前 0–8 项及尚待验收的真实安装、Provider、窗口和 ARTEX 双端，见[本轮对账](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md#8--版本中心发布证据与远期研究)与 [#351 总台账](https://github.com/wxcvm/dsh-purge/issues/351)。
+
+> 下文为 2026-11-12 历史记录，不用于判断当前可见性、最新版本或实机完成状态。
 
 ## 已完成 · 仓库与维护
 
