@@ -107,3 +107,25 @@ test('linked plugin tree is labelled uninspected instead of following an arbitra
   assert.equal(result.profiles[0].version, null);
   assert.equal(result.profiles[0].sourceBytesEqual, null);
 });
+
+test('only pnpm links confined to the current profile store may be inspected', t => {
+  const f = workspace(t);
+  const store = path.join(f.home, 'profiles', 'desktop', 'node_modules', '.pnpm',
+    'dsh-purge@1.1.92-wxcvm.18', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(store, { recursive: true });
+  const destination = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.writeFileSync(path.join(store, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '1.1.92-wxcvm.18' }));
+  for (const rel of sampleFiles) {
+    fs.mkdirSync(path.dirname(path.join(store, rel)), { recursive: true });
+    fs.mkdirSync(path.dirname(path.join(f.root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(store, rel), 'same-source-' + rel);
+    fs.writeFileSync(path.join(f.root, rel), 'same-source-' + rel);
+  }
+  try { fs.symlinkSync(store, destination, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host does not allow creating symbolic links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'present-pnpm-link');
+  assert.equal(result.profiles[0].sourceBytesEqual, true);
+  assert.equal(result.runtimeLoadVerified, false);
+});
