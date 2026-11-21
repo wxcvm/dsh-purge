@@ -10,7 +10,7 @@
 - create 使用 task_key 幂等。assign 使用精确 session_id + run_id；同一任务多轮执行按 attempt 顺序保存。同一会话/轮次不能同时登记为另一个任务。
 - report 只接受当前最新轮次且尚未结算的 assignment。重复 / 旧轮次回报只返回拒绝原因，不能覆盖新状态。
 - close 是独立记录动作：只有 ready 可标 done；当前 running 必须先有结算报告。记录 done **不代表实际结果已独立验证**。
-- recovery 只列出持久的 running 行，host_activity 固定 unverified；机器重启不能证明子会话结束。没有真实注册表检查前不能自动标 interrupted、释放名额或重新派活。
+- recovery 只列出持久的 running 行；未见宿主结束事件时 host_activity 为 unverified，收到精确匹配的 subagent/end 事件后为 end-observed；机器重启本身不能证明子会话结束。没有真实宿主证据前不能自动标 interrupted、释放额外名额或重新派活。
 - SQLite 事务保护每次生命周期写入；旧演练数据库按原本 DDL 自行新增空表，已有资料不重写。
 - summary/objective/reason 采用原有基础敏感字符串遮蔽，**不是完整隐私匿名化**；仅存简短文本，不保存完整对话/工具轨迹。
 
@@ -52,4 +52,4 @@
 - 单元：重复创建、重复/乱序 report、跨库隔离、重启恢复候选、事务、状态枚举、敏感字符串脱敏、分页。
 - 集成：Windows / Ubuntu Node24 测试，现有工具 inventory、客户端构建与原有用例均应通过。
 - 实机：真实 Harness rc.5 中以实际 subagent 会话进行一轮创建、结束、恢复候选核对；不用伪造 Session ID。
-- 下一阶段建议：基于真实 subagent/start/end 与 session 绑定，将现有 Agent Teams / attention 的事实**只读**关联到此任务账本；接入人工待阅卡片，重点查运行中 / 待答复 / 需复核状态的一致性。没有证据前不自动恢复或执行。
+- 下一阶段建议：在已完成的 subagent/end 精确观察记录基础上，补齐真实宿主运行状态的只读对账与待人工确认视图；核对 host-end、结构化回报、原生 Teams 状态和用户确认之间的差异。没有证据前不自动恢复或执行。
