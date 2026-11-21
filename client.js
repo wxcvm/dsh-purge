@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "350d82ef13fa9078";
+		const CLIENT_BUILD_ID = "c0c1cac2d088ce3c";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4679,13 +4679,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 
 		function PromptProfilesSection({ onRedteam } = {}) {
 			const [profiles, setProfiles] = useState([]);
-			const [active, setActive] = useState("coding");
-			const [globalDraft, setGlobalDraft] = useState(null);
-			const [draft, setDraft] = useState(null);
+			const [selectedId, setActive] = useState("coding");
+			const [drafts, setDrafts] = useState({});
 			const [newId, setNewId] = useState("");
 			const [sessionId, setSessionId] = useState("");
 			const [sessionLock, setSessionLock] = useState(null);
 			const [sessionOverrides, setSessionOverrides] = useState({});
+            const sessionRead = useRef(0);
 			const [sample, setSample] = useState("");
 			const [preset, setPreset] = useState("standard");
 			const [previewModel, setPreviewModel] = useState("");
@@ -4695,7 +4695,9 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState("");
 			const [loadError, setLoadError] = useState("");
-            const [routingDraft, setRoutingDraft] = useState({ bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false });
+            const [savedRouting, setSavedRouting] = useState({ bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false });
+            const [routingEdits, setRoutingDraft] = useState(null);
+            const routingDraft = routingEdits || savedRouting;
             const [routingDiag, setRoutingDiag] = useState(null);
 			const parseLines = (value) => String(value || "").split(/[\n,，]+/).map(x => x.trim()).filter(Boolean);
             const availableTargetOptions = field => {
@@ -4740,18 +4742,39 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				}
 				return copy;
 			};
+            const localRules = [
+                ...profiles.filter(p => p.id !== "redteam" && p.scope !== "global"),
+                ...Object.values(drafts).filter(p => p.scope === "local" && !profiles.some(saved => saved.id === p.id)),
+            ];
+            const active = localRules.some(p => p.id === selectedId) ? selectedId : localRules[0]?.id;
+            const profileDraft = id => {
+                if (!id) return null;
+                if (Object.hasOwn(drafts, id)) return drafts[id];
+                const saved = profiles.find(p => p.id === id);
+                return saved ? prepare(saved) : null;
+            };
+            const globalDraft = profileDraft("global");
+            const draft = profileDraft(active);
+            const setDraft = value => setDrafts(current => ({ ...current, [value.id]: value }));
+            const setGlobalDraft = setDraft;
+            const clearDraft = (id, savedDraft) => setDrafts(current => {
+                if (!Object.hasOwn(current, id) || (savedDraft && current[id] !== savedDraft)) return current;
+                const next = { ...current };
+                delete next[id];
+                return next;
+            });
 			const explainError = (error) => {
 				const message = String(error?.message || error);
 				return /\b404\b/.test(message)
 					? "提示词规则接口 404：当前前端与后端可能并非同版，或后端路由没有注册。请完全退出 Harness（包括托盘）再打开；如仍失败，到诊断中心核对磁盘插件与已加载后端版本。"
 					: "提示词规则请求失败：" + message;
 			};
-			const reload = useCallback(async (chosen) => {
+			const reload = useCallback(async () => {
 				try {
 					const response = await apiJson("/dsh-purge/prompt-profiles");
 					if (!response?.ok) throw new Error(response?.error || "读取失败");
 					setProfiles(response.profiles || []);
-                    setRoutingDraft({
+                    setSavedRouting({
                         bundledDefault: response.routingSettings?.bundledDefault === true,
                         redteamTaskRoute: response.routingSettings?.redteamTaskRoute === true,
                         modelAdaptive: response.routingSettings?.modelAdaptive === true,
@@ -4759,29 +4782,24 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     setRoutingDiag(response.lastAssembly || null);
                     setObservedTargets(Array.isArray(response.observedTargets) ? response.observedTargets : []);
 					setLoadError("");
-					setActive(old => chosen || ((response.profiles || []).some(p => p.id === old) && old) ||
-                    response.profiles?.find(p => p.scope === "local")?.id || "");
-				} catch (error) { setLoadError(explainError(error)); }
+                    return true;
+				} catch (error) { setLoadError(explainError(error)); return false; }
 			}, []);
 			useEffect(() => { reload(); }, [reload]);
-			useEffect(() => {
-                const current = profiles.find(item => item.id === active);
-                if (current) setDraft(prepare(current));
-            }, [active, profiles]);
-            useEffect(() => {
-                const global = profiles.find(item => item.id === "global");
-                if (global) setGlobalDraft(prepare(global));
-            }, [profiles]);
-			const perform = async (op, payload, selected) => {
+			const perform = async (op, payload, savedDraft) => {
+                const sessionRevision = sessionRead.current;
 				setBusy(true); setNotice("");
 				try {
 					const response = await promptProfilesApi(op, payload);
 					if (!response?.ok) throw new Error(response?.error || "操作失败");
-					if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
-					if (op === "pause" || op === "resume") setSessionOverrides(response.sessionOverrides || {});
-					if (op === "delete") setDraft(null);
+                    if (sessionRead.current === sessionRevision) {
+                        if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
+                        if (op === "pause" || op === "resume") setSessionOverrides(response.sessionOverrides || {});
+                    }
 					setNotice(op === "delete" ? "规则已删除" : op === "pause" ? "当前会话已暂停这条规则" : op === "resume" ? "已恢复按规则自动选择" : "已保存");
-					await reload(selected);
+					const readBack = await reload();
+                    if (op === "delete") clearDraft(payload.id);
+                    if (op === "save" && savedDraft && readBack) clearDraft(savedDraft.id, savedDraft);
 				} catch (error) { setNotice(explainError(error)); }
 				finally { setBusy(false); }
 			};
@@ -4791,7 +4809,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     const result = await promptProfilesApi("routing-settings", { settings: routingDraft });
                     if (!result?.ok) throw new Error(result?.error || "保存失败");
                     setNotice("路由开关已保存。是否用于后续请求，请核对新的组装记录；保存不代表已投递。");
-                    await reload(active);
+                    if (await reload()) setRoutingDraft(current => current === routingEdits ? null : current);
                 } catch (error) { setNotice(explainError(error)); }
                 finally { setBusy(false); }
             };
@@ -4806,13 +4824,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     allowTargets: targets("allow"), blockTargets: targets("block"),
                     presetSwitches: value.presetSwitches || {}, injectOtherPresets: value.injectOtherPresets !== false,
                     ...(value.id === "redteam" ? {} : { body: value.body || "" }),
-                } }, value.id);
+                } }, value);
             };
             const save = () => saveProfile(draft);
 			const create = () => {
 				const id = newId.trim() || "rule-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 				if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) { setNotice("规则 ID 只能使用小写英文字母开头，以及字母、数字、下划线和连字符"); return; }
-				if (profiles.some(p => p.id === id)) { setNotice("同名规则已存在，请换个 ID"); return; }
+				if (profiles.some(p => p.id === id) || Object.hasOwn(drafts, id)) { setNotice("同名规则已存在，请换个 ID"); return; }
 				setDraft(prepare({ id, name: "新提示词规则", scope: "local", enabled: true, priority: 30,
 					body: "", keywords: [], excludes: [], allowEnabled: false, blockEnabled: false,
 					presetSwitches: { standard: true, ptc: true, minimal: true, cordis: true },
@@ -4822,17 +4840,25 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				setNotice("新规则已打开：填写正文与适用范围后点击「保存规则」。未保存前不会注入任何内容。");
 			};
 			const showLock = async (id) => {
+                const request = ++sessionRead.current;
 				try {
 					const response = await apiJson("/dsh-purge/prompt-profiles?sessionId=" + encodeURIComponent(id));
+                    if (request !== sessionRead.current) return;
 					if (!response?.ok) throw new Error(response?.error || "读取会话设置失败");
 					setSessionLock(response.sessionLock || null);
 					setSessionOverrides(response.sessionOverrides || {});
-				} catch (error) { setNotice(explainError(error)); }
+				} catch (error) { if (request === sessionRead.current) setNotice(explainError(error)); }
 			};
+            const changeSession = id => {
+                ++sessionRead.current;
+                setSessionId(id);
+                setSessionLock(null);
+                setSessionOverrides({});
+            };
 			const selectedSession = () => {
 				const id = currentSessionId(rewindSessions);
 				if (!id) { setNotice("无法读取当前会话 ID，可以手动输入"); return; }
-				setSessionId(id); setSessionLock(null); void showLock(id);
+				changeSession(id); void showLock(id);
 			};
             const presetOptions = [["standard", "标准"], ["ptc", "PTC"], ["minimal", "极简"],
                 ["cordis", "创造"], ["redteam", "红队"]];
@@ -4850,8 +4876,52 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         checked: value.injectOtherPresets !== false,
                         onChange: e => setValue({ ...value, injectOtherPresets: e.target.checked }) }),
                     "未列出的预设也注入"));
+            const modelField = field => field === "models" || field === "providers";
+            const targetPicker = (value, setValue, prefix, field, title) => {
+                const key = prefix + "_" + field;
+                const selected = parseLines(value[key]);
+                const options = availableTargetOptions(field);
+                const listLabel = prefix === "allow" ? "白名单" : "黑名单";
+                const manual = h("textarea", { className: "dshp-area", rows: 2,
+                    "aria-label": listLabel + title,
+                    placeholder: "每行一个实际 ID，留空不限定这一项",
+                    value: value[key] || "",
+                    onChange: e => setValue({ ...value, [key]: e.target.value }) });
+                return h("div", { key: field, className: "dshp-prompt-target", role: "group", "aria-label": listLabel + title },
+                    h("strong", null, title),
+                    h("div", { className: "dshp-prompt-target-picker" },
+                        h("div", { className: "dshp-prompt-target-options" },
+                            options.length ? options.map(option => h("button", {
+                                type: "button", key: option.id, title: option.id,
+                                "aria-label": "添加" + listLabel + title + " " + option.id,
+                                disabled: selected.includes(option.id),
+                                onClick: () => addTargetValue(value, setValue, field, prefix, option.id),
+                            }, "+ " + option.label)) :
+                                h("span", { className: "dshp-prompt-field-note" }, "暂无本机观测 ID，可直接输入。")),
+                        selected.length ? h("div", { className: "dshp-prompt-target-tags" },
+                            selected.map(id => h("button", { type: "button", key: id, title: id,
+                                "aria-label": "移除" + title + " " + id,
+                                onClick: () => removeTargetValue(value, setValue, field, prefix, id),
+                            }, id, " ×"))) : null,
+                        prefix === "allow" && modelField(field) ? manual :
+                            h("details", { className: "dshp-prompt-manual" },
+                                h("summary", null, "手动输入 / 批量粘贴"), manual)));
+            };
+            const modelScope = (value, setValue) => h("fieldset", { className: "dshp-prompt-model-scope" },
+                h("legend", null, "适用模型 / Provider"),
+                h("label", { className: "dshp-prompt-scope-switch" },
+                    h("input", { type: "checkbox", "aria-label": "启用此规则白名单",
+                        checked: value.allowEnabled === true,
+                        onChange: e => setValue({ ...value, allowEnabled: e.target.checked }) }),
+                    "按指定范围匹配（白名单）"),
+                h("p", { className: "dshp-prompt-field-note" },
+                    "使用实际模型和服务商 ID。开启后，填写的每个维度都要匹配；若所有维度均留空，本规则不匹配。可在高级设置补充会话、预设与排除项。"),
+                !value.allowEnabled && (parseLines(value.allow_models).length || parseLines(value.allow_providers).length)
+                    ? h("p", { className: "dshp-prompt-field-note" }, "已填模型范围，但白名单尚未启用；仅保存这些 ID 不会限制匹配。") : null,
+                h("div", { className: "dshp-prompt-targets" },
+                    fields.filter(([field]) => modelField(field)).map(([field, title]) => targetPicker(value, setValue, "allow", field, title))));
             const advanced = (value, setValue) => h("details", { className: "dshp-prompt-advanced", style: { marginTop: 10 } },
-                h("summary", { style: { cursor: "pointer" } }, "关键词、模型名单与高级设置"),
+                h("summary", { style: { cursor: "pointer" } }, "关键词、排除项与其他适用范围"),
                 h("div", { className: "dshp-prompt-advanced-content" },
                     h("div", { className: "dshp-prompt-help" },
                         h("strong", null, "规则如何生效"),
@@ -4879,60 +4949,36 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         [["allow", "白名单（仅允许）"], ["block", "黑名单（排除）"]].map(([prefix, label]) =>
                             h("details", { key: prefix, className: "dshp-prompt-list-card" },
                                 h("summary", null, label, " · ", (prefix === "allow" ? value.allowEnabled : value.blockEnabled) ? "已启用" : "未启用"),
-                                h("label", { className: "dshp-prompt-list-switch" },
+                                prefix === "block" ? h("label", { className: "dshp-prompt-list-switch" },
                                     h("input", { type: "checkbox",
-                                        "aria-label": prefix === "allow" ? "启用此规则白名单" : "启用此规则黑名单",
-                                        checked: prefix === "allow" ? value.allowEnabled === true : value.blockEnabled === true,
-                                        onChange: e => setValue({ ...value,
-                                            [prefix === "allow" ? "allowEnabled" : "blockEnabled"]: e.target.checked }) }),
-                                    " 启用此名单"),
+                                        "aria-label": "启用此规则黑名单", checked: value.blockEnabled === true,
+                                        onChange: e => setValue({ ...value, blockEnabled: e.target.checked }) }),
+                                    " 启用此名单") : null,
                                 h("p", { className: "dshp-prompt-field-note" },
                                     prefix === "allow"
                                         ? "开启后：同一字段填写多行时任一匹配即可，不同已填写字段需全部满足；开启但全部留空时不注入。"
                                         : "任一字段的任一条目匹配就排除当前规则；黑名单优先于白名单。仅想排除 GPT，可在模型 ID 填 *gpt*，不要单独保留 *。"),
                                 h("div", { className: "dshp-prompt-targets" },
-                                    fields.map(([field, title]) => h("label", { key: field },
-                                        title,
-                                        h("span", { className: "dshp-prompt-field-note" },
-                                            field === "models" ? "模型真实 ID；如 *gpt* 或 glm-*。"
-                                            : field === "providers" ? "服务商路由 ID，不一定是品牌名，需以宿主识别值为准。"
-                                            : field === "sessions" ? "仅指定会话的真实 Session ID。"
-                                            : "Agent 预设 ID：standard / ptc / minimal / cordis / redteam。"),
-                                        h("div", { className: "dshp-prompt-target-picker" },
-                                            h("div", { className: "dshp-prompt-target-options" },
-                                                availableTargetOptions(field).length
-                                                  ? availableTargetOptions(field).map(option => h("button", {
-                                                      type: "button", key: option.id,
-                                                      title: option.id,
-                                                      "aria-label": "添加" + (prefix === "allow" ? "白名单" : "黑名单") + title + " " + option.id,
-                                                      disabled: parseLines(value[prefix + "_" + field]).includes(option.id),
-                                                      onClick: () => addTargetValue(value, setValue, field, prefix, option.id),
-                                                    }, "+ " + option.label))
-                                                  : h("span", { className: "dshp-prompt-field-note" }, "尚未从本机请求观察到此类 ID")),
-                                            h("div", { className: "dshp-prompt-target-tags" },
-                                                parseLines(value[prefix + "_" + field]).map(id => h("button", {
-                                                    type: "button", key: id, title: id,
-                                                    "aria-label": "移除" + title + " " + id,
-                                                    onClick: () => removeTargetValue(value, setValue, field, prefix, id),
-                                                }, id, " ×"))),
-                                            h("details", { className: "dshp-prompt-manual" },
-                                                h("summary", null, "高级手动输入 / 批量粘贴"),
-                                                h("textarea", { className: "dshp-area", rows: 2,
-                                                    "aria-label": (prefix === "allow" ? "白名单" : "黑名单") + title,
-                                                    value: value[prefix + "_" + field] || "",
-                                                    onChange: e => setValue({ ...value, [prefix + "_" + field]: e.target.value }) })))))))))));
-            const localRules = profiles.filter(p => p.id !== "redteam" && p.scope !== "global");
+                                    fields.filter(([field]) => prefix === "block" || !modelField(field)).map(([field, title]) =>
+                                        targetPicker(value, setValue, prefix, field, title))))))));
             const currentIsNew = draft && !profiles.some(p => p.id === draft.id);
             const panel = { border: "1px solid var(--dsw-alias-border-l1, #36506b)",
                 borderRadius: 12, padding: 16, minWidth: 0, background: "var(--dsw-specific-card-bg, rgba(100,130,170,.045))" };
-            return h("section", { className: "dshp-sub", style: { padding: 16, display: "grid", gap: 14 } },
-                h("h3", { style: { margin: 0 } }, "通用与局部提示词"),
+            return h("section", { className: "dshp-prompt-page", style: {
+                display: "grid", gridTemplateColumns: "minmax(0,1fr)", minWidth: 0, gap: 14,
+            } },
                 h("p", { className: "dshp-hint", style: { margin: 0 } },
-                    "先选择 Agent 预设，再按需展开关键词与名单。高级名单只控制当前提示词的注入；红队正文独立管理。"),
+                    "通用提示词和局部规则分别编辑、分别保存。按模型区分时，在对应规则下设置「适用模型 / Provider」，保存后可做不调用模型的预览。"),
                 loadError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, loadError) : null,
                 notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null,
-                h("section", { className: "dshp-routing-switches", style: panel },
-                    h("h4", { style: { margin: "0 0 10px" } }, "注入路由 · 三个独立开关"),
+                h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) }),
+                h("p", { className: "dshp-hint", style: { margin: 0, overflowWrap: "anywhere" } },
+                    observedTargets.length
+                        ? "最近记录的模型 / Provider：" + (observedTargets[0]?.model || "未识别") + " / "
+                            + (observedTargets[0]?.provider || "未识别") + "（不代表当前会话）"
+                        : "没有本机模型记录时，仍可手动输入模型和 Provider ID。"),
+                h("details", { className: "dshp-routing-switches" },
+                    h("summary", null, "高级路由设置", routingEdits ? " · 有未保存改动" : ""),
                     h("p", { className: "dshp-hint" }, "普通会话默认按匹配注入。三个开关互不依赖，仍遵守会话锁定和规则黑白名单。"),
                     [
                         ["bundledDefault", "无匹配时注入内置提示词", "无规则命中时才兜底；默认关闭"],
@@ -4946,13 +4992,12 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
                     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
                         h("button", { type: "button", disabled: busy || Boolean(loadError),
-                            onClick: saveRouting }, "保存路由开关")),
-                    h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) })),
+                            onClick: saveRouting }, "保存路由开关"))),
                 h("div", { className: "dshp-prompt-columns",
                     style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
                         gap: 16, alignItems: "start" } },
                     h("section", { className: "dshp-prompt-global", style: panel },
-                        h("h4", { style: { margin: "0 0 10px" } }, "通用全局提示词"),
+                        h("h4", { style: { margin: "0 0 10px" } }, "通用提示词", drafts.global ? " · 未保存" : ""),
                         globalDraft ? h("div", { style: { display: "grid", gap: 12 } },
                             h("textarea", { "aria-label": "全局提示词正文", className: "dshp-area",
                                 rows: 15, spellCheck: false, style: { minHeight: 280 },
@@ -4964,11 +5009,14 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     checked: globalDraft.enabled === true,
                                     onChange: e => setGlobalDraft({ ...globalDraft, enabled: e.target.checked }) }),
                                 "启用全局注入"),
+                            modelScope(globalDraft, setGlobalDraft),
                             presetSelectors(globalDraft, setGlobalDraft),
                             advanced(globalDraft, setGlobalDraft),
-                            h("div", { style: { display: "flex", gap: 10 } },
+                            h("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
                                 h("button", { type: "button", disabled: busy || Boolean(loadError),
-                                    onClick: () => saveProfile(globalDraft) }, "保存全局提示词"))
+                                    onClick: () => saveProfile(globalDraft) }, "保存全局提示词"),
+                                drafts.global ? h("button", { type: "button", disabled: busy,
+                                    onClick: () => clearDraft("global") }, "恢复已保存的全局内容") : null)
                         ) : h("p", { className: "dshp-hint" }, "正在读取全局提示词配置……"),
                         h("details", { style: { marginTop: 18 } },
                             h("summary", { style: { cursor: "pointer" } }, "红队模式专用（独立）"),
@@ -4976,19 +5024,6 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                 "红队正文依然来自 prompt-inject.md，不会改写全局正文。只有明确勾选红队的其他提示词才允许附加到红队模式。"),
                             h("button", { type: "button", onClick: () => onRedteam?.() }, "编辑红队主提示词"))),
                     h("section", { className: "dshp-prompt-local", style: panel },
-                        h("aside", { className: "dshp-prompt-environment", "aria-label": "当前环境与命中预览" },
-                            h("h5", null, "当前环境 · 本机实际观测"),
-                            observedTargets.length
-                                ? h("div", { className: "dshp-prompt-env-grid" },
-                                    h("span", null, "模型：", observedTargets[0]?.model || "未识别"),
-                                    h("span", null, "Provider：", observedTargets[0]?.provider || "未识别"),
-                                    h("span", null, "Agent：", observedTargets[0]?.preset || "未识别"),
-                                    h("span", null, "Session：", observedTargets[0]?.sessionId
-                                        ? observedTargets[0].sessionId.slice(-12) : "未识别"),
-                                    h("span", null, "最近记录：", observedTargets.length, " 组身份"))
-                                : h("p", { className: "dshp-prompt-field-note" }, "尚未观察到模型请求；可先发起普通对话，再回来选择真实 Model / Provider。"),
-                            h("p", { className: "dshp-prompt-field-note" },
-                                "下方作用范围列表优先列出本机已观测 ID；选中后仍须保存对应提示词。黑白名单与当前启停设置不会被自动更改。")),
                         h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center",
                             flexWrap: "wrap", gap: 10, marginBottom: 12 } },
                             h("h4", { style: { margin: 0 } }, "局部提示词"),
@@ -4999,14 +5034,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                 border: "1px solid var(--dsw-alias-border-l1, #36506b)",
                                 background: active === p.id ? "rgba(80,145,218,.13)" : "transparent" } },
                                 h("button", { type: "button", "aria-label": "编辑规则 " + p.id,
+                                    "aria-pressed": active === p.id,
                                     style: { flex: 1, textAlign: "left", minWidth: 0 }, onClick: () => setActive(p.id) },
-                                    p.name),
-                                h("label", { style: { display: "inline-flex", alignItems: "center", gap: 6 } },
-                                    h("input", { type: "checkbox", "aria-label": "启用规则 " + p.id,
-                                        checked: p.enabled === true, disabled: busy || Boolean(loadError),
-                                        onChange: e => void perform("save", { profile: { id: p.id, enabled: e.target.checked } }, p.id) }),
-                                    "启用"))),
-                            currentIsNew ? h("p", { className: "dshp-hint" }, "未保存的新规则：" + draft.name) : null),
+                                    drafts[p.id]?.name || p.name),
+                                h("span", { className: "dshp-hint" },
+                                    drafts[p.id] ? "未保存" : p.enabled ? "已启用" : "已停用")))),
                         draft && draft.id !== "redteam" && draft.scope !== "global"
                         ? h("div", { style: { display: "grid", gap: 12 } },
                             h("label", null, "名称",
@@ -5021,11 +5053,15 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     checked: draft.enabled === true,
                                     onChange: e => setDraft({ ...draft, enabled: e.target.checked }) }),
                                 "启用此提示词规则"),
+                            modelScope(draft, setDraft),
                             presetSelectors(draft, setDraft),
                             advanced(draft, setDraft),
                             h("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } },
                                 h("button", { type: "button", disabled: busy || Boolean(loadError), onClick: save },
                                     "保存规则"),
+                                drafts[draft.id] ? h("button", { type: "button", disabled: busy,
+                                    onClick: () => clearDraft(draft.id) },
+                                    currentIsNew ? "放弃新规则" : "恢复已保存的规则") : null,
                                 !["coding", "writing"].includes(draft.id) && !currentIsNew
                                     ? h("button", { type: "button", disabled: busy,
                                         onClick: () => { if (window.confirm("删除提示词规则「" + draft.name + "」？"))
@@ -5041,7 +5077,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         "可暂停某条局部规则。旧版会话锁定仍可用，但会覆盖自动匹配。"),
                     h("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
                         h("input", { "aria-label": "会话 ID", placeholder: "Session ID", value: sessionId,
-                            onChange: e => { setSessionId(e.target.value); setSessionLock(null); setSessionOverrides({}); } }),
+                            onChange: e => changeSession(e.target.value) }),
                         h("button", { type: "button", onClick: selectedSession }, "获取当前会话"),
                         h("button", { type: "button", disabled: !sessionId,
                             onClick: () => showLock(sessionId) }, "查询锁定"),
@@ -5068,6 +5104,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                 onChange: e => setPreviewModel(e.target.value) }),
                             h("input", { "aria-label": "预览厂商 ID", placeholder: "Provider ID", value: previewProvider,
                                 onChange: e => setPreviewProvider(e.target.value) }),
+                            observedTargets[0]?.model ? h("button", { type: "button", onClick: () => {
+                                setPreviewModel(observedTargets[0].model);
+                                setPreviewProvider(observedTargets[0].provider || "");
+                            } }, "填入最近记录的模型") : null,
                             h("button", { type: "button", disabled: busy, onClick: async () => {
                                 try {
                                     const result = await promptProfilesApi("preview", {
@@ -15647,6 +15687,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}
 		}
 		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;z-index:10040!important;\n  width:auto!important;height:auto!important;box-sizing:border-box!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"],\nhtml[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,\nhtml[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role=\"button\"]){\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\nhtml[data-windows-titlebar] .dshp-workspace[data-default-full=\"1\"] .dshp-workspace-nav,\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-privacy,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-privacy:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-privacy{border-color:#365477;color:#d3e5f6;padding:7px 10px}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@media(max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n\n.dshp-prompt-advanced-content{display:grid;gap:14px;padding-top:12px;min-width:0}\n.dshp-prompt-help{padding:12px 14px;border:1px solid #304663;border-radius:9px;background:#14243a;font-size:12px;line-height:1.6;color:#b5c8df}\n.dshp-prompt-help strong{display:block;color:#e7f1ff;font-size:13px;margin-bottom:5px}\n.dshp-prompt-help p{margin:5px 0}\n.dshp-prompt-examples{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}\n.dshp-prompt-examples span{white-space:normal}\n.dshp-prompt-examples code{color:#c4e3ff;padding:2px 5px;background:#233b57;border-radius:4px}\n.dshp-prompt-environment{border:1px solid #304663;border-radius:9px;background:#14243a;padding:12px;margin-bottom:15px;min-width:0}\n.dshp-prompt-environment h5{margin:0 0 9px;font-size:13px}\n.dshp-prompt-env-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px;font-size:12px;word-break:break-word}\n.dshp-prompt-target-picker{display:grid;gap:8px;min-width:0}\n.dshp-prompt-target-options,.dshp-prompt-target-tags{display:flex;flex-wrap:wrap;gap:5px;min-width:0}\n.dshp-prompt-target-options button,.dshp-prompt-target-tags button{border:1px solid #406487;border-radius:7px;background:#1d3857;color:#e3f0ff;padding:5px 8px;font:inherit;max-width:100%;overflow-wrap:anywhere;text-align:left;cursor:pointer}\n.dshp-prompt-target-options button:disabled{opacity:.45;cursor:default}\n.dshp-prompt-target-tags button{background:#285074}\n.dshp-prompt-manual summary{font-size:12px;color:#a9c5e7;cursor:pointer}\n.dshp-prompt-manual textarea{margin-top:8px}\n.dshp-prompt-criteria,.dshp-prompt-targets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;align-items:start;min-width:0}\n.dshp-prompt-criteria>label,.dshp-prompt-targets>label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}\n.dshp-prompt-field-note{display:block;font-size:11px;line-height:1.5;color:#9eb5d1;font-weight:400}\n.dshp-prompt-advanced textarea.dshp-area{display:block;flex:none;width:100%;box-sizing:border-box;min-height:68px;max-width:100%;resize:vertical}\n.dshp-prompt-criteria input[type=number]{max-width:100%;width:150px;box-sizing:border-box}\n.dshp-prompt-lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));align-items:start;gap:12px;min-width:0}\n.dshp-prompt-list-card{padding:12px;border:1px solid #304663;border-radius:10px;min-width:0}\n.dshp-prompt-list-card>summary{cursor:pointer;font-weight:600}\n.dshp-prompt-list-switch{display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:12px}\n.dshp-prompt-list-card>.dshp-prompt-field-note{margin:6px 0 12px}\n.dshp-workspace-recovery{padding:24px;color:#e5eefb;overflow:auto}\n.dshp-workspace-recovery button{padding:8px 12px;cursor:pointer}\n";
+		const PURGE_PROMPT_PAGE_CSS = `
+.dshp-prompt-page summary{cursor:pointer}
+.dshp-prompt-page .dshp-routing-switches{padding:9px 12px;border:1px solid var(--dshp-line);border-radius:8px}
+.dshp-prompt-model-scope{min-width:0;margin:0;padding:10px 12px;border:1px solid var(--dshp-line);border-radius:8px}
+.dshp-prompt-model-scope legend{padding:0 4px;font-weight:600}
+.dshp-prompt-scope-switch{display:flex;align-items:center;gap:7px}
+.dshp-prompt-target{display:flex;min-width:0;flex-direction:column;gap:6px;font-size:12px}
+.dshp-prompt-target textarea.dshp-area{width:100%;min-height:52px;resize:vertical;box-sizing:border-box}
+`;
 		const PURGE_WORKSPACE_PAINT_CSS = `
 /* Stop sampling behind the fullscreen shell and its scrolling content.
    Keep the palette, bounded dialogs, and compact Dock unchanged. */
@@ -15668,7 +15717,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				uiTag.setAttribute("data-dsh-purge-ui", "1");
 				document.head.append(uiTag);
 			}
-			uiTag.textContent = PURGE_CSS + PURGE_WORKSPACE_CSS + PURGE_WORKSPACE_PAINT_CSS;
+			uiTag.textContent = PURGE_CSS + PURGE_WORKSPACE_CSS + PURGE_WORKSPACE_PAINT_CSS + PURGE_PROMPT_PAGE_CSS;
 			if (__dshPurgeDrill && __dshPurgeDrill.CSS) {
 				let drillTag = document.querySelector('style[data-dsh-purge-drill="1"]');
 				if (!drillTag) {

@@ -9,16 +9,16 @@ const end = client.indexOf("function SettingsRoot(props)", start);
 assert.ok(start > 0 && end > start, "profile component must be included in the generated client");
 const source = client.slice(start, end);
 
-function mount() {
+function mount({ querySession } = {}) {
   const profiles = [
     { id: "global", name: "全局", scope: "global", enabled: false, priority: 0, keywords: [], excludes: [], body: "" },
     { id: "redteam", name: "红队", enabled: true, priority: 100, keywords: ["红队演练"], excludes: [], body: "" },
     { id: "coding", name: "开发", enabled: true, priority: 50, keywords: ["修复代码"], excludes: [], body: "Original development text" },
     { id: "writing", name: "写作", enabled: true, priority: 40, keywords: ["翻译"], excludes: [], body: "Writing instructions" },
   ];
-  const apiCalls = [], actions = [], values = [], effectQueue = [];
+  const apiCalls = [], actions = [], values = [], refs = [], effectQueue = [];
   const routingSettings = { bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false };
-  let stateIndex = 0, sessionLock = "writing";
+  let stateIndex = 0, refIndex = 0, sessionLock = "writing";
   const context = vm.createContext({
     useState(initial) {
       const at = stateIndex++;
@@ -26,10 +26,12 @@ function mount() {
       return [values[at], next => { values[at] = typeof next === "function" ? next(values[at]) : next; }];
     },
     useCallback: fn => fn,
+    useRef: current => (refs[refIndex++] ??= { current }),
     useEffect(fn) { effectQueue.push(fn); },
     h: (type, props, ...children) => ({ type, props: props || {}, children }),
     apiJson: async url => {
       apiCalls.push(url);
+      if (querySession && url.includes("sessionId=")) return querySession(url);
       return { ok: true, profiles: structuredClone(profiles),
         routingSettings: structuredClone(routingSettings),
         lastAssembly: { stage: "assembled", delivery: "unverified" },
@@ -55,7 +57,7 @@ function mount() {
   });
   vm.runInContext(source, context);
   function render() {
-    stateIndex = 0;
+    stateIndex = refIndex = 0;
     effectQueue.length = 0;
     return vm.runInContext("PromptProfilesSection()", context);
   }
@@ -77,14 +79,11 @@ function mount() {
     render();
     effectQueue[0]();
     // useEffect schedules the async reload but does not return its Promise.
-    // Flush that microtask before React's subsequent render/effect cycle.
+    // Flush the initial fetch before rendering the saved settings.
     await new Promise(resolve => setImmediate(resolve));
-    render();
-    effectQueue[1]();
-    effectQueue[2]();
     return render();
   }
-  return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings, loadEditor: () => effectQueue[1]() };
+  return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings };
 }
 
 test("local editor saves its independent body through the API callback", async () => {
@@ -101,6 +100,51 @@ test("local editor saves its independent body through the API callback", async (
   assert.equal(saved.data.profile.id, "coding");
   assert.equal(saved.data.profile.body, "Updated from editor");
   assert.equal(ui.profiles.find(p => p.id === "coding").body, "Updated from editor");
+});
+
+test("switching rules and saving another card keeps independent drafts", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "全局提示词正文").props.onChange({ target: { value: "Keep the answer in Chinese." } });
+  tree = ui.render();
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "Summarize the document." } });
+  tree = ui.render();
+  ui.find(tree, "button", "编辑规则 writing").props.onClick();
+  tree = ui.render();
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "Use short sentences." } });
+  ui.find(ui.render(), "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "全局提示词正文").props.value, "Keep the answer in Chinese.");
+  assert.equal(ui.profiles.find(p => p.id === "global").body, "", "saving local did not persist the global draft");
+  ui.find(tree, "button", "编辑规则 coding").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "局部提示词正文").props.value, "Summarize the document.");
+  assert.equal(ui.profiles.find(p => p.id === "coding").body, "Original development text");
+  ui.find(tree, "button", "保存全局提示词").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ui.find(ui.render(), "textarea", "局部提示词正文").props.value, "Summarize the document.");
+  assert.equal(ui.profiles.find(p => p.id === "global").body, "Keep the answer in Chinese.");
+});
+
+test("global and local editors share a full-width page with model scope outside advanced options", async () => {
+  const ui = mount();
+  const tree = await ui.initialize();
+  assert.equal(tree.props.className, "dshp-prompt-page");
+  assert.equal(tree.props.style.gridTemplateColumns, "minmax(0,1fr)");
+  const columns = ui.nodes(tree).find(n => n.props.className === "dshp-prompt-columns");
+  assert.deepEqual(Array.from(columns.children, n => n.props.className),
+    ["dshp-prompt-global", "dshp-prompt-local"]);
+  for (const editor of columns.children) {
+    const scopes = ui.nodes(editor).filter(n => n.props.className === "dshp-prompt-model-scope");
+    assert.equal(scopes.length, 1);
+    assert.ok(ui.find(scopes[0], "textarea", "白名单模型 ID"));
+    assert.ok(ui.find(scopes[0], "textarea", "白名单厂商 / Provider ID"));
+  }
+  ui.find(tree, "button", "填入最近记录的模型").props.onClick();
+  assert.equal(ui.find(ui.render(), "input", "预览模型 ID").props.value, "deepseek-flash");
+  assert.equal(ui.find(ui.render(), "input", "预览厂商 ID").props.value, "deepseek-account");
+  assert.equal(ui.actions.length, 0, "prefilling a preview does not write settings");
 });
 
 test("session picker reads the actual lock and applies explicit off/unlock actions", async () => {
@@ -125,6 +169,19 @@ test("session picker reads the actual lock and applies explicit off/unlock actio
   await ui.find(tree, "button", "应用锁定").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(ui.actions.at(-1).op, "unlock");
+});
+
+test("a delayed session lookup cannot set the lock selector for a newly entered session", async () => {
+  let resolveOld;
+  const ui = mount({ querySession: () => new Promise(resolve => { resolveOld = resolve; }) });
+  const tree = await ui.initialize();
+  ui.find(tree, "button", "获取当前会话").props.onClick();
+  ui.find(ui.render(), "input", "会话 ID").props.onChange({ target: { value: "different-session" } });
+  resolveOld({ ok: true, sessionLock: "writing" });
+  await new Promise(resolve => setImmediate(resolve));
+  const current = ui.render();
+  assert.equal(ui.find(current, "input", "会话 ID").props.value, "different-session");
+  assert.equal(ui.find(current, "select", "锁定提示词").props.value, "");
 });
 
 
@@ -229,7 +286,7 @@ test("advanced rule fields use compact responsive columns instead of full-height
   assert.match(client, /\.dshp-prompt-lists\{display:grid/);
 });
 
-test("advanced targets offer observed local choices and retain manual bulk editing", async () => {
+test("model scope and advanced targets offer observed local choices while retaining manual editing", async () => {
   const ui = mount();
   let tree = await ui.initialize();
   assert.ok(ui.find(tree, "button", "添加白名单模型 ID deepseek-flash"));
@@ -237,7 +294,9 @@ test("advanced targets offer observed local choices and retain manual bulk editi
   assert.ok(ui.find(tree, "button", "添加白名单对话 Session ID current-host-session"));
   assert.ok(ui.find(tree, "button", "添加白名单Agent 预设 cordis"));
   assert.ok(ui.find(tree, "textarea", "白名单模型 ID"), "manual entry remains available");
-  assert.ok(ui.find(tree, "aside", "当前环境与命中预览"), "right-hand environment panel is present");
+  assert.ok(ui.nodes(tree).some(n => n.type === "p" && n.children.some(s =>
+    typeof s === "string" && s.includes("最近记录的模型 / Provider：") && s.includes("不代表当前会话"))),
+    "recent model evidence is visible and not called the current session");
 
   ui.find(tree, "button", "添加白名单模型 ID deepseek-flash").props.onClick();
   tree = ui.render();
