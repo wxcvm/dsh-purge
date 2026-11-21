@@ -99,6 +99,7 @@ jobs:
       - name: Run unit and public API contract tests
         env:
           PURGE_CI_TEST_CONCURRENCY: ${{ vars.PURGE_CI_TEST_CONCURRENCY }}
+          PURGE_VERIFY_GIT_ARCHIVE: '1'
         run: |
           node -e "const n=Number(process.env.PURGE_CI_TEST_CONCURRENCY || require('node:os').availableParallelism()); if(!Number.isSafeInteger(n)||n<1) throw Error('Invalid test concurrency'); const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-concurrency='+n,'test/*.test.*','maintenance/*.test.mjs','maintenance/desktop-tools/*.test.mjs'],{stdio:'inherit'}); process.exitCode=r.status ?? 1"
       - name: Run pending specifications
