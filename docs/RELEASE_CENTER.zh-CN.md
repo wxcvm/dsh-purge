@@ -33,6 +33,12 @@
 
 该检查不会运行 `postinstall`、启动 Harness Desktop、安装到用户已有目录、执行清洗补丁或发送真实 Provider 请求；完成后移除临时目录。**当前主线 package.json 的版本号仍对应上一正式版，不表示从当前主线生成的候选归档就是已发布 .18 的相同字节。** 只有以实际 Release 标签 / 资产 / SHA256 校验后，才能确认发布资产；真实 DSH_HOME 升级、Desktop 加载和 Provider 投递仍按 #336/#337/#340 单独记录。
 
+## Windows Runner 的只读 Desktop 证据（不等于已加载）
+
+`scripts/inspect-windows-desktop-evidence.mjs` 在 Windows 自托管 Runner 上只读定位官方 Harness Desktop 的安装 exe 与 **app.asar 实际清单**、公共 runtime 文件，并以该 Runner 上的当前源码做逐文件哈希比较，分别检查 Desktop / Web / Default profile 的已安装 `dsh-purge`。既有 pnpm 安装产生的 junction 只有在解析目标仍位于当前 profile `node_modules/.pnpm` 内时才允许读取；外部链接标成“未检查”，不会跟随。检测结果仅输出**布尔值、公开版本号、固定相对文件名及匹配/缺失状态**，不输出用户绝对路径、进程命令行、项目/会话内容、提示词正文、日志原文或任何凭据。
+
+这个步骤仅在 `master` **push** 的 Windows Runner CI 执行（Pull Request 不读取机器环境），即使找不到 Desktop 也会给出“无证据”的真实状态，不自动修改/修复/启动/重启任何程序、不访问网络。运行进程计数是机器上的进程观察，并非运行时插件模块的证据：脚本明确报告 `runtimeLoadVerified: false`。安装磁盘文件与当前源码逐字节相同，也**不能证明已经重启并加载最新版本**。实际加载、开关生效、Provider HTTP、升级回退仍由 #336/#337/#340 的实机操作另行验收；观察结果也不能代替正式 Release 资产 SHA256。
+
 ## 后续发布预检
 
 - 固定候选提交，确认包内版本、标签、必要运行文件和 SHA-256。已发布版本不使用相同标签替换资产。
