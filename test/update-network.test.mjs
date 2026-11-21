@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { gitHubCredential, parseUpdateProxy, updateProxy, publicUpstreamRefs } from '../lib/update-network.js'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import os from 'node:os'
 
 test('Git credential reuse is noninteractive, scoped, memory-only and keeps tokens out of diagnostics', () => {
   const secret = 'fixture-only-secret'
@@ -38,16 +39,68 @@ test('updater UI consumes real check results, including unavailable upstreams, w
   assert.match(client, /update\.upstreamUnknown/)
 })
 
-test('public upstream refs disable credentials and keep proxy values out of command arguments', () => {
+test('public upstream refs isolate all private Git credentials and config while retaining the selected proxy', () => {
+  const inherited = {
+    DSH_PURGE_GITHUB_TOKEN: 'private-token',
+    GITHUB_TOKEN: 'github-token',
+    GH_TOKEN: 'gh-token',
+    GH_ENTERPRISE_TOKEN: 'enterprise-token',
+    GIT_ASKPASS: '/private/askpass',
+    SSH_ASKPASS: '/private/ssh-askpass',
+    GIT_ASKPASS_REQUIRE: 'force',
+    GIT_CONFIG_PARAMETERS: "'http.extraHeader=Authorization: Bearer private'",
+    GIT_CONFIG: '/private/gitconfig',
+    GIT_CONFIG_GLOBAL: '/private/global-config',
+    GIT_CONFIG_SYSTEM: '/private/system-config',
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'http.extraHeader',
+    GIT_CONFIG_VALUE_0: 'Authorization: Bearer private',
+    GIT_DIR: '/private/.git',
+    GIT_WORK_TREE: '/private/worktree',
+    GIT_SSL_NO_VERIFY: '1',
+    HTTPS_PROXY: 'http://proxy-user:proxy-pass@127.0.0.1:7890',
+    https_proxy: 'http://proxy-user:proxy-pass@127.0.0.1:7890',
+  }
+  const original = { ...inherited }
+  let cwd = ''
   const result = publicUpstreamRefs({ repository: 'deepseek-ai/deepseek-harness', releasePrefix: 'dsh-v' }, {
-    proxyUrl: 'http://127.0.0.1:7890/', run: (_command, args, options) => {
+    env: inherited,
+    proxyUrl: 'http://127.0.0.1:7890/',
+    run: (_command, args, options) => {
+      cwd = options.cwd
+      assert.ok(existsSync(cwd), 'the isolated working directory exists only for this request')
       assert.ok(args.includes('ls-remote'))
       assert.ok(!args.some(v => v.includes('7890')))
+      assert.equal(options.env.DSH_PURGE_GITHUB_TOKEN, undefined)
+      assert.equal(options.env.GITHUB_TOKEN, undefined)
+      assert.equal(options.env.GH_TOKEN, undefined)
+      assert.equal(options.env.GH_ENTERPRISE_TOKEN, undefined)
+      assert.equal(options.env.GIT_ASKPASS, undefined)
+      assert.equal(options.env.SSH_ASKPASS, undefined)
+      assert.equal(options.env.GIT_ASKPASS_REQUIRE, undefined)
+      assert.equal(options.env.GIT_CONFIG_PARAMETERS, undefined)
+      assert.equal(options.env.GIT_DIR, undefined)
+      assert.equal(options.env.GIT_WORK_TREE, undefined)
+      assert.equal(options.env.GIT_SSL_NO_VERIFY, undefined)
+      assert.equal(options.env.HTTPS_PROXY, undefined)
+      assert.equal(options.env.https_proxy, undefined)
+      assert.equal(options.env.GIT_CONFIG_NOSYSTEM, '1')
+      assert.equal(options.env.GIT_CONFIG_GLOBAL, os.devNull)
+      assert.equal(options.env.GIT_CONFIG_SYSTEM, os.devNull)
+      assert.equal(options.env.GIT_CEILING_DIRECTORIES, cwd)
+      assert.equal(options.env.GIT_CONFIG_COUNT, '4')
       assert.equal(options.env.GIT_CONFIG_KEY_0, 'credential.helper')
       assert.equal(options.env.GIT_CONFIG_VALUE_0, '')
-      assert.equal(options.env.DSH_PURGE_GITHUB_TOKEN, undefined)
+      assert.equal(options.env.GIT_CONFIG_KEY_1, 'http.proxy')
+      assert.equal(options.env.GIT_CONFIG_VALUE_1, 'http://127.0.0.1:7890/')
+      assert.equal(options.env.GIT_CONFIG_KEY_2, 'http.extraHeader')
+      assert.equal(options.env.GIT_CONFIG_VALUE_2, '')
+      assert.equal(options.env.GIT_CONFIG_KEY_3, 'http.https://github.com/.extraHeader')
+      assert.equal(options.env.GIT_CONFIG_VALUE_3, '')
       return 'a'.repeat(40) + '\trefs/heads/master\n' + 'b'.repeat(40) + '\trefs/tags/dsh-v0.2.2-rc.3\n'
     },
   })
   assert.deepEqual(result.tags, ['dsh-v0.2.2-rc.3'])
+  assert.deepEqual(inherited, original, 'caller environment is never mutated')
+  assert.equal(existsSync(cwd), false, 'temporary isolated directory is removed')
 })
