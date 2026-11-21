@@ -72,7 +72,7 @@ try {
   // folder correctly refuses to import that entrypoint without a host.
   // Supply a reviewed host API fixture in the disposable installation only.
   const hostToolsVersion = process.env.PURGE_PACK_SMOKE_TOOLS_VERSION || '0.2.2-rc.5';
-  assert.match(hostToolsVersion, /^\\d+\\.\\d+\\.\\d+-rc\\.\\d+$/,
+  assert.match(hostToolsVersion, /^\d+\.\d+\.\d+-rc\.\d+$/,
     'the host API fixture version must be explicitly pinned');
   command(npm, [
     'install', '--prefix', home, archive, '@deepseek-ai/dsh-tools@' + hostToolsVersion,
