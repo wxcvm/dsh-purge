@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
 import { installAssembleGuard } from "../lib/identity.js";
-import { savePromptProfile, setSessionPromptLock, setSessionPromptPause, listPromptProfiles, routePrompt, latestPromptTask } from "../lib/prompt-profiles.js";
+import { savePromptProfile, setSessionPromptLock, setSessionPromptPause, listPromptProfiles, routePrompt } from "../lib/prompt-profiles.js";
 import { setInjectionOff } from "../lib/inject-switch.js";
 
 test("official Agent Loop carries Purge through frozen llm/stream into an inert adapter", {
@@ -52,26 +52,8 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   const nativeMarker = "P0_NATIVE_COMPLETE_20261120";
   ctx.systemPrompt.section({ name: "fixture:complete", order: 0, text: nativeMarker, complete: true });
   const config = { enabled: true, bundledDefault: true };
-  const assemblyObservations = [];
-  ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
-    const hostSession = context?.agent?.session;
-    const hostEvents = typeof hostSession?.snapshotEvents === "function"
-      ? hostSession.snapshotEvents() : [];
-    assemblyObservations.push({
-      lastUserAtHook: latestPromptTask(hostEvents),
-      contextKeys: Object.keys(context || {}),
-      agentKeys: Object.keys(context?.agent || {}),
-      lastEventTypes: hostEvents.slice(-5).map(event => event.type),
-      recentSpliced: hostEvents.filter(event => event.type === "agent/inbox/spliced")
-        .slice(-1).map(event => ({
-          dataKeys: Object.keys(event.data || {}),
-          dataExcerpt: JSON.stringify(event.data || {}).slice(0, 900),
-        })),
-      inboxKeys: Object.keys(context?.agent?.inbox || {}),
-      inboxExcerpt: JSON.stringify(context?.agent?.inbox || {}).slice(0, 350),
-    });
-    return rewriteLiveAssembly(config, await next(), context);
-  });
+  ctx.on("system-prompt/assemble", async (_assembly, context, next) =>
+    rewriteLiveAssembly(config, await next(), context));
   installAssembleGuard(ctx.systemPrompt, (assembly, context) =>
     rewriteLiveAssembly(config, assembly, context));
 
@@ -164,18 +146,8 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
     home, preset: "standard", sessionId,
     text: "fixture-special first rule check", model: "fixture-model", provider: "fixture",
   });
-  const latestHostTask = latestPromptTask(agent.session.snapshotEvents());
-  assert.ok(current.includes(localMarker), "saved local rule enters the actual loop request; "
-    + JSON.stringify({
-      directSelected: direct.selected, directDecisions: direct.decisions,
-      latestHostTask, assemblyAtSend: assemblyObservations.at(-1), report: {
-        selected: getLastInjectReport()?.selected,
-        reason: getLastInjectReport()?.reason,
-        route: getLastInjectReport()?.route,
-        stage: getLastInjectReport()?.stage,
-      },
-      currentHasGlobal: current.includes(globalMarker),
-    }));
+  assert.ok(direct.selected.includes("fixture_local"), "standalone saved rule must be eligible");
+  assert.ok(current.includes(localMarker), "saved local rule enters the actual loop request");
   assert.ok(current.indexOf(globalMarker) < current.indexOf(localMarker), "global precedes local");
   assert.equal(current.split(globalMarker).length - 1, 1, "global rule appears once");
   assert.equal(current.split(localMarker).length - 1, 1, "local rule appears once");
