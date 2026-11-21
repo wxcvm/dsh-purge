@@ -26,7 +26,7 @@ const assign = (db, task_id, session_id = 'child', run_id = 'run-1') =>
   assignWorkItem(db, { task_id, session_id, run_id })
 const report = (db, task_id, status, session_id = 'child', run_id = 'run-1',
   summary = 'Review result recorded') =>
-  reportWorkItem(db, { task_id, session_id, run_id, status, summary })
+  reportWorkItem(db, { task_id, session_id, run_id, status, summary, host_checked: true })
 
 test('work registration is idempotent and does not overwrite the existing item', () => {
   const db = memory()
@@ -143,13 +143,32 @@ test('existing dispatch routes use the selected engagement and preserve no-selec
     assert.equal(dispatch(store, { op: 'workItemGet', engagement: 'test-project', task_id: id }).item.id, id)
     assert.equal(dispatch(store, { op: 'workItemReport', engagement: 'test-project',
       task_id: id, session_id: 'child', run_id: 'run-1', status: 'ready',
-      summary: 'Review complete; requires explicit acceptance' }).recorded, true)
+      summary: 'Review complete; requires explicit acceptance', host_checked: true }).recorded, true)
     assert.equal(dispatch(store, { op: 'workItemClose', engagement: 'test-project',
       task_id: id, outcome: 'done', reason: 'Accepted' }).closed, true)
     assert.equal(dispatch(store, { op: 'workItemList', engagement: 'test-project' }).total, 1)
     const none = { ...store, activeEngagementId: () => undefined }
     assert.equal(dispatch(none, { op: 'workItemCreate', task_key: 'x', role: 'review',
       objective: 'x' }).ok, false)
+  } finally { db.close() }
+})
+
+test('unobserved run requires explicit operator attestation; observed exact end does not', () => {
+  const db = memory()
+  try {
+    const taskId = create(db, 'unobserved-run').item.id
+    assign(db, taskId, 'child', 'run-1')
+    const request = { task_id: taskId, session_id: 'child', run_id: 'run-1',
+      status: 'ready', summary: 'Read host logs before settling' }
+    assert.throws(() => reportWorkItem(db, request), /operator host check/)
+    assert.equal(getWorkItem(db, taskId).status, 'running')
+    assert.equal(reportWorkItem(db, { ...request, host_checked: true }).recorded, true)
+
+    const observedId = create(db, 'observed-run').item.id
+    assign(db, observedId, 'ended-child', 'run-2')
+    observeWorkItemEnd(db, { session_id: 'ended-child', run_id: 'run-2', stop_reason: 'completed' })
+    assert.equal(reportWorkItem(db, { task_id: observedId, session_id: 'ended-child',
+      run_id: 'run-2', status: 'ready', summary: 'Host event observed' }).recorded, true)
   } finally { db.close() }
 })
 
