@@ -56,6 +56,8 @@ jobs:
         run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
       - name: Verify installed rc.5 packages and peers
         run: node .github/scripts/check-host-fixture.mjs 0.2.2-rc.5
+      - name: Smoke-test actual npm tarball in disposable DSH_HOME
+        run: node scripts/smoke-packed-install.mjs
       - name: Prepare and install the independent rc.3 regression fixture
         env:
           NODE_USE_ENV_PROXY: '1'
