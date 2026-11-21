@@ -14,6 +14,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { checkCandidateArchives } from './check-candidate-archives.mjs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -103,6 +104,10 @@ try {
     'sealed development prompt must not leak into the installed package');
   assert.equal(existsSync(path.join(installed, '.github')), false,
     'repository automation must not be in the package');
+
+  const paired = checkCandidateArchives({ cwd: root, outputDir: temp, installedDir: installed });
+  console.log('Candidate ' + paired.commit + ': npm SHA-256 ' + sha256 + '; ZIP SHA-256 ' + paired.zipSha256
+    + '; ' + paired.fileCount + ' shipped files match (' + paired.newlineOnly + ' with checkout newline conversion only).');
 
   const probe = [
     "import assert from 'node:assert/strict';",
