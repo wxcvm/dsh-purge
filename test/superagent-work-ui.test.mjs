@@ -87,16 +87,20 @@ test('manual settlement requires affirmative external host check and exact sessi
   const report = requests.find(req => req.op === 'workItemReport')
   assert.deepEqual(report, {
     op: 'workItemReport', engagement: 'one', task_id: 1, session_id: 'child-1', run_id: 'run-1',
-    status: 'ready', summary: 'Checked host: the original run stopped',
+    status: 'ready', summary: 'Checked host: the original run stopped', host_checked: true,
   })
   assert.match(content(ui), /结算已记录/)
   ui.unmount()
 })
 
 test('observed exact-run host end allows settlement without external checkbox', async () => {
+  const calls = []
   const ended = item({ assignment: { ...item().assignment, host_end_at: '2026-11-21T01:00:00Z', host_stop_reason: 'completed' } })
-  const ui = mount('one', async req => req.op === 'workItemReview'
-    ? list('one', [ended]) : { ok: true, engagement: 'one', item: { ...ended, history: [ended.assignment] } })
+  const ui = mount('one', async req => {
+    calls.push(req)
+    return req.op === 'workItemReview'
+      ? list('one', [ended]) : { ok: true, engagement: 'one', item: { ...ended, history: [ended.assignment] } }
+  })
   await setImmediate()
   control(ui, 'button', '查看持久任务 #1').props.onClick()
   await setImmediate()
@@ -104,6 +108,8 @@ test('observed exact-run host end allows settlement without external checkbox', 
   assert.equal(elements(ui.render()).some(node => node.type === 'input' && node.props.type === 'checkbox'), false)
   control(ui, 'textarea', '结算依据').props.onChange({ target: { value: 'Confirmed review summary' } })
   assert.equal(control(ui, 'button', '记录结算').props.disabled, false)
+  await control(ui, 'button', '记录结算').props.onClick()
+  assert.equal(calls.find(req => req.op === 'workItemReport').host_checked, false)
   ui.unmount()
 })
 

@@ -9,7 +9,7 @@
 - 每个既有演练的 assets.db 新增 agent_work_item 与 agent_work_assignment；不新建共享数据服务，不改原生 Agent Teams 的存储，也不修改 agent_attention 的已读回报。
 - create 使用 task_key 幂等。assign 使用精确 session_id + run_id；同一任务多轮执行按 attempt 顺序保存。同一会话/轮次不能同时登记为另一个任务。
 - report 只接受当前最新轮次且尚未结算的 assignment。重复 / 旧轮次回报只返回拒绝原因，不能覆盖新状态。
-- close 是独立记录动作：只有 ready 可标 done；当前 running 必须先有结算报告。记录 done **不代表实际结果已独立验证**。
+- 工作台人工 `close` 是独立记录动作（模型工具不可调用）：只有 ready 可标 done；当前 running 必须先有结算报告。记录 done **不代表实际结果已独立验证**。
 - recovery 只列出持久的 running 行；未见宿主结束事件时 host_activity 为 unverified，收到精确匹配的 subagent/end 事件后为 end-observed；机器重启本身不能证明子会话结束。没有真实宿主证据前不能自动标 interrupted、释放额外名额或重新派活。
 - SQLite 事务保护每次生命周期写入；旧演练数据库按原本 DDL 自行新增空表，已有资料不重写。
 - summary/objective/reason 采用原有基础敏感字符串遮蔽，**不是完整隐私匿名化**；仅存简短文本，不保存完整对话/工具轨迹。
@@ -20,9 +20,9 @@
 
 1. redteam_work_item action=create, task_key=docs-review-01, role=review, objective=核对本地文档。
 2. action=assign, task_id=返回的任务 ID, session_id=确切子会话 ID, run_id=确切轮次 ID。
-3. action=report, task_id=同上, session_id/run_id=同上, status=ready, summary=已整理证据待审查。
-4. action=close, task_id=同上, outcome=done, reason=已明确核对并收口。
-5. 宿主中途重启后先 action=recovery，人工对照宿主会话目录和当前活动状态；如果确认旧轮次已中断，再用 action=report status=interrupted 结算旧轮次，而后 action=assign 记录新的实际轮次。
+3. 确认宿主已发出精确匹配的 `subagent/end` 事件后，才可通过工具 `action=report` 登记该轮状态及简短摘要；运行结束仍不等于交付完成。
+4. 最终 `done/dropped` 收口需在作战台由操作者人工核验并提交，模型工具不再提供 `close`。若无精确宿主结束事件，操作者需在工作台独立核对旧 run，勾选人工核验声明才能结算；模型工具不能自报该声明。
+5. 宿主中途重启后先 `action=recovery`，人工对照真实会话目录；如确认旧轮次已中断，由工作台结算为 `interrupted`，再在 Harness 实际启动新轮次并记录新的 session/run。
 
 ## 第二阶段：真实子智能体结束事件对账（本 PR 增量）
 
@@ -45,7 +45,7 @@
 | redteam_task_block | 针对已有 next_action 任务键记录阻塞原因 |
 | 本轮 agent_work_item / assignment | 可追溯的长任务 ID、执行轮次、终态登记和恢复候选 |
 
-第一阶段**不会自动**调用 subagent、shell、漏洞验证、扫描、GitHub/飞书任务监听，也不会将任意历史记录当作授权。真正的 SuperAgent Source、Trigger、Eval、Ticket Engine、持久 Effects、异步投递和调度器仍未移植；不应将当前成果宣传为无人值守系统。
+后台强制区分真实宿主结束事件与人工 `host_checked` 声明；该声明只说明操作者在外部核验，不是技术上独立验证。第一阶段**不会自动**调用 subagent、shell、漏洞验证、扫描、GitHub/飞书任务监听，也不会将任意历史记录当作授权。真正的 SuperAgent Source、Trigger、Eval、Ticket Engine、持久 Effects、异步投递和调度器仍未移植；不应将当前成果宣传为无人值守系统。
 
 ## 验收与待办
 
