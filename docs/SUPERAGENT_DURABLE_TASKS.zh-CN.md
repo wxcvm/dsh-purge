@@ -9,7 +9,7 @@
 - 每个既有演练的 assets.db 新增 agent_work_item 与 agent_work_assignment；不新建共享数据服务，不改原生 Agent Teams 的存储，也不修改 agent_attention 的已读回报。
 - create 使用 task_key 幂等。assign 使用精确 session_id + run_id；同一任务多轮执行按 attempt 顺序保存。同一会话/轮次不能同时登记为另一个任务。
 - report 只接受当前最新轮次且尚未结算的 assignment。重复 / 旧轮次回报只返回拒绝原因，不能覆盖新状态。
-- close 是独立记录动作：只有 ready 可标 done；当前 running 必须先有结算报告。记录 done **不代表实际结果已独立验证**。
+- 工作台人工 `close` 是独立记录动作（模型工具不可调用）：只有 ready 可标 done；当前 running 必须先有结算报告。记录 done **不代表实际结果已独立验证**。
 - recovery 只列出持久的 running 行；未见宿主结束事件时 host_activity 为 unverified，收到精确匹配的 subagent/end 事件后为 end-observed；机器重启本身不能证明子会话结束。没有真实宿主证据前不能自动标 interrupted、释放额外名额或重新派活。
 - SQLite 事务保护每次生命周期写入；旧演练数据库按原本 DDL 自行新增空表，已有资料不重写。
 - summary/objective/reason 采用原有基础敏感字符串遮蔽，**不是完整隐私匿名化**；仅存简短文本，不保存完整对话/工具轨迹。
