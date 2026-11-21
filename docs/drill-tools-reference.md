@@ -75,16 +75,18 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 参数：
 
-- `action` — 必填：`create` 登记任务；`list` 分页；`get` 查看单条及最多 100 次历史；`assign` 将确切 `session_id/run_id` 记为本轮执行；`report` 结算本轮；`close` 显式收口；`recovery` 列出需核对的持久化运行记录。
+- `action` — 必填：`create` 登记任务；`list` 分页；`get` 查看单条及最多 100 次历史；`assign` 将确切 `session_id/run_id` 记为本轮执行；`report` 在精确宿主结束事件已观察后登记本轮结算；`recovery` 列出需核对的持久化运行记录。
 - `engagement` — 当前靶标，默认会话绑定；不同靶标隔离。
 - `task_key / role / objective` — `create` 必填。相同 task_key 不覆盖已有记录，重复操作幂等。
 - `task_id` — `get / assign / report / close` 必填。
 - `session_id / run_id` — `assign / report` 必填，防止前一轮迟到报告覆盖新轮次。
 - `status / summary` — `report`：`waiting|ready|blocked|failed|interrupted` 和结果摘要；摘要进行有限的凭据文本遮蔽。
-- `outcome / reason` — `close`：`done|dropped` 和明确原因；`done` 需要先有 `ready` 回报，禁止直接将 running 当作完成。
+- `done/dropped` 的最终收口改由工作台人工复核后通过本机 UI 接口完成；模型工具不允许代替操作者关闭任务。
 - `limit / offset` — 分页查询，最多 100 条。
 
 宿主真实 `subagent/end` 事件到达时，若演练绑定及 `session_id/run_id` 精确匹配本任务的已登记 Assignment，将仅补记 `host_end_at/host_stop_reason`，不会自动完成或重新执行任务。详情见 [第二阶段真实事件对账](SUPERAGENT_DURABLE_TASKS.zh-CN.md#第二阶段真实子智能体结束事件对账本-pr-增量)。
+
+结算约束：模型工具不会提供人工 `host_checked` 声明，只有已观察到本次精确 `subagent/end` 的任务轮次才可由模型调用 `report` 结算。无结束事件时须在工作台明确核对后人工结算；该勾选是操作者声明而不是独立宿主证明。
 
 恢复语义：宿主重启后 `recovery` 显示 `host_activity=unverified`，**并不推断原子智能体已退出**；必须先核对其真实会话和执行状态，再显式记 `interrupted` 并分配新轮次。没有自动重启、自动重派、自动批准或后台任务。本轮完整使用说明见 [SuperAgent 持久任务阶段一](SUPERAGENT_DURABLE_TASKS.zh-CN.md)。
 
