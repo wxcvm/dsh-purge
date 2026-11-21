@@ -33,6 +33,8 @@ jobs:
       - name: Install declared plugin dependencies once
         id: root-install
         run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional --package-lock=false
+      - name: Verify npm package file contract
+        run: node scripts/check-packlist.mjs
       - name: Prepare latest official fixture, without host or model execution
         if: runner.os == 'Linux'
         shell: bash
