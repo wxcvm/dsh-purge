@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
 import { installAssembleGuard } from "../lib/identity.js";
-import { savePromptProfile, setSessionPromptLock, setSessionPromptPause, listPromptProfiles } from "../lib/prompt-profiles.js";
+import { savePromptProfile, setSessionPromptLock, setSessionPromptPause, listPromptProfiles, routePrompt, latestPromptTask } from "../lib/prompt-profiles.js";
 import { setInjectionOff } from "../lib/inject-switch.js";
 
 test("official Agent Loop carries Purge through frozen llm/stream into an inert adapter", {
@@ -142,7 +142,22 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   await send("fixture-special first rule check");
   let current = deliveredNow();
   assert.ok(current.includes(globalMarker), "saved global rule enters the actual loop request");
-  assert.ok(current.includes(localMarker), "saved local rule enters the actual loop request");
+  const direct = routePrompt({
+    home, preset: "standard", sessionId,
+    text: "fixture-special first rule check", model: "fixture-model", provider: "fixture",
+  });
+  const latestHostTask = latestPromptTask(agent.session.snapshotEvents());
+  assert.ok(current.includes(localMarker), "saved local rule enters the actual loop request; "
+    + JSON.stringify({
+      directSelected: direct.selected, directDecisions: direct.decisions,
+      latestHostTask, report: {
+        selected: getLastInjectReport()?.selected,
+        reason: getLastInjectReport()?.reason,
+        route: getLastInjectReport()?.route,
+        stage: getLastInjectReport()?.stage,
+      },
+      currentHasGlobal: current.includes(globalMarker),
+    }));
   assert.ok(current.indexOf(globalMarker) < current.indexOf(localMarker), "global precedes local");
   assert.equal(current.split(globalMarker).length - 1, 1, "global rule appears once");
   assert.equal(current.split(localMarker).length - 1, 1, "local rule appears once");
