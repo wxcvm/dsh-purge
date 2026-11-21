@@ -211,3 +211,37 @@ test('a failed refresh labels retained rows as an earlier read until a fresh res
   assert.doesNotMatch(content(ui), /上次读取结果/)
   assert.match(content(ui), /当前没有待阅回报/)
 })
+
+test('manual paging keeps the exact report ID, preserves prior rows on failure and follows the ack page', async () => {
+  const requests = []
+  const first = Array.from({ length: 20 }, (_, i) => report(41 - i))
+  let readingSecond = 0
+  const ui = mount('docs', async request => {
+    requests.push(request)
+    if (request.op === 'attentionAck') return queue('docs', first,
+      { offset: 0, limit: 20, total: 20, has_more: false, ack: { report_id: 21, acknowledged: true } })
+    if (request.offset === 20) {
+      if (++readingSecond === 1) throw new Error('connection interrupted')
+      return queue('docs', [report(21)], { offset: 20, limit: 20, total: 21, truncated: true, has_more: false })
+    }
+    return queue('docs', first, { offset: 0, limit: 20, total: 21, truncated: true, has_more: true })
+  })
+  await setImmediate()
+  assert.equal(button(ui, '上一页回报').props.disabled, true)
+  await button(ui, '下一页回报').props.onClick()
+  assert.match(content(ui), /上次读取结果/)
+  assert.ok(button(ui, '将回报 #41 标为已阅'))
+  await button(ui, '下一页回报').props.onClick()
+  assert.match(content(ui), /21–21 \/ 21 条/)
+  assert.ok(button(ui, '将回报 #21 标为已阅'))
+  assert.equal(button(ui, '下一页回报').props.disabled, true)
+  await button(ui, '上一页回报').props.onClick()
+  assert.ok(button(ui, '将回报 #41 标为已阅'))
+  await button(ui, '下一页回报').props.onClick()
+  assert.deepEqual(requests.map(r => r.op), Array(5).fill('attention'))
+  await button(ui, '将回报 #21 标为已阅').props.onClick()
+  assert.deepEqual(requests.at(-1), { op: 'attentionAck', engagement: 'docs', report_id: 21, offset: 20 })
+  assert.equal(button(ui, '上一页回报'), undefined)
+  assert.ok(button(ui, '将回报 #41 标为已阅'))
+  assert.equal(button(ui, '将回报 #21 标为已阅'), undefined)
+})

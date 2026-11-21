@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "b11ffc83a40aaecc";
+		const CLIENT_BUILD_ID = "de7ab6ef078a6182";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -13914,7 +13914,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [statusFilter, setStatusFilter] = React.useState('all')
       const [snapshotOutdated, setSnapshotOutdated] = React.useState(false)
       const active = React.useRef(null)
-      const load = async (reportId) => {
+      const load = async (reportId, pageOffset = queue?.offset ?? 0) => {
         const scope = active.current
         if (!scope || scope.pending) return
         const confirm = reportId !== undefined
@@ -13922,8 +13922,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setBusy(confirm ? reportId : 'list')
         setNotice(null)
         try {
-          const response = await api(confirm ? { op: 'attentionAck', engagement, report_id: reportId }
-            : { op: 'attention', engagement })
+          const request = confirm ? { op: 'attentionAck', engagement, report_id: reportId } : { op: 'attention', engagement }
+          if (pageOffset) request.offset = pageOffset
+          const response = await api(request)
           if (active.current !== scope) return
           if (!response?.ok || response.engagement !== engagement || !Array.isArray(response.items)
             || (confirm && (response.ack?.report_id !== reportId || typeof response.ack.acknowledged !== 'boolean'))) {
@@ -13953,7 +13954,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!engagement) return
         const scope = { pending: false }
         active.current = scope
-        void load()
+        void load(undefined, 0)
         return () => { if (active.current === scope) active.current = null }
       }, [engagement])
 
@@ -13982,8 +13983,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : visible && items.length === 0 ? h('div', { className: 'rt-note' }, visible.total > 0
             ? '没有加载到待阅回报，仍有回报待读取。'
             : snapshotOutdated || busy === 'list' ? '上次读取没有待阅回报。' : '当前没有待阅回报。') : null,
-        visible?.truncated ? h('div', { className: 'rt-note' },
-          '当前只展示 ' + items.length + ' 条待阅回报；状态筛选不包括未加载的回报。') : null,
+        visible?.truncated ? h('div', { className: 'rt-toolbar' },
+          h('span', { className: 'rt-note', role: 'status' }, (visible.offset || 0) + 1 + '–'
+            + ((visible.offset || 0) + items.length) + ' / ' + visible.total + ' 条；状态筛选不包括未加载的回报。'),
+          h('button', { type: 'button', className: 'rt-btn', disabled: busy !== null || !(visible.offset > 0),
+            onClick: () => load(undefined, Math.max(0, visible.offset - visible.limit)) }, '上一页回报'),
+          h('button', { type: 'button', className: 'rt-btn', disabled: busy !== null || !visible.has_more,
+            onClick: () => load(undefined, visible.offset + visible.limit) }, '下一页回报')) : null,
         items.length > 0 ? h('div', { className: 'rt-toolbar' },
           h('label', null, '按回报状态筛选 ',
             h('select', { className: 'rt-input', value: statusFilter, onChange: e => setStatusFilter(e.target.value) },
