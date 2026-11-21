@@ -39,7 +39,8 @@ function mount(engagement, api, opts = {}) {
   const render = () => { state = ref = 0; return vm.runInContext('WorkItemsPanel({engagement,...opts})', ctx) }
   render()
   dispose = effect?.()
-  return { render, unmount() { dispose?.(); unmounted = true }, writes: () => unmountedWrites }
+  return { render, reloadScope() { dispose?.(); render(); dispose = effect?.() },
+    unmount() { dispose?.(); unmounted = true }, writes: () => unmountedWrites }
 }
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -48,6 +49,11 @@ function elements(node) {
 const control = (ui, type, label) => elements(ui.render()).find(node => node.type === type
   && (node.props['aria-label'] === label || node.children.includes(label)))
 const content = ui => JSON.stringify(ui.render())
+const deferred = () => {
+  let resolve, reject
+  const promise = new Promise((ok, fail) => { resolve = ok; reject = fail })
+  return { promise, resolve, reject }
+}
 
 test('durable board reads the selected engagement and retains unverified registry semantics', async () => {
   const requests = []
@@ -181,4 +187,112 @@ test('unmounted project discards stale review results', async () => {
   await setImmediate()
   assert.equal(ui.writes(), 0)
   assert.doesNotMatch(content(ui), /must-stay-hidden/)
+})
+
+test('search narrows only the loaded page and ignores hidden fields in privacy mode', async () => {
+  const requests = [], opts = {}
+  const ui = mount('one', async req => {
+    requests.push(req)
+    return { ...list('one', [item(), item({ id: 12, task_key: 'copy-edit', role: 'editor' })]), hasMore: true, total: 32 }
+  }, opts)
+  await setImmediate()
+  const search = value => control(ui, 'input', '搜索本页任务').props.onChange({ target: { value } })
+  search('  EDITOR ')
+  assert.equal(control(ui, 'button', '查看持久任务 #1'), undefined)
+  assert.ok(control(ui, 'button', '查看持久任务 #12'))
+  assert.match(content(ui), /第 1–2 条 \/ 共 32 条 · 本页匹配 1 条/)
+  search('#1')
+  assert.ok(control(ui, 'button', '查看持久任务 #1'))
+  assert.equal(control(ui, 'button', '查看持久任务 #12'), undefined)
+  search('not-on-this-page')
+  assert.match(content(ui), /其他页没有加入搜索/)
+  assert.ok(control(ui, 'button', '下一页'))
+  control(ui, 'button', '清除搜索').props.onClick()
+  assert.ok(control(ui, 'button', '查看持久任务 #12'))
+  search('not-on-this-page')
+  opts.maskReportOrigin = true
+  assert.equal(control(ui, 'input', '搜索本页任务'), undefined)
+  assert.equal(elements(ui.render()).filter(node => node.type === 'article').length, 2)
+  assert.doesNotMatch(content(ui), /本页匹配|没有匹配项|not-on-this-page|copy-edit/)
+  assert.equal(requests.length, 1)
+  ui.unmount()
+})
+
+test('list labels distinguish loading and failed refresh from an empty result', async () => {
+  const first = deferred(), second = deferred()
+  let calls = 0
+  const panel = mount('one', async () => {
+    switch (++calls) {
+      case 1: return first.promise
+      case 2: return second.promise
+      default: throw Error('private connection message')
+    }
+  })
+  assert.match(content(panel), /正在读取任务台账/)
+  const refresh = control(panel, 'button', '刷新持久任务').props.onClick()
+  second.resolve(list('one', [item({ task_key: 'latest-result' })]))
+  await refresh
+  first.resolve(list('one', []))
+  await setImmediate()
+  assert.match(content(panel), /latest-result/)
+  assert.doesNotMatch(content(panel), /还没有登记持久任务/)
+  await control(panel, 'button', '刷新持久任务').props.onClick()
+  assert.match(content(panel), /任务台账读取失败；下方为上次成功读取的结果/)
+  assert.match(content(panel), /latest-result/)
+  assert.doesNotMatch(content(panel), /private connection message/)
+  panel.unmount()
+})
+
+test('a late detail response cannot replace a different selection or reopen a cancelled view', async () => {
+  const old = deferred(), cancelled = deferred()
+  let detailReads = 0
+  const one = item({ id: 1, task_key: 'first-task' }), two = item({ id: 2, task_key: 'second-task' })
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', [one, two])
+    if (++detailReads === 1) return old.promise
+    if (detailReads === 3) return cancelled.promise
+    return { ok: true, engagement: 'one', item: { ...two, history: [] } }
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  assert.match(content(ui), /正在读取任务 #1 的详情/)
+  control(ui, 'button', '查看持久任务 #2').props.onClick()
+  await setImmediate()
+  old.resolve({ ok: true, engagement: 'one', item: { ...one, history: [] } })
+  await setImmediate()
+  assert.match(content(ui), /任务 #2 · 已登记执行/)
+  assert.doesNotMatch(content(ui), /任务 #1 · 已登记执行/)
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  control(ui, 'button', '取消查看').props.onClick()
+  cancelled.resolve({ ok: true, engagement: 'one', item: { ...one, history: [] } })
+  await setImmediate()
+  assert.equal(control(ui, 'button', '关闭详情'), undefined)
+  assert.doesNotMatch(content(ui), /正在读取任务 #1 的详情/)
+  ui.unmount()
+})
+
+test('manual action finishing after switching the list filter does not leave controls busy', async () => {
+  const pending = deferred()
+  const ready = full({ status: 'ready' })
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', [ready])
+    if (req.op === 'workItemGet') return { ok: true, engagement: 'one', item: ready }
+    return pending.promise
+  })
+  await setImmediate()
+  const open = async () => {
+    control(ui, 'button', '查看持久任务 #1').props.onClick()
+    await setImmediate()
+    control(ui, 'input', '收尾依据').props.onChange({ target: { value: 'Reviewed the draft' } })
+  }
+  await open()
+  const saving = control(ui, 'button', '确认完成').props.onClick()
+  assert.equal(control(ui, 'button', '确认完成').props.disabled, true)
+  control(ui, 'select', '筛选任务状态').props.onChange({ target: { value: 'ready' } })
+  ui.reloadScope()
+  pending.resolve({ ok: true, closed: true })
+  await saving
+  await open()
+  assert.equal(control(ui, 'button', '确认完成').props.disabled, false)
+  ui.unmount()
 })
