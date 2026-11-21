@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6fec4ed9fd867cf3";
+		const CLIENT_BUILD_ID = "350d82ef13fa9078";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -13746,7 +13746,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               ' 我已在宿主外部核对当前 run；理解仅凭任务记录/会话快照不能判断已结束') : null,
             h('button', { className: 'rt-btn', disabled: Boolean(busy) || !settleAllowed,
               onClick: () => mutate({ op: 'workItemReport', task_id: record.id,
-                session_id: assignment.session_id, run_id: assignment.run_id, status: outcome, summary }, '结算', record.id) }, '记录结算')) : null,
+                session_id: assignment.session_id, run_id: assignment.run_id, status: outcome, summary, host_checked: !assignment.host_end_at && hostChecked }, '结算', record.id) }, '记录结算')) : null,
           canReassign ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
             h('h4', null, '关联已有执行 / 重试记录'),
             h('p', { className: 'rt-note' }, '先在 Harness 中实际派发，再填写真实 session_id 和 run_id；本操作不会启动或重启智能体。'),
