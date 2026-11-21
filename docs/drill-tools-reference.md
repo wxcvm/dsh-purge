@@ -84,6 +84,8 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `outcome / reason` — `close`：`done|dropped` 和明确原因；`done` 需要先有 `ready` 回报，禁止直接将 running 当作完成。
 - `limit / offset` — 分页查询，最多 100 条。
 
+宿主真实 `subagent/end` 事件到达时，若演练绑定及 `session_id/run_id` 精确匹配本任务的已登记 Assignment，将仅补记 `host_end_at/host_stop_reason`，不会自动完成或重新执行任务。详情见 [第二阶段真实事件对账](SUPERAGENT_DURABLE_TASKS.zh-CN.md#第二阶段真实子智能体结束事件对账本-pr-增量)。
+
 恢复语义：宿主重启后 `recovery` 显示 `host_activity=unverified`，**并不推断原子智能体已退出**；必须先核对其真实会话和执行状态，再显式记 `interrupted` 并分配新轮次。没有自动重启、自动重派、自动批准或后台任务。本轮完整使用说明见 [SuperAgent 持久任务阶段一](SUPERAGENT_DURABLE_TASKS.zh-CN.md)。
 
 ### `redteam_agent_slot`
