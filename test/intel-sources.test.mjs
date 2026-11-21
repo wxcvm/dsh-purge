@@ -37,7 +37,8 @@ test('multi-provider preferences persist through existing platform API without l
   assert.equal(response.ok, true)
   assert.deepEqual(response.config.intelSources,
     { selected: ['local', 'censys', 'shodan', 'quake'], preferred: 'shodan' })
-  assert.equal(response.config.env.FOFA_KEY, 'fixture-key')
+  assert.deepEqual(response.config.env, {})
+  assert.equal(response.config.fofaKeyConfigured, true)
   assert.equal(response.config.tools.nmap, '/mock/nmap')
   const roundTrip = dispatch(store, { op: 'platformConfigGet' })
   assert.deepEqual(roundTrip.config.intelSources, response.config.intelSources)
