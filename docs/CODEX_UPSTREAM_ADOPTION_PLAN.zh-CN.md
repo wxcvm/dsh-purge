@@ -182,3 +182,11 @@ gh issue view 351 -R wxcvm/dsh-purge
 运行 `node test/fixtures/ordinary-prompt-routing-benchmark.mjs`（Node.js 24）。17 个固定人工标注句仅包含代码审阅、文档/写作、中性对照；在临时配置中仅启用普通规则，10 轮热运行，不调用宿主、Provider 或网络。Windows 样本：规则正好匹配 **13/17**，总是选择同一标签的最优基线 **5/17**；170 次热路由延迟 p50 约 **2.74 ms**、p95 约 **4.42 ms**。Node 进程 RSS 起止约 46.0 → 48.2 MiB，不是峰值或候选模型内存。未匹配样本包括否定、提及某类工作却在请求另一类工作，以及关键词外同义说法；这组小样本不用于估算生产准确率。
 
 没有运行本地模型或取得精度、延迟、资源三项对照，因此**不引入模型、不新增依赖、不改运行时路由**。如以后做对比，先冻结独立样本与验收指标，再在同机记录规则和候选模型的误判、回退、p95 和峰值内存；达不到净收益不采纳。跟踪 [#350](https://github.com/wxcvm/dsh-purge/issues/350)，汇总仍用 [#351](https://github.com/wxcvm/dsh-purge/issues/351)。
+
+## 9 · 继续验收：普通工作台绘制与 ARTEX 本机端点
+
+- [#437](https://github.com/wxcvm/dsh-purge/pull/437) 已合并为 [`41e1ddb`](https://github.com/wxcvm/dsh-purge/commit/41e1ddb8147f31e919da033f46ddf1aa1a3d70ed)，[合并后的 Windows / Ubuntu 兼容性 CI](https://github.com/wxcvm/dsh-purge/actions/runs/44902226783) 均通过。没有发版。
+- [#364](https://github.com/wxcvm/dsh-purge/issues/364)：Windows Chromium 计算样式确认，普通嵌入清洗台原来还有 `blur(12px)`，且 650px 嵌入面板仍用侧栏布局，因为旧断点看整窗而不是面板。本次只调整普通清洗台输入控件与断点：在 1440px 整窗内，1160px 面板的通用/局部并排铺满；650px 面板顶部导航、编辑区纵向排布且无横向溢出。键盘焦点和滚动可达，普通嵌入与宿主铺满状态均不叠加模糊，弹窗和独立浮窗保留原样。
+- 可复跑：`node test/fixtures/clean-workspace-chromium.mjs "<Chromium 或 Chrome 可执行文件>"`。夹具读取真实 `client.js` 样式，以本地固定 DOM 运行，不执行宿主、插件脚本或接口。它所验证的是几何、计算样式和交互可达性，**不是** Windows Electron 的 GPU 绘制或原始空白复发验收。仍需隔离 Desktop 复验 DPI/最大化/全屏和页面切换。
+- [#336](https://github.com/wxcvm/dsh-purge/issues/336)：在新建 DSH_HOME 用本机 rc.5 桌面包自带 CLI，确认 Web profile 与插件管理入口可解析。没有启动第二个 Electron 桌面、挂载 Purge 到生产配置或发模型请求。这不是 Purge 在 Web/Desktop 中完整安装和恢复的证明。
+- [#346](https://github.com/wxcvm/dsh-purge/issues/346)：Windows 本机 ARTEX v0.6.0 的监听地址为 `127.0.0.1`；复用 Purge 的实际只读身份探针得到 HTTP 200、状态 `detected`。无独立凭据访问隐私总览返回 401。未发送凭据、未改两端数据；实际配对、权限内的回执、断线及冲突恢复继续单独验收。
