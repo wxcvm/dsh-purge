@@ -50,7 +50,13 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 
 同一检查还从当前检出的完整 Git 提交生成 ZIP，将默认包清单、前后端入口、更新器、维护入口和署名等 9 个文件与 npm 已解出的真实制品逐项比较，并报告两个归档各自的 SHA-256。非生成文本允许 Windows 检出时只发生 LF/CRLF 转换，并单独计数；生成的前端要求字节相等。该 ZIP 是候选证据，不创建标签、不上传资产、不视为已发布。
 
-该检查不会运行 `postinstall`、启动 Harness Desktop、安装到用户已有目录、执行清洗补丁或发送真实 Provider 请求；完成后移除临时目录。**当前主线 package.json 的版本号仍对应上一正式版，不表示从当前主线生成的候选归档就是已发布 .18 的相同字节。** 只有以实际 Release 标签 / 资产 / SHA256 校验后，才能确认发布资产；真实 DSH_HOME 升级、Desktop 加载和 Provider 投递仍按 #336/#337/#340 单独记录。
+该检查不会运行 `postinstall`、启动 Harness Desktop、安装到用户已有目录、执行清洗补丁或发送真实 Provider 请求；完成后移除临时目录。**主线 `package.json` 的版本号只标识当前源码候选。即使和正式版同号，候选归档也不一定与已发布资产字节相同。** 只有以实际 Release 标签 / 资产 / SHA256 校验后，才能确认发布资产；真实 DSH_HOME 升级、Desktop 加载和 Provider 投递仍按 #336/#337/#340 单独记录。
+
+### 2026-11-22 · 主线候选、公开 Release 和本机安装
+
+- **源码候选**：[master @6dd19dc](https://github.com/wxcvm/dsh-purge/blob/6dd19dc90cc097223b3557ef1f67d5935fb62055/package.json) 是 `1.1.92-wxcvm.19`，[该提交 Windows/Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44927054025) 通过；这是该提交的证据，不适用于后续提交。
+- **实际发布**：当日 [GitHub Releases](https://github.com/wxcvm/dsh-purge/releases) 的最新正式版仍是 [`v1.1.92-wxcvm.18`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.18)。不能以源码版本或 CI 产物替代发布标签与实际资产。
+- **本机磁盘和进程**：[只读核验](https://github.com/wxcvm/dsh-purge/issues/336#issuecomment-7066127454) 找到 Harness Desktop `0.2.2-rc.5` 和已登记的 Purge `.18`；插件前端字节与比较的 `.19` 候选不同。Desktop 有运行进程，但没有取得该进程加载候选版的证据。没有安装或重启，也没有发送 Provider 请求。
 
 ## Windows Runner 的只读 Desktop 证据（不等于已加载）
 
