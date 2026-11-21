@@ -45,6 +45,95 @@ test('knowledge page and authorized bridge are wired into generated client', () 
   }
 })
 
+test('exact text re-import skips in the same transaction and preserves local favorites and history', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-knowledge-dedup-'))
+  try {
+    const call = (op, args = {}) => knowledgeRequest(root, { op, ...args })
+    const note = { title: '交接', body: '备注\n', category: '导入文档', source: '交接.md' }
+    const first = call('knowledgeImport', { documents: [note, note], skipExactDuplicate: true })
+    assert.deepEqual(first, { ok: true, imported: 1, ids: [1], skipped: 1 })
+    const item = call('knowledgeGet', { id: first.ids[0] }).item
+    call('knowledgeSave', { ...item, favorite: true })
+    const { documents, history } = call('knowledgeExport').backup
+    assert.equal(documents[0].favorite, 1)
+    assert.equal(history.length, 1)
+    const duplicate = call('knowledgeImport', { documents: [{ ...note, source: ' 交接.md ' }], skipExactDuplicate: true })
+    assert.deepEqual(duplicate, { ok: true, imported: 0, ids: [], skipped: 1 })
+    const after = call('knowledgeExport').backup
+    assert.deepEqual(after.documents, documents)
+    assert.deepEqual(after.history, history)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('same title does not hide a content, source, category or tag difference', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-knowledge-distinct-'))
+  try {
+    const note = { title: '会议纪要', body: '正文', category: '资料', tags: '团队', source: '会议.txt' }
+    const variants = [note, { ...note, title: '项目纪要' }, { ...note, body: '正文\n' },
+      { ...note, category: '项目' }, { ...note, tags: '归档' }, { ...note, source: '会议.md' }]
+    const result = knowledgeRequest(root, { op: 'knowledgeImport', documents: variants, skipExactDuplicate: true })
+    assert.equal(result.imported, variants.length)
+    assert.equal(result.skipped, 0)
+    assert.equal(knowledgeRequest(root, { op: 'knowledgeList' }).total, variants.length)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('regular imports keep the original response and backup history is never deduplicated', () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-knowledge-backup-'))
+  try {
+    const call = (op, args = {}) => knowledgeRequest(root, { op, ...args })
+    const note = { title: '部署指南', body: '最新版', source: '部署.md' }
+    assert.deepEqual(call('knowledgeImport', { documents: [note, note] }), { ok: true, imported: 2, ids: [1, 2] })
+    const savedAt = '2026-10-15T00:00:00.000Z'
+    const restore = call('knowledgeImport', {
+      // Also safeguard an importer setting the text option on a backup row.
+      skipExactDuplicate: true,
+      documents: [{ ...note, history: [] }, { ...note, history: [{ ...note, body: '旧版', saved_at: savedAt }] }],
+    })
+    assert.deepEqual(restore, { ok: true, imported: 2, ids: [3, 4], skipped: 0 })
+    const history = call('knowledgeHistory', { id: 4 }).items
+    assert.equal(history.length, 1)
+    assert.equal(history[0].saved_at, savedAt)
+    assert.equal(call('knowledgeHistoryGet', { id: 4, revision_id: history[0].revision_id }).item.body, '旧版')
+    assert.equal(call('knowledgeList').total, 4)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('file chooser only opts Markdown and TXT into exact dedup and reports skipped separately', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-knowledge-files-'))
+  try {
+    const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+    const start = source.indexOf('const importFiles = files =>')
+    const end = source.indexOf('const exportBackup =', start)
+    assert.ok(start >= 0 && end > start)
+    const seen = []
+    let notice = '', error = ''
+    const scope = {
+      run: fn => fn(),
+      confirmCredentials: async () => true,
+      request: async req => { seen.push(req); return knowledgeRequest(root, req) },
+      setCredentialAudit() {},
+      setNotice(value) { notice = value },
+      setError(value) { error = value },
+      setQuery() {}, setCategory() {}, setFavorites() {}, setOffset() {}, async refresh() {},
+    }
+    const importFiles = new Function(...Object.keys(scope), source.slice(start, end) + '\nreturn importFiles')(...Object.values(scope))
+    const file = (name, content) => ({ name, async text() { return content } })
+    const backup = JSON.stringify({ format: 'purge-knowledge-v1',
+      documents: [{ id: 17, title: '会议', body: '正文', category: '导入文档', source: '会议.MD' }],
+      history: [{ document_id: 17, title: '会议', body: '旧版' }] })
+    await importFiles([file('会议.MD', '正文'), file('会议.MD', '正文'), file('说明.TXT', '普通文本'),
+      file('备份.json', backup), file('invalid.csv', 'a,b')])
+    assert.deepEqual(seen.map(r => r.skipExactDuplicate), [true, true, true, undefined])
+    assert.equal(seen[3].documents[0].history[0].body, '旧版')
+    assert.equal(notice, '已导入 3 条；跳过 1 条完全相同的文档；失败 1 项')
+    assert.match(error, /invalid\.csv/)
+    const data = knowledgeRequest(root, { op: 'knowledgeExport' }).backup
+    assert.equal(data.documents.length, 3)
+    assert.equal(data.history.length, 1)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
 test('internal knowledge list limits preserve totals, ranking and the default UI page', () => {
   const root = mkdtempSync(join(tmpdir(), 'purge-knowledge-page-'))
   try {
