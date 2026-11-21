@@ -44,6 +44,15 @@ test('Super Agent is a separate entry with project-scoped panels and jumps', () 
   assert.equal(ledgerFocused, 1)
 })
 
+test('Workbench aliases preserve legacy navigation and do not alias Super Agent to settings', () => {
+  const select = load('activeWorkbenchTab', 'RtNavIcon')
+  for (const [tab, page] of [
+    ['skills', 'knowledge-center'], ['knowledge', 'env'], ['local-search', 'env'],
+    ['prompts', 'agents'], ['agents', 'agents'], ['superagent', 'superagent'], ['overview', 'overview'],
+  ]) assert.equal(select(tab), page)
+  assert.match(client, /superagent: \['M8 5H5v16h14V5h-3'/)
+})
+
 test('history keeps registration, host-end and settlement separate and opens only the saved session', () => {
   let error = ''
   const render = load('WorkAttemptEvidence', 'SuperAgentTab', { useState: () => [error, next => { error = next }] })
