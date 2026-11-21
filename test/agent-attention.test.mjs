@@ -69,6 +69,37 @@ test("attention is one per latest child and never resurrects older after ack", (
   } finally { a.close(); b.close(); }
 });
 
+test("manual report pages do not acknowledge anything; an emptied final page falls back safely", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(DDL);
+    const store = fixture({ a: db });
+    const added = Array.from({ length: 21 }, (_, i) =>
+      store.recordAgentReport("a", report("appendix-" + i, i === 0 ? "ready" : "waiting", "chapter-" + i)).id);
+    const read = (offset) => dispatch(store, { op: "attention", engagement: "a", offset });
+    const first = read(0);
+    assert.deepEqual(first.items.map(row => row.id), added.slice(1).reverse());
+    assert.equal(first.offset, 0);
+    assert.equal(first.limit, 20);
+    assert.equal(first.has_more, true);
+    const next = read(20);
+    assert.deepEqual(next.items.map(row => row.id), [added[0]]);
+    assert.equal(next.total, 21);
+    assert.equal(next.awaiting_person, 20);
+    assert.equal(next.has_more, false);
+    assert.equal(read(9_000).offset, 20);
+    for (const invalid of [-20, 20.5, 'not an offset']) assert.equal(read(invalid).offset, 0);
+    assert.equal(read(0).total, 21, "reads do not mark reports as acknowledged");
+
+    const result = dispatch(store, { op: "attentionAck", engagement: "a", report_id: added[0], offset: 20 });
+    assert.deepEqual(result.ack, { report_id: added[0], acknowledged: true });
+    assert.equal(result.offset, 0);
+    assert.equal(result.has_more, false);
+    assert.deepEqual(result.items.map(row => row.id), added.slice(1).reverse());
+    assert.equal(Object.hasOwn(store.attentionQueue("a"), "offset"), false, "agent tool keeps its existing list shape");
+  } finally { db.close(); }
+});
+
 test("opt-in console digest counts only current-project pending reports without returning their details", () => {
   const a = new DatabaseSync(":memory:"), b = new DatabaseSync(":memory:");
   const store = fixture({ a, b });
