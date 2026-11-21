@@ -49,13 +49,62 @@ function inside(root, target) {
 function realDirectory(dir) {
   try { return fs.realpathSync(dir); } catch { return ''; }
 }
+// Only explicitly understood pnpm layouts are permitted for installed-byte
+// checks. A directory whose *name* resembles .pnpm is never sufficient.
+function ordinaryDirectory(dir) {
+  try {
+    const stat = fs.lstatSync(dir);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch { return false; }
+}
+function verifiedPnpmLinkTarget(home, profileDir, target) {
+  const homeReal = realDirectory(home);
+  const profileReal = realDirectory(profileDir);
+  const candidates = [
+    { scope: 'verified-profile-pnpm-store', base: path.join(profileDir, 'node_modules', '.pnpm'),
+      parent: profileReal },
+    // DSH may host a shared pnpm virtual store for multiple profiles.
+    { scope: 'verified-shared-profile-pnpm-store', base: path.join(homeReal, 'profiles', 'node_modules', '.pnpm'),
+      parent: homeReal },
+  ];
+  for (const { scope, base, parent } of candidates) {
+    if (!parent || !ordinaryDirectory(base)) continue;
+    const store = realDirectory(base);
+    if (!store || !inside(parent, store) || !inside(store, target)) continue;
+    const rel = path.relative(store, target).split(path.sep);
+    // Reject path-shaped package names or links to another package in pnpm's
+    // node_modules. The final package itself must be a normal directory.
+    if (rel.length !== 3 || !/^dsh-purge@[^\\/]+$/.test(rel[0])
+      || rel[1] !== 'node_modules' || rel[2] !== 'dsh-purge') continue;
+    const packageDir = path.join(store, rel[0]);
+    const modulesDir = path.join(packageDir, 'node_modules');
+    if (!ordinaryDirectory(packageDir) || !ordinaryDirectory(modulesDir)
+      || !ordinaryDirectory(target)) continue;
+    if (realDirectory(packageDir) !== packageDir
+      || realDirectory(modulesDir) !== modulesDir
+      || realDirectory(target) !== target) continue;
+    return scope;
+  }
+  return null;
+}
 /** Metadata-only path categories; never include any resolved path in output. */
 function classifyLink(target, home, profileDir, repositoryRoot) {
   const profileReal = realDirectory(profileDir);
   const homeReal = realDirectory(home);
   const checkoutReal = realDirectory(repositoryRoot);
   if (profileReal && inside(profileReal, target)) return 'inside-same-profile-untrusted';
-  if (homeReal && inside(homeReal, target)) return 'inside-dsh-home-untrusted';
+  if (homeReal && inside(homeReal, target)) {
+    // Only return a fixed, non-sensitive category. Do not emit any suffixes.
+    const rel = path.relative(homeReal, target).split(path.sep);
+    if (rel[0] === 'profiles' && rel[1] === 'node_modules')
+      return rel[2] === '.pnpm' ? 'dsh-home-shared-pnpm-untrusted'
+        : 'dsh-home-shared-modules-untrusted';
+    if (rel[0] === 'profiles' && PROFILES.includes(rel[1]))
+      return 'dsh-home-other-profile-untrusted';
+    if (rel[0] === 'profiles') return 'dsh-home-other-profile-pool-untrusted';
+    if (rel[0] === 'node_modules') return 'dsh-home-root-node-modules-untrusted';
+    return 'inside-dsh-home-untrusted';
+  }
   if (checkoutReal && (target === checkoutReal || inside(checkoutReal, target)))
     return 'inside-ci-checkout-untrusted';
   for (const [key, dir] of [['local-appdata', process.env.LOCALAPPDATA],
@@ -93,16 +142,12 @@ function profileEvidence(home, name, root) {
       output.installation = 'linked-uninspected';
       output.linkTargetScope = 'unresolved';
       installedRoot = fs.realpathSync(installed);
-      const storePath = path.join(dir, 'node_modules', '.pnpm');
-      const storeStat = (() => { try { return fs.lstatSync(storePath); } catch { return null; } })();
-      const storeRoot = storeStat?.isDirectory() ? realDirectory(storePath) : '';
-      const profileReal = realDirectory(dir);
-      if (!storeRoot || !profileReal || !inside(profileReal, storeRoot)
-          || !inside(storeRoot, installedRoot)) {
+      const verified = verifiedPnpmLinkTarget(home, dir, installedRoot);
+      if (!verified) {
         output.linkTargetScope = classifyLink(installedRoot, home, dir, root);
         return output;
       }
-      output.linkTargetScope = 'verified-profile-pnpm-store';
+      output.linkTargetScope = verified;
       output.installation = 'present-pnpm-link';
     } else if (!stat.isDirectory()) {
       output.installation = 'invalid';
