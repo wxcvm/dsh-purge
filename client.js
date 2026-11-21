@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "7fa7deddeb8f9f90";
+		const CLIENT_BUILD_ID = "b11ffc83a40aaecc";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12848,6 +12848,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [view, setView] = React.useState('personal')
       const [history, setHistory] = React.useState([])
       const [revision, setRevision] = React.useState(null)
+      const [importBatch, setImportBatch] = React.useState(null)
       const [notice, setNotice] = React.useState('')
       const [credentialAudit, setCredentialAudit] = React.useState(null)
       const empty = () => ({ title: '', body: '', category: '', tags: '', source: '', favorite: false })
@@ -12896,38 +12897,62 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setDraft(experience ? { ...empty(), category: '任务经验', body: '## 背景与任务引用\n\n## 已核实的结论\n\n## 证据与来源\n\n## 修复或排错经验\n\n## 尚待确认的问题\n' } : empty())
       }
       const importFiles = files => run(async () => {
-        let count = 0, skipped = 0
-        const failures = []
-        const add = async (row, skipExactDuplicate = false) => {
+        setNotice('')
+        const entries = []
+        const add = (file, row, skipExactDuplicate = false) => {
+          const label = typeof row.title === 'string' && row.title.trim() ? row.title : file
           const payload = { op: 'knowledgeImport', documents: [row] }
           if (skipExactDuplicate) payload.skipExactDuplicate = true
-          if (new Blob([JSON.stringify(payload)]).size > 8 * 1024 * 1024) throw Error('文档及历史超出单次请求 8 MiB，请拆分后导入')
-          if (!await confirmCredentials(row, '导入')) { failures.push('已取消一份疑似含凭据的文档'); return }
-          const r = await request(payload)
-          count += r.imported
-          skipped += r.skipped ?? 0
-          if (r.imported) setCredentialAudit(null)
+          if (new Blob([JSON.stringify(payload)]).size > 8 * 1024 * 1024) {
+            entries.push({ label, file, status: 'failed', message: '文档及历史超出单次请求 8 MiB，请拆分后导入' })
+            return
+          }
+          entries.push({ label, file, status: 'ready', payload, revisions: row.history?.length })
         }
         for (const file of files) {
           try {
             const content = await file.text()
             if (/\.json$/i.test(file.name)) {
               const backup = JSON.parse(content)
-              if (backup.format !== 'purge-knowledge-v1' || !Array.isArray(backup.documents) || !Array.isArray(backup.history)) throw Error('不是 Purge 知识备份')
+              if (backup?.format !== 'purge-knowledge-v1' || !Array.isArray(backup.documents) || !Array.isArray(backup.history)) throw Error('不是 Purge 知识备份')
+              if (!backup.documents.length) throw Error('备份没有可导入的文档')
+              const history = new Map()
               for (const row of backup.documents) {
-                try { await add({ ...row, history: backup.history.filter(h => h.document_id === row.id) }) }
-                catch (e) { failures.push(String(row.title || file.name) + '：' + e.message) }
+                if (!Number.isSafeInteger(row?.id) || row.id < 1 || history.has(row.id)) throw Error('备份文档编号无效或重复，无法对应历史版本')
+                history.set(row.id, [])
               }
+              for (const old of backup.history) {
+                const revisions = history.get(old?.document_id)
+                if (!revisions) throw Error('备份中有历史版本找不到对应的文档')
+                revisions.push(old)
+              }
+              for (const row of backup.documents) add(file.name, { ...row, history: history.get(row.id) })
             } else if (/\.(md|txt)$/i.test(file.name)) {
-              await add({ title: file.name.replace(/\.(md|txt)$/i, ''), body: content, category: '导入文档', source: file.name }, true)
+              add(file.name, { title: file.name.replace(/\.(md|txt)$/i, ''), body: content, category: '导入文档', source: file.name }, true)
             } else throw Error('仅支持 Markdown、TXT 或 Purge JSON 备份')
-          } catch (e) { failures.push(file.name + '：' + e.message) }
+          } catch (e) { entries.push({ label: file.name, status: 'failed', message: String(e.message || e) }) }
         }
-        setNotice('已导入 ' + count + ' 条' + (skipped ? '；跳过 ' + skipped + ' 条完全相同的文档' : '')
-          + (failures.length ? '；失败 ' + failures.length + ' 项' : ''))
-        if (failures.length) setError(failures.join('\n'))
-        setQuery(''); setCategory(''); setFavorites(false); setOffset(0)
-        await refresh()
+        setImportBatch({ entries, done: false })
+      })
+      const confirmImport = () => run(async () => {
+        const entries = []
+        for (const entry of importBatch.entries) {
+          const { payload, ...result } = entry
+          if (!payload) { entries.push(result); continue }
+          try {
+            if (!await confirmCredentials(payload.documents[0], '导入')) {
+              entries.push({ ...result, status: 'cancelled' })
+              continue
+            }
+            const r = await request(payload)
+            entries.push({ ...result, status: r.imported ? 'imported' : 'skipped', id: r.ids[0] })
+          } catch (e) { entries.push({ ...result, status: 'failed', message: String(e.message || e) }) }
+        }
+        setImportBatch({ entries, done: true })
+        if (entries.some(entry => entry.status === 'imported')) {
+          setCredentialAudit(null)
+          await refresh()
+        }
       })
       const exportBackup = () => run(async () => {
         const audit = await request({ op: 'knowledgeCredentialAudit' })
@@ -12965,6 +12990,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
       const field = (key, label) => h('label', { style: { display: 'grid', gap: 4 } }, label,
         h('input', { className: 'rt-input', value: draft[key] || '', disabled: busy, onChange: e => change(key, e.target.value) }))
+      const importLabels = { ready: '待导入', imported: '已导入', skipped: '完全相同，已跳过', cancelled: '已取消', failed: '未导入' }
+      const readyImports = importBatch?.entries.filter(entry => entry.status === 'ready').length ?? 0
+      const importSummary = importBatch?.done ? ['imported', 'skipped', 'cancelled', 'failed'].map((status, i) =>
+        ['已导入', '跳过', '取消', '失败'][i] + ' ' + importBatch.entries.filter(entry => entry.status === status).length).join(' · ') : ''
       return h('div', { className: 'rt-pane' },
         h('div', { className: 'rt-card', style: { display: 'flex', gap: 8 } },
           h('button', { className: 'rt-btn' + (view === 'personal' ? ' rt-btn-primary' : ''), onClick: () => setView('personal') }, '个人资料'),
@@ -12984,6 +13013,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('button', { className: 'rt-btn', disabled: busy, onClick: auditCredentials }, '检查敏感资料'),
             h('label', { style: { display: 'grid', gap: 4 } }, '导入文件 / 备份',
               h('input', { type: 'file', multiple: true, accept: '.md,.txt,.json', disabled: busy, onChange: e => { const files = Array.from(e.target.files || []); e.target.value = ''; if (files.length) importFiles(files) } }))),
+          importBatch ? h('section', { className: 'rt-card', 'aria-label': '个人资料导入' },
+            h('h4', null, importBatch.done ? '导入结果' : '导入预览'),
+            h('p', { role: 'status' }, importBatch.done ? importSummary : '待导入 ' + readyImports + ' 条。确认前不会写入；文本重复项在写入时检查。'),
+            h('ul', { style: { maxHeight: '16rem', overflow: 'auto', overflowWrap: 'anywhere' } },
+              importBatch.entries.map((entry, i) => h('li', { key: i },
+                h('strong', null, entry.label),
+                ' · ' + [entry.file !== entry.label ? entry.file : '', entry.revisions != null ? '历史 ' + entry.revisions + ' 版' : '',
+                  importLabels[entry.status], entry.message].filter(Boolean).join(' · '),
+                entry.id ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => open(entry.id) }, '打开 #' + entry.id) : null))),
+            h('div', { className: 'rt-toolbar' },
+              importBatch.done || !readyImports ? null : h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: confirmImport }, busy ? '正在导入…' : '确认导入 ' + readyImports + ' 条'),
+              h('button', { className: 'rt-btn', disabled: busy, onClick: () => setImportBatch(null) }, importBatch.done || !readyImports ? '关闭' : '取消导入'))) : null,
           credentialAudit ? h('div', { className: 'rt-card', role: 'status' },
             h('p', null, '本地检查：' + credentialAudit.flagged_documents + ' 份疑似敏感文档 / ' + credentialAudit.documents + ' 份；' + credentialAudit.flagged_revisions + ' 个疑似敏感历史版本。'),
             h('p', null, '仅显示条目编号，不显示匹配值；未发现不代表无凭据。'),
