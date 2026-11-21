@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "27912c4426d76f9e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1068,9 +1068,20 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-restart-card .dshp-modal-ops{display:flex;justify-content:flex-end;gap:8px}
 .dshp-restart-card .dshp-btn{padding:8px 12px;font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,#16140f);background:color-mix(in srgb,var(--dsw-alias-bg-layer-2,#fff) 40%,transparent);border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6d8f78) 34%,transparent)}
 .dshp-restart-card .dshp-btn-primary,.dshp-restart-card .dshp-btn-primary:hover:not(:disabled){color:#fff;background:var(--dsw-alias-brand-primary,#2f6b4f);border-color:var(--dsw-alias-brand-primary,#2f6b4f)}
-body[data-ds-dark-theme] .dshp-restart-card,.dshp-restart-mask[data-theme="dusk"] .dshp-restart-card{background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#1c1e24) 42%,transparent);color:#f4f1ea;border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 32%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 10%,transparent),0 16px 40px color-mix(in srgb,#000 28%,transparent)}
-body[data-ds-dark-theme] .dshp-restart-card .dshp-btn,.dshp-restart-mask[data-theme="dusk"] .dshp-restart-card .dshp-btn{color:#f4f1ea;background:color-mix(in srgb,#1c1e24 42%,transparent);border-color:color-mix(in srgb,#6dbf8c 32%,transparent)}
-body[data-ds-dark-theme] .dshp-restart-card .dshp-btn-primary,body[data-ds-dark-theme] .dshp-restart-card .dshp-btn-primary:hover:not(:disabled),.dshp-restart-mask[data-theme="dusk"] .dshp-restart-card .dshp-btn-primary,.dshp-restart-mask[data-theme="dusk"] .dshp-restart-card .dshp-btn-primary:hover:not(:disabled){color:#fff;background:#3d8f68;border-color:#3d8f68}
+/* The portal's resolved theme may lag the host's palette while it switches.
+   Keep the inherited host tokens when they match, but never mix palettes. */
+.dshp-restart-mask[data-theme="white"]{color-scheme:light}
+.dshp-restart-mask[data-theme="dusk"]{color-scheme:dark}
+:is(html,body)[data-ds-dark-theme] .dshp-restart-mask[data-theme="white"]{
+  --dsw-alias-bg-layer-1:#fffcf7;--dsw-alias-bg-layer-2:#fff;
+  --dsw-alias-label-primary:#16140f;--dsw-alias-brand-primary:#2f6b4f;
+}
+html:not([data-ds-dark-theme]) body:not([data-ds-dark-theme]) .dshp-restart-mask[data-theme="dusk"]{
+  --dsw-alias-bg-layer-1:#1c1e24;--dsw-alias-brand-primary:#6dbf8c;
+}
+:is(body[data-ds-dark-theme] .dshp-restart-mask:not([data-theme]),.dshp-restart-mask[data-theme="dusk"]) .dshp-restart-card{background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#1c1e24) 42%,transparent);color:#f4f1ea;border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#6dbf8c) 32%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 10%,transparent),0 16px 40px color-mix(in srgb,#000 28%,transparent)}
+:is(body[data-ds-dark-theme] .dshp-restart-mask:not([data-theme]),.dshp-restart-mask[data-theme="dusk"]) .dshp-restart-card .dshp-btn{color:#f4f1ea;background:color-mix(in srgb,#1c1e24 42%,transparent);border-color:color-mix(in srgb,#6dbf8c 32%,transparent)}
+:is(body[data-ds-dark-theme] .dshp-restart-mask:not([data-theme]),.dshp-restart-mask[data-theme="dusk"]) .dshp-restart-card :is(.dshp-btn-primary,.dshp-btn-primary:hover:not(:disabled)){color:#fff;background:#3d8f68;border-color:#3d8f68}
 .dshp-notice{font-size:12px;line-height:16px}
 .dshp-notice.is-ok{color:var(--dshp-ok)}
 .dshp-notice.is-bad{color:var(--dshp-bad)}
