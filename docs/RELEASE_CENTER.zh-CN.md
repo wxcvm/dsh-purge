@@ -49,6 +49,16 @@
 
 在 [master CI #44890697673](https://github.com/wxcvm/dsh-purge/actions/runs/44890697673) 的 Windows 只读样本中，官方 Desktop `0.2.2-rc.5` 的公开 runtime 文件完整，但 `desktop` profile 的 `dsh-purge` 为 `linked-uninspected`，只证明插件入口链接未满足当时的受信任 .pnpm 路径约束，**没有证明链接断开、插件版本不匹配或 Desktop 加载失败**。当轮进程匹配数为 0，同样无法推断下一次启动状态。后续只补链接出处的脱敏分类，绝不为了“看见版本”放开读取任意外部链接。需要版本/请求级证据时，须先在受控目录定位有效安装副本，或由已运行的授权宿主提供最小、明确的加载收据。
 
+### 手动授权核验 DSH_HOME 内非标准链接（默认关闭）
+
+如果 Windows Runner 自动探针继续显示 `linked-uninspected / inside-dsh-home-untrusted`，这**不能证明插件安装失败**。不要把所有 DSH_HOME 内的未知目录直接加入自动白名单。仓库现在提供仅由操作者主动触发的只读核验：
+
+1. 打开 [Local Compatibility (Windows + WSL)](https://github.com/wxcvm/dsh-purge/actions/workflows/compatibility.yml)，选择 **Run workflow**，选择正式 `master`，勾选 **inspect_home_plugin_link**。默认不勾选，PR 与普通主线 push 绝不启用。
+2. Windows Runner 将只在该项**明确开启**时，沿当前 desktop profile 的 `node_modules/dsh-purge` 已存在的链接，检查目标是否为 `DSH_HOME` 内的**实体目录**，且 `package.json` 必须声明 `name: dsh-purge`。仅读取这一包固定的五个代码文件进行源码逐字节比对；任何离开包目录的文件/目录 symlink 都拒绝哈希。外部于 DSH_HOME 的目标始终拒绝读取。
+3. 结果依旧仅列公开版本号、固定文件相对名及 `identical/different/missing` 状态，**不包含**真实路径、个人配置、聊天记录、Prompt 正文、源文件字节或哈希值。也可在自己控制的 Windows 终端显式执行 `node scripts/inspect-windows-desktop-evidence.mjs --inspect-home-plugin-link`，脚本本身不写配置。
+
+此选项授予的只是**读取 DSH_HOME 内链接所指插件代码文件**的临时权限，并非同意更新、重启 Desktop、清洗宿主、运行 Provider 或向云端发送本地私密数据。无论勾选与否，`runtimeLoadVerified` 仍为 `false`：插件磁盘字节一致不等于当前 Electron 进程已经加载该代码。#336 的真实 GUI 与 Provider 请求验收继续独立进行。
+
 ## 后续发布预检
 
 - 固定候选提交，确认包内版本、标签、必要运行文件和 SHA-256。已发布版本不使用相同标签替换资产。

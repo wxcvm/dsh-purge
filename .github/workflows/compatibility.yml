@@ -2,6 +2,12 @@ name: Local Compatibility (Windows + WSL)
 
 on:
   workflow_dispatch:
+    inputs:
+      inspect_home_plugin_link:
+        description: 'Explicit opt-in: inspect installed dsh-purge link inside DSH_HOME (read-only, sanitized)'
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
   pull_request:
@@ -107,8 +113,16 @@ jobs:
         run: |
           node -e "const n=Number(process.env.PURGE_CI_TEST_CONCURRENCY || require('node:os').availableParallelism()); if(!Number.isSafeInteger(n)||n<1) throw Error('Invalid test concurrency'); const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-concurrency='+n,'test/*.test.*','maintenance/*.test.mjs','maintenance/desktop-tools/*.test.mjs'],{stdio:'inherit'}); process.exitCode=r.status ?? 1"
       - name: Read-only Windows Desktop evidence (not a release gate)
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && runner.os == 'Windows' }}
-        run: node scripts/inspect-windows-desktop-evidence.mjs
+        if: ${{ github.ref == 'refs/heads/master' && runner.os == 'Windows' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        shell: pwsh
+        env:
+          DSH_HOME_LINK_OPT_IN: ${{ github.event_name == 'workflow_dispatch' && inputs.inspect_home_plugin_link && '1' || '0' }}
+        run: |
+          if ($env:DSH_HOME_LINK_OPT_IN -eq '1') {
+            node scripts/inspect-windows-desktop-evidence.mjs --inspect-home-plugin-link
+          } else {
+            node scripts/inspect-windows-desktop-evidence.mjs
+          }
       - name: Run pending specifications
         id: specs
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.root-install.outcome == 'success' }}
