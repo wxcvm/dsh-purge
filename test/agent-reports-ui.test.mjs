@@ -50,6 +50,7 @@ function elements(node) {
 
 const button = (ui, label) => elements(ui.render())
   .find(n => n.type === 'button' && (n.props['aria-label'] === label || n.children.includes(label)))
+const statusPicker = ui => elements(ui.render()).find(n => n.type === 'select')
 const content = ui => JSON.stringify(ui.render())
 
 test('report pane scopes reads to a selected project; empty is not a completion claim', async () => {
@@ -111,7 +112,7 @@ test('failed acknowledgement can be retried; a stale receipt does not acknowledg
 
 test('project-keyed pane discards a response after leaving the original project', async () => {
   let resolveAck
-  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt,\s+onSectionReady: props\.onReportSectionReady,/)
+  assert.match(client, /h\(AgentReports, \{ key: 'agent-reports:' \+ \(eng \|\| ''\), engagement: eng, onReceipt: props\.onReportReceipt,/)
   const first = mount('first', request => request.op === 'attention'
     ? Promise.resolve(queue('first', [report(31)]))
     : new Promise(resolve => { resolveAck = resolve }))
@@ -158,4 +159,55 @@ test('the existing privacy projection hides report identifiers, notes and naviga
   assert.ok(button(ui, '将回报 #51 标为已阅'))
   assert.match(content(standalone), /hidden-child/)
   assert.equal(button(standalone, '查看回报 #51 的来源会话'), undefined)
+})
+
+test('status filter uses only loaded items and never changes a receipt or the project total', async () => {
+  const requests = []
+  const ui = mount('docs', async request => {
+    requests.push(request)
+    const remaining = [report(61, { status: 'ready' }), report(62, { status: 'future-status' })]
+    const answer = { total: 7, truncated: true }
+    return request.op === 'attentionAck'
+      ? queue('docs', remaining, { ...answer, total: 6, ack: { report_id: 60, acknowledged: true } })
+      : queue('docs', [report(60), ...remaining], answer)
+  }, undefined, { maskReportOrigin: true })
+  await setImmediate()
+  const choose = value => statusPicker(ui).props.onChange({ target: { value } })
+  const option = value => elements(statusPicker(ui)).find(n => n.type === 'option' && n.props.value === value)
+  assert.deepEqual(option('all').children, ['全部已加载（3）'])
+  assert.deepEqual(option('waiting').children, ['等待回复（1）'])
+  assert.deepEqual(option('unknown').children, ['状态未知（1）'])
+  assert.match(content(ui), /状态筛选不包括未加载的回报/)
+  choose('unknown')
+  assert.ok(button(ui, '将回报 #62 标为已阅'))
+  assert.equal(button(ui, '将回报 #60 标为已阅'), undefined)
+  assert.doesNotMatch(content(ui), /document-review-|缺少附录|请提供附录/)
+  choose('waiting')
+  assert.match(content(ui), /待阅回报 · 7/)
+  assert.deepEqual(requests, [{ op: 'attention', engagement: 'docs' }])
+  await button(ui, '将回报 #60 标为已阅').props.onClick()
+  assert.deepEqual(requests.at(-1), { op: 'attentionAck', engagement: 'docs', report_id: 60 })
+  assert.match(content(ui), /待阅回报 · 6/)
+  assert.match(content(ui), /已加载的回报中没有符合该状态/)
+  assert.doesNotMatch(content(ui), /当前没有待阅回报/)
+  button(ui, '清除状态筛选').props.onClick()
+  assert.equal(statusPicker(ui).props.value, 'all')
+  assert.ok(button(ui, '将回报 #61 标为已阅'))
+})
+
+test('a failed refresh labels retained rows as an earlier read until a fresh result arrives', async () => {
+  let attempts = 0
+  const ui = mount('docs', async () => {
+    if (++attempts === 1) return queue('docs', [report(70)])
+    if (attempts === 2) throw new Error('offline')
+    return queue('docs', [])
+  })
+  await setImmediate()
+  await button(ui, '刷新回报').props.onClick()
+  assert.match(content(ui), /未能读取待阅回报/)
+  assert.match(content(ui), /上次读取结果，尚未确认最新待阅状态/)
+  assert.ok(button(ui, '将回报 #70 标为已阅'))
+  await button(ui, '刷新回报').props.onClick()
+  assert.doesNotMatch(content(ui), /上次读取结果/)
+  assert.match(content(ui), /当前没有待阅回报/)
 })
