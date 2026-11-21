@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "35a3e1e271139362";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -5053,19 +5053,51 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [profilesVisited, setProfilesVisited] = useState(true);
 			const [runtimeVisited, setRuntimeVisited] = useState(false);
 			const pageHeading = useRef(null);
-			const focusNextPage = useRef(false);
+			const activePaneButton = useRef(null);
+			const pendingFocus = useRef(null);
 			const navigate = (next) => {
 				let target = next;
-				if (next === "runtime") { setDiagnosticsPane("runtime"); setRuntimeVisited(true); target = "diagnostics"; }
-				else if (next === "profiles") { setPromptPane("library"); setProfilesVisited(true); target = "prompt"; }
-				else if (next === "diagnostics") { setDiagnosticsPane("health"); }
-				if (target !== section) { focusNextPage.current = true; setSection(target); }
+				let changesPane = false;
+				if (next === "runtime") {
+					changesPane = diagnosticsPane !== "runtime";
+					setDiagnosticsPane("runtime");
+					setRuntimeVisited(true);
+					target = "diagnostics";
+				} else if (next === "profiles") {
+					changesPane = promptPane !== "library";
+					setPromptPane("library");
+					setProfilesVisited(true);
+					target = "prompt";
+				} else if (next === "diagnostics") {
+					changesPane = diagnosticsPane !== "health";
+					setDiagnosticsPane("health");
+				}
+				if (target !== section) { pendingFocus.current = "page"; setSection(target); }
+				// A content shortcut can hide its own button without changing the outer page.
+				else if (changesPane) pendingFocus.current = "pane";
 			};
-			useEffect(() => {
-				if (!focusNextPage.current) return;
-				focusNextPage.current = false;
-				pageHeading.current?.focus();
-			}, [section]);
+			useLayoutEffect(() => {
+				const destination = pendingFocus.current;
+				if (!destination) return;
+				pendingFocus.current = null;
+				const focusTarget = destination === "pane" ? (activePaneButton.current ?? pageHeading.current) : pageHeading.current;
+				focusTarget?.focus();
+			}, [section, promptPane, diagnosticsPane]);
+			const handleCleanNavKey = (event) => {
+				const { key, currentTarget, altKey, ctrlKey, metaKey, shiftKey } = event;
+				if (altKey || ctrlKey || metaKey || shiftKey) return;
+				const previous = key === "ArrowLeft" || key === "ArrowUp";
+				const next = key === "ArrowRight" || key === "ArrowDown";
+				if (!previous && !next && key !== "Home" && key !== "End") return;
+				const buttons = Array.from(currentTarget.parentElement?.querySelectorAll(".dshp-clean-nav-item") || []);
+				const current = buttons.indexOf(currentTarget);
+				if (current < 0) return;
+				const target = key === "Home" ? 0 : key === "End" ? buttons.length - 1
+					: (current + (previous ? -1 : 1) + buttons.length) % buttons.length;
+				event.preventDefault();
+				// Keep ordinary navigation buttons and their Enter/Space activation.
+				buttons[target].focus();
+			};
 			useEffect(() => {
 				let cancelled = false;
 				let timer = 0;
@@ -5120,6 +5152,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					sections.map((item) => h("button", {
 						key: item.id, type: "button", className: "dshp-clean-nav-item",
 						"aria-current": section === item.id ? "page" : undefined,
+						onKeyDown: handleCleanNavKey,
 						onClick: () => navigate(item.id),
 					}, h("strong", null, item.title), h("small", null, item.description))),
 				),
@@ -5132,11 +5165,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					section === "prompt" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "提示词管理分组" },
 						[["library", "通用与局部提示词"], ["source", "红队专用提示词"]].map(([id, label]) => h("button", {
 							key: id, type: "button", className: "dshp-clean-filter" + (promptPane === id ? " is-on" : ""),
+							ref: promptPane === id ? activePaneButton : null,
 							"aria-pressed": promptPane === id, onClick: () => { setPromptPane(id); if (id === "library") setProfilesVisited(true); },
 						}, label))) : null,
 					section === "diagnostics" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "诊断中心分组" },
 						[["health", "宿主与故障"], ["runtime", "Provider 与运行记录"]].map(([id, label]) => h("button", {
 							key: id, type: "button", className: "dshp-clean-filter" + (diagnosticsPane === id ? " is-on" : ""),
+							ref: diagnosticsPane === id ? activePaneButton : null,
 							"aria-pressed": diagnosticsPane === id, onClick: () => { setDiagnosticsPane(id); if (id === "runtime") setRuntimeVisited(true); },
 						}, label))) : null,
 					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || (section === "prompt" && promptPane === "library") || (section === "diagnostics" && diagnosticsPane === "runtime") },
@@ -5144,7 +5179,9 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
 						h(RulesSection, null)),
 					profilesVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "prompt" || promptPane !== "library" },
-						h(PromptProfilesSection, { onRedteam: () => setPromptPane("source") })) : null,
+						h(PromptProfilesSection, { onRedteam: () => {
+							if (promptPane !== "source") { pendingFocus.current = "pane"; setPromptPane("source"); }
+						} })) : null,
 					runtimeVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "diagnostics" || diagnosticsPane !== "runtime" },
 						h(RuntimeObservationsSection, { onNavigate: navigate, active: section === "diagnostics" && diagnosticsPane === "runtime" })) : null,
 				),
