@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "030c53b8cb9dc42e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -13753,6 +13753,20 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return summary
     }
 
+    function ArtexIntelPairingStatus({ config, loading, failed, checking, pairing }) {
+      const configured = config?.configured === true
+      const status = loading ? '读取中…'
+        : configured ? '公司 #' + config.companyId + ' · 本机配置已记录'
+        : config?.configured === false ? '未配置独立情报令牌或公司 ID；不影响本机服务检测。'
+        : failed ? '配置读取失败，无法确认是否已配对' : '尚未读取配对配置'
+      return h('div', { 'aria-live': 'polite' },
+        h('div', { className: 'rt-kv' }, h('b', null, 'ARTEX 接收公司'), h('span', null, status)),
+        !loading && config?.configured === false
+          ? h('p', { className: 'rt-foot' }, '只在情报交接或读取配对公司数据时需要配置。') : null,
+        !loading && configured && !pairing ? h('p', { className: 'rt-foot' },
+          checking ? '正在核对两端配对…' : '尚未检测两端配对；保存的配置不代表对端已确认。') : null)
+    }
+
     function ArtexIntelPanel(props) {
       const eng = props.engagement
       const [target, setTarget] = React.useState(props.target || '')
@@ -13825,8 +13839,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('h4', null, 'ARTEX 本机情报同步'),
         h('p', { className: 'rt-foot' }, '将当前项目已保存的授权历史情报传到 ARTEX 公司；不启动扫描，不将历史端口当作实时资产。'),
         h('div', { className: 'rt-kv' }, h('b', null, '当前 Purge 项目'), h('span', null, eng || '尚未选择项目')),
-        h('div', { className: 'rt-kv' }, h('b', null, 'ARTEX 接收公司'), h('span', null,
-          loading ? '读取中…' : config?.configured ? '公司 #' + config.companyId : '未配置独立情报令牌或公司 ID')),
+        h(ArtexIntelPairingStatus, { config, loading, failed: !!configError, checking: pairBusy || pairSaving, pairing }),
         h('button', { type: 'button', className: 'rt-btn', disabled: loading || syncBusy || pairBusy || pairSaving, onClick: reload }, '刷新联动配置'),
         h('button', { type: 'button', className: 'rt-btn', disabled: loading || syncBusy || pairBusy || pairSaving || !config?.configured, onClick: checkPairing }, pairBusy ? '检测中…' : '检测真实配对'),
         pairing ? h('p', { className: pairing.ok ? 'rt-foot' : 'rt-err', role: 'status' }, pairing.ok
@@ -13834,7 +13847,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : pairing.error || '配对未确认') : null,
         configError ? h('p', { className: 'rt-err', role: 'alert' }, configError) : null,
         h('details', { open: !config?.configured || undefined },
-          h('summary', null, '配对配置 · ' + (config?.source === 'environment' ? '宿主环境变量' : config?.source === 'saved' ? '本机已保存' : '未配置')),
+          h('summary', null, '配对配置 · ' + (loading ? '读取中'
+            : config?.source === 'environment' ? '宿主环境变量'
+            : config?.source === 'saved' ? '本机已保存'
+            : config?.configured === false ? '未配置' : '状态未知')),
           h('p', { className: 'rt-foot' }, '从 ARTEX 管理端获取独立情报令牌和公司 ID。在这里保存并检测，无需重启 Purge。令牌不会回显。'),
           config?.source === 'environment' ? h('p', { className: 'rt-foot' }, '宿主环境变量优先；请在宿主修改现有配对。') :
             h('div', null,
@@ -13973,6 +13989,31 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           detailError ? h('p',{className:'rt-err',role:'alert'},detailError) : null,
           detailView,
           h('p', { className: 'rt-foot' }, '详情遵循现有资产遮蔽设置；报告按公司归属读取，不读取任务描述、原始流量或跨公司目标。')) : null)
+    }
+
+    function ArtexLocalReadiness({ state, busy, failed }) {
+      const titles = {
+        detected: 'ARTEX 本机服务已确认',
+        degraded: '已识别 ARTEX，但健康状态异常',
+        service_candidate: '8787 端口有响应，尚未确认是 ARTEX',
+        installed_offline: 'ARTEX 本机工具已发现，服务未运行',
+        absent: '当前未发现运行中的 ARTEX 服务',
+      }
+      const service = state
+        ? (titles[state.state] || (state.online ? titles.detected : 'ARTEX 状态未知'))
+          + (state.version ? ' · ' + state.version : '') + (state.httpStatus ? ' · HTTP ' + state.httpStatus : '')
+        : busy ? '正在检测…' : failed ? '读取失败，状态未知' : '尚未检测'
+      const tools = Array.isArray(state?.tools) ? state.tools : null
+      const adoptionKnown = tools && tools.every(item => typeof item?.reused === 'boolean')
+      const row = (label, value) => h('div', { className: 'rt-kv' }, h('b', null, label), h('span', null, value))
+      return h('div', { 'aria-live': 'polite' },
+        busy && state ? h('p', { className: 'rt-foot' }, '正在重新检测；下方为上次结果。') : null,
+        row('服务连通', service),
+        row('本机工具文件', tools ? '已发现 ' + tools.length + ' 个' : '未取得清单'),
+        row('DSH 路径采用', adoptionKnown ? '采用 ' + tools.filter(item => item.reused).length + ' 个 ARTEX 路径' : '未确认'),
+        row('工具执行验证', '未检查；找到文件不代表可执行已验证。'),
+        tools?.length === 0 ? h('p', { className: 'rt-foot' },
+          '未发现本机工具文件不影响服务身份判断。如需复用本机安装，请核对「本机联动配置」中的路径。') : null)
     }
 
     function ArtexTab(props) {
@@ -14170,15 +14211,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           .finally(() => { if (revision === artexRefreshRevision.current) setBusy(false) })
       }
       React.useEffect(() => { refresh(); loadPaths() }, [])
-      const titles = {
-        detected: 'ARTEX 本机服务已确认',
-        degraded: '已识别 ARTEX，但健康状态异常',
-        service_candidate: '8787 端口有响应，尚未确认是 ARTEX',
-        installed_offline: 'ARTEX 本机工具已发现，服务未运行',
-        absent: '当前未发现运行中的 ARTEX 服务',
-      }
       const tools = state && Array.isArray(state.tools) ? state.tools : []
-      const reused = tools.filter((x) => x.reused).length
       const reviewQueue = report && Array.isArray(report.review_queue) ? report.review_queue : []
       const activeProgress = reviewProgress && reviewProgress._report === report
         && reviewProgress.engagement === props.engagement ? reviewProgress : null
@@ -14274,21 +14307,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               target: '_blank', rel: 'noopener noreferrer', className: 'rt-btn',
             }, '打开 ARTEX 情报同步') : null),
           error ? h('p', { className: 'rt-err', role: 'alert' }, maskArtex ? 'ARTEX 状态读取失败，详情已隐藏。' : error) : null,
+          h(ArtexLocalReadiness, { state, busy, failed: !!error }),
           state ? h('div', null,
-            h('p', { className: 'rt-hint', role: 'status' },
-              (titles[state.state] || (state.online ? titles.detected : 'ARTEX 状态未知'))
-              + (state.version ? ' · ' + state.version : '')
-              + (state.httpStatus ? ' · HTTP ' + state.httpStatus : '')),
             state.note && !maskArtex ? h('p', { className: 'rt-foot' }, state.note) : null,
-            h('p', { className: 'rt-foot' },
-              '已发现 ' + tools.length + ' 个本机工具文件，其中 DSH 当前采用 ' + reused + ' 个路径；找到文件不代表可执行已验证。'),
             tools.length ? h('div', { className: 'rt-card' },
               h('h4', null, '共享工具与路径'),
               tools.map((tool) => h('div', { key: tool.id, className: 'rt-kv' },
                 h('b', null, tool.id),
                 h('span', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
-                  (tool.reused ? 'DSH 已采用 · ' : '未被 DSH 采用 · ') + (maskArtex ? '路径已隐藏' : tool.path))))
-            ) : h('p', { className: 'rt-foot' }, '未找到可复用的 ARTEX 本机工具文件。'),
+                  (tool.reused === true ? 'DSH 已采用 · '
+                    : tool.reused === false ? '未被 DSH 采用 · ' : '采用状态未知 · ') + (maskArtex ? '路径已隐藏' : tool.path))))
+            ) : null,
             !maskArtex && Array.isArray(state.toolRoots) && state.toolRoots.length
               ? h('details', null,
                   h('summary', null, '已发现的 ARTEX 工具目录'),
@@ -14296,7 +14325,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               : null,
             !maskArtex && state.skillDir ? h('div', { className: 'rt-kv' },
               h('b', null, 'ARTEX Skill 目录（只读）'), h('span', null, state.skillDir)) : null,
-          ) : h('p', { className: 'rt-foot' }, busy ? '正在查询 ARTEX…' : '尚未读取 ARTEX 状态'),
+          ) : null,
           h('p', { className: 'rt-foot' },
             '工具查找沿用 DSH 原有配置优先级。不会读取 ARTEX 密钥或任务，不会启动服务、复制 Skills 或执行工具。'),
         ),
