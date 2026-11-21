@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { gitHubCredential, parseUpdateProxy, updateProxy, publicUpstreamRefs } from '../lib/update-network.js'
 import { existsSync, readFileSync } from 'node:fs'
-import os from 'node:os'
+import path from 'node:path'
 
 test('Git credential reuse is noninteractive, scoped, memory-only and keeps tokens out of diagnostics', () => {
   const secret = 'fixture-only-secret'
@@ -91,8 +91,9 @@ test('public upstream refs isolate all private Git credentials and config while 
       assert.equal(options.env.HTTPS_PROXY, undefined)
       assert.equal(options.env.https_proxy, undefined)
       assert.equal(options.env.GIT_CONFIG_NOSYSTEM, '1')
-      assert.equal(options.env.GIT_CONFIG_GLOBAL, os.devNull)
-      assert.equal(options.env.GIT_CONFIG_SYSTEM, os.devNull)
+      assert.equal(options.env.GIT_CONFIG_GLOBAL, path.join(cwd, 'empty.gitconfig'))
+      assert.equal(options.env.GIT_CONFIG_SYSTEM, path.join(cwd, 'empty.gitconfig'))
+      assert.equal(readFileSync(options.env.GIT_CONFIG_GLOBAL, 'utf8'), '')
       assert.equal(options.env.GIT_CEILING_DIRECTORIES, cwd)
       assert.equal(options.env.GIT_CONFIG_COUNT, '4')
       assert.equal(options.env.GIT_CONFIG_KEY_0, 'credential.helper')
