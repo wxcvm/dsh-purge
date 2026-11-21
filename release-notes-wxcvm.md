@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.19
+
+## 中文
+
+本条是 **.19 发布候选说明**，按 `.18` 正式版固定标签 `0bd3a58` 之后的主线增量整理。准备候选不等于已发布；不得移动、复写 `.18` 标签或资产，实际交付以未来新标签、ZIP、SHA-256 和实机记录为准。
+
+- **提示词与工作区保存**：保护普通全局/局部提示词的编辑草稿、保存冲突和文件写入失败路径；完善实际组装时的当轮请求归属和工作区 UI，避免编辑界面“保存成功”与磁盘状态不一致（#433、#442–#445 等）。
+- **Agent 与运行时观测**：扩充 Super Agent 持久任务、人工审核和来源区分；修复 Agent 替换后迟到持久流事件归属，明确“观测到”与“真实 Provider 投递成功”的区别（#429–#430、#446）。
+- **安全与隐私**：收紧本机 API 的跨站写入边界与 opaque Origin 检查（#447）；隔离公共上游 Git 读取时的私有凭据与配置，保留显式代理（#448）；共享报告遮蔽私钥、passphrase 以及 YAML 多行敏感值（#449、#450）。这属于定向缺口修复，不代表全部敏感信息已自动脱敏，分享前仍须人工检查。
+- **兼容、更新与交付验证**：核实 Windows Desktop 插件安装、链接目录与构建字节的只读证据；改进 release/npm 双归档对账、干净 `DSH_HOME` 安装和回退隔离测试。CI、宿主只读检测、真实加载与实际模型输出仍是不同的验收等级。
+- **ARTEX 与其他 UI**：手动审查按明确来源隔离、保存冲突时保留草稿；进一步调整清洗台窗口布局、状态提示与相关管理页面，不把外部系统的状态误认成 Purge 自身确认的结果。
+
+**发布前剩余门槛**：候选新 SHA 的 Windows/Ubuntu CI 与打包核对、不可变标签与 Release SHA256、Windows 11 Harness Desktop 真正加载/重启/配置开关/回退、实际 Provider 请求送达以及 ARTEX 双端联动仍需分别确认，追踪 #336、#337、#338、#339、#340、#343。当前发布版依旧是 `v1.1.92-wxcvm.18`。
+
+## English
+
+Candidate notes for the changes on master since the immutable `.18` release: safer ordinary prompt save and draft conflict handling, Super Agent work/review improvements, late-stream observation reconciliation, local browser-origin checks, isolated public-upstream Git credentials, private-key and YAML multiline masking in opt-in shareable reports, and improved read-only package/Desktop evidence. No claim of actual Provider delivery or Desktop/ARTEX end-to-end acceptance. This text and candidate package metadata do not publish a release. Previous tags and assets remain untouched.
+
+---
+
 # 1.1.92-wxcvm.18
 
 ## 中文
