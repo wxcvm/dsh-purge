@@ -276,3 +276,84 @@ test('DSH_HOME private checkout link stays uninspected even with a valid manifes
   assert.equal(result.profiles[0].linkTargetScope, 'inside-dsh-home-untrusted');
   assert.equal(result.profiles[0].version, null);
 });
+
+test('nonstandard DSH_HOME plugin link stays unread by default and is fingerprinted only on opt-in', t => {
+  const f = workspace(t);
+  const target = path.join(f.home, 'private-plugin-workspace');
+  const dest = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(path.join(target, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '1.1.92-wxcvm.18' }));
+  for (const rel of sampleFiles) {
+    fs.mkdirSync(path.dirname(path.join(f.root, rel)), { recursive: true });
+    fs.mkdirSync(path.dirname(path.join(target, rel)), { recursive: true });
+    fs.writeFileSync(path.join(f.root, rel), 'source-' + rel);
+    fs.writeFileSync(path.join(target, rel), 'source-' + rel);
+  }
+  try { fs.symlinkSync(target, dest, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create symlinks: ' + error.code); return; }
+  const normal = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(normal.profiles[0].installation, 'linked-uninspected');
+  assert.equal(normal.profiles[0].version, null);
+  const permitted = inspectReadOnlyDesktopEvidence({
+    home: f.home, root: f.root, exe: '', inspectHomeLinkedPlugin: true,
+  });
+  assert.equal(permitted.profiles[0].installation, 'present-operator-home-link');
+  assert.equal(permitted.profiles[0].linkTargetScope, 'operator-opted-in-dsh-home-link');
+  assert.equal(permitted.profiles[0].version, '1.1.92-wxcvm.18');
+  assert.equal(permitted.profiles[0].sourceBytesEqual, true);
+  fs.writeFileSync(path.join(target, 'lib', 'index.js'), 'earlier installed source');
+  const changed = inspectReadOnlyDesktopEvidence({
+    home: f.home, root: f.root, exe: '', inspectHomeLinkedPlugin: true,
+  });
+  assert.equal(changed.profiles[0].sourceBytesEqual, false);
+  assert.equal(changed.profiles[0].sourceFileComparison['lib/index.js'], 'different');
+  assert.equal(changed.runtimeLoadVerified, false);
+  assert.ok(!JSON.stringify(changed).includes(target), 'do not show destination pathname');
+});
+
+test('operator opt-in never follows links outside DSH_HOME or symlinked private payloads', t => {
+  const f = workspace(t);
+  const outside = path.join(f.base, 'private-external-package');
+  const dest = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(outside, { recursive: true });
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(path.join(outside, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: 'private-secret-value' }));
+  try { fs.symlinkSync(outside, dest, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create symlinks: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({
+    home: f.home, root: f.root, exe: '', inspectHomeLinkedPlugin: true,
+  });
+  assert.equal(result.profiles[0].installation, 'linked-uninspected');
+  assert.equal(result.profiles[0].version, null);
+  assert.equal(result.profiles[0].sourceBytesEqual, null);
+  assert.ok(!JSON.stringify(result).includes(outside));
+  assert.ok(!JSON.stringify(result).includes('private-secret-value'));
+});
+
+test('operator opt-in never reads a linked manifest or nested code escaping its plugin root', t => {
+  const f = workspace(t);
+  const target = path.join(f.home, 'private-plugin-workspace');
+  const outside = path.join(f.base, 'external');
+  const dest = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  fs.mkdirSync(target, { recursive: true });
+  fs.mkdirSync(outside);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(path.join(outside, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '99.99.99' }));
+  fs.writeFileSync(path.join(outside, 'index.js'), 'SECRET_NOT_READ');
+  try {
+    fs.symlinkSync(path.join(outside, 'package.json'), path.join(target, 'package.json'), 'file');
+    fs.symlinkSync(outside, path.join(target, 'lib'), process.platform === 'win32' ? 'junction' : 'dir');
+    fs.symlinkSync(target, dest, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) { t.skip('host cannot create symlinks: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({
+    home: f.home, root: f.root, exe: '', inspectHomeLinkedPlugin: true,
+  });
+  assert.equal(result.profiles[0].installation, 'invalid-manifest');
+  assert.equal(result.profiles[0].version, null);
+  assert.ok(!JSON.stringify(result).includes('SECRET_NOT_READ'));
+  assert.ok(!JSON.stringify(result).includes(outside));
+});
