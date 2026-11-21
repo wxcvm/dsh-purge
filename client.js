@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "aff40b52afc2a723";
+		const CLIENT_BUILD_ID = "7fa7deddeb8f9f90";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4680,6 +4680,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           h('p', { className: 'dshp-runtime-meta' }, maskRuntime ? '会话 / 请求标识已隐藏' : value(r.sessionId) + ' / ' + value(r.attemptId)),
           h('dl', null,
             detail('流 / 结算', (r.streamEnded ? '流已结束' : '流结束未观测') + ' / ' + value(r.settlement)),
+            r.durableArrival === 'exact-late' ? detail('持久事件补证', '按同一会话的已提交序号关联；不补算实时阶段耗时') : null,
             detail('首文本 / 总耗时', value(r.firstTextMs) + ' / ' + value(r.elapsedMs) + ' ms'),
             detail('终态 / 回合', (r.finishObserved ? value(r.hostReason) : '终态未观测') + ' / ' + value(r.turnOutcome)),
             detail('Token / HTTP', value(r.usage?.totalTokens) + ' / ' + value(r.httpStatus)),
