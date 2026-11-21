@@ -6,19 +6,19 @@
 
 ## 0. 开工前实时核对与首轮工作（2026-11-20）
 
-**先读本节，再读第 1–6 节。** 以下为 [master@977358a7](https://github.com/wxcvm/dsh-purge/commit/977358a7cd3ed60284d8294b9d6a6e9424e7d121) 的任务快照；仓库可能继续变化，以当前 GitHub/本地 `origin/master`、PR 状态与对应提交 CI 为准。
+**先读本节和第 7 节，再查相应专题。** 以下为 [master@0bd3a58](https://github.com/wxcvm/dsh-purge/commit/0bd3a58ba1981c61193e898a2d1ba4f3517d7f5d) 的任务快照（[Windows/Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44724659602) 均成功）；仓库可能继续变化，以当前 GitHub/本地 `origin/master`、PR 状态与对应提交 CI 为准。
 
 | 模块 / 原 PR | 2026-11-20 已核对情况 | 不要做的重复工作 / 下一步 |
 | --- | --- | --- |
 | [#382/#383 提示词](https://github.com/wxcvm/dsh-purge/pull/383)、[#384 Team](https://github.com/wxcvm/dsh-purge/pull/384) | 已合并 | 不重建路由/Team；真实 Windows Desktop 和 Provider 仍需独立验收 |
 | [#385 Agent attention](https://github.com/wxcvm/dsh-purge/pull/385) | **已合并**、[Windows/Linux CI 通过](https://github.com/wxcvm/dsh-purge/actions/runs/44646881605)，当前数据表名 `agent_attention` | 不重写已合并的回报/ack 后端。剩余是 [#343](https://github.com/wxcvm/dsh-purge/issues/343) 智能体待办 UI、真实 `subagent/end` / 用户界面闭环。PR 描述较早写 `agent_report`，不是最新代码 |
 | [#386 LLM 最终请求](https://github.com/wxcvm/dsh-purge/pull/386) | 已合并；测试在隔离官方 Agent Loop 到达**惰性模拟适配器** | 不重造冻结请求测试；仍缺真实网络 Provider 与用户实际 Desktop |
-| [#387 版本区间](https://github.com/wxcvm/dsh-purge/pull/387) / [#391 同资产精确 CVE 历史排序](https://github.com/wxcvm/dsh-purge/pull/391) / [#392 本地 PoC URL CSV 索引](https://github.com/wxcvm/dsh-purge/pull/392) | **均已合并**，从开放的 [#378](https://github.com/wxcvm/dsh-purge/pull/378) 分拆、修正并通过各自 Windows/Linux CI | #378 仅审真正未移植的独有内容；**不要再整包引入版本区间、模糊 CVE 历史、PoC 目录写入或自动执行功能** |
-| [#388 质量采集](https://github.com/wxcvm/dsh-purge/pull/388) | 已合并，从开放的 [#254](https://github.com/wxcvm/dsh-purge/pull/254) 选择性吸收 | #254 仍指向 `beta`，不可整包合并旧客户端/旧知识模块；真实模型三组验收未完成 |
+| [#387 版本区间](https://github.com/wxcvm/dsh-purge/pull/387) / [#391 同资产精确 CVE 历史排序](https://github.com/wxcvm/dsh-purge/pull/391) / [#392 本地 PoC URL CSV 索引](https://github.com/wxcvm/dsh-purge/pull/392) | **均已合并**，从已关闭归档的 [#378](https://github.com/wxcvm/dsh-purge/pull/378) 分拆、修正并通过各自 Windows/Linux CI | #378 仅审真正未移植的独有内容；**不要再整包引入版本区间、模糊 CVE 历史、PoC 目录写入或自动执行功能** |
+| [#388 质量采集](https://github.com/wxcvm/dsh-purge/pull/388) | 已合并，从已关闭归档的 [#254](https://github.com/wxcvm/dsh-purge/pull/254) 选择性吸收 | 旧 #254 以 `beta` 为目标，不可整包合并旧客户端/旧知识模块；真实模型三组验收未完成 |
 | [#389 沙箱审批](https://github.com/wxcvm/dsh-purge/pull/389)、[#390 Windows PowerShell 工具](https://github.com/wxcvm/dsh-purge/pull/390) | 已合并隔离宿主/Runner 回归 | 不视为用户 Windows Desktop 上 `sandbox_permissions` / 空 `justification` 的真实问题已解决，见 #355 |
-| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | **开放 Draft，Windows/Linux 检查失败**；`scripts/prepare-host-fixture.mjs` 默认仍为 `0.2.2-rc.3` | **建议 Codex 的第一项小任务**：Windows [失败日志](https://github.com/wxcvm/dsh-purge/actions/runs/44646823221/job/135991416873) 已证实 `npm ETARGET: No matching version found for @deepseek-ai/dsh-llm@0.2.2-rc.5`。PR #376 已对缺失的 `dsh-error@rc.5` 回退 rc.3；**当前直接阻塞包是 `dsh-llm`**。核对官方实际发布的版本及 peer 契约，再最小修复 fixture/测试、保留 rc.3 回归，不修改生产运行时或发布；Linux 同 run 也失败但日志读取不可用，不能推断同一错误栈 |
+| [#376 rc.5 CI 夹具](https://github.com/wxcvm/dsh-purge/pull/376) | 已合并，官方 rc.5 默认夹具 / rc.3 独立回归 | [旧 ETARGET 已证实可由 stale npm 索引复现](https://github.com/wxcvm/dsh-purge/pull/376#issuecomment-7027708270)；不要重开或混配版本。夹具和 CI 不证明真实 Desktop / Provider |
 
-**当前交付边界**：最近发布标签是 [`v1.1.92-wxcvm.17`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)；`package.json` 版本仍为 `1.1.92-wxcvm.17`。**后续合并不代表 .17 ZIP 包已更新**。CI 用 Node **24**、依赖 `node:sqlite`；不要因 `engines: >=18` 而在 Node 18 上误判测试失败。常规使用 `npm test` + `node scripts/build-client.mjs --check`，`npm run test:all` 含 `test-pending` 预期未完成检查，并非日常必绿门槛。
+**当前交付边界**：[#402](https://github.com/wxcvm/dsh-purge/pull/402) 已合并，最新可见 [`v1.1.92-wxcvm.18`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.18) 指向 `0bd3a58`。Release、后续 master、Windows Desktop 和网络 Provider 分开核对。CI 用 Node **24**，常规使用 `npm test` 和 `node scripts/build-client.mjs --check`；`test-pending` 不是正常 CI 的必绿门槛。
 
 **只读启动命令**（前提是已有授权的仓库克隆，不能在有未提交改动时盲目 reset/clean）：
 
@@ -36,7 +36,7 @@ gh issue view 351 -R wxcvm/dsh-purge
 ## 1. 关系与决策（不要混同）
 
 1. 原始 Purge 历史署名：[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)；本仓库保留 LICENSE/NOTICE。**2026-11-20 GitHub API 对该历史 URL 返回 404**（可能私有、迁移或下架，不推定其不存在）。不能将此 URL 当作当前可直接拉取的上游；现用可访问的接手版固定 SHA 与我方源码核查。
-2. **指定重点维护上游 / 本轮主要差异来源**：[CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe)；用户已明确选择将它作为未来优先跟踪对象。已审查基线：[`main@d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec)（上游 v2.0.0、文档描述目标 DSH 0.2.2-rc.3）。
+2. **指定重点维护上游 / 本轮主要差异来源**：[CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe)；用户已明确选择将它作为未来优先跟踪对象。已审查基线：[`main@d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec)（上游 v2.0.0、文档描述目标 DSH 0.2.2-rc.3）。后续源码已对照 [`main@cc881fbd`](https://github.com/CallMeGuLab/dsh-purge-safe/commit/cc881fbd68b891772330c6b0d275b0c971794e00)，新主题提交不属于旧 v2.0.0 制品。
 3. 官方宿主：[deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)；**Harness API/真实服务事实以目标宿主源码与运行时为准**。其中 [Agent Teams](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/team/agent-team)、[Team 工具](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/team/tool-agent-team)、[流式接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/llm-streaming.md) 属于独立权威依据。
 4. “作为上游”指**持续比较、记录出处和有选择吸收**；**不意味着**改 Git remote、自动同步、覆盖我方完整源码、默认启用所有功能或改变发布频道。不是把继任关系当作已被 GitHub 独立核实的授权凭证。
 5. 其他社区项目是**借鉴来源，不等同直接上游**；逐项核对许可证、当前实现、与我方重合/缺口及真实价值。用户偏好**零新增付费、最小充分实现、只修改根因、避免附加功能门禁与冗余审计**。
@@ -52,7 +52,7 @@ gh issue view 351 -R wxcvm/dsh-purge
 | Agent 运行与占用 | 已有 `agent-status`、`agent-reservations`、`task-context`、`task_block`、持久 handoff 摘要 | [源码](../lib/redteam/agent-reservations.js)、[Issue #345](https://github.com/wxcvm/dsh-purge/issues/345)；不要复制另一套任务/并发账本 |
 | 统一知识/技能、ARTEX 联动和已有 UI | 已有来源适配、分页、项目/资产/证据、状态接口 | [社区吸收记录](COMMUNITY_ABSORPTION_20261119.zh-CN.md)、[#344](https://github.com/wxcvm/dsh-purge/issues/344)、[#346](https://github.com/wxcvm/dsh-purge/issues/346)；新来源不要重建数据库 |
 
-**当前状态已更新（见第 0 节）**：#385/#386/#387/#388/#389/#390 已合并。#376/#378/#254 等仍开放但可能与已合并部分重叠。不能把这份快照当作实时 PR 列表。
+**历史 PR 去重**：#376 已合并，#378/#254 已拆分归档；#396 已由 #401 替代，#399 已由 #398 替代，#368 已由 #374 替代，不重开旧分支。
 
 ## 3. 按原始上游源码逐项吸收（有明确文件入口）
 
@@ -75,7 +75,7 @@ gh issue view 351 -R wxcvm/dsh-purge
 ### P0. 先验证真实宿主请求与发布链（优先于宣称“已修”）
 
 - **目标**：确认真实 Windows Desktop + 指定 Harness 版本下，Purge 当前加载的是哪个代码、补丁实际是否有效、Provider 收到的最终 System Prompt 是否符合预期。
-- **位置**：[#336 安装/回退](https://github.com/wxcvm/dsh-purge/issues/336)、[#337 应用→重启→重连](https://github.com/wxcvm/dsh-purge/issues/337)、[#339 pack 合约](https://github.com/wxcvm/dsh-purge/issues/339)、[#340 提示词](https://github.com/wxcvm/dsh-purge/issues/340)、[#341 流式](https://github.com/wxcvm/dsh-purge/issues/341)、[已合并的 #386 惰性 Provider 请求测试](https://github.com/wxcvm/dsh-purge/pull/386)及[仍失败的 #376 rc.5 fixture](https://github.com/wxcvm/dsh-purge/pull/376)。
+- **位置**：[#336 安装/回退](https://github.com/wxcvm/dsh-purge/issues/336)、[#337 应用→重启→重连](https://github.com/wxcvm/dsh-purge/issues/337)、[#339 pack 合约](https://github.com/wxcvm/dsh-purge/issues/339)、[#340 提示词](https://github.com/wxcvm/dsh-purge/issues/340)、[#341 流式](https://github.com/wxcvm/dsh-purge/issues/341)、[已合并的 #386 惰性 Provider 请求测试](https://github.com/wxcvm/dsh-purge/pull/386)及[已合并的 #376 rc.5 fixture](https://github.com/wxcvm/dsh-purge/pull/376)。
 - **核验链**：`source-readable → router-selected → assembled → official rendered → frozen llm/stream request（#386 已有隔离夹具）→ 实际 Provider 网络请求（仍未验收）`。分别记录宿主版本、活动 Profile/插件版本、重启后加载路径和实际请求结果。**冻结请求、惰性适配器和真实 HTTP 投递不等价**。
 - **矩阵**：红队/普通/minimal/自定义预设 × 主/备用切换 × 有/无 `{{cwd}}` 插值 × 用户全局/局部开关与 Session 锁定 × 子代理/根会话。逐案验证只注入一次、原生上下文/工具保留、无额外默认启用。
 - **完成标准**：真实宿主的只读证据、前后对照、相应测试、明确的未测 Provider 列表；不要仅凭 CI、UI 显示或旧版安装包称完成。
@@ -137,6 +137,22 @@ gh issue view 351 -R wxcvm/dsh-purge
 5. **交接更新位置**：具体源码差异、下一步补丁写回 [#347](https://github.com/wxcvm/dsh-purge/issues/347)；全项目进度在 [#351](https://github.com/wxcvm/dsh-purge/issues/351)；涉及的既有 #340/#343/#344/#345/#346 等按模块补充。每条说明包括**原始链接、代码路径、问题、推荐方案、完成条件、PR/CI 与未验证项**，不新开一套重复事项。
 6. **同步校验**：新增或更新文档链接后，确认文件已在默认分支；原始上游 commit 链接可打开；任务引用没有标成不真实的“完成”。文档改动本身**不**代表 CI 或 Desktop 验收。
 
-### 可直接交给 Codex 的第一条任务
+## 7. 总计划及专题进度
 
-> 阅读 `AGENTS.md`、本文第 0 节和 Issue #347/#351；核对最新 master、PR、CI。首选 **#376 rc.5 夹具安装失败**这一独立 P0 小任务：从 [Windows 已证实的 `@deepseek-ai/dsh-llm@0.2.2-rc.5` ETARGET](https://github.com/wxcvm/dsh-purge/actions/runs/44646823221/job/135991416873) 出发，查明官方 npm 子包发布版本/peer 组合，最小修改 fixture，保留 rc.3 兼容并在 Windows/Linux 跑相应测试；不要为了 CI 绿灯捏造不存在的 rc.5 包；如果环境无法复现或缺凭据/依赖，留下具体阻塞并转到 #343 基于已合并 #385 的 Agent 待办 UI。不要重复合并 #385/#386/#387/#388/#389/#390，不整包合并 #378/#254。每轮提交来源链接、受影响文件、CI 与 Desktop 未验收项，不自动发版。
+本表同时覆盖 #347 与 #351。状态为**已具备、已合并待实机、确认缺口、待对账、仅设计/可选、明确不移植**，不是发布或实机完成清单。以专题收尾；同专题可以拆几个小 PR，独立任务可以并行。
+
+| 轮次 | 专题 / 归属 | 交付与验收 |
+| --- | --- | --- |
+| 0 | #347 / #351 入口与去重 | 更新双仓固定 SHA、开放 PR、已合并/替代证据和最新 Release；本表与已有社区来源表互补，不新建平行台账。实施从新工作树起步，保留现有工作树。 |
+| 1 | #336/#337/#339/#244/#348 制品、环境与恢复 | 同一候选 SHA 分别实打 npm tgz 与 Git ZIP，检查文件、包内版本、入口与 SHA-256；验证干净加载、更新中断、现有配置样本的升级、回退及重连；版本顺序覆盖 beta.9/beta.10 与渠道隔离。准备真正隔离的 Windows Desktop（独立 Electron 数据目录、DSH_HOME 和实例或独立 VM），分别记录 Web、Headless、Runner。保留 rc.3/rc.5 合约。 |
+| 2 | #338/#340/#341/#342/#355/#356 配置、诊断与接口 | 用普通无害样例核对配置保存、当前进程、实际加载路径、本机请求、取消/乱序/重复/终态；确认已具备的兼容能力不重做。验收本机鉴权、旧数据迁移、日志/备份脱敏和凭据分离；参数说明与结果检查用无副作用输入，不修改审批。真实远端 Provider 仅用隔离测试配置，单列验收。 |
+| 3 | #343/#345/#302 Super Agent | 在已合并 #384/#385 上补人工待阅、来源、逐条确认与可靠错误回显；不接自动派发。普通文档任务核对来源/run、重启、重复工作和同条件指标；现有 Teams、报告、占用与完成态分开。持久任务、交接、恢复、复盘登记为设计，实测不足才进入普通任务实现。 |
+| 4 | #343/#352/#361/#364 交互与窗口 | 修全屏晚到、外层页签键盘语义和局部主题解析，保留 #401。总览/异常入口、保存/草稿、窄窗/滚动与焦点按真实操作验收；#364 独立查大块空白和绘制，记录 DPI、窗口态、构建身份，不由异步全屏测试代替。 |
+| 5 | #344/#352/#360 人工资料、技能与环境 | 逐项核对人工批量导入预览、逐行结果、证据来源与归档恢复；复用现有事务及存储，不建平行账本。核对知识正文、稳定 ID、分页、引用、失效状态、技能宿主注册和按需更新/移除；环境只读版本与何时实测分开。CISA KEV 只是可选 CVE 公告来源，先核实缺口，不自动下载，不改变单资产状态。 |
+| 6 | #346/#336 与 ARTEX #172/#180/#183 双端交付 | 保留公司绑定、手工交接与只读回执，明确公司/任务/资产配对、来源、版本和幂等性；覆盖过期、断线、权限变化与冲突，保留人工复核。真实 Windows 双端分别验收发现、采纳、升级和回退，不扩令牌权限或覆盖最终结论。 |
+| 7 | #347/#302/#344 与 ARTEX #183 来源裁定 | 固定主上游提交，并以第 5 节的现有社区表为底：逐源登记版本、许可、来源、已具备/待验收/真实缺口、接收仓库及证据。补历史原仓及 Mojin、富江、REA 等项目，未核实地址保留待证。可独立取用的增量回填各专题；不移植无人值守攻击与保护规避链路。 |
+| 8 | #349/#350/#348 版本中心与远期研究 | 对照版本中心、开发状态、发布资产及历史归属。保留历史与现行署名、有效标签和可选 paper-autopilot；不自动提升频道或发布。#350 为规则优先的可选研究：仅用普通样本比较准确性、延迟和资源，未证实收益不集成。 |
+
+**已补证的基线（.18）**：发布 ZIP 与 SHA256SUMS 已核对；#244 的跨位数与稳定渠道已由现有 Node 24 回归证明，不需要另写比较器。#337 的 Windows 合成普通目录与 pnpm junction 回滚通过，不等于当前桌面安装已升级或重启。当前在用的 Windows Harness 是 rc.5；已读清单并用实际安装树的工具编译器跑隔离契约，未启动或修改该实例。真正的 Desktop 独立实例、隔离远端 Provider 和双端 ARTEX 仍分别需要验收。
+
+**共同验收**：独立记录源码、同一候选 SHA 的 CI、合并、真实 Desktop / Provider / 双端、Release。没有独立测试账号或实机时写明实际缺件和复跑条件，不把夹具写成真实宿主。不要复制现有凭据，不启停正在使用的安装，不新增付费调用。每轮结果回填对应旧 Issue，#347 汇总来源裁定，#351 汇总交付状态。

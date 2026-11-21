@@ -2,7 +2,7 @@
 
 [返回工作台](../README.md) · [版本中心](RELEASE_CENTER.zh-CN.md) · [PR 列表](https://github.com/wxcvm/dsh-purge/pulls) · [问题追踪](https://github.com/wxcvm/dsh-purge/issues)
 
-> 历史快照日期：2026-11-12。当前工作见 [#351 总台账](https://github.com/wxcvm/dsh-purge/issues/351) 与 [.11 交付台账](DELIVERY_STATUS_11.zh-CN.md)。下文为历史记录，不用于判断最新工作是否完成。
+> 历史快照日期：2026-11-12。当前工作见 [#351 总台账](https://github.com/wxcvm/dsh-purge/issues/351) 和[完整实施总表](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md#7-总计划及专题进度)，已发布版本看[版本中心](RELEASE_CENTER.zh-CN.md)。下文为历史记录，不用于判断最新工作是否完成。
 
 ## 已完成 · 仓库与维护
 
@@ -24,7 +24,7 @@
 | P0 | 私有安装与更新兼容 | 通过授权获取正确包；安装、更新与版本切换分别验证；凭据不进入仓库或日志 |
 | P0 | Windows Desktop 实机验收 | 记录安装版本、宿主版本、重启后的真实运行结果 |
 | P1 | Web 实机验收 | 独立记录 Web 的版本和运行结果 |
-| P1 | Beta → Stable | [#171](https://github.com/wxcvm/dsh-purge/pull/171) 仍开放；完成验收并明确批准后再提升 |
+| P1 | Beta → Stable | [#171](https://github.com/wxcvm/dsh-purge/pull/171) 已关闭未合并（历史参考）；不将其当作当前待合并任务 |
 | P1 | 首页以外的 GitHub 外观 | About、Topics、社交封面尚未调整 |
 
 ## 工作流

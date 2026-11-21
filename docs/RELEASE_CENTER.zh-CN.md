@@ -2,15 +2,17 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
-> 本页为私有仓库的维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
+> 本页为维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
 ## 当前 Release 查询快照 · 2026-11-20
 
 | 渠道 | 最新可见版本 | 证据与边界 |
 | --- | --- | --- |
-| Latest listed Release | [v1.1.92-wxcvm.17](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17) | GitHub Release 发布于 2026-11-19；此处只确认标签/Release 可见，**不宣称本轮下载了资产或校验了 SHA-256** |
-| 当前 master | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | **已经包含在 .17 发布之后合并的代码**；提交 SHA、CI 与功能实机结果必须另按当前分支核对 |
-| 源码包版本 | [package.json](../package.json) | 当前仍标为 `1.1.92-wxcvm.17`，**不能用这个版本字段推断 .17 已发布包具有最新 master 功能** |
+| 最新 Release | [v1.1.92-wxcvm.18](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.18) | 对应 [`0bd3a58`](https://github.com/wxcvm/dsh-purge/commit/0bd3a58ba1981c61193e898a2d1ba4f3517d7f5d)，已下载 ZIP 与 SHA256SUMS，校验、包内版本和入口通过（见下） |
+| 当前 master | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | [发布提交 Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44724659602) 已通过；后续主分支改动与旧发布包不混同 |
+| 实际安装 / Provider | [#336](https://github.com/wxcvm/dsh-purge/issues/336) | 另行验收，不从版本字段、CI 或 Release 可见性推断 |
+
+已校验发布 ZIP 的 SHA-256：`310ec43c2a0821ee1e266dc62e0be2ead876218a51b05b267e74c3501d4b75df`。下载字节、包内清单与版本通过，不等于已安装或已加载。
 
 有关上游接手版和 Codex 实施：[根目录 AGENTS.md](../AGENTS.md)、[上游吸收执行方案](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md)。发布前仍须执行当前提交的打包、干净配置、Windows Desktop / Web 安装与恢复检查，不能拿 CI 或 .11 的校验结果替代。
 
