@@ -29,7 +29,7 @@
 
 ## 发布候选包的干净目录自动验收（非 Desktop 实机）
 
-`scripts/check-packlist.mjs` 仅校验 npm 将打包哪些文件；`scripts/smoke-packed-install.mjs` 进一步从**当前候选源码**实际执行 `npm pack`，校验 tgz 的 npm SHA-1 / SHA-512 元数据与真实归档一致，在全新、可销毁的临时 `DSH_HOME` 内安装该 tgz，验证包内版本、关键文件、五个 Host 插件模块导入、生成客户端语法和 CLI `--help`。Windows / Ubuntu 的兼容性 CI 均执行该步骤，失败不允许把当前候选标记为打包验收成功。
+`scripts/check-packlist.mjs` 仅校验 npm 将打包哪些文件；`scripts/smoke-packed-install.mjs` 进一步从**当前候选源码**实际执行 `npm pack`，校验 tgz 的 npm SHA-1 / SHA-512 元数据与真实归档一致，在全新、可销毁的临时 `DSH_HOME` 内安装该 tgz，验证包内版本、关键文件、五个 Host 插件模块导入（作战台工具模块需在该临时环境额外安装已固定版本的官方 `@deepseek-ai/dsh-tools` 宿主接口）、生成客户端语法和 CLI `--help`。Windows / Ubuntu 的兼容性 CI 均执行该步骤，失败不允许把当前候选标记为打包验收成功。
 
 该检查不会运行 `postinstall`、启动 Harness Desktop、安装到用户已有目录、执行清洗补丁或发送真实 Provider 请求；完成后移除临时目录。**当前主线 package.json 的版本号仍对应上一正式版，不表示从当前主线生成的候选归档就是已发布 .18 的相同字节。** 只有以实际 Release 标签 / 资产 / SHA256 校验后，才能确认发布资产；真实 DSH_HOME 升级、Desktop 加载和 Provider 投递仍按 #336/#337/#340 单独记录。
 
