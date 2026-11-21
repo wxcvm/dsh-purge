@@ -26,6 +26,21 @@ test('opaque and cross-site browser origins cannot use the local exemption', () 
     'a missing Origin requires the private Desktop Host cookie')
 })
 
+test('unrelated app origins do not bypass the local browser-origin boundary', () => {
+  for (const origin of [
+    'app://other', 'app://dsh.evil.example', 'app:opaque',
+    'app://dsh@malicious.example', 'app://dsh/path', 'app://dsh:80',
+    'dsh-app://app',
+  ]) {
+    assert.equal(allowedBridgeOrigin(request(origin)), false, origin)
+    assert.equal(allowedBridgeOrigin(request(origin, '127.0.0.1', '127.0.0.1:53380',
+      'dsh-desktop-session=private-test-cookie')), false,
+    'an unrecognized explicit Origin must never become trusted via a cookie: ' + origin)
+  }
+  assert.equal(allowedBridgeOrigin(request('APP://DSH')), true,
+    'the established renderer Origin stays compatible when case differs')
+})
+
 test('remote peers cannot claim local desktop-origin exemptions', () => {
   assert.equal(allowedBridgeOrigin(request('null', '198.51.100.8')), false)
   assert.equal(allowedBridgeOrigin(request(undefined, '198.51.100.8')), false)
