@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6488b762004b9360";
+		const CLIENT_BUILD_ID = "c54f24beea676cbe";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -284,6 +284,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"update.applying": "正在更新…",
 			"update.switching": "正在切换版本…",
 			"update.noHigherVersion": "未发现更高版本（本机 {version}，通道 {remote}）。",
+			"update.versionUnverified": "未能读取完整版本号，不能判断是否有更高版本（本机 {version}，通道 {remote}）。",
 			"update.revisionsDiffer": "版本号同为 {version}，但记录的提交不同：本机 {localSha}，通道 {remoteSha}。未执行更新。",
 			"update.revisionsUnknown": "版本号同为 {version}，但缺少可核对的提交记录。",
 			"update.revisionsMatch": "本机记录与通道提交一致（{remoteSha}）；不代表当前进程已加载。",
@@ -672,6 +673,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"update.applying": "Updating…",
 			"update.switching": "Switching version…",
 			"update.noHigherVersion": "No higher version found (installed {version}; channel {remote}).",
+			"update.versionUnverified": "A version number is unavailable; update status is unverified (installed {version}; channel {remote}).",
 			"update.revisionsDiffer": "Both report {version}, but their recorded commits differ: installed {localSha}; channel {remoteSha}. No update was applied.",
 			"update.revisionsUnknown": "Both report {version}, but a commit record is missing or unverified.",
 			"update.revisionsMatch": "The installation record matches the channel commit ({remoteSha}); this does not verify the running process.",
@@ -3667,10 +3669,16 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			if (d.hasUpdate) return d.pinned
 				? tr("update.pinned", { version, remote })
 				: tr("update.available", { remote, local: version });
-			const sameVersion = d.localVersion && d.remoteVersion
-				&& String(d.localVersion).replace(/^v/i, "") === String(d.remoteVersion).replace(/^v/i, "");
-			if (!sameVersion) return tr("update.noHigherVersion", { version, remote });
-			const revisionStatus = d.lanes?.[d.channel || "stable"]?.revisionStatus;
+			const lane = d.lanes?.[d.channel || "stable"];
+			const remoteVersion = lane?.version ?? d.remoteVersion;
+			const validVersion = value => /^v?\d+\.\d+\.\d+(?:[-+][0-9a-z.+-]+)?$/i.test(value || "");
+			if (!validVersion(d.localVersion) || !validVersion(remoteVersion)) {
+				return tr("update.versionUnverified", { version, remote });
+			}
+			if (d.localVersion.replace(/^v/i, "") !== remoteVersion.replace(/^v/i, "")) {
+				return tr("update.noHigherVersion", { version, remote });
+			}
+			const revisionStatus = lane?.revisionStatus;
 			const ids = { version, localSha: d.localSha || "—", remoteSha: d.remoteSha || "—" };
 			if (revisionStatus === "differs") return tr("update.revisionsDiffer", ids);
 			if (revisionStatus === "matches") return tr("update.revisionsMatch", ids);

@@ -64,3 +64,11 @@ test("version updates, ahead-of-channel installs, and pinned notices keep their 
   assert.equal(pinned.lane.hasUpdate, true, "keep existing explicit pinned-channel behavior");
   assert.match(notice(pinned.info, tr), /^update\.pinned/);
 });
+
+test("a channel head SHA cannot be used as a fallback version number", () => {
+  const unknown = fixture(old, "");
+  assert.equal(unknown.lane.hasUpdate, false);
+  assert.match(notice({ ...unknown.info, remoteVersion: head.slice(0, 7) }, tr), /^update\.versionUnverified/);
+  assert.match(notice({ localVersion: version, remoteVersion: head.slice(0, 7) }, tr), /^update\.versionUnverified/);
+  assert.match(notice({ localVersion: "", remoteVersion: version }, tr), /^update\.versionUnverified/);
+});
