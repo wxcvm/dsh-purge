@@ -88,12 +88,23 @@ jobs:
         shell: pwsh
         run: ./maintenance/inject-switch/Build.ps1
       - name: Attach optional Windows switch executable
+        id: windows-switch-artifact
         if: runner.os == 'Windows'
+        # The native build above remains release-gating. Artifact storage may
+        # transiently fail (e.g. ECONNRESET) independently of the compiled exe.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: dsh-inject-switch-windows
           path: maintenance/inject-switch/dist/dsh-inject-switch.exe
+          if-no-files-found: error
           retention-days: 14
+      - name: Report optional Windows artifact delivery failure
+        if: ${{ always() && runner.os == 'Windows' && steps.windows-switch-artifact.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          Write-Host '::warning title=Windows switch artifact not delivered::The switch compiled, but optional artifact upload failed. Check the upload job before using the binary.'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Optional Windows switch binary artifact upload failed; build and API test results remain separate. Re-run the failed upload/job before relying on downloadable artifacts.' -Encoding utf8
       - name: Smoke-test Desktop updater and simulated rollback
         if: runner.os == 'Windows'
         shell: pwsh
