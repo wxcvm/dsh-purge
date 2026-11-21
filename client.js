@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "211c251a0f3e5793";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4037,19 +4037,24 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		function detectHostTheme() {
+			let schemes = [];
 			try {
 				if (typeof document !== "undefined") {
 					const root = document.documentElement;
 					if (document.body?.hasAttribute("data-ds-dark-theme") || root?.hasAttribute("data-ds-dark-theme")) return "dusk";
-					const scheme = (root.style.colorScheme || getComputedStyle(root).colorScheme || getComputedStyle(root).getPropertyValue("color-scheme") || "").toLowerCase();
-					if (scheme.includes("dark")) return "dusk";
-					if (scheme.includes("light")) return "white";
+					const inline = root?.style?.colorScheme;
+					const style = !inline && root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
+					schemes = (inline || style?.colorScheme || style?.getPropertyValue?.("color-scheme") || "")
+						.toLowerCase().split(/\s+/).filter((scheme) => scheme === "light" || scheme === "dark");
+					const dark = schemes.includes("dark");
+					if (dark !== schemes.includes("light")) return dark ? "dusk" : "white";
 				}
-				if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-					return "dusk";
-				}
-			} catch { /* ignore */ }
-			return "white";
+			} catch { /* Some host views restrict computed style; try the media preference. */ }
+			try {
+				const matches = typeof window === "undefined" ? undefined : window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+				if (typeof matches === "boolean") return matches ? "dusk" : "white";
+			} catch { /* Fall back to the first scheme advertised by the host. */ }
+			return schemes[0] === "dark" ? "dusk" : "white";
 		}
 
 		function readTheme() {
@@ -13354,6 +13359,80 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
     }
 
+    function AgentReports(props) {
+      const engagement = props.engagement
+      const [queue, setQueue] = React.useState(null)
+      const [busy, setBusy] = React.useState(null)
+      const [notice, setNotice] = React.useState(null)
+      const active = React.useRef(null)
+      const load = async (reportId) => {
+        const scope = active.current
+        if (!scope || scope.pending) return
+        const confirm = reportId !== undefined
+        scope.pending = true
+        setBusy(confirm ? reportId : 'list')
+        setNotice(null)
+        try {
+          const response = await api(confirm ? { op: 'attentionAck', engagement, report_id: reportId }
+            : { op: 'attention', engagement })
+          if (active.current !== scope) return
+          if (!response?.ok || response.engagement !== engagement || !Array.isArray(response.items)
+            || (confirm && (response.ack?.report_id !== reportId || typeof response.ack.acknowledged !== 'boolean'))) {
+            throw new Error('Invalid report response')
+          }
+          setQueue(response)
+          if (confirm) setNotice({ text: response.ack.acknowledged
+            ? '该回报已标为已阅。' : '这条回报已变化或已阅，列表已刷新。' })
+        } catch {
+          if (active.current === scope) setNotice({ error: true, text: confirm
+            ? '未能确认已阅，请重试或刷新列表。' : '未能读取待阅回报，请重试。' })
+        } finally {
+          if (active.current === scope) {
+            scope.pending = false
+            setBusy(null)
+          }
+        }
+      }
+      React.useEffect(() => {
+        if (!engagement) return
+        const scope = { pending: false }
+        active.current = scope
+        void load()
+        return () => { if (active.current === scope) active.current = null }
+      }, [engagement])
+
+      const visible = queue?.engagement === engagement ? queue : null
+      const labels = { waiting: '等待回复', blocked: '遇到阻塞', failed: '报告失败',
+        ready: '已回报可继续', progress: '进度回报', dropped: '已放弃' }
+      return h('section', { className: 'rt-card', 'aria-label': '待阅回报' },
+        h('h4', null, '待阅回报' + (visible ? ' · ' + visible.total : '')),
+        h('div', { className: 'rt-note' }, '这里显示智能体上报的状态。标为已阅不会完成任务或改变运行名额。'),
+        engagement ? h('button', { type: 'button', className: 'rt-btn', disabled: busy !== null,
+          onClick: () => load() }, busy === 'list' ? '读取回报中…' : '刷新回报') : null,
+        notice ? h('div', { className: notice.error ? 'rt-err' : 'rt-note', role: notice.error ? 'alert' : 'status' },
+          notice.text) : null,
+        !engagement ? h('div', { className: 'rt-note' }, '选择项目后查看待阅回报。')
+          : visible && visible.items.length === 0 ? h('div', { className: 'rt-note' }, '当前没有待阅回报。') : null,
+        visible?.truncated ? h('div', { className: 'rt-note' }, '当前只展示 ' + visible.items.length + ' 条待阅回报。') : null,
+        visible?.items.map((item) => {
+          const stamp = item.created_at && new Date(item.created_at)
+          const time = stamp && Number.isFinite(stamp.getTime())
+            ? h('time', { dateTime: item.created_at }, stamp.toLocaleString())
+            : '时间未知'
+          return h('article', { key: item.id, className: 'rt-card', style: { marginTop: 8, overflowWrap: 'anywhere' } },
+            h('strong', null, (Object.hasOwn(labels, item.status) ? labels[item.status] : '状态未知') + ' · #' + item.id),
+            h('div', null, '来源：' + (item.session_id || '未知会话')
+              + (item.parent_session ? ' · 主会话：' + item.parent_session : '')),
+            h('div', null, time),
+            item.blocked_reason ? h('div', null, '备注：' + item.blocked_reason) : null,
+            item.needs?.length ? h('ul', null, item.needs.map((need, i) => h('li', { key: i },
+              need.detail || (need.kind === 'other' ? '需要人工查看' : need.kind)))) : null,
+            h('button', { type: 'button', className: 'rt-btn', disabled: busy !== null,
+              'aria-label': '将回报 #' + item.id + ' 标为已阅', onClick: () => load(item.id) },
+              busy === item.id ? '确认中…' : '标为已阅'))
+        }))
+    }
+
     /**
      * 智能体页签：并发名额（最多 3 个）+ 六个角色与它们的提示词。
      * 主会话派活前先看这里的名额，用户也能一眼看到"现在还能拉起几个智能体"。
@@ -13426,6 +13505,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-pane' },
           err ? h('div', { className: 'rt-err' }, err) : null,
           concurrency && concurrency.ok === false ? h('div', { className: 'rt-err' }, concurrency.error || '智能体状态读取失败') : null,
+          h(AgentReports, { key: 'agent-reports:' + (eng || ''), engagement: eng }),
           h('div', { className: 'rt-card' },
             h('h4', null, '并发规则（硬约束）'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
@@ -15217,6 +15297,83 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					+ "；测绘与 ARTEX 联动展示 " + (status.maskAssetResults ? "遮蔽" : "显示")
 			};
 		}
+		function createWorkspaceFullscreen(document, showError) {
+			let entering = null;
+			let leaving = null;
+			const owns = (element) => !!element && document.fullscreenElement === element;
+			const leave = (element, silent = false) => {
+				if (leaving?.element === element) {
+					if (silent) leaving.silent = true;
+					return;
+				}
+				if (!owns(element) || typeof document.exitFullscreen !== "function") return;
+				const attempt = { element, silent };
+				leaving = attempt;
+				const settle = (failed) => {
+					if (leaving !== attempt) return;
+					leaving = null;
+					if (failed && !attempt.silent) showError("退出全屏失败，可以使用 Esc");
+				};
+				try {
+					Promise.resolve(document.exitFullscreen()).then(() => settle(false), () => settle(true));
+				} catch { settle(true); }
+			};
+			return {
+				owns,
+				toggle(element) {
+					if (!element || entering || leaving) return;
+					showError("");
+					if (owns(element)) return leave(element);
+					if (document.fullscreenElement) {
+						showError("请先退出其他内容的全屏");
+						return;
+					}
+					if (typeof element.requestFullscreen !== "function") {
+						showError("当前宿主不支持此全屏方式，可试试 F11");
+						return;
+					}
+					const attempt = { element, cancelled: false };
+					entering = attempt;
+					const settle = (error) => {
+						entering = null;
+						if (attempt.cancelled) {
+							// A request may succeed after the user already left.
+							// Never exit another component's fullscreen session.
+							if (!error) leave(element, true);
+						} else if (error) {
+							showError(error);
+						}
+					};
+					try {
+						// Keep the native request inside the button's user gesture.
+						Promise.resolve(element.requestFullscreen()).then(
+							() => settle(""),
+							() => settle("宿主不允许全屏，可试试 F11 或最大化 DSH 窗口")
+						);
+					} catch { settle("全屏切换被宿主拒绝，可试试 F11"); }
+				},
+				release(element) {
+					if (entering?.element === element) entering.cancelled = true;
+					leave(element, true);
+				},
+			};
+		}
+		const WORKSPACE_TABS = ["clean", "drill"];
+		function handleWorkspaceTabKey(event, key, open) {
+			if (event.altKey || event.ctrlKey || event.metaKey) return;
+			const index = WORKSPACE_TABS.indexOf(key);
+			const size = WORKSPACE_TABS.length;
+			let next;
+			if (event.key === "ArrowRight") next = (index + 1) % size;
+			else if (event.key === "ArrowLeft") next = (index + size - 1) % size;
+			else if (event.key === "Home") next = 0;
+			else if (event.key === "End") next = size - 1;
+			else return;
+			event.preventDefault();
+			const target = WORKSPACE_TABS[next];
+			event.currentTarget.parentElement?.querySelector('[data-workspace-tab="' + target + '"]')?.focus();
+			open(target);
+		}
 		function PurgeWorkspacePage() {
 			const t = useT();
 			useLayoutEffect(() => { ensurePurgeWorkspaceStyles(); }, []);
@@ -15252,36 +15409,24 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			const [immersive, setImmersive] = useState(false);
 			const [fullscreenError, setFullscreenError] = useState("");
 			const [navigationError, setNavigationError] = useState("");
-			useEffect(() => {
+			const fullscreenRef = useRef(null);
+			if (!fullscreenRef.current) fullscreenRef.current = createWorkspaceFullscreen(document, setFullscreenError);
+			const fullscreen = fullscreenRef.current;
+			useLayoutEffect(() => {
+				if (!workspaceVisible) return;
+				const element = workspaceRef.current;
 				const onChange = () => {
-					setImmersive(document.fullscreenElement === workspaceRef.current);
+					setImmersive(fullscreen.owns(element));
 					setFullscreenError("");
 				};
+				onChange();
 				document.addEventListener("fullscreenchange", onChange);
-				return () => document.removeEventListener("fullscreenchange", onChange);
-			}, []);
-			const toggleImmersive = () => {
-				const el = workspaceRef.current;
-				if (!el) return;
-				setFullscreenError("");
-				try {
-					if (document.fullscreenElement === el) {
-						const result = document.exitFullscreen();
-						if (result && typeof result.catch === "function") {
-							result.catch(() => setFullscreenError("退出全屏失败，可以使用 Esc"));
-						}
-					} else if (typeof el.requestFullscreen === "function") {
-						const result = el.requestFullscreen();
-						if (result && typeof result.catch === "function") {
-							result.catch(() => setFullscreenError("宿主不允许全屏，可试试 F11 或最大化 DSH 窗口"));
-						}
-					} else {
-						setFullscreenError("当前宿主不支持此全屏方式，可试试 F11");
-					}
-				} catch {
-					setFullscreenError("全屏切换被宿主拒绝，可试试 F11");
-				}
-			};
+				return () => {
+					document.removeEventListener("fullscreenchange", onChange);
+					fullscreen.release(element);
+				};
+			}, [workspaceVisible, fullscreen]);
+			const toggleImmersive = () => fullscreen.toggle(workspaceRef.current);
 			useEffect(() => {
 				const fn = (next) => { setPage(next); setWorkspaceVisible(true); setNavigationError(""); };
 				purgeWorkspaceBus.listeners.add(fn);
@@ -15294,18 +15439,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			}, [page]);
 			const open = (next) => selectPurgeWorkspacePage(next);
 			const back = () => {
-				// Leave the browser's fullscreen top layer before returning to the host.
-				if (document.fullscreenElement === workspaceRef.current && typeof document.exitFullscreen === "function") {
-					try {
-						const result = document.exitFullscreen();
-						if (result && typeof result.catch === "function") result.catch(() => {});
-					} catch { /* The host may already have exited fullscreen. */ }
-				}
 				// Do not blank the workspace if the host refuses the navigation.
 				if (!selectPurgeHostPanel(null)) {
 					setNavigationError("暂时无法返回会话，请重试。");
 					return;
 				}
+				fullscreen.release(workspaceRef.current);
 				setNavigationError("");
 				__dshPurgeDrill.setTemporaryPrivacy(null);
 				setWorkspaceVisible(false);
@@ -15322,9 +15461,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				h("header", { className: "dshp-workspace-nav" },
 					h("strong", null, "Purge"),
 					h("nav", { className: "dshp-workspace-tabs", role: "tablist", "aria-label": "Purge 工作区" },
-						["clean", "drill"].map((key) => h("button", {
+						WORKSPACE_TABS.map((key) => h("button", {
 							type: "button", key, role: "tab",
+							id: "dshp-workspace-tab-" + key,
+							"data-workspace-tab": key,
 							"aria-selected": String(page === key),
+							"aria-controls": "dshp-workspace-panel-" + key,
+							tabIndex: page === key ? 0 : -1,
+							onKeyDown: (event) => handleWorkspaceTabKey(event, key, open),
 							onClick: () => open(key),
 						}, key === "clean" ? "清洗台" : "作战台"))),
 					h("button", { type: "button", className: "dshp-workspace-privacy",
@@ -15337,8 +15481,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 						onClick: toggleImmersive }, immersive ? "退出系统全屏" : "系统全屏"),
 					fullscreenError || navigationError ? h("span", { className: "dshp-workspace-fullscreen-error",
 						role: "status" }, navigationError || fullscreenError) : null),
-				h("div", { className: "dshp-dock-body" },
-					h(PurgeWorkspaceBoundary, { key: page }, h(PurgeWorkspaceContent, { page, t }))));
+				WORKSPACE_TABS.map((key) => h("div", {
+					className: "dshp-dock-body", key, role: "tabpanel",
+					id: "dshp-workspace-panel-" + key,
+					"aria-labelledby": "dshp-workspace-tab-" + key,
+					hidden: page !== key,
+					style: page === key ? undefined : { display: "none" },
+				}, page === key ? h(PurgeWorkspaceBoundary, { key: page }, h(PurgeWorkspaceContent, { page, t })) : null)));
 			// Portal escapes the Harness main-panel layout and its sidebar/clipping container.
 			// Keep the same React state and host API; no separate browser window.
 			try {
@@ -15412,12 +15561,33 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function loadDockGeom() {
 			try {
 				const raw = JSON.parse(window.localStorage.getItem(DOCK_GEOM_KEY) || "null");
-				if (raw && typeof raw === "object") return clampDockGeom(raw);
+				if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
 			} catch { /* ignore */ }
-			return clampDockGeom(defaultDockGeom());
+			return null;
 		}
 		function saveDockGeom(g) {
-			try { window.localStorage.setItem(DOCK_GEOM_KEY, JSON.stringify(clampDockGeom(g))); } catch { /* ignore */ }
+			try { window.localStorage.setItem(DOCK_GEOM_KEY, JSON.stringify(g)); } catch { /* ignore */ }
+		}
+		function useDockGeometry() {
+			const [{ preferred, edited }, setPreference] = useState(() => ({ preferred: loadDockGeom(), edited: false }));
+			const [, renderViewport] = useState(0);
+			const visible = clampDockGeom(preferred || defaultDockGeom());
+			useEffect(() => {
+				const onResize = () => renderViewport((revision) => revision + 1);
+				window.addEventListener("resize", onResize);
+				return () => window.removeEventListener("resize", onResize);
+			}, []);
+			useEffect(() => { if (edited) saveDockGeom(preferred); }, [preferred, edited]);
+			// Browser resize only affects the projection. A drag or resize
+			// gesture persists just the fields the user actually changed.
+			const edit = (patch) => setPreference((previous) => {
+				const base = previous.preferred || defaultDockGeom();
+				const next = clampDockGeom({ ...clampDockGeom(base), ...patch });
+				const updated = { ...base };
+				for (const key of Object.keys(patch)) updated[key] = next[key];
+				return { preferred: updated, edited: true };
+			});
+			return [visible, edit];
 		}
 
 		function WelcomeNotice() {
@@ -15933,7 +16103,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function PurgeDock() {
 			const t = useT();
 			const st = useDock();
-			const [geom, setGeom] = useState(() => loadDockGeom());
+			const [geom, editGeom] = useDockGeometry();
 			const [dockTheme, setDockTheme] = useState(detectHostTheme);
 			useEffect(() => {
 				const sync = () => setDockTheme(detectHostTheme());
@@ -15953,15 +16123,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				return () => { widthTag.remove(); };
 			}, []);
 			useEffect(() => {
-				saveDockGeom(geom);
 				const tag = document.querySelector('style[data-dsh-purge-dock-w="1"]');
 				if (tag) tag.textContent = ":root{--dshp-dock-w:" + geom.w + "px;--dshp-dock-h:" + geom.h + "px}";
-			}, [geom]);
-			useEffect(() => {
-				const onResize = () => setGeom((g) => clampDockGeom(g));
-				window.addEventListener("resize", onResize);
-				return () => window.removeEventListener("resize", onResize);
-			}, []);
+			}, [geom.w, geom.h]);
 			useEffect(() => {
 				if (st.tab === "drill" && readDrillAuth() && __dshPurgeDrill && __dshPurgeDrill.setUI) {
 					try { __dshPurgeDrill.setUI({ open: true }); } catch { /* ignore */ }
@@ -15979,7 +16143,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				const sy = e.clientY;
 				const ox = geom.x;
 				const oy = geom.y;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: ox + (ev.clientX - sx), y: oy + (ev.clientY - sy), w: g.w, h: g.h }));
+				const move = (ev) => editGeom({ x: ox + (ev.clientX - sx), y: oy + (ev.clientY - sy) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
@@ -15995,7 +16159,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				const sy = e.clientY;
 				const ow = geom.w;
 				const oh = geom.h;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: g.x, y: g.y, w: ow + (ev.clientX - sx), h: oh + (ev.clientY - sy) }));
+				const move = (ev) => editGeom({ w: ow + (ev.clientX - sx), h: oh + (ev.clientY - sy) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
@@ -16012,7 +16176,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				const ow = geom.w;
 				const move = (ev) => {
 					const dx = ev.clientX - sx;
-					setGeom((g) => clampDockGeom({ x: ox + dx, y: g.y, w: ow - dx, h: g.h }));
+					editGeom({ x: ox + dx, w: ow - dx });
 				};
 				const up = () => {
 					window.removeEventListener("mousemove", move);
@@ -16027,7 +16191,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				e.stopPropagation();
 				const sx = e.clientX;
 				const ow = geom.w;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: g.x, y: g.y, w: ow + (ev.clientX - sx), h: g.h }));
+				const move = (ev) => editGeom({ w: ow + (ev.clientX - sx) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
@@ -16041,7 +16205,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				e.stopPropagation();
 				const sy = e.clientY;
 				const oh = geom.h;
-				const move = (ev) => setGeom((g) => clampDockGeom({ x: g.x, y: g.y, w: g.w, h: oh + (ev.clientY - sy) }));
+				const move = (ev) => editGeom({ h: oh + (ev.clientY - sy) });
 				const up = () => {
 					window.removeEventListener("mousemove", move);
 					window.removeEventListener("mouseup", up);
