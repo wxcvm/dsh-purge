@@ -7,8 +7,11 @@ import { tmpdir } from 'node:os'
 import { DDL, RedteamStore, dispatch } from '../lib/redteam/store-core.js'
 import {
   createWorkItem, assignWorkItem, reportWorkItem, closeWorkItem,
-  getWorkItem, listWorkItems, workRecoveryCandidates,
+  getWorkItem, listWorkItems, workRecoveryCandidates, observeWorkItemEnd,
 } from '../lib/redteam/agent-work-items.js'
+import { captureAgentEndReport } from '../lib/redteam/agent-attention.js'
+import { createReservations } from '../lib/redteam/agent-reservations.js'
+import { bindSession } from '../lib/redteam/session-bindings.js'
 
 function memory() {
   const db = new DatabaseSync(':memory:')
@@ -147,5 +150,99 @@ test('existing dispatch routes use the selected engagement and preserve no-selec
     const none = { ...store, activeEngagementId: () => undefined }
     assert.equal(dispatch(none, { op: 'workItemCreate', task_key: 'x', role: 'review',
       objective: 'x' }).ok, false)
+  } finally { db.close() }
+})
+
+test('host end is observed once and must never infer done or clear a running task', () => {
+  const db = memory()
+  try {
+    const id = create(db).item.id
+    assign(db, id, 'child', 'run-1')
+    assert.deepEqual(observeWorkItemEnd(db, { session_id: 'other-child', run_id: 'run-1' }),
+      { observed: false, reason: 'unmatched-run' })
+    const observed = observeWorkItemEnd(db, {
+      session_id: 'child', run_id: 'run-1', stop_reason: 'completed',
+    })
+    assert.equal(observed.observed, true)
+    assert.equal(observed.task_id, id)
+    const current = getWorkItem(db, id)
+    assert.equal(current.status, 'running')
+    assert.equal(current.host_activity, 'end-observed')
+    assert.equal(current.needs_host_check, false)
+    assert.equal(current.needs_settlement, true)
+    assert.equal(current.assignment.host_stop_reason, 'completed')
+    assert.equal(observeWorkItemEnd(db, {
+      session_id: 'child', run_id: 'run-1', stop_reason: 'error',
+    }).reason, 'already-observed')
+    assert.equal(getWorkItem(db, id).assignment.host_stop_reason, 'completed')
+    assert.throws(() => assign(db, id, 'next', 'run-2'), /cannot assign/)
+    assert.equal(report(db, id, 'ready').recorded, true)
+    assert.equal(closeWorkItem(db, { task_id: id, outcome: 'done', reason: 'Reviewed' }).closed, true)
+  } finally { db.close() }
+})
+
+test('a delayed host end can annotate history but cannot override the new attempt', () => {
+  const db = memory()
+  try {
+    const id = create(db).item.id
+    assign(db, id, 'child', 'old-run')
+    report(db, id, 'failed', 'child', 'old-run')
+    assign(db, id, 'next', 'new-run')
+    assert.equal(observeWorkItemEnd(db, {
+      session_id: 'child', run_id: 'old-run', stop_reason: 'aborted',
+    }).observed, true)
+    const current = getWorkItem(db, id)
+    assert.equal(current.attempt, 2)
+    assert.equal(current.status, 'running')
+    assert.equal(current.needs_host_check, true)
+    assert.equal(current.history[1].host_stop_reason, 'aborted')
+    assert.equal(current.history[0].host_end_at, null)
+    assert.equal(workRecoveryCandidates(db).total, 1)
+  } finally { db.close() }
+})
+
+test('real subagent/end records only matching bound work, even without redteamReport', () => {
+  const db = memory(), other = memory()
+  const store = {
+    db(id) { return id === 'demo' ? db : id === 'other' ? other : undefined },
+    recordAgentReport: RedteamStore.prototype.recordAgentReport,
+    observeWorkItemEnd: RedteamStore.prototype.observeWorkItemEnd,
+  }
+  try {
+    bindSession(store, { agent: { session: { id: 'root-demo' } } }, 'demo', { persist: false })
+    const id = create(db).item.id
+    assign(db, id, 'child-demo', 'actual-run')
+    const book = createReservations()
+    const event = { id: 'child-demo', runId: 'actual-run', parentSessionId: 'root-demo',
+      stopReason: 'completed', lastAssistantMessage: [{ type: 'text', text: 'A final note without marker' }] }
+    assert.equal(captureAgentEndReport(store, book, event), null)
+    assert.equal(getWorkItem(db, id).host_activity, 'end-observed')
+    assert.equal(getWorkItem(db, id).status, 'running')
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM agent_attention').get().n, 0)
+    assert.equal(captureAgentEndReport(store, book, event), null)
+    assert.equal(getWorkItem(db, id).assignment.host_stop_reason, 'completed')
+    assert.equal(other.prepare('SELECT COUNT(*) AS n FROM agent_work_assignment').get().n, 0)
+    const unrelated = { ...event, parentSessionId: 'foreign-root' }
+    assert.equal(captureAgentEndReport(store, book, unrelated), null)
+    assert.equal(getWorkItem(db, id).status, 'running')
+  } finally { db.close(); other.close() }
+})
+
+test('optional observational failure does not prevent the existing attention report', () => {
+  const db = memory()
+  const errors = []
+  const store = {
+    db() { return db },
+    recordAgentReport: RedteamStore.prototype.recordAgentReport,
+    observeWorkItemEnd() { throw new Error('synthetic ledger fault') },
+  }
+  try {
+    bindSession(store, { agent: { session: { id: 'root' } } }, 'demo', { persist: false })
+    const end = { id: 'child', runId: 'run-1', parentSessionId: 'root', stopReason: 'completed',
+      lastAssistantMessage: [{ type: 'text', text: 'redteamReport: {"status":"ready"}' }] }
+    const result = captureAgentEndReport(store, createReservations(), end, error => errors.push(error.message))
+    assert.equal(result.recorded, true)
+    assert.deepEqual(errors, ['synthetic ledger fault'])
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM agent_attention').get().n, 1)
   } finally { db.close() }
 })
