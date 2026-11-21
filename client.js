@@ -4790,7 +4790,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 try {
                     const result = await promptProfilesApi("routing-settings", { settings: routingDraft });
                     if (!result?.ok) throw new Error(result?.error || "保存失败");
-                    setNotice("路由开关已保存并立即生效");
+                    setNotice("路由开关已保存。是否用于后续请求，请核对新的组装记录；保存不代表已投递。");
                     await reload(active);
                 } catch (error) { setNotice(explainError(error)); }
                 finally { setBusy(false); }
@@ -4946,10 +4946,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
                     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
                         h("button", { type: "button", disabled: busy || Boolean(loadError),
-                            onClick: saveRouting }, "保存路由开关"),
-                        routingDiag ? h("span", { className: "dshp-hint" },
-                            "最近组装：" + (routingDiag.stage || "未观测")
-                            + " · 模型投递：" + (routingDiag.delivery || "未验证")) : null)),
+                            onClick: saveRouting }, "保存路由开关")),
+                    h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) })),
                 h("div", { className: "dshp-prompt-columns",
                     style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
                         gap: 16, alignItems: "start" } },
@@ -5058,6 +5056,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 h("details", null,
                     h("summary", { style: { cursor: "pointer" } }, "预览路由选择（不调用模型）"),
                     h("div", { style: { display: "grid", gap: 8, paddingTop: 10 } },
+                        h("p", { className: "dshp-hint", style: { margin: 0 } },
+                            "只模拟已保存规则的匹配；不会读取未保存草稿，也不验证真实组装或投递。更改条件后请重新预览。"),
                         h("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } },
                             h("select", { "aria-label": "预设模式", value: preset,
                                 onChange: e => setPreset(e.target.value) },
@@ -5080,7 +5080,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             onChange: e => setSample(e.target.value),
                             placeholder: "输入测试任务" }),
                         preview ? h("div", { className: "dshp-hint" },
-                            h("p", null, "将注入：" + (preview.selected?.length ? preview.selected.join(" + ") : "无")),
+                            h("p", null, "上次预览命中：" + (preview.selected?.length ? preview.selected.join(" + ") : "无")),
                             (preview.decisions || []).map(item => h("p", { key: item.id },
                                 item.id + "："
                                 + ({ matched: "匹配", disabled: "已禁用", "preset-disabled": "当前预设已关闭",
@@ -5089,6 +5089,29 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     "keyword-miss": "关键词未命中", "empty-body": "正文为空" }[item.reason] || item.reason))))
                             : null)));
 
+		}
+
+		function PromptAssemblyEvidence({ report, unavailable }) {
+			const labels = {
+				assembled: "已组装",
+				"assembled-not-leading": "已组装，但插入位置不符合预期",
+				"candidate-dropped": "有候选内容，但未进入组装结果",
+				"no-candidate": "本次没有候选内容",
+			};
+			const ordinary = !unavailable && report?.route === "router";
+			const knownStage = ordinary && typeof report.stage === "string" && Object.hasOwn(labels, report.stage);
+			const assembly = unavailable ? "暂时无法读取"
+				: knownStage ? labels[report.stage]
+				: ordinary ? "结果未识别"
+				: report?.route ? "最近一条不是普通会话记录"
+				: "尚未观测到普通会话组装";
+			const at = knownStage && typeof report.at === "string" ? Date.parse(report.at) : NaN;
+			const observed = Number.isFinite(at) ? new Date(at) : null;
+			return h("div", { className: "dshp-hint", role: "status", "aria-label": "普通提示词组装与投递" },
+				"最近组装：" + assembly,
+				observed ? h("time", { dateTime: observed.toISOString() }, "（" + observed.toLocaleString() + "）") : null,
+				" · 模型投递：未验证",
+				h("div", null, "这里只显示宿主最近的普通会话组装观察，不一定来自当前规则或会话；组装不等于模型收到。"));
 		}
 
 		function SettingsRoot(props) {
