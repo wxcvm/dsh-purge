@@ -35,9 +35,13 @@
 
 ## Windows Runner 的只读 Desktop 证据（不等于已加载）
 
-`scripts/inspect-windows-desktop-evidence.mjs` 在 Windows 自托管 Runner 上只读定位官方 Harness Desktop 的安装 exe 与 **app.asar 实际清单**、公共 runtime 文件，并以该 Runner 上的当前源码做逐文件哈希比较，分别检查 Desktop / Web / Default profile 的已安装 `dsh-purge`。既有 pnpm 安装产生的 junction 只有在解析目标仍位于当前 profile `node_modules/.pnpm` 内时才允许读取；外部链接标成“未检查”，不会跟随。检测结果仅输出**布尔值、公开版本号、固定相对文件名及匹配/缺失状态**，不输出用户绝对路径、进程命令行、项目/会话内容、提示词正文、日志原文或任何凭据。
+`scripts/inspect-windows-desktop-evidence.mjs` 在 Windows 自托管 Runner 上只读定位官方 Harness Desktop 的安装 exe 与 **app.asar 实际清单**、公共 runtime 文件，并以该 Runner 上的当前源码做逐文件哈希比较，分别检查 Desktop / Web / Default profile 的已安装 `dsh-purge`。既有 pnpm 安装产生的 junction 只有在解析目标仍位于当前 profile `node_modules/.pnpm` 内时才允许读取，并且逐项拒绝任何进一步跳到该包目录以外的符号链接；未知/断开的链接不会跟随、不会读取目标包内容，只返回 `linkTargetScope` 的**预定义类别**（例如当前 profile 其他目录、DSH_HOME 其他目录、LocalAppData 或未知外部目录），不返回目标原始路径、路径片段或目录名。检测结果仅输出**布尔值、公开版本号、固定相对文件名及匹配/缺失状态**，不输出用户绝对路径、进程命令行、项目/会话内容、提示词正文、日志原文或任何凭据。
 
 这个步骤仅在 `master` **push** 的 Windows Runner CI 执行（Pull Request 不读取机器环境），即使找不到 Desktop 也会给出“无证据”的真实状态，不自动修改/修复/启动/重启任何程序、不访问网络。运行进程计数是机器上的进程观察，并非运行时插件模块的证据：脚本明确报告 `runtimeLoadVerified: false`。安装磁盘文件与当前源码逐字节相同，也**不能证明已经重启并加载最新版本**。实际加载、开关生效、Provider HTTP、升级回退仍由 #336/#337/#340 的实机操作另行验收；观察结果也不能代替正式 Release 资产 SHA256。
+
+### 2026-11-21 · 首轮 Runner 链接问题的后续判断
+
+在 [master CI #44890697673](https://github.com/wxcvm/dsh-purge/actions/runs/44890697673) 的 Windows 只读样本中，官方 Desktop `0.2.2-rc.5` 的公开 runtime 文件完整，但 `desktop` profile 的 `dsh-purge` 为 `linked-uninspected`，只证明插件入口链接未满足当时的受信任 .pnpm 路径约束，**没有证明链接断开、插件版本不匹配或 Desktop 加载失败**。当轮进程匹配数为 0，同样无法推断下一次启动状态。后续只补链接出处的脱敏分类，绝不为了“看见版本”放开读取任意外部链接。需要版本/请求级证据时，须先在受控目录定位有效安装副本，或由已运行的授权宿主提供最小、明确的加载收据。
 
 ## 后续发布预检
 

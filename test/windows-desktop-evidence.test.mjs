@@ -104,6 +104,7 @@ test('linked plugin tree is labelled uninspected instead of following an arbitra
   catch (error) { t.skip('host does not allow creating symbolic links: ' + error.code); return; }
   const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
   assert.equal(result.profiles[0].installation, 'linked-uninspected');
+  assert.match(result.profiles[0].linkTargetScope, /-untrusted$/);
   assert.equal(result.profiles[0].version, null);
   assert.equal(result.profiles[0].sourceBytesEqual, null);
 });
@@ -126,6 +127,62 @@ test('only pnpm links confined to the current profile store may be inspected', t
   catch (error) { t.skip('host does not allow creating symbolic links: ' + error.code); return; }
   const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
   assert.equal(result.profiles[0].installation, 'present-pnpm-link');
+  assert.equal(result.profiles[0].linkTargetScope, 'verified-profile-pnpm-store');
   assert.equal(result.profiles[0].sourceBytesEqual, true);
   assert.equal(result.runtimeLoadVerified, false);
+});
+
+test('untrusted same-profile link returns only a category and never reads its manifest', t => {
+  const f = workspace(t);
+  const dir = path.join(f.home, 'profiles', 'desktop');
+  const links = path.join(dir, 'node_modules');
+  const target = path.join(dir, 'private-package');
+  fs.mkdirSync(links, { recursive: true });
+  fs.mkdirSync(target);
+  fs.writeFileSync(path.join(target, 'package.json'), '{"name":"dsh-purge","version":"99.99.99"}');
+  try { fs.symlinkSync(target, path.join(links, 'dsh-purge'),
+      process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host does not allow links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'linked-uninspected');
+  assert.equal(result.profiles[0].linkTargetScope, 'inside-same-profile-untrusted');
+  assert.equal(result.profiles[0].version, null);
+  assert.equal(result.profiles[0].sourceBytesEqual, null);
+  assert.ok(!JSON.stringify(result).includes(target), 'never reveal junction destination');
+});
+
+test('broken link is not mistaken for an absent package or followed elsewhere', t => {
+  const f = workspace(t);
+  const dir = path.join(f.home, 'profiles', 'desktop', 'node_modules');
+  fs.mkdirSync(dir, { recursive: true });
+  const missing = path.join(f.base, 'does-not-exist');
+  try { fs.symlinkSync(missing, path.join(dir, 'dsh-purge'),
+      process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host does not allow links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'linked-uninspected');
+  assert.equal(result.profiles[0].linkTargetScope, 'unresolved');
+  assert.equal(result.profiles[0].version, null);
+});
+
+test('nested directory link escaping a verified pnpm store cannot disclose private files', t => {
+  const f = workspace(t);
+  const store = path.join(f.home, 'profiles', 'desktop', 'node_modules', '.pnpm',
+    'dsh-purge@1.1.92-wxcvm.18', 'node_modules', 'dsh-purge');
+  const link = path.join(f.home, 'profiles', 'desktop', 'node_modules', 'dsh-purge');
+  const outside = path.join(f.base, 'private-source');
+  fs.mkdirSync(store, { recursive: true });
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(store, 'package.json'),
+    JSON.stringify({ name: 'dsh-purge', version: '1.1.92-wxcvm.18' }));
+  fs.writeFileSync(path.join(outside, 'index.js'), 'DO_NOT_READ_PRIVATE_MARKER');
+  try {
+    fs.symlinkSync(outside, path.join(store, 'lib'), process.platform === 'win32' ? 'junction' : 'dir');
+    fs.symlinkSync(store, link, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) { t.skip('host does not allow links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  assert.equal(result.profiles[0].installation, 'present-pnpm-link');
+  assert.equal(result.profiles[0].sourceFileComparison['lib/index.js'], 'missing');
+  assert.ok(!JSON.stringify(result).includes('DO_NOT_READ_PRIVATE_MARKER'));
+  assert.ok(!JSON.stringify(result).includes(outside));
 });
