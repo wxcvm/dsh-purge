@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "39f9d7c86597e71f";
+		const CLIENT_BUILD_ID = "f799ccf2e2970c4f";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10553,6 +10553,56 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const sourceDraft = React.useRef(chosen)
       const sourceRevision = React.useRef(0)
       const sourceDirty = React.useRef(false)
+      // Persist only local survey defaults. Consent to transmit a target is
+      // deliberately an ephemeral per-operation checkbox, never a preference.
+      const surveyPreferenceKeys = ['useSubfinder', 'includeShodan', 'saveCt', 'saveSubdomains', 'saveDns', 'saveIntel']
+      const [surveyPreferences, setSurveyPreferences] = React.useState({
+        useSubfinder: false, includeShodan: false, saveCt: false,
+        saveSubdomains: false, saveDns: false, saveIntel: false,
+      })
+      const surveyPreferencesRef = React.useRef(surveyPreferences)
+      const savedSurveyPreferences = React.useRef(null)
+      const surveyPreferenceRevision = React.useRef(0)
+      const [surveyPreferencesReady, setSurveyPreferencesReady] = React.useState(false)
+      const [surveyPreferencesBusy, setSurveyPreferencesBusy] = React.useState(false)
+      const [surveyPreferencesMessage, setSurveyPreferencesMessage] = React.useState('正在读取测绘偏好…')
+      const updateSurveyPreference = (key, checked) => {
+        if (!surveyPreferencesReady || surveyPreferencesBusy || !surveyPreferenceKeys.includes(key)) return
+        const next = { ...surveyPreferencesRef.current, [key]: !!checked }
+        surveyPreferencesRef.current = next
+        setSurveyPreferences(next)
+        setSurveyPreferencesBusy(true)
+        setSurveyPreferencesMessage('正在保存测绘偏好…')
+        const revision = ++surveyPreferenceRevision.current
+        // Reuse the existing platform-config write queue; unrelated platform
+        // selection and survey-preference saves cannot silently race.
+        intelSourcesWriteQueue = intelSourcesWriteQueue.then(async () => {
+          try {
+            const response = await api({ op: 'intelSurveyPreferencesSave', preferences: { [key]: !!checked } })
+            if (!response || response.ok !== true || !response.preferences ||
+                surveyPreferenceKeys.some(k => typeof response.preferences[k] !== 'boolean') ||
+                response.preferences[key] !== !!checked) {
+              throw new Error((response && response.error) || '测绘偏好保存回执不一致')
+            }
+            savedSurveyPreferences.current = response.preferences
+            if (revision === surveyPreferenceRevision.current) {
+              surveyPreferencesRef.current = response.preferences
+              setSurveyPreferences(response.preferences)
+              setSurveyPreferencesMessage('测绘偏好已保存；外部查询仍须单次同意。')
+            }
+          } catch (error) {
+            if (revision === surveyPreferenceRevision.current) {
+              if (savedSurveyPreferences.current) {
+                surveyPreferencesRef.current = savedSurveyPreferences.current
+                setSurveyPreferences(savedSurveyPreferences.current)
+              }
+              setSurveyPreferencesMessage('保存失败，已恢复上次设置：' + String(error?.message || error))
+            }
+          } finally {
+            if (revision === surveyPreferenceRevision.current) setSurveyPreferencesBusy(false)
+          }
+        })
+      }
       const [savedMaskAssets, setMaskAssets] = React.useState(false)
       const temporary = useTemporaryPrivacy()
       const maskAssets = savedMaskAssets || !!temporary?.maskAssetResults
@@ -10576,49 +10626,43 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         }, () => { setInventoryBusy(false); setInventory({ error: '读取关联清单失败' }) })
       }
       const [subTarget, setSubTarget] = React.useState('')
-      const [subTool, setSubTool] = React.useState(false)
       const [subConsent, setSubConsent] = React.useState(false)
-      const [subCommit, setSubCommit] = React.useState(false)
       const [subBusy, setSubBusy] = React.useState(false)
       const [subResult, setSubResult] = React.useState(null)
       const runSub = (history = false) => {
-        if (!eng || !subTarget.trim() || subBusy || (!history && subTool && !subConsent)) return
+        if (!eng || !subTarget.trim() || subBusy || (!history && surveyPreferences.useSubfinder && !subConsent)) return
         setSubBusy(true); setSubResult(null)
         api({ op: history ? 'scopedSubdomainHistory' : 'scopedSubdomains', engagement: eng,
-          target: subTarget.trim(), useSubfinder: subTool, confirmExternal: subConsent, commit: subCommit }).then(r => {
+          target: subTarget.trim(), useSubfinder: surveyPreferences.useSubfinder, confirmExternal: subConsent, commit: surveyPreferences.saveSubdomains }).then(r => {
           setSubBusy(false); setSubResult({ ...r, history })
         }, () => { setSubBusy(false); setSubResult({ error: '子域查询失败' }) })
       }
       const [ctTarget, setCtTarget] = React.useState('')
       const [ctConsent, setCtConsent] = React.useState(false)
-      const [ctCommit, setCtCommit] = React.useState(false)
       const [ctBusy, setCtBusy] = React.useState(false)
       const [ctResult, setCtResult] = React.useState(null)
       const runCt = (history = false) => {
         if (!eng || !ctTarget.trim() || ctBusy || (!history && !ctConsent)) return
         setCtBusy(true); setCtResult(null)
         api({ op: history ? 'scopedCtHistory' : 'scopedCtLookup', engagement: eng,
-          target: ctTarget.trim(), confirmExternal: ctConsent, commit: ctCommit }).then(r => {
+          target: ctTarget.trim(), confirmExternal: ctConsent, commit: surveyPreferences.saveCt }).then(r => {
           setCtBusy(false); setCtResult({ ...r, history })
         }, () => { setCtBusy(false); setCtResult({ error: 'CT 查询失败' }) })
       }
       const [dnsTarget, setDnsTarget] = React.useState('')
       const [dnsConsent, setDnsConsent] = React.useState(false)
-      const [dnsCommit, setDnsCommit] = React.useState(false)
       const [dnsBusy, setDnsBusy] = React.useState(false)
       const [dnsResult, setDnsResult] = React.useState(null)
       const runDns = (history = false) => {
         if (!eng || !dnsTarget.trim() || dnsBusy || (!history && !dnsConsent)) return
         setDnsBusy(true); setDnsResult(null)
         api({ op: history ? 'scopedDnsHistory' : 'scopedDnsLookup', engagement: eng,
-          target: dnsTarget.trim(), confirmExternal: dnsConsent, commit: dnsCommit }).then(r => {
+          target: dnsTarget.trim(), confirmExternal: dnsConsent, commit: surveyPreferences.saveDns }).then(r => {
           setDnsBusy(false); setDnsResult({ ...r, history })
         }, () => { setDnsBusy(false); setDnsResult({ error: 'DNS 查询失败' }) })
       }
       const [intelTarget, setIntelTarget] = React.useState('')
-      const [intelShodan, setIntelShodan] = React.useState(false)
       const [intelConsent, setIntelConsent] = React.useState(false)
-      const [intelCommit, setIntelCommit] = React.useState(false)
       const [intelBusy, setIntelBusy] = React.useState(false)
       const [intelResult, setIntelResult] = React.useState(null)
       const readIntelHistory = () => {
@@ -10632,16 +10676,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!eng || !intelConsent || !intelTarget.trim() || intelBusy) return
         setIntelBusy(true); setIntelResult(null)
         api({ op: 'scopedIntelLookup', engagement: eng, target: intelTarget.trim(),
-          sources: intelShodan ? ['internetdb', 'shodan'] : ['internetdb'],
-          confirmExternal: true, commit: intelCommit }).then(r => {
+          sources: surveyPreferences.includeShodan ? ['internetdb', 'shodan'] : ['internetdb'],
+          confirmExternal: true, commit: surveyPreferences.saveIntel }).then(r => {
           setIntelBusy(false); setIntelResult(r)
           if (r?.imported) setRefresh(n => n + 1)
         }, () => { setIntelBusy(false); setIntelResult({ error: '查询失败' }) })
       }
       const limit = 30
       React.useEffect(() => {
+        setSubConsent(false); setCtConsent(false); setDnsConsent(false); setIntelConsent(false)
+        setSurveyConfirm(false)
+      }, [eng])
+      React.useEffect(() => {
         let live = true
         const revision = sourceRevision.current
+        const surveyLoadRevision = surveyPreferenceRevision.current
         intelSourcesWriteQueue.then(() => api({ op: 'intelSourcesGet' })).then((r) => {
           if (!live) return
           if (!r || r.ok !== true || !r.selection) { setSourceMsg((r && r.error) || '读取平台列表失败'); return }
@@ -10649,6 +10698,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setSourceStatus(r.sourceStatus || {})
           setMaskAssets(!!r.maskAssets)
           setMaskSurvey(!!r.maskSurvey)
+          // The same authenticated config GET hydrates both independent
+          // preference groups; missing fields indicate a stale host bundle.
+          if (surveyLoadRevision === surveyPreferenceRevision.current) {
+            const loaded = r.surveyPreferences
+            if (loaded && surveyPreferenceKeys.every(k => typeof loaded[k] === 'boolean')) {
+              savedSurveyPreferences.current = loaded
+              surveyPreferencesRef.current = loaded
+              setSurveyPreferences(loaded)
+              setSurveyPreferencesReady(true)
+              setSurveyPreferencesMessage('测绘默认选项已加载；外部提交确认不会保存。')
+            } else {
+              setSurveyPreferencesReady(false)
+              setSurveyPreferencesMessage('当前宿主未提供测绘偏好保存接口，请检查实际加载的插件版本。')
+            }
+          }
           if (revision !== sourceRevision.current) return
           setSavedSources(r.selection)
           if (sourceDirty.current) return
@@ -10816,6 +10880,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { opacity: 0.85 } }, source.details),
             source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
               style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+          surveyCard('external', { className: 'rt-card', style: { fontSize: 12 } },
+            h('b', null, '测绘默认选项'),
+            h('div', { className: 'rt-foot' },
+              '使用 subfinder、Shodan 与默认保存结果的勾选会自动保存，刷新后回显；'
+              + '向 crt.sh、DNS、第三方工具等外部服务提交目标的授权不会保存，每次操作需明确确认。'),
+            h('div', { className: surveyPreferencesMessage.startsWith('保存失败') ? 'rt-err' : 'rt-foot' },
+              surveyPreferencesBusy ? '正在保存…' : surveyPreferencesMessage)),
           surveyCard('external', { className: 'rt-card' },
             h('h4', null, '证书透明度 · 子域线索'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
@@ -10825,8 +10896,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
               h('label', null, h('input', { type: 'checkbox', checked: ctConsent,
                 onChange: e => setCtConsent(e.target.checked) }), ' 同意向 crt.sh 提交域名'),
-              h('label', null, h('input', { type: 'checkbox', checked: ctCommit,
-                onChange: e => setCtCommit(e.target.checked) }), ' 保存 CT 线索')),
+              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.saveCt, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
+                onChange: e => updateSurveyPreference('saveCt', e.target.checked) }), ' 保存 CT 线索')),
             h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
               disabled: ctBusy || !eng || !ctConsent || !ctTarget.trim(), onClick: () => runCt() },
               ctBusy ? '查询中…' : '查询证书子域'),
@@ -10880,14 +10951,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('input', { className: 'rt-input', value: subTarget, placeholder: '根域名',
               onChange: e => { setSubTarget(e.target.value); setSubConsent(false); setSubResult(null) } }),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
-              h('label', null, h('input', { type: 'checkbox', checked: subTool,
-                onChange: e => { setSubTool(e.target.checked); setSubConsent(false) } }), ' 使用 subfinder'),
+              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.useSubfinder, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
+                onChange: e => { updateSurveyPreference('useSubfinder', e.target.checked); setSubConsent(false) } }), ' 使用 subfinder'),
               h('label', null, h('input', { type: 'checkbox', checked: subConsent,
                 onChange: e => setSubConsent(e.target.checked) }), ' 同意向工具配置的外部数据源提交域名'),
-              h('label', null, h('input', { type: 'checkbox', checked: subCommit,
-                onChange: e => setSubCommit(e.target.checked) }), ' 保存合并快照')),
+              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.saveSubdomains, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
+                onChange: e => updateSurveyPreference('saveSubdomains', e.target.checked) }), ' 保存合并快照')),
             h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
-              disabled: subBusy || !eng || !subTarget.trim() || (subTool && !subConsent), onClick: () => runSub() },
+              disabled: subBusy || !eng || !subTarget.trim() || (surveyPreferences.useSubfinder && !subConsent), onClick: () => runSub() },
               subBusy ? '处理中…' : '合并子域线索'),
             h('button', { className: 'rt-btn', style: { marginTop: 8, marginLeft: 8 },
               disabled: subBusy || !eng || !subTarget.trim(), onClick: () => runSub(true) }, '读取合并历史'),
@@ -10917,8 +10988,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
               h('label', null, h('input', { type: 'checkbox', checked: dnsConsent,
                 onChange: e => setDnsConsent(e.target.checked) }), ' 同意向 DNS 解析器提交域名'),
-              h('label', null, h('input', { type: 'checkbox', checked: dnsCommit,
-                onChange: e => setDnsCommit(e.target.checked) }), ' 保存 DNS 观察')),
+              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.saveDns, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
+                onChange: e => updateSurveyPreference('saveDns', e.target.checked) }), ' 保存 DNS 观察')),
             h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
               disabled: dnsBusy || !eng || !dnsConsent || !dnsTarget.trim(), onClick: () => runDns() },
               dnsBusy ? '查询中…' : '查询 DNS 记录'),
@@ -10942,12 +11013,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('input', { className: 'rt-input', value: intelTarget, placeholder: '已登记范围内的 IP',
               onChange: e => { setIntelTarget(e.target.value); setIntelConsent(false); setIntelResult(null) } }),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
-              h('label', null, h('input', { type: 'checkbox', checked: intelShodan,
-                onChange: e => { setIntelShodan(e.target.checked); setIntelConsent(false) } }), ' 加查 Shodan API'),
+              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.includeShodan, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
+                onChange: e => { updateSurveyPreference('includeShodan', e.target.checked); setIntelConsent(false) } }), ' 加查 Shodan API'),
               h('label', null, h('input', { type: 'checkbox', checked: intelConsent,
                 onChange: e => setIntelConsent(e.target.checked) }), ' 同意将该 IP 提交给所选外部平台'),
-              h('label', null, h('input', { type: 'checkbox', checked: intelCommit,
-                onChange: e => setIntelCommit(e.target.checked) }), ' 保存被动情报到本地库')),
+              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.saveIntel, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
+                onChange: e => updateSurveyPreference('saveIntel', e.target.checked) }), ' 保存被动情报到本地库')),
             h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 8 },
               disabled: intelBusy || !eng || !intelConsent || !intelTarget.trim(), onClick: runIntel },
               intelBusy ? '查询中…' : '查询被动情报'),
@@ -11600,13 +11671,17 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           dirty ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
             setDraft(savedDraftRef.current); setMsg({ ok: '已恢复上次保存的配置。' })
           } }, '撤销修改') : null,
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save }, busy ? '处理中…' : '保存')),
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save },
+            busy ? '处理中…' : '保存环境配置')),
         h('div', { className: 'rt-toolbar', role: 'group', 'aria-label': '环境中心子页面' },
           sections.map(([id, label]) => h('button', {
             key: id, type: 'button', className: 'rt-btn' + (section === id ? ' rt-btn-primary' : ''),
             'aria-pressed': section === id, onClick: () => setSection(id),
           }, label))),
-        section === 'local-search' ? h(LocalAssetSearchTab, { engagement: props.engagement, refreshKey }) :
+        section === 'local-search' ? h(React.Fragment, null,
+          h('div', { className: 'rt-foot', style: { padding: '4px 12px' } },
+            '顶部“保存环境配置”不保存测绘操作勾选；测绘偏好在测绘中心自动保存，外部提交同意不持久化。'),
+          h(LocalAssetSearchTab, { engagement: props.engagement, refreshKey })) :
         h('div', { className: 'rt-pane', style: { minHeight: 0 } },
         err ? h('div', { className: 'rt-err' }, err) : null,
         msg ? h('div', { className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
