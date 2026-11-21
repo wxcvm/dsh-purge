@@ -52,8 +52,19 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   const nativeMarker = "P0_NATIVE_COMPLETE_20261120";
   ctx.systemPrompt.section({ name: "fixture:complete", order: 0, text: nativeMarker, complete: true });
   const config = { enabled: true, bundledDefault: true };
-  ctx.on("system-prompt/assemble", async (_assembly, context, next) =>
-    rewriteLiveAssembly(config, await next(), context));
+  const assemblyObservations = [];
+  ctx.on("system-prompt/assemble", async (_assembly, context, next) => {
+    const hostSession = context?.agent?.session;
+    const hostEvents = typeof hostSession?.snapshotEvents === "function"
+      ? hostSession.snapshotEvents() : [];
+    assemblyObservations.push({
+      lastUserAtHook: latestPromptTask(hostEvents),
+      contextKeys: Object.keys(context || {}),
+      agentKeys: Object.keys(context?.agent || {}),
+      lastEventTypes: hostEvents.slice(-5).map(event => event.type),
+    });
+    return rewriteLiveAssembly(config, await next(), context);
+  });
   installAssembleGuard(ctx.systemPrompt, (assembly, context) =>
     rewriteLiveAssembly(config, assembly, context));
 
@@ -150,7 +161,7 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   assert.ok(current.includes(localMarker), "saved local rule enters the actual loop request; "
     + JSON.stringify({
       directSelected: direct.selected, directDecisions: direct.decisions,
-      latestHostTask, report: {
+      latestHostTask, assemblyAtSend: assemblyObservations.at(-1), report: {
         selected: getLastInjectReport()?.selected,
         reason: getLastInjectReport()?.reason,
         route: getLastInjectReport()?.route,
