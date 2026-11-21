@@ -56,20 +56,34 @@ function profileEvidence(home, name, root) {
   try {
     const stat = fs.lstatSync(installed);
     if (stat.isSymbolicLink()) {
-      output.installation = 'linked-uninspected';
-      return output;
-    }
-    if (!stat.isDirectory()) {
+      // pnpm normally links a profile package into its own .pnpm store.
+      // Inspect only links verified to stay strictly under that profile's
+      // node_modules/.pnpm; arbitrary links may point to private user files.
+      const target = fs.realpathSync(installed);
+      const store = fs.realpathSync(path.join(dir, 'node_modules', '.pnpm'));
+      const relative = path.relative(store, target);
+      const inside = relative && relative !== '..' && !relative.startsWith('..' + path.sep)
+        && !path.isAbsolute(relative);
+      if (!inside) {
+        output.installation = 'linked-uninspected';
+        return output;
+      }
+      output.installation = 'present-pnpm-link';
+    } else if (!stat.isDirectory()) {
       output.installation = 'invalid';
       return output;
     }
-  } catch { return output; }
+  } catch {
+    // A link without a resolvable in-profile pnpm store is not trusted.
+    if (fs.existsSync(installed)) output.installation = 'linked-uninspected';
+    return output;
+  }
   const pkg = safeJson(path.join(installed, 'package.json'));
   if (pkg?.name !== 'dsh-purge' || !version(pkg.version)) {
     output.installation = 'invalid-manifest';
     return output;
   }
-  output.installation = 'present';
+  if (output.installation !== 'present-pnpm-link') output.installation = 'present';
   output.version = version(pkg.version);
   for (const rel of CHECK_FILES) {
     const source = path.join(root, rel);
