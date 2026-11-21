@@ -35,9 +35,15 @@
 
 ## Windows Runner 的只读 Desktop 证据（不等于已加载）
 
-`scripts/inspect-windows-desktop-evidence.mjs` 在 Windows 自托管 Runner 上只读定位官方 Harness Desktop 的安装 exe 与 **app.asar 实际清单**、公共 runtime 文件，并以该 Runner 上的当前源码做逐文件哈希比较，分别检查 Desktop / Web / Default profile 的已安装 `dsh-purge`。既有 pnpm 安装产生的 junction 只有在解析目标仍位于当前 profile `node_modules/.pnpm` 内时才允许读取，并且逐项拒绝任何进一步跳到该包目录以外的符号链接；未知/断开的链接不会跟随、不会读取目标包内容，只返回 `linkTargetScope` 的**预定义类别**（例如当前 profile 其他目录、DSH_HOME 其他目录、LocalAppData 或未知外部目录），不返回目标原始路径、路径片段或目录名。检测结果仅输出**布尔值、公开版本号、固定相对文件名及匹配/缺失状态**，不输出用户绝对路径、进程命令行、项目/会话内容、提示词正文、日志原文或任何凭据。
+`scripts/inspect-windows-desktop-evidence.mjs` 在 Windows 自托管 Runner 上只读定位官方 Harness Desktop 的安装 exe 与 **app.asar 实际清单**、公共 runtime 文件，并以该 Runner 上的当前源码做逐文件哈希比较，分别检查 Desktop / Web / Default profile 的已安装 `dsh-purge`。既有 pnpm 安装产生的 junction 只有在解析目标属于当前 profile `node_modules/.pnpm`，或经结构验证的 DSH_HOME 共享 `profiles/node_modules/.pnpm/dsh-purge@*/node_modules/dsh-purge` 正规实体包目录时才读取；校验中会验证固定包名、层级、目录不为其他 symlink/junction，并且逐项拒绝任何进一步跳到该包目录以外的符号链接。未知/断开的链接不会跟随、不会读取目标包内容，只返回 `linkTargetScope` 的**预定义类别**（例如当前 profile 其他目录、DSH_HOME 其他目录、LocalAppData 或未知外部目录），不返回目标原始路径、路径片段或目录名。检测结果仅输出**布尔值、公开版本号、固定相对文件名及匹配/缺失状态**，不输出用户绝对路径、进程命令行、项目/会话内容、提示词正文、日志原文或任何凭据。
 
 这个步骤仅在 `master` **push** 的 Windows Runner CI 执行（Pull Request 不读取机器环境），即使找不到 Desktop 也会给出“无证据”的真实状态，不自动修改/修复/启动/重启任何程序、不访问网络。运行进程计数是机器上的进程观察，并非运行时插件模块的证据：脚本明确报告 `runtimeLoadVerified: false`。安装磁盘文件与当前源码逐字节相同，也**不能证明已经重启并加载最新版本**。实际加载、开关生效、Provider HTTP、升级回退仍由 #336/#337/#340 的实机操作另行验收；观察结果也不能代替正式 Release 资产 SHA256。
+
+### 2026-11-21 · DSH_HOME 共享 pnpm 目录对账规则
+
+仓库中的 profile 安装脚本和 Windows junction 回退夹具均说明：`node_modules/dsh-purge` 可以是 junction，不能以“不是本 profile .pnpm 目录”推断损坏。新增的只读校验将同一 DSH_HOME 的**共享 profile 虚拟存储**列为第二个受信任布局，但仅在真实路径严格匹配 `profiles/node_modules/.pnpm/dsh-purge@*/node_modules/dsh-purge`，并且各级都是实体目录（而非再次跳转的链接）后才读取其**固定的五个插件代码文件和 package.json**。版本相等不代表代码相等；必须逐文件判定 `identical/different/missing`。共享目录下其他包、非标准文件夹、外部目录、断开的链接、嵌套逃逸和私人开发链接仍拒绝读取。整个过程不显示任何用户路径/正文/源码哈希，不进行安装或重启。
+
+这个只读结果仍只代表 **Runner 磁盘上**的版本，不代表已运行 Desktop 的插件模块、Provider HTTP 内容或用户点击开关后的行为已验证。
 
 ### 2026-11-21 · 首轮 Runner 链接问题的后续判断
 
