@@ -40,45 +40,80 @@ function digest(file) {
   try { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
   catch { return null; }
 }
+function inside(root, target) {
+  if (!root || !target) return false;
+  const relative = path.relative(root, target);
+  return relative !== '' && relative !== '..' && !relative.startsWith('..' + path.sep)
+    && !path.isAbsolute(relative);
+}
+function realDirectory(dir) {
+  try { return fs.realpathSync(dir); } catch { return ''; }
+}
+/** Metadata-only path categories; never include any resolved path in output. */
+function classifyLink(target, home, profileDir, repositoryRoot) {
+  const profileReal = realDirectory(profileDir);
+  const homeReal = realDirectory(home);
+  const checkoutReal = realDirectory(repositoryRoot);
+  if (profileReal && inside(profileReal, target)) return 'inside-same-profile-untrusted';
+  if (homeReal && inside(homeReal, target)) return 'inside-dsh-home-untrusted';
+  if (checkoutReal && (target === checkoutReal || inside(checkoutReal, target)))
+    return 'inside-ci-checkout-untrusted';
+  for (const [key, dir] of [['local-appdata', process.env.LOCALAPPDATA],
+                            ['roaming-appdata', process.env.APPDATA]]) {
+    const resolved = realDirectory(dir || '');
+    if (resolved && (target === resolved || inside(resolved, target)))
+      return key + '-untrusted';
+  }
+  // A pnpm store outside this profile may be legitimate, but must NOT be
+  // followed based on filename spelling or a package.json claim alone.
+  return 'external-untrusted';
+}
+function confinedFile(file, root) {
+  try { return inside(root, fs.realpathSync(file)); } catch { return false; }
+}
 function profileEvidence(home, name, root) {
   const dir = path.join(home, 'profiles', name);
   const installed = path.join(dir, 'node_modules', 'dsh-purge');
   const output = {
     profile: name, installation: 'absent', version: null,
     profileBundleRegistered: null, cordisInsertPresent: null,
-    sourceBytesEqual: null, sourceFileComparison: {},
+    linkTargetScope: null, sourceBytesEqual: null, sourceFileComparison: {},
   };
   const manifest = safeJson(path.join(dir, 'package.json'));
   const bundles = manifest?.dsh?.profile?.bundles;
   if (Array.isArray(bundles)) output.profileBundleRegistered = bundles.includes('dsh-purge');
   // Presence only: do not print, parse or upload the user's cordis.patch.yml.
   output.cordisInsertPresent = regularFile(path.join(dir, 'cordis.patch.yml'));
+  let installedRoot = '';
   try {
     const stat = fs.lstatSync(installed);
     if (stat.isSymbolicLink()) {
-      // pnpm normally links a profile package into its own .pnpm store.
-      // Inspect only links verified to stay strictly under that profile's
-      // node_modules/.pnpm; arbitrary links may point to private user files.
-      const target = fs.realpathSync(installed);
-      const store = fs.realpathSync(path.join(dir, 'node_modules', '.pnpm'));
-      const relative = path.relative(store, target);
-      const inside = relative && relative !== '..' && !relative.startsWith('..' + path.sep)
-        && !path.isAbsolute(relative);
-      if (!inside) {
-        output.installation = 'linked-uninspected';
+      // Resolving link metadata does not read its target's package files.
+      // This identifies why a link is skipped without printing any paths.
+      output.installation = 'linked-uninspected';
+      output.linkTargetScope = 'unresolved';
+      installedRoot = fs.realpathSync(installed);
+      const storePath = path.join(dir, 'node_modules', '.pnpm');
+      const storeStat = (() => { try { return fs.lstatSync(storePath); } catch { return null; } })();
+      const storeRoot = storeStat?.isDirectory() ? realDirectory(storePath) : '';
+      const profileReal = realDirectory(dir);
+      if (!storeRoot || !profileReal || !inside(profileReal, storeRoot)
+          || !inside(storeRoot, installedRoot)) {
+        output.linkTargetScope = classifyLink(installedRoot, home, dir, root);
         return output;
       }
+      output.linkTargetScope = 'verified-profile-pnpm-store';
       output.installation = 'present-pnpm-link';
     } else if (!stat.isDirectory()) {
       output.installation = 'invalid';
       return output;
+    } else {
+      installedRoot = fs.realpathSync(installed);
     }
-  } catch {
-    // A link without a resolvable in-profile pnpm store is not trusted.
-    if (fs.existsSync(installed)) output.installation = 'linked-uninspected';
-    return output;
-  }
-  const pkg = safeJson(path.join(installed, 'package.json'));
+  } catch { return output; }
+  const manifestFile = path.join(installed, 'package.json');
+  // Defend against nested file/directory links escaping even a trusted store.
+  const pkg = confinedFile(manifestFile, installedRoot) ? safeJson(manifestFile) : null;
   if (pkg?.name !== 'dsh-purge' || !version(pkg.version)) {
     output.installation = 'invalid-manifest';
     return output;
@@ -89,7 +124,7 @@ function profileEvidence(home, name, root) {
     const source = path.join(root, rel);
     const target = path.join(installed, rel);
     const a = regularFile(source) ? digest(source) : null;
-    const b = regularFile(target) ? digest(target) : null;
+    const b = regularFile(target) && confinedFile(target, installedRoot) ? digest(target) : null;
     output.sourceFileComparison[rel] = !b ? 'missing' : !a ? 'candidate-unavailable'
       : a === b ? 'identical' : 'different';
   }
