@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "6b02164630be408e";
+		const CLIENT_BUILD_ID = "df4aed14f431e342";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4757,7 +4757,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             const query = ruleFilter.trim().toLowerCase();
             const shownRules = query ? localRules.filter(rule =>
                 [rule, drafts[rule.id]].filter(Boolean).some(item =>
-                    [item.id, item.name, ...promptScopeIds(item, "models"), ...promptScopeIds(item, "providers")]
+                    [item.id, item.name, ...["allow", "block"].flatMap(kind => [
+                        ...promptScopeIds(item, "models", kind), ...promptScopeIds(item, "providers", kind)])]
                         .some(value => typeof value === "string" && value.toLowerCase().includes(query)))) : localRules;
             const profileDraft = id => {
                 if (!id) return null;
@@ -5259,25 +5260,27 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     } }, "添加")));
         }
 
-        function promptScopeIds(rule, field) {
-            const draft = rule?.["allow_" + field];
-            const configured = typeof draft === "string" ? draft.split(/[\n,，]+/) : rule?.allowTargets?.[field];
+        function promptScopeIds(rule, field, kind = "allow") {
+            const draft = rule?.[kind + "_" + field];
+            const configured = typeof draft === "string" ? draft.split(/[\n,，]+/) : rule?.[kind + "Targets"]?.[field];
             return Array.isArray(configured) ? configured.filter(value => typeof value === "string")
                 .map(value => value.trim()).filter(Boolean) : [];
         }
 
         function promptScopeDescription(rule) {
-            const suffix = rule.blockEnabled ? " · 已开启排除项" : "";
-            if (!rule.allowEnabled) return "白名单关闭" + suffix;
             const group = (label, values) => values.length
                 ? label + values.slice(0, 2).join("、") + (values.length > 2 ? " 等 " + values.length + " 项" : "") : "";
-            const targets = [
-                group("模型：", promptScopeIds(rule, "models")),
-                group("Provider：", promptScopeIds(rule, "providers")),
-                promptScopeIds(rule, "sessions").length ? "限制会话" : "",
-                promptScopeIds(rule, "presets").length ? "限制 Agent 预设" : "",
-            ].filter(Boolean);
-            return (targets.length ? targets.join(" · ") : "白名单开启但未填条件，不会匹配") + suffix;
+            const describe = kind => [
+                group("模型：", promptScopeIds(rule, "models", kind)),
+                group("Provider：", promptScopeIds(rule, "providers", kind)),
+                group("会话：", promptScopeIds(rule, "sessions", kind)),
+                group("Agent 预设：", promptScopeIds(rule, "presets", kind)),
+            ].filter(Boolean).join(" · ");
+            const allowed = !rule.allowEnabled ? "白名单关闭"
+                : describe("allow") || "白名单开启但未填条件，不会匹配";
+            if (!rule.blockEnabled) return allowed;
+            return allowed + " · " + (describe("block")
+                ? "黑名单排除：" + describe("block") : "黑名单开启但未填条件");
         }
 
 		function PromptAssemblyEvidence({ report, unavailable }) {
