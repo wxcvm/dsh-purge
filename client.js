@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "4fe8b7d04e529869";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12195,6 +12195,25 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /* 情报：知识库（POC/EXP）与本机 nuclei 模板检索。数据来自 /redteam/api 的 poc 与 template 两组 op。 */
+    function PersonalKnowledgeProvenance({ item }) {
+      const source = typeof item.source === 'string' ? item.source.trim() : ''
+      let href = ''
+      // A source can be a label, a path, or a URL. Never navigate to a non-web
+      // reference or a URL with embedded credentials.
+      if (/^https?:\/\/[^\s\\]+$/i.test(source)) {
+        try {
+          const url = new URL(source)
+          if (!url.username && !url.password) href = url.href
+        } catch { /* Keep unparseable references as text. */ }
+      }
+      const modified = typeof item.updated_at === 'string' ? new Date(item.updated_at) : null
+      return h('div', { className: 'rt-ops-subtle', style: { overflowWrap: 'anywhere' } },
+        h('div', null, '记录来源（未自动核验）：',
+          href ? h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, source) : (source || '未填写')),
+        h('div', null, '本地修改时间：', modified && Number.isFinite(modified.getTime())
+          ? h('time', { dateTime: modified.toISOString() }, modified.toLocaleString()) : '未知'))
+    }
+
     function UnifiedKnowledgeTab({ initialSource = 'all', initialCategory = '' } = {}) {
       const labels = { all: '全部来源', bundled: 'Purge 内置知识', personal: '个人资料', cve: 'CVE 索引', redteam: '红队与社区技能', aboutsecurity: 'AboutSecurity', artex: 'ARTEX' }
       const browsableSources = ['bundled', 'personal', 'cve', 'redteam', 'aboutsecurity']
@@ -12269,6 +12288,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('p', null, '来源：' + labels[detail.origin]
             + (detail.community_source ? ' · ' + detail.community_source : '')
             + (detail.truncated ? ' · 原文显示已截断' : '')),
+          detail.origin === 'personal' ? h(PersonalKnowledgeProvenance, { item: detail }) : null,
           detail.source_url ? h('a', { href: detail.source_url, target: '_blank', rel: 'noopener noreferrer' }, '查看原始来源') : null,
           h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情'),
           h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' } }, detail.body || '无正文'),
@@ -12499,7 +12519,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             draft.id ? h('button', { className: 'rt-btn', disabled: busy, onClick: remove }, '删除') : null),
           draft.id ? h('div', null, h('h4', null, '历史版本（' + history.length + '）'),
             history.map(old => h('button', { key: old.revision_id, className: 'rt-btn', disabled: busy, onClick: () => run(async () => setRevision((await request({ op: 'knowledgeHistoryGet', id: draft.id, revision_id: old.revision_id })).item)) }, old.title + ' · ' + old.saved_at)),
-            revision ? h('div', null, h('h4', null, revision.title), h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflow: 'auto' } }, revision.body),
+            revision ? h('div', null, h('h4', null, revision.title), h(PersonalKnowledgeProvenance, { item: revision }),
+              h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflow: 'auto' } }, revision.body),
               h('button', { className: 'rt-btn rt-btn-primary', disabled: busy, onClick: restore }, '恢复该版本'),
               h('button', { className: 'rt-btn', onClick: () => setRevision(null) }, '关闭历史')) : null) : null) : null)
     }
