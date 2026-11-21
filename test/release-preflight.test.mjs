@@ -69,7 +69,7 @@ function fixture(t) {
   git('update-ref', 'refs/remotes/origin/master', head)
   assert.equal(typeof releaseStep?.run, 'string', 'the real workflow step must be exercised')
   return {
-    git, write, commit, head, run, path: file => path.join(repo, file),
+    git, write, commit, head, run, ghExecutable: path.join(bin, 'gh'), ghCalled, path: file => path.join(repo, file),
     preflight(extra = {}) {
       const result = run('bash', ['-c', releaseStep.run], {
         GITHUB_REPOSITORY: 'wxcvm/dsh-purge',
@@ -134,4 +134,19 @@ test('release preflight will not attest an archive with a different version or m
   result = f.preflight({ GITHUB_SHA: missing })
   assert.notEqual(result.status, 0)
   assert.equal(existsSync(f.path('SHA256SUMS.txt')), false)
+})
+
+test('existing published GitHub Release fails closed without replacing assets', { skip }, t => {
+  const f = fixture(t)
+  writeFileSync(f.ghExecutable, '#!/bin/sh\\nprintf "%s\\n" "$*" >> "$PREFLIGHT_GH_PROBE"\\nif [ "$1" = release ] && [ "$2" = view ]; then exit 0; fi\\nexit 98\\n', { mode: 0o700 })
+  const result = f.run('bash', ['-c', releaseStep.run], {
+    GITHUB_REPOSITORY: 'wxcvm/dsh-purge',
+    GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_NAME: 'master',
+    GITHUB_SHA: f.head, DRY_RUN: 'false',
+  })
+  assert.notEqual(result.status, 0, 'preexisting release must block publication')
+  assert.match(result.stdout + result.stderr, /already exists; refusing to overwrite immutable assets/)
+  assert.deepEqual(readFileSync(f.ghCalled, 'utf8').trim().split('\\n'), ['release view ' + tag],
+    'no release create or upload may run after an existing release is observed')
+  assert.equal(f.git('tag', '--list'), '', 'local repository tags are unchanged')
 })
