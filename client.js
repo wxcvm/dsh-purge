@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "61ed1f24af5802b9";
+		const CLIENT_BUILD_ID = "7165eadcbf986a6a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -13444,14 +13444,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           const time = stamp && Number.isFinite(stamp.getTime())
             ? h('time', { dateTime: item.created_at }, stamp.toLocaleString())
             : '时间未知'
+          const masked = props.maskReportOrigin === true
+          const sourceId = typeof item.session_id === 'string' && item.session_id.trim() ? item.session_id : null
+          const openSource = !masked && sourceId && typeof props.onOpenReportSession === 'function'
+            ? () => {
+                let result
+                try { result = props.onOpenReportSession(sourceId) } catch { /* host navigation failure */ }
+                if (result !== 'opened') setNotice({ error: true, text: result === 'archived'
+                  ? '来源会话或其所属会话已归档，请在宿主中查看归档状态。'
+                  : '当前宿主无法打开这条回报的来源会话，待阅状态未更改。' })
+              }
+            : null
           return h('article', { key: item.id, className: 'rt-card', style: { marginTop: 8, overflowWrap: 'anywhere' } },
             h('strong', null, (Object.hasOwn(labels, item.status) ? labels[item.status] : '状态未知') + ' · #' + item.id),
-            h('div', null, '来源：' + (item.session_id || '未知会话')
-              + (item.parent_session ? ' · 主会话：' + item.parent_session : '')),
+            h('div', null, masked ? '来源和回报详情暂不显示。' : '来源：' + (sourceId || '未知会话')
+              + (item.parent_session ? ' · 归属会话：' + item.parent_session : '')),
             h('div', null, time),
-            item.blocked_reason ? h('div', null, '备注：' + item.blocked_reason) : null,
-            item.needs?.length ? h('ul', null, item.needs.map((need, i) => h('li', { key: i },
+            !masked && item.blocked_reason ? h('div', null, '备注：' + item.blocked_reason) : null,
+            !masked && item.needs?.length ? h('ul', null, item.needs.map((need, i) => h('li', { key: i },
               need.detail || (need.kind === 'other' ? '需要人工查看' : need.kind)))) : null,
+            openSource ? h('button', { type: 'button', className: 'rt-btn', onClick: openSource,
+              'aria-label': '查看回报 #' + item.id + ' 的来源会话' }, '查看来源会话') : null,
             h('button', { type: 'button', className: 'rt-btn', disabled: busy !== null,
               'aria-label': '将回报 #' + item.id + ' 标为已阅', onClick: () => load(item.id) },
               busy === item.id ? '确认中…' : '标为已阅'))
@@ -13531,7 +13544,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           err ? h('div', { className: 'rt-err' }, err) : null,
           concurrency && concurrency.ok === false ? h('div', { className: 'rt-err' }, concurrency.error || '智能体状态读取失败') : null,
           h(AgentReports, { key: 'agent-reports:' + (eng || ''), engagement: eng, onReceipt: props.onReportReceipt,
-            onSectionReady: props.onReportSectionReady }),
+            onSectionReady: props.onReportSectionReady, onOpenReportSession: props.onOpenReportSession,
+            maskReportOrigin: props.maskReportOrigin }),
           h('div', { className: 'rt-card' },
             h('h4', null, '并发规则（硬约束）'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
@@ -14986,7 +15000,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setUI({ tab: 'findings', focus: { engagement: eng, kind: 'vulns', assetId } })
         } })
       else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey: refreshKey, onReportReceipt,
-        onReportSectionReady: (node) => focusAgentReports(node, eng, reportFocus) })
+        onReportSectionReady: (node) => focusAgentReports(node, eng, reportFocus),
+        onOpenReportSession: props?.onOpenReportSession, maskReportOrigin: props?.maskReportOrigin })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng, onRestored: (id) => { api({ op: 'activateEngagement', engagement: id }).finally(() => refreshList(id)) } })
       else if (!eng) {
         body = h('div', { className: 'rt-pane' },
@@ -15257,6 +15272,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		// Use the same native main-panel slots as Armory: navigation stays in the DSH shell.
 		const PURGE_PANEL_ID = "dsh-purge-workspace";
 		let purgeWorkspaceCtx = null;
+		let purgeReportNavigationCtx = null;
 		const purgeWorkspaceBus = { page: "drill", listeners: new Set() };
 		function selectPurgeWorkspacePage(page) {
 			purgeWorkspaceBus.page = page === "clean" ? "clean" : "drill";
@@ -15320,8 +15336,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					h("button", { type: "button", onClick: () => this.setState({ failed: false }) }, "重试此页面"));
 			}
 		}
-		function PurgeWorkspaceContent({ page, t }) {
-			return page === "clean" ? h(SettingsRoot, { t, workspace: true }) : h(__dshPurgeDrill.Panel, { embedded: true });
+		function PurgeWorkspaceContent({ page, t, onOpenReportSession, maskReportOrigin }) {
+			return page === "clean" ? h(SettingsRoot, { t, workspace: true })
+				: h(__dshPurgeDrill.Panel, { embedded: true, onOpenReportSession, maskReportOrigin });
 		}
 		function installPurgeCaptionPalette(doc, Observer) {
 			const body = doc.body;
@@ -15372,6 +15389,38 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				detail: "已保存：扫描记录与运行诊断 " + (status.maskHistory ? "遮蔽" : "显示")
 					+ "；测绘与 ARTEX 联动展示 " + (status.maskAssetResults ? "遮蔽" : "显示")
 			};
+		}
+		function purgeReportNavigation(ctx) {
+			try {
+				const workspace = ctx?.uiWorkspace;
+				const workspaces = ctx?.workspaces;
+				const sessions = ctx?.sessions;
+				if (typeof workspace?.openSession === "function" && typeof workspace.selection?.getSnapshot === "function"
+					&& typeof workspaces?.list?.getSnapshot === "function" && typeof sessions?.subagentAddress === "function") {
+					return { workspace, workspaces, sessions };
+				}
+			} catch { /* The host may not expose the native view services. */ }
+			return null;
+		}
+		function installPurgeReportNavigation(ctx) {
+			ctx.effect(() => {
+				purgeReportNavigationCtx = ctx;
+				return () => { if (purgeReportNavigationCtx === ctx) purgeReportNavigationCtx = null; };
+			}, "dsh-purge: report session navigation");
+		}
+		function openPurgeReportSession(ctx, sessionId) {
+			const navigation = purgeReportNavigation(ctx);
+			if (!navigation || typeof sessionId !== "string" || !sessionId.trim()) return "unavailable";
+			try {
+				const archived = navigation.workspaces.list.getSnapshot()?.archivedSessionIds;
+				if (!Array.isArray(archived)) return "unavailable";
+				if (archived.includes(sessionId)) return "archived";
+				// The report owner is not necessarily the direct parent; only the host resolves it.
+				const parent = navigation.sessions.subagentAddress(sessionId)?.parentSessionId;
+				if (parent && archived.includes(parent)) return "archived";
+				navigation.workspace.openSession(sessionId);
+				return navigation.workspace.selection.getSnapshot()?.sessionId === sessionId ? "opened" : "unavailable";
+			} catch { return "unavailable"; }
 		}
 		function createWorkspaceFullscreen(document, showError) {
 			let entering = null;
@@ -15514,18 +15563,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				}
 			}, [page]);
 			const open = (next) => selectPurgeWorkspacePage(next);
+			const leaveWorkspace = () => {
+				fullscreen.release(workspaceRef.current);
+				setNavigationError("");
+				__dshPurgeDrill.setTemporaryPrivacy(null);
+				setWorkspaceVisible(false);
+			};
 			const back = () => {
 				// Do not blank the workspace if the host refuses the navigation.
 				if (!selectPurgeHostPanel(null)) {
 					setNavigationError("暂时无法返回会话，请重试。");
 					return;
 				}
-				fullscreen.release(workspaceRef.current);
-				setNavigationError("");
-				__dshPurgeDrill.setTemporaryPrivacy(null);
-				setWorkspaceVisible(false);
+				leaveWorkspace();
 			};
 			if (!workspaceVisible) return null;
+			const maskReportOrigin = temporaryPrivacy?.maskHistory === true || privacyStatus?.ok !== true || privacyStatus.maskHistory !== false;
+			const onOpenReportSession = !maskReportOrigin && purgeReportNavigation(purgeReportNavigationCtx) ?
+				(sessionId) => {
+					const result = openPurgeReportSession(purgeReportNavigationCtx, sessionId);
+					// The native navigation already reveals the selected conversation.
+					if (result === "opened") leaveWorkspace();
+					return result;
+				} : null;
 			const panel = h("section", {
 				ref: workspaceRef,
 				className: "dshp-dock dshp-workspace",
@@ -15563,7 +15623,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 					"aria-labelledby": "dshp-workspace-tab-" + key,
 					hidden: page !== key,
 					style: page === key ? undefined : { display: "none" },
-				}, page === key ? h(PurgeWorkspaceBoundary, { key: page }, h(PurgeWorkspaceContent, { page, t })) : null)));
+				}, page === key ? h(PurgeWorkspaceBoundary, { key: page },
+					h(PurgeWorkspaceContent, { page, t, onOpenReportSession, maskReportOrigin })) : null)));
 			// Portal escapes the Harness main-panel layout and its sidebar/clipping container.
 			// Keep the same React state and host API; no separate browser window.
 			try {
@@ -16798,6 +16859,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
 		function apply(ctx) {
 			purgeWorkspaceCtx = ctx;
+			if (typeof ctx.inject === "function") {
+				ctx.inject(["uiWorkspace", "workspaces", "sessions"], installPurgeReportNavigation);
+			}
 			if (typeof ctx.inject === "function") ctx.inject(["commandUi", "sessions", "remote", "remote.commands"], installTargetBindingPicker);
 			ctx.slots.inject("main", () => ctx.slots.register({
 				name: "main", key: PURGE_PANEL_ID, label: "Purge 工作区",

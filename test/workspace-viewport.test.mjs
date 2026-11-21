@@ -27,7 +27,8 @@ test("workspace styles are installed before paint and back releases fullscreen",
   assert.match(source, /useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/);
   const back = source.match(/const back = \(\) => \{([\s\S]*?)\n\t\t\t\};\n\t\t\tif \(!workspaceVisible\)/);
   assert.ok(back, "workspace back handler must exist");
-  assert.match(back[1], /selectPurgeHostPanel\(null\)[\s\S]*fullscreen\.release\(workspaceRef\.current\)[\s\S]*setWorkspaceVisible\(false\)/);
+  assert.match(back[1], /selectPurgeHostPanel\(null\)[\s\S]*leaveWorkspace\(\)/);
+  assert.match(source, /const leaveWorkspace = \(\) => \{\s*fullscreen\.release\(workspaceRef\.current\);[\s\S]*?setWorkspaceVisible\(false\)/);
 });
 
 test("host layout failures fall back to the Dock instead of escaping", () => {
@@ -36,14 +37,14 @@ test("host layout failures fall back to the Dock instead of escaping", () => {
 });
 
 test("failed host navigation keeps the workspace visible", () => {
-  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*fullscreen\.release\(workspaceRef\.current\);\s*setNavigationError\(""\);\s*__dshPurgeDrill\.setTemporaryPrivacy\(null\);\s*setWorkspaceVisible\(false\)/);
+  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*leaveWorkspace\(\)/);
 });
 
 test("a page render failure leaves navigation available and supports retry", () => {
   assert.match(source, /class PurgeWorkspaceBoundary extends Component/);
   assert.match(source, /static getDerivedStateFromError\(\) \{ return \{ failed: true \}; \}/);
   assert.match(source, /onClick: \(\) => this\.setState\(\{ failed: false \}\)/);
-  assert.match(source, /h\(PurgeWorkspaceBoundary, \{ key: page \}, h\(PurgeWorkspaceContent, \{ page, t \}\)\)/);
+  assert.match(source, /h\(PurgeWorkspaceBoundary, \{ key: page \},\s*h\(PurgeWorkspaceContent, \{ page, t, onOpenReportSession, maskReportOrigin \}\)\)/);
   assert.match(css, /\.dshp-workspace-recovery\{/);
 });
 

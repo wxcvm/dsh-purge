@@ -12,9 +12,9 @@ function extract(start, end) {
 
 // Evaluate only the shipped workspace component and its local UI helpers.
 // DOM and React hooks below are controlled; no DSH process is started.
-function workspace({ canReturn = true } = {}) {
+function workspace({ canReturn = true, page = "clean", privacyStatus = null, temporaryPrivacy = null, reportNavigationCtx = null } = {}) {
   const callbacks = [], cleanup = [], state = [], focused = [];
-  const bus = { page: "clean", listeners: new Set() };
+  const bus = { page, listeners: new Set() };
   const dispatchPage = (page) => {
     bus.page = page;
     for (const listener of bus.listeners) listener(page);
@@ -45,6 +45,7 @@ function workspace({ canReturn = true } = {}) {
     h(tag, props, ...children) { return { tag, props: props ?? {}, children: children.flat() }; },
     useT() { return () => ""; },
     useState(initial) {
+      if (state.length === 2) initial = privacyStatus;
       const index = state.push(initial) - 1;
       return [initial, (value) => { state[index] = value; }];
     },
@@ -54,8 +55,9 @@ function workspace({ canReturn = true } = {}) {
     ensurePurgeWorkspaceStyles() {},
     PurgeWorkspaceBoundary: "boundary",
     PurgeWorkspaceContent: "content",
-    __dshPurgeDrill: { useTemporaryPrivacy() { return false; }, setTemporaryPrivacy() {} },
+    __dshPurgeDrill: { useTemporaryPrivacy() { return temporaryPrivacy; }, setTemporaryPrivacy() {} },
     purgeWorkspaceBus: bus,
+    purgeReportNavigationCtx: reportNavigationCtx,
     selectPurgeWorkspacePage: dispatchPage,
     selectPurgeHostPanel: () => canReturn,
     document: doc,
@@ -73,8 +75,9 @@ function workspace({ canReturn = true } = {}) {
   const navigation = tree.children[0].children;
   const byClass = (key) => navigation.find((node) => node.props.className === "dshp-workspace-" + key);
   const tabs = byClass("tabs").children;
+  const content = tree.children.slice(1).find((panel) => !panel.props.hidden).children[0].children[0].props;
   return {
-    doc, element, tabs, panels: tree.children.slice(1), focused,
+    doc, element, tabs, panels: tree.children.slice(1), focused, content,
     get page() { return state[0]; },
     get visible() { return state[1]; },
     get immersive() { return state[3]; },
@@ -106,6 +109,76 @@ function workspace({ canReturn = true } = {}) {
     },
   };
 }
+
+test("report navigation opens the exact child in the native view, then releases only owned fullscreen", async () => {
+  let selected, archive = [];
+  const calls = [];
+  const host = {
+    sessions: { subagentAddress(id) { assert.equal(id, "review-child"); return { parentSessionId: "catalog-parent" }; } },
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: archive }) } },
+    uiWorkspace: {
+      openSession(id) { calls.push(id); selected = id; },
+      selection: { getSnapshot: () => ({ sessionId: selected }) },
+    },
+  };
+  const ui = workspace({ canReturn: false, page: "drill", reportNavigationCtx: host, privacyStatus: { ok: true, maskHistory: false } });
+  ui.toggle();
+  assert.deepEqual(calls, [], "mount must not navigate");
+  archive = ["catalog-parent"];
+  assert.equal(ui.content.onOpenReportSession("review-child"), "archived");
+  assert.deepEqual(calls, []);
+  assert.equal(ui.visible, true);
+  archive = [];
+  assert.equal(ui.content.onOpenReportSession("review-child"), "opened");
+  assert.deepEqual(calls, ["review-child"]);
+  assert.equal(ui.visible, false, "native navigation already revealed the conversation");
+  ui.resolve();
+  await Promise.resolve();
+  assert.equal(ui.exitCalls, 1);
+});
+
+test("an unknown or rejected native session never falls back to another session or hides Purge", () => {
+  const opened = [];
+  const host = {
+    sessions: { subagentAddress() { return undefined; } },
+    workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    uiWorkspace: {
+      openSession(id) { opened.push(id); if (id === "missing") throw Error("private host detail"); },
+      selection: { getSnapshot: () => ({ sessionId: "other" }) },
+    },
+  };
+  const ui = workspace({ page: "drill", reportNavigationCtx: host, privacyStatus: { ok: true, maskHistory: false } });
+  assert.equal(ui.content.onOpenReportSession("missing"), "unavailable");
+  assert.equal(ui.content.onOpenReportSession("not-selected"), "unavailable");
+  assert.equal(ui.visible, true);
+  assert.deepEqual(opened, ["missing", "not-selected"]);
+
+  assert.equal(workspace({ page: "drill", privacyStatus: { ok: true, maskHistory: false } }).content.onOpenReportSession, null);
+  const initialPrivacy = workspace({ page: "drill", reportNavigationCtx: host });
+  assert.equal(initialPrivacy.content.maskReportOrigin, true);
+  assert.equal(initialPrivacy.content.onOpenReportSession, null);
+  const masked = workspace({ page: "drill", reportNavigationCtx: host,
+    privacyStatus: { ok: true, maskHistory: false }, temporaryPrivacy: { maskHistory: true } });
+  assert.equal(masked.content.maskReportOrigin, true);
+  assert.equal(masked.content.onOpenReportSession, null);
+});
+
+test("report navigation uses an optional host scope and releases only the disposed scope", () => {
+  assert.match(client, /ctx\.inject\(\["uiWorkspace", "workspaces", "sessions"\], installPurgeReportNavigation\)/);
+  const hooks = new Function(
+    "let purgeReportNavigationCtx = null; " +
+    extract("function installPurgeReportNavigation(", "function openPurgeReportSession(") +
+    "return { installPurgeReportNavigation, current: () => purgeReportNavigationCtx };"
+  )();
+  const stub = () => ({ effect(run) { this.dispose = run(); } });
+  const first = stub(), next = stub();
+  hooks.installPurgeReportNavigation(first);
+  hooks.installPurgeReportNavigation(next);
+  first.dispose();
+  assert.equal(hooks.current(), next);
+  next.dispose();
+  assert.equal(hooks.current(), null);
+});
 
 test("a pending fullscreen request cannot strand the workspace after returning", async () => {
   const ui = workspace();
