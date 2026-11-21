@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { DDL, RedteamStore, dispatch } from '../lib/redteam/store-core.js'
+import { DDL, migrate, RedteamStore, dispatch } from '../lib/redteam/store-core.js'
 import {
   createWorkItem, assignWorkItem, reportWorkItem, closeWorkItem,
   getWorkItem, listWorkItems, workRecoveryCandidates, observeWorkItemEnd,
@@ -244,5 +244,23 @@ test('optional observational failure does not prevent the existing attention rep
     assert.equal(result.recorded, true)
     assert.deepEqual(errors, ['synthetic ledger fault'])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM agent_attention').get().n, 1)
+  } finally { db.close() }
+})
+
+test('old work assignment tables gain observational columns without losing existing rows', () => {
+  const db = new DatabaseSync(':memory:')
+  try {
+    db.exec('CREATE TABLE agent_work_assignment (id INTEGER PRIMARY KEY, task_id INTEGER, attempt INTEGER, session_id TEXT, run_id TEXT, status TEXT, summary TEXT, started_at TEXT, finished_at TEXT)')
+    db.exec("INSERT INTO agent_work_assignment (id,task_id,attempt,session_id,run_id,status,started_at) VALUES (17,9,1,'old-session','old-run','running','2026-01-01')")
+    db.exec(DDL)
+    migrate(db)
+    migrate(db)
+    const columns = db.prepare('PRAGMA table_info(agent_work_assignment)').all().map(x => x.name)
+    assert.ok(columns.includes('host_end_at'))
+    assert.ok(columns.includes('host_stop_reason'))
+    const old = db.prepare('SELECT * FROM agent_work_assignment WHERE id = 17').get()
+    assert.equal(old.session_id, 'old-session')
+    assert.equal(old.run_id, 'old-run')
+    assert.equal(old.host_end_at, null)
   } finally { db.close() }
 })
