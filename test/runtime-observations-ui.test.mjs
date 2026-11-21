@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const runtimePanel = () => readFileSync(new URL('../lib/workspace/thinking-experiment.js', import.meta.url), 'utf8').replace(/^export /gm, '') + '\n' + readFileSync(new URL('../lib/workspace/runtime-panel.js', import.meta.url), 'utf8');
+const readState = (snapshot, { session = '', error = '', receivedAt = null } = {}) => ({
+  query: { session }, snapshot, error, receivedAt,
+});
 
 test('runtime panel polls only while visible, projects a report locally and cleans up', async () => {
   let cleanup, timer, count = 0, visible = true;
@@ -36,7 +39,7 @@ test('runtime route is GET only and reuses plugin access guard rather than disk 
 });
 test('native panel source renders abstention and missing delivery evidence independently', () => {
   let index = 0;
-  const ctx = { useState: v => [index++ === 0 ? { items: [{ generation: 1, attemptId: 'a', assessment: { decision: 'uncertain', delivery: 'not-verified', reasonCodes: ['denied-object-uncertain'] } }] } : v, () => {}],
+  const ctx = { useState: v => [index++ === 0 ? readState({ items: [{ generation: 1, attemptId: 'a', assessment: { decision: 'uncertain', delivery: 'not-verified', reasonCodes: ['denied-object-uncertain'] } }] }) : v, () => {}],
     useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) };
   vm.createContext(ctx);
   const rendered = vm.runInContext(runtimePanel() + '\nRuntimeObservationsSection()', ctx);
@@ -57,18 +60,27 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
   const render = filter => {
     let i = 0;
     const updates = [];
-    const ctx = { useState: v => { const at = i++; return [at === 0 ? { items: rows } : at === 5 ? filter : v, next => updates.push([at, next])]; },
+    const disclosures = [{ open: true }, { open: false }];
+    const ctx = { useState: v => { const at = i++; return [at === 0 ? readState({ items: rows }) : at === 3 ? filter : v, next => updates.push([at, next])]; },
       useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) };
     vm.createContext(ctx);
     const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx);
     const all = [];
     function walk(n) { if (Array.isArray(n)) { n.forEach(walk); return; } if (!n || typeof n !== 'object') return; all.push(n); walk(n.children); }
     walk(tree);
-    return { all, cards: all.filter(n => n.type === 'article'), updates };
+    all.find(n => n.props?.className === 'dshp-runtime-grid').props.ref.current = {
+      querySelectorAll(selector) {
+        assert.equal(selector, '.dshp-runtime-card > details');
+        return disclosures;
+      },
+    };
+    return { all, cards: all.filter(n => n.type === 'article'), updates, disclosures };
   };
   const all = render('all');
   assert.equal(all.cards.length, 5);
-  assert.equal(all.cards.map(n => n.props['data-status']).join(','), 'running,ended,ended,attention,attention');
+  assert.equal(all.cards.map(n => n.props['data-status']).join(','), 'attention,attention,running,ended,ended');
+  assert.deepEqual(all.cards.map(n => n.props.key), ['1:lost', '1:failed', '1:pending', '1:finished', '1:cancelled']);
+  assert.equal(all.all.find(n => n.type?.name === 'ThinkingExperimentPanel').props.rows[0], rows[0]);
   assert.equal(new Set(all.cards.map(n => n.props.key)).size, all.cards.length);
   for (const card of all.cards) {
     const details = card.children[0];
@@ -88,7 +100,11 @@ test('runtime cards separate missing evidence, cancellation and observed transpo
   assert.equal(render('ended').cards.length, 2);
   const button = all.all.find(n => n.type === 'button' && n.children.includes('异常 2'));
   assert.ok(button); button.props.onClick();
-  assert.deepEqual(all.updates.at(-1), [5, 'attention']);
+  assert.deepEqual(all.updates.at(-1), [3, 'attention']);
+  all.all.find(n => n.type === 'button' && n.children.includes('展开当前记录')).props.onClick();
+  assert.deepEqual(all.disclosures.map(node => node.open), [true, true]);
+  all.all.find(n => n.type === 'button' && n.children.includes('收起当前记录')).props.onClick();
+  assert.deepEqual(all.disclosures.map(node => node.open), [false, false]);
 });
 
 test('stream end without observed finish is not labelled an observed terminal', () => {
@@ -103,22 +119,40 @@ test('stream end without observed finish is not labelled an observed terminal', 
 })
 
 
-test('runtime empty states distinguish loading, failed read and active filters', () => {
+test('runtime empty states distinguish loading, failed read, stale empty and active filters', () => {
   const panel=runtimePanel();
-  const render=(snapshot,error,session,filter) => {
+  const render=(snapshot,{error='',session='',filter='all',route='',receivedAt=null}={}) => {
     let i=0; const updates=[], nodes=[];
-    const ctx=vm.createContext({useState:v=>{const at=i++;return [[snapshot,error,null,'',session,filter][at] ?? v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})});
+    const ctx=vm.createContext({useState:v=>{const at=i++;return [[readState(snapshot,{error,session,receivedAt}),null,'',filter,route][at] ?? v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})});
     const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx);
     function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n&&typeof n==='object'){nodes.push(n);walk(n.children)}}walk(tree);
     return {body:JSON.stringify(tree),nodes,updates};
   };
-  assert.match(render(null,'','','all').body,/正在读取运行状态/);
-  assert.match(render(null,'HTTP 503','','all').body,/暂时无法读取运行记录/);
-  assert.match(render({items:[]},'','','all').body,/暂无运行记录/);
-  const filtered=render({items:[]},'','session-1','attention');
+  assert.match(render(null).body,/正在读取运行状态/);
+  const failed=render(null,{error:'HTTP 503'});
+  assert.match(failed.body,/暂时无法读取运行记录/);
+  assert.doesNotMatch(failed.body,/流式接口：未观测|最近成功读取/);
+  assert.match(render({items:[]}).body,/暂无运行记录/);
+  const stale=render({items:[]},{error:'HTTP 503',receivedAt:Date.parse('2026-11-20T12:34:56Z')});
+  assert.match(stale.body,/上次读取没有运行记录/);
+  assert.match(stale.body,/计数未更新/);
+  assert.equal(stale.nodes.find(n=>n.type==='time').props.dateTime,'2026-11-20T12:34:56.000Z');
+  assert.doesNotMatch(stale.body,/暂无运行记录/);
+  const filtered=render({items:[]},{session:'session-1',filter:'attention',route:'old-route'});
   assert.match(filtered.body,/当前筛选没有匹配记录/);
   filtered.nodes.find(n=>n.type==='button'&&n.children.includes('清除筛选')).props.onClick();
-  assert.deepEqual(filtered.updates,[[5,'all'],[0,null],[1,''],[4,'']]);
+  assert.equal(filtered.updates.length,3);
+  assert.deepEqual(filtered.updates[0],[3,'all']);
+  assert.equal(filtered.updates[1][0],0);
+  assert.equal(filtered.updates[1][1].query.session,'');
+  assert.equal(filtered.updates[1][1].snapshot,null);
+  assert.deepEqual(filtered.updates[2],[4,'']);
+  for (const options of [{ filter:'attention' },{ route:'disappeared-route' }]) {
+    const view=render({items:[]},options);
+    assert.match(view.body,/当前筛选没有匹配记录/);
+    assert.ok(view.nodes.find(n=>n.type==='button'&&n.children.includes('清除筛选')));
+    assert.doesNotMatch(view.body,/展开当前记录/);
+  }
 });
 
 
@@ -131,7 +165,7 @@ test('runtime route filter uses actual observed provider/model pairs and keeps u
   ]
   let i=0; const updates=[]
   const selected=JSON.stringify(['local','model-b'])
-  const ctx=vm.createContext({useState:v=>{const at=i++;return [at===0?{items:rows}:at===6?selected:v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const ctx=vm.createContext({useState:v=>{const at=i++;return [at===0?readState({items:rows}):at===4?selected:v,n=>updates.push([at,n])]},useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
   const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx)
   const nodes=[]; function walk(n){if(Array.isArray(n)){n.forEach(walk);return}if(n&&typeof n==='object'){nodes.push(n);walk(n.children)}}walk(tree)
   const cards=nodes.filter(n=>n.type==='article')
@@ -141,7 +175,7 @@ test('runtime route filter uses actual observed provider/model pairs and keeps u
   assert.ok(select); assert.equal(select.props.value,selected)
   assert.ok(nodes.some(n=>n.type==='option'&&n.children.includes('未观测 / 未观测')))
   select.props.onChange({target:{value:''}})
-  assert.deepEqual(updates,[[6,'']])
+  assert.deepEqual(updates,[[4,'']])
   assert.match(JSON.stringify(tree),/不代表全部 Provider 或协议已兼容/)
   assert.match(JSON.stringify(tree),/当前路由证据（请求数）：首文本 0 · 工具调用 0 · 已观测终态 0 · 取消 0/)
 })
@@ -160,7 +194,7 @@ test('runtime cards distinguish configured route from assistant-observed route',
   const panel = runtimePanel()
   const rows=[{generation:1,attemptId:'a',provider:'local',model:'actual',providerSource:'request-header',modelSource:'assistant-event',finishObserved:true}]
   let i=0;
-  const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const ctx=vm.createContext({useState:v=>[i++===0?readState({items:rows}):v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
   const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx)
   assert.match(JSON.stringify(tree),/Provider：请求头配置 · 模型：助手事件/)
 })
@@ -170,7 +204,7 @@ test('runtime cards show separate live and durable evidence and count a request 
   const panel=runtimePanel()
   const rows=[{generation:1,attemptId:'a',provider:'local',model:'model',toolCalls:0,durableToolStarts:2,durableTextObserved:true,firstTextMs:null,observedChunks:1,chunks:3,streamGap:true,finishObserved:true}]
   let i=0
-  const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const ctx=vm.createContext({useState:v=>[i++===0?readState({items:rows}):v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
   const tree=vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx), output=JSON.stringify(tree)
   assert.match(output,/首文本 0 · 工具调用 1 · 已观测终态 1/)
   assert.match(output,/仅持久流文本证据/)
@@ -184,8 +218,8 @@ test('runtime display masks identifiers and report when shared privacy is enable
   const panel = runtimePanel();
   let i = 0;
   const ctx = vm.createContext({ __dshPurgeDrill: { api() {} },
-    useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] }
-      : at === 2 ? { secret: 'private-report' } : at === 7 ? { maskHistory: true } : v, () => {}]; },
+    useState: v => { const at = i++; return [at === 0 ? readState({ items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] })
+      : at === 1 ? { secret: 'private-report' } : at === 5 ? { maskHistory: true } : v, () => {}]; },
     useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) });
   const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx);
   const cards = tree.children.find(node => node?.props?.className === 'dshp-runtime-grid');
@@ -205,7 +239,7 @@ test('temporary runtime privacy overrides local reveal without changing routing'
   let i = 0
   const ctx = vm.createContext({
     __dshPurgeDrill: { api() {}, useTemporaryPrivacy: () => ({ task: 'sharing', maskHistory: true }) },
-    useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] } : at === 7 ? { maskHistory: false } : at === 9 ? true : v, () => {}] },
+    useState: v => { const at = i++; return [at === 0 ? readState({ items: [{ generation: 1, sessionId: 'private-session', attemptId: 'private-attempt', provider: 'local', model: 'model' }] }) : at === 5 ? { maskHistory: false } : at === 7 ? true : v, () => {}] },
     useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children })
   })
   const tree = vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx)
@@ -222,7 +256,7 @@ test('runtime card shows usage source and separates live and durable totals', ()
   const panel=runtimePanel()
   const rows=[{generation:1,attemptId:'a',usage:{totalTokens:20},usageSource:'host-stream',liveUsage:{totalTokens:20},durableUsage:{totalTokens:null},finishObserved:true}]
   let i=0
-  const ctx=vm.createContext({useState:v=>[i++===0?{items:rows}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
+  const ctx=vm.createContext({useState:v=>[i++===0?readState({items:rows}):v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children})})
   const output=JSON.stringify(vm.runInContext(panel+'\nRuntimeObservationsSection()',ctx))
   assert.match(output,/实时流 · 实时 \/ 持久总量：20 \/ 未观测/)
 })
@@ -244,16 +278,21 @@ test('clean workspace combines runtime observations under diagnostics and preser
 
 test('runtime read separates missing route, disconnect, malformed response and recovery', async () => {
   const updates = [];
-  let timer, i = 0;
+  let timer, i = 0, read;
   const responses = [
     async () => ({ ok: false, status: 404, json() { throw Error('must not read body'); } }),
+    async () => ({ ok: true, json: async () => ({ ok: true, items: [{ attemptId: 'cached' }] }) }),
     async () => { throw Error('fixture-secret-in-network-error'); },
     async () => ({ ok: true, json: async () => ({ ok: false, items: [], error: 'fixture-secret-in-response' }) }),
     async () => ({ ok: true, json: async () => ({ ok: true, items: [null] }) }),
     async () => ({ ok: true, json: async () => ({ ok: true, items: [] }) }),
   ];
   const ctx = vm.createContext({
-    useState(v) { const idx = i++; return [v, next => updates.push([idx, next])]; },
+    useState(v) {
+      if (i++ !== 0) return [v, () => {}];
+      read = v;
+      return [read, next => { read = next(read); updates.push(read); }];
+    },
     useRef: () => ({ current: { getClientRects: () => [1] } }), useEffect: fn => fn(),
     h: (type, props, ...children) => ({ type, props, children }),
     document: { visibilityState: 'visible' }, apiUrl: p => p, AbortController,
@@ -262,20 +301,68 @@ test('runtime read separates missing route, disconnect, malformed response and r
   });
   vm.runInContext(runtimePanel() + '\nRuntimeObservationsSection()', ctx);
   await new Promise(resolve => setImmediate(resolve));
-  for (let step = 1; step < 5; step++) await timer();
-  assert.deepEqual(updates.filter(([idx]) => idx === 1).map(([, next]) => next), [
-    'diag.runtime.missing', 'diag.runtime.offline', 'diag.runtime.invalid', 'diag.runtime.invalid', '',
+  for (let step = 1; step < 6; step++) await timer();
+  assert.deepEqual(updates.map(next => next.error), [
+    'diag.runtime.missing', '', 'diag.runtime.offline', 'diag.runtime.invalid', 'diag.runtime.invalid', '',
   ]);
-  assert.deepEqual(updates.filter(([idx]) => idx === 0).map(([, next]) => next), [{ ok: true, items: [] }]);
+  assert.equal(updates[0].snapshot, null);
+  assert.equal(updates[0].receivedAt, null);
+  assert.equal(updates[1].snapshot.items[0].attemptId, 'cached');
+  assert.ok(Number.isFinite(updates[1].receivedAt));
+  for (const stale of updates.slice(2, 5)) {
+    assert.equal(stale.snapshot, updates[1].snapshot);
+    assert.equal(stale.receivedAt, updates[1].receivedAt);
+  }
+  assert.deepEqual(updates[5].snapshot, { ok: true, items: [] });
+  assert.ok(updates[5].receivedAt >= updates[1].receivedAt);
   assert.doesNotMatch(JSON.stringify(updates), /fixture-secret/);
+});
+
+test('late observation responses cannot fill a replacement query with the same filter', async () => {
+  let state, index, complete;
+  const requests = [];
+  const ctx = vm.createContext({
+    useState(v) {
+      if (index++ !== 0) return [v, () => {}];
+      state ??= v;
+      return [state, next => { state = typeof next === 'function' ? next(state) : next; }];
+    },
+    useRef: () => ({ current: { getClientRects: () => [1] } }),
+    useEffect: fn => fn(),
+    h: (type, props, ...children) => ({ type, props, children }),
+    document: { visibilityState: 'visible' }, apiUrl: p => p, AbortController,
+    fetch(url) {
+      requests.push(url);
+      if (requests.length === 1) return new Promise(resolve => { complete = resolve; });
+      return new Promise(() => {});
+    },
+    setTimeout() {}, clearTimeout() {},
+  });
+  vm.runInContext(runtimePanel(), ctx);
+  function change(value) {
+    index = 0;
+    const tree = vm.runInContext('RuntimeObservationsSection()', ctx);
+    const toolbar = tree.children.find(n => n?.props?.className === 'dshp-runtime-toolbar');
+    toolbar.children[0].children[1].props.onChange({ target: { value } });
+  }
+  change('different-session');
+  change('');
+  const replacement = state;
+  assert.equal(replacement.query.session, '');
+  assert.equal(requests.length, 2);
+  complete({ ok: true, json: async () => ({ ok: true, items: [{ attemptId: 'old' }] }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(state, replacement);
+  assert.equal(state.snapshot, null);
+  assert.equal(state.receivedAt, null);
 });
 
 test('unknown privacy settings cannot reveal identifiers or a local imported report', () => {
   for (const privacy of [undefined, { api() {} }]) {
     let i = 0;
     const ctx = vm.createContext({ __dshPurgeDrill: privacy,
-      useState: v => { const at = i++; return [at === 0 ? { items: [{ generation: 1, sessionId: 'private-sample-session', attemptId: 'a' }] }
-        : at === 2 ? { secret: 'private-sample-report' } : at === 9 ? true : v, () => {}]; },
+      useState: v => { const at = i++; return [at === 0 ? readState({ items: [{ generation: 1, sessionId: 'private-sample-session', attemptId: 'a' }] })
+        : at === 1 ? { secret: 'private-sample-report' } : at === 7 ? true : v, () => {}]; },
       useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }) });
     const tree = vm.runInContext(runtimePanel() + '\nRuntimeObservationsSection()', ctx);
     const visible = [];
@@ -300,7 +387,7 @@ test('runtime panel shows observed child lifecycle without treating unmatched ev
   const render = subagents => {
     let i = 0;
     const ctx = vm.createContext({
-      useState: v => [i++ === 0 ? { items: [], subagents } : v, () => {}],
+      useState: v => [i++ === 0 ? readState({ items: [], subagents }) : v, () => {}],
       useRef: () => ({}), useEffect() {}, h: (type, props, ...children) => ({ type, props, children }),
     });
     return JSON.stringify(vm.runInContext(panel + '\nRuntimeObservationsSection()', ctx));
@@ -314,7 +401,7 @@ test('runtime panel shows observed child lifecycle without treating unmatched ev
 
 test('thinking experiment is mounted with filtered real observations and no original reasoning payload', () => {
   let i = 0; const row = { generation:1, attemptId:'a', model:'fixture', reasoningChunks:2, reasoningChars:10, firstReasoningMs:5 };
-  const ctx=vm.createContext({ useState:v=>[i++===0?{items:[row]}:v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children}) });
+  const ctx=vm.createContext({ useState:v=>[i++===0?readState({items:[row]}):v,()=>{}],useRef:()=>({}),useEffect(){},h:(type,props,...children)=>({type,props,children}) });
   const tree=vm.runInContext(runtimePanel()+'\nRuntimeObservationsSection()',ctx);
   const experiment=tree.children.find(n=>n?.type?.name==='ThinkingExperimentPanel');
   assert.ok(experiment); assert.equal(experiment.props.rows[0],row); assert.equal(experiment.props.snapshotAvailable,true);
