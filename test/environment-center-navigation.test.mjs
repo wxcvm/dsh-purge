@@ -9,7 +9,9 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     for (const id of ['summary', 'execution', 'tools', 'local-search', 'network', 'diagnostics']) {
       assert.ok(env.includes("['" + id + "',"))
     }
-    assert.match(env, /section === 'local-search' \? h\(LocalAssetSearchTab, \{ engagement: props.engagement, refreshKey \}\)/)
+    assert.match(env, /section === 'local-search' \? h\(React\.Fragment, null,/) 
+    assert.match(env, /h\(LocalAssetSearchTab, \{ engagement: props.engagement, refreshKey \}\)/)
+    assert.match(env, /顶部“保存环境配置”不保存测绘操作勾选/)
     assert.match(src, /initialSection: st\.tab === 'local-search' \? 'local-search' : 'summary'/)
     assert.doesNotMatch(src, /label: '资源', pages: [^\n]*local-search/)
     assert.match(src, /op: 'intelSourcesSave'/)

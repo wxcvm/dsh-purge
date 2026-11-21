@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { INTEL_SOURCES, normalizeIntelSources } from '../lib/redteam/intel-sources.js'
-import { loadPlatformConfig, savePlatformConfig, platformSummary } from '../lib/redteam/platform-config.js'
+import { loadPlatformConfig, savePlatformConfig, platformSummary,
+  DEFAULT_INTEL_SURVEY_PREFERENCES, normalizeIntelSurveyPreferences } from '../lib/redteam/platform-config.js'
 import { dispatch } from '../lib/redteam/store-core.js'
 
 test('internet asset search sources have distinct official browser entries and honest execution states', () => {
@@ -88,4 +89,80 @@ test('dedicated preference save does not overwrite an unreadable configuration',
   writeFileSync(file, '{ broken')
   assert.equal(dispatch({ root }, { op: 'intelSourcesSave', selection: { selected: ['local'], preferred: 'local' } }).ok, false)
   assert.equal(readFileSync(file, 'utf8'), '{ broken')
+})
+
+test('survey preferences persist in existing config and never include external consent', t => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-survey-preferences-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  savePlatformConfig({ env: { FOFA_KEY: 'fixture-secret' }, tools: { nmap: '/fixture/nmap' } }, root)
+  assert.deepEqual(dispatch({ root }, { op: 'intelSurveyPreferencesGet' }).preferences,
+    DEFAULT_INTEL_SURVEY_PREFERENCES)
+  let response = dispatch({ root }, { op: 'intelSurveyPreferencesSave', preferences: {
+    useSubfinder: true, saveCt: true, saveDns: true,
+  } })
+  assert.equal(response.ok, true)
+  assert.deepEqual(response.preferences, {
+    ...DEFAULT_INTEL_SURVEY_PREFERENCES, useSubfinder: true, saveCt: true, saveDns: true,
+  })
+  response = dispatch({ root }, { op: 'intelSurveyPreferencesSave', preferences: {
+    includeShodan: true, saveCt: false,
+  } })
+  assert.equal(response.ok, true)
+  assert.equal(response.preferences.useSubfinder, true, 'partial updates preserve unrelated preferences')
+  assert.equal(response.preferences.saveCt, false)
+  assert.equal(response.preferences.includeShodan, true)
+  assert.deepEqual(dispatch({ root }, { op: 'intelSourcesGet' }).surveyPreferences, response.preferences)
+  assert.deepEqual(loadPlatformConfig(root).intelSurveyPreferences, response.preferences)
+  assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'fixture-secret')
+  assert.equal(loadPlatformConfig(root).tools.nmap, '/fixture/nmap')
+  assert.equal(readFileSync(join(root, 'config.json'), 'utf8').includes('confirmExternal'), false)
+  const refetch = dispatch({ root }, { op: 'platformConfigGet' })
+  assert.deepEqual(refetch.config.intelSurveyPreferences, response.preferences)
+  // A completely independent platform config save does not erase survey preferences.
+  savePlatformConfig({ toolkitDir: '/new/toolbox' }, root)
+  assert.deepEqual(loadPlatformConfig(root).intelSurveyPreferences, response.preferences)
+})
+
+test('external permission and arbitrary checkbox fields cannot be persisted as survey preferences', t => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-survey-consent-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const store = { root }
+  const illegal = [
+    { confirmExternal: true }, { consent: true }, { confirm: true },
+    { saveCt: 'true' }, { saveCt: 1 }, { useSubfinder: null }, {},
+    null, [], 'anything',
+  ]
+  for (const preferences of illegal) {
+    const result = dispatch(store, { op: 'intelSurveyPreferencesSave', preferences })
+    assert.equal(result.ok, false)
+  }
+  assert.deepEqual(dispatch(store, { op: 'intelSurveyPreferencesGet' }).preferences,
+    DEFAULT_INTEL_SURVEY_PREFERENCES)
+  assert.deepEqual(normalizeIntelSurveyPreferences({ saveCt: true, confirmExternal: true }),
+    { ...DEFAULT_INTEL_SURVEY_PREFERENCES, saveCt: true })
+})
+
+test('survey UI persists defaults but never stores per-operation external confirmations', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    const survey = src.slice(src.indexOf('function LocalAssetSearchTab(props)'), src.indexOf('function EnvTab(props)'))
+    assert.match(survey, /op: 'intelSurveyPreferencesSave'/)
+    assert.match(survey, /surveyPreferencesReady/)
+    assert.match(survey, /测绘偏好已保存/)
+    assert.match(survey, /surveyPreferences\.useSubfinder/)
+    assert.match(survey, /surveyPreferences\.includeShodan/)
+    assert.match(survey, /surveyPreferences\.saveCt/)
+    assert.match(survey, /surveyPreferences\.saveDns/)
+    assert.match(survey, /surveyPreferences\.saveIntel/)
+    assert.match(survey, /confirmExternal: subConsent/)
+    assert.match(survey, /confirmExternal: ctConsent/)
+    assert.match(survey, /confirmExternal: dnsConsent/)
+    assert.match(survey, /setSubConsent\(false\).*Consu(med|me)/)
+    assert.match(survey, /setCtConsent\(false\)/)
+    assert.match(survey, /setDnsConsent\(false\)/)
+    assert.match(survey, /setIntelConsent\(false\)/)
+    assert.match(survey, /setSurveyConfirm\(false\)/)
+    assert.doesNotMatch(survey, /preferences: \{[^}]*Consent/)
+    assert.match(src, /保存环境配置/)
+  }
 })
