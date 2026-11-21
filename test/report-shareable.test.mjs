@@ -33,6 +33,7 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
       '{"Set-Cookie": "session=synthetic-set-cookie; Path=/"}',
       'password=synthetic-password',
       'api_key: synthetic-api-key',
+      '{"private_key":"synthetic-private-key","sshPrivateKey":"synthetic-ssh-private-key","passphrase":"synthetic-passphrase","signing_key":"synthetic-signing-key","encryptionKey":"synthetic-encryption-key"}',
       'password: "synthetic secret with spaces"',
       'GET https://operator:in-url-password@example.net/private',
       'prose: Bearer standalone-secret',
@@ -52,7 +53,8 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   const safe = writeReportBundle({ root, engagement, outDir: output, report, shareable: true })
   const markdown = fs.readFileSync(safe.reportFile, 'utf8')
   for (const secret of ['synthetic-credential', 'synthetic-cookie', 'synthetic-password',
-    'synthetic-api-key', 'synthetic-basic', 'synthetic-json-cookie', 'synthetic-proxy', 'synthetic-set-cookie', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
+    'synthetic-api-key', 'synthetic-private-key', 'synthetic-ssh-private-key', 'synthetic-passphrase',
+    'synthetic-signing-key', 'synthetic-encryption-key', 'synthetic-basic', 'synthetic-json-cookie', 'synthetic-proxy', 'synthetic-set-cookie', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
     'synthetic secret with spaces', 'in-url-password', 'standalone-secret', 'operator:']) {
     assert.ok(!markdown.includes(secret), 'shareable markdown must not contain ' + secret)
   }
