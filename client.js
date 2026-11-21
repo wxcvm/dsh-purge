@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "0e74807d6bdf30f4";
+		const CLIENT_BUILD_ID = "aff40b52afc2a723";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -70,7 +70,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 				try { data = text ? JSON.parse(text) : null; } catch {
 					throw new Error(r.status + " non-json: " + text.slice(0, 120));
 				}
-				if (!r.ok) throw new Error((data && (data.error || data.message)) || (r.status + " " + r.statusText));
+				if (!r.ok) throw Object.assign(new Error((data && (data.error || data.message)) ||
+					(r.status + " " + r.statusText)), { code: data?.code });
 				return data;
 			} catch (e) {
 				if (isAbortError(e)) throw new Error("timeout");
@@ -4768,7 +4769,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const fields = [["models", "模型 ID"], ["providers", "厂商 / Provider ID"],
 				["sessions", "对话 Session ID"], ["presets", "Agent 预设"]];
 			const prepare = (p) => {
-				const copy = { ...p, keywordsText: (p.keywords || []).join("\n"), excludesText: (p.excludes || []).join("\n"),
+				const copy = { ...p, _baseRevision: p.revision, keywordsText: (p.keywords || []).join("\n"), excludesText: (p.excludes || []).join("\n"),
                     presetSwitches: { ...(p.presetSwitches || {}) }, injectOtherPresets: p.injectOtherPresets !== false };
 				for (const [field] of fields) {
 					copy["allow_" + field] = (p.allowTargets?.[field] || []).join("\n");
@@ -4796,6 +4797,23 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             };
             const globalDraft = profileDraft("global");
             const draft = profileDraft(active);
+            const compareSavedProfile = value => {
+                if (!value || !Object.hasOwn(drafts, value.id) || value._baseRevision === undefined) return null;
+                const saved = savedProfiles.get(value.id);
+                const revision = saved ? saved.revision : null;
+                if (revision === undefined || revision === value._baseRevision) return null;
+                return h("div", { className: "dshp-prompt-help", role: "status" },
+                    h("strong", null, saved ? "此规则有更新的已保存版本" : "此规则已从已保存设置中删除"),
+                    saved ? h("details", null, h("summary", null, "查看已保存正文"),
+                        h("textarea", { className: "dshp-area", rows: 4, readOnly: true,
+                            "aria-label": "已保存正文 " + value.id, value: saved.body || "" })) : null,
+                    h("p", null, "草稿没有丢。采用当前版本作为比对基线后，仍需手动保存才会写入。"),
+                    h("button", { type: "button", disabled: busy || reading,
+                        "aria-label": "采用已保存版本作为比对基线 " + value.id,
+                        onClick: () => setDrafts(current => Object.hasOwn(current, value.id) ? {
+                            ...current, [value.id]: { ...current[value.id], _baseRevision: revision }
+                        } : current) }, "保留草稿，采用当前比对基线"));
+            };
             const setDraft = value => setDrafts(current => ({ ...current, [value.id]: value }));
             const setGlobalDraft = setDraft;
             const clearDraft = useCallback((id, savedDraft) => setDrafts(current => {
@@ -4826,11 +4844,26 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 setLoadError("");
                 const confirmed = pendingReadback.current;
                 pendingReadback.current = null;
-                if (confirmed?.profile) clearDraft(confirmed.profile.id, confirmed.profile);
+                if (confirmed?.profile) {
+                    const submitted = confirmed.profile;
+                    const savedRevision = response.profiles.find(p => p.id === submitted.id)?.revision;
+                    setDrafts(current => {
+                        const draft = current[submitted.id];
+                        if (!draft) return current;
+                        if (draft !== submitted) {
+                            // Preserve typing that continued while this own save was in flight.
+                            if (!confirmed.authoritative || savedRevision === undefined || draft._baseRevision !== submitted._baseRevision) return current;
+                            return { ...current, [submitted.id]: { ...draft, _baseRevision: savedRevision } };
+                        }
+                        const next = { ...current };
+                        delete next[submitted.id];
+                        return next;
+                    });
+                }
                 if (confirmed && Object.hasOwn(confirmed, "routing")) {
                     setRoutingDraft(current => current === confirmed.routing ? null : current);
                 }
-            }, [clearDraft]);
+            }, []);
 			const reload = useCallback(async () => {
                 const revision = ++loadRevision.current;
                 setReading(true);
@@ -4873,13 +4906,22 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
                         if (op === "pause" || op === "resume") setSessionOverrides(response.sessionOverrides || {});
                     }
-                    if (op === "save" && savedDraft) pendingReadback.current = { profile: savedDraft };
+                    if (op === "save" && savedDraft) pendingReadback.current = {
+                        profile: savedDraft,
+                        authoritative: Array.isArray(response.profiles) && Boolean(response.routingSettings),
+                    };
                     const savedMessage = op === "delete" ? "规则已删除" : op === "pause" ? "当前会话已暂停这条规则"
                         : op === "resume" ? "已恢复按规则自动选择" : "已保存";
                     const readBack = await readAfterWrite(response);
                     if (op === "delete") clearDraft(payload.id);
                     setNotice(readBack ? savedMessage : savedMessage + "；读回失败，请用「重新读取」核对。");
-				} catch (error) { setNotice(explainError(error)); }
+				} catch (error) {
+                    if (error?.code === "prompt_profile_conflict") {
+                        const readBack = await reload();
+                        setNotice(readBack ? "规则已在别处更改：已读回保存版本，草稿仍保留；本次未覆盖。"
+                            : "规则已在别处更改；本次未覆盖，草稿仍保留。请点击「重新读取」。");
+                    } else setNotice(explainError(error));
+                }
 				finally { setBusy(false); }
 			};
             const saveRouting = async () => {
@@ -4907,14 +4949,14 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     allowTargets: targets("allow"), blockTargets: targets("block"),
                     presetSwitches: value.presetSwitches || {}, injectOtherPresets: value.injectOtherPresets !== false,
                     ...(value.id === "redteam" ? {} : { body: value.body || "" }),
-                } }, value);
+                }, expectedRevision: value._baseRevision }, value);
             };
             const save = () => saveProfile(draft);
 			const create = () => {
 				const id = newId.trim() || "rule-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 				if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) { setNotice("规则 ID 只能使用小写英文字母开头，以及字母、数字、下划线和连字符"); return; }
 				if (savedProfiles.has(id) || Object.hasOwn(drafts, id)) { setNotice("同名规则已存在，请换个 ID"); return; }
-				setDraft(prepare({ id, name: "新提示词规则", scope: "local", enabled: true, priority: 30,
+				setDraft(prepare({ id, name: "新提示词规则", scope: "local", enabled: true, priority: 30, revision: null,
 					body: "", keywords: [], excludes: [], allowEnabled: false, blockEnabled: false,
 					presetSwitches: { standard: true, ptc: true, minimal: true, cordis: true },
                     injectOtherPresets: true, allowTargets: {}, blockTargets: {} }));
@@ -5125,6 +5167,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     checked: globalDraft.enabled === true,
                                     onChange: e => setGlobalDraft({ ...globalDraft, enabled: e.target.checked }) }),
                                 "启用全局注入"),
+                            compareSavedProfile(globalDraft),
                             modelScope(globalDraft, setGlobalDraft),
                             presetSelectors(globalDraft, setGlobalDraft),
                             advanced(globalDraft, setGlobalDraft),
@@ -5187,6 +5230,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     checked: draft.enabled === true,
                                     onChange: e => setDraft({ ...draft, enabled: e.target.checked }) }),
                                 "启用此提示词规则"),
+                            compareSavedProfile(draft),
                             modelScope(draft, setDraft),
                             presetSelectors(draft, setDraft),
                             advanced(draft, setDraft),
@@ -5199,7 +5243,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                 !["coding", "writing"].includes(draft.id) && !currentIsNew
                                     ? h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
                                         onClick: () => { if (window.confirm("删除提示词规则「" + draft.name + "」？"))
-                                            void perform("delete", { id: draft.id }); } }, "删除规则") : null,
+                                            void perform("delete", { id: draft.id, expectedRevision: draft._baseRevision }); } }, "删除规则") : null,
                                 sessionId ? h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
                                     onClick: () => void perform(sessionOverrides[draft.id] === "off" ? "resume" : "pause",
                                         { sessionId, profileId: draft.id }) },

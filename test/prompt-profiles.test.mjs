@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deletePromptProfile, getSessionPromptLock, getSessionPromptOverrides, setSessionPromptPause, latestPromptTask, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { deletePromptProfile, getSessionPromptLock, getSessionPromptOverrides, setSessionPromptPause, latestPromptTask, listEditablePromptProfiles, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
 import { isLoopbackRequest } from "../lib/web.js";
 
 function withHome(fn) {
@@ -238,4 +238,28 @@ test("keyword-free local rule can use explicit preset switches without modifying
   assert.equal(routePrompt({ home, preset: "my-mode", text: "" }).id, null);
   savePromptProfile(home, { id: "custom_a", enabled: false });
   assert.equal(routePrompt({ home, preset: "ptc" }).id, null);
+}));
+
+test("ordinary profile save/delete do not overwrite a newer stored revision", () => withHome(home => {
+  const profile = id => listEditablePromptProfiles(home).find(row => row.id === id);
+  assert.equal(profile("redteam").revision, undefined);
+  const first = profile("coding").revision;
+  assert.match(first, /^[a-f0-9]{64}$/);
+  savePromptProfile(home, { id: "coding", body: "Window A saved" }, first);
+  const next = profile("coding");
+  assert.notEqual(next.revision, first);
+  assert.throws(() => savePromptProfile(home, { id: "coding", body: "Window B stale" }, first),
+    { code: "prompt_profile_conflict" });
+  assert.equal(profile("coding").body, "Window A saved");
+  assert.equal(profile("coding").revision, next.revision);
+  savePromptProfile(home, { id: "personal-note", body: "New draft" }, null);
+  const created = profile("personal-note");
+  assert.throws(() => savePromptProfile(home, { id: "personal-note", body: "Collision" }, null),
+    { code: "prompt_profile_conflict" });
+  savePromptProfile(home, { id: "personal-note", body: "Updated" }, created.revision);
+  assert.throws(() => deletePromptProfile(home, "personal-note", created.revision),
+    { code: "prompt_profile_conflict" });
+  assert.equal(profile("personal-note").body, "Updated");
+  deletePromptProfile(home, "personal-note", profile("personal-note").revision);
+  assert.equal(profile("personal-note"), undefined);
 }));
