@@ -126,6 +126,28 @@ test("recovered update keeps disk, renderer, backend and profile outcomes separa
   assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
 });
 
+test("update verification names absent local files without calling unknown ones missing", () => {
+  const start = client.indexOf("function UpdateVerification(");
+  const end = client.indexOf("function RepairCenter(", start);
+  assert.ok(start >= 0 && end > start);
+  const h = (type, props, ...children) => ({ type, props, children: children.flat() });
+  const sha = "a".repeat(40);
+  const target = { sha, status: "mismatch", files: [
+    { file: "client.js", status: "mismatch", reason: "local_missing" },
+    { file: "lib/index.js", status: "unknown" },
+  ] };
+  let pos = 0;
+  const useState = init => [pos++ === 2 ? target : init, () => {}];
+  const render = new Function("h", "useState", "Btn", "CLIENT_BUILD_ID",
+    client.slice(start, end) + "\nreturn UpdateVerification;")(h, useState, "button", "build");
+  const tree = render({ state: { update_receipt: {
+    targetSha: sha, phase: "awaiting_restart", diskMatch: false, disk: { missingFiles: ["client.js"] },
+  } } });
+  assert.match(words(tree), /本地缺失：client\.js/);
+  assert.match(words(tree), /client\.js · 本地缺失/);
+  assert.match(words(tree), /lib\/index\.js · 未知/);
+});
+
 test("restart dispatch distinguishes rejection, acknowledgement, and late failure", () => {
   const source = readFileSync(new URL("../lib/update.js", import.meta.url), "utf8");
   const start = source.indexOf("export function dispatchUpdateRestart(");
