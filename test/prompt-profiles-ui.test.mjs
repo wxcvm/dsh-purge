@@ -87,6 +87,40 @@ function mount({ querySession, readSettings, requestPreview, fullWriteResponse =
   return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings, observed };
 }
 
+test("saved and draft blacklists are visible and searchable without changing route settings", async () => {
+  const ui = mount();
+  Object.assign(ui.profiles.find(p => p.id === "coding"), {
+    allowEnabled: false, blockEnabled: true,
+    blockTargets: { models: ["blocked-model"], providers: ["blocked-provider"],
+      sessions: ["blocked-session"], presets: ["redteam"] },
+  });
+  Object.assign(ui.profiles.find(p => p.id === "writing"), {
+    allowEnabled: true, allowTargets: { models: ["allowed-writer"] },
+    blockEnabled: true, blockTargets: { models: ["forbidden-writer"] },
+  });
+  await ui.initialize();
+  const local = () => ui.nodes(ui.render()).find(n => n.props.className === "dshp-prompt-local");
+  const search = value => ui.find(ui.render(), "input", "查找局部提示词规则")
+    .props.onChange({ target: { value } });
+  let display = JSON.stringify(local());
+  assert.match(display, /白名单关闭 · 黑名单排除：模型：blocked-model · Provider：blocked-provider · 会话：blocked-session · Agent 预设：redteam/);
+  assert.match(display, /模型：allowed-writer · 黑名单排除：模型：forbidden-writer/);
+  search("BLOCKED-PROVIDER");
+  assert.ok(ui.find(local(), "button", "编辑规则 coding"));
+  assert.equal(ui.find(local(), "button", "编辑规则 writing"), undefined);
+  search("FORBIDDEN-WRITER");
+  assert.ok(ui.find(local(), "button", "编辑规则 writing"));
+  assert.equal(ui.find(local(), "button", "编辑规则 coding"), undefined);
+  search("");
+  ui.find(local(), "textarea", "黑名单模型 ID").props.onChange({ target: { value: "new-blocked-draft" } });
+  display = JSON.stringify(local());
+  assert.match(display, /已保存范围：","白名单关闭 · 黑名单排除：模型：blocked-model/);
+  assert.match(display, /未保存的范围：","白名单关闭 · 黑名单排除：模型：new-blocked-draft/);
+  search("NEW-BLOCKED-DRAFT");
+  assert.ok(ui.find(local(), "button", "编辑规则 coding"));
+  assert.equal(ui.actions.length, 0, "search and editing draft do not save or route");
+});
+
 const nextTask = () => new Promise(resolve => setImmediate(resolve));
 
 test("local rule list separates saved and draft model scopes; searching does not change the editor", async () => {
