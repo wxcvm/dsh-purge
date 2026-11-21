@@ -157,6 +157,11 @@ test('survey UI persists defaults but never stores per-operation external confir
     assert.match(survey, /confirmExternal: subConsent/)
     assert.match(survey, /confirmExternal: ctConsent/)
     assert.match(survey, /confirmExternal: dnsConsent/)
+    assert.match(survey, /setSubConsent\(false\).*Consu(med|me)/)
+    assert.match(survey, /setCtConsent\(false\)/)
+    assert.match(survey, /setDnsConsent\(false\)/)
+    assert.match(survey, /setIntelConsent\(false\)/)
+    assert.match(survey, /setSurveyConfirm\(false\)/)
     assert.doesNotMatch(survey, /preferences: \{[^}]*Consent/)
     assert.match(src, /保存环境配置/)
   }
