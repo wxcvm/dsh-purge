@@ -367,11 +367,42 @@ test("advanced rule fields use compact responsive columns instead of full-height
   assert.match(client, /\.dshp-prompt-lists\{display:grid/);
 });
 
+function mountRecentTargetPicker() {
+  let choice = "";
+  const context = vm.createContext({
+    useState: () => [choice, next => { choice = next; }],
+    h: (type, props, ...children) => ({ type, props: props || {}, children }),
+  });
+  vm.runInContext(source, context);
+  return props => context.PromptObservedTargetSelect(props);
+}
+
+function recentTargetProps(ui, tree, label) {
+  const picker = ui.nodes(tree).find(n => n.type?.name === "PromptObservedTargetSelect" && n.props.label === label);
+  assert.ok(picker, "a recent select exists for " + label);
+  return picker.props;
+}
+
+function addRecentTarget(ui, tree, label, id, beforeAdd = () => {}) {
+  const props = recentTargetProps(ui, tree, label);
+  const renderPicker = mountRecentTargetPicker();
+  let picker = renderPicker(props);
+  assert.equal(ui.find(picker, "button", "添加到" + label).props.disabled, true);
+  const select = ui.find(picker, "select", "从最近记录选择" + label);
+  assert.ok(ui.nodes(select).some(n => n.type === "option" && n.props.value === id));
+  select.props.onChange({ target: { value: id } });
+  beforeAdd();
+  picker = renderPicker(props);
+  assert.equal(ui.find(picker, "select", "从最近记录选择" + label).props.value, id);
+  ui.find(picker, "button", "添加到" + label).props.onClick();
+  assert.equal(ui.find(renderPicker(props), "select", "从最近记录选择" + label).props.value, "");
+}
+
 test("model scope and advanced targets offer observed local choices while retaining manual editing", async () => {
   const ui = mount();
   let tree = await ui.initialize();
-  assert.ok(ui.find(tree, "button", "添加白名单模型 ID deepseek-flash"));
-  assert.ok(ui.find(tree, "button", "添加白名单厂商 / Provider ID deepseek-account"));
+  assert.ok(recentTargetProps(ui, tree, "白名单模型 ID"));
+  assert.ok(recentTargetProps(ui, tree, "白名单厂商 / Provider ID"));
   assert.ok(ui.find(tree, "button", "添加白名单对话 Session ID current-host-session"));
   assert.ok(ui.find(tree, "button", "添加白名单Agent 预设 cordis"));
   assert.ok(ui.find(tree, "textarea", "白名单模型 ID"), "manual entry remains available");
@@ -379,10 +410,12 @@ test("model scope and advanced targets offer observed local choices while retain
     typeof s === "string" && s.includes("最近记录的模型 / Provider：") && s.includes("不代表当前会话"))),
     "recent model evidence is visible and not called the current session");
 
-  ui.find(tree, "button", "添加白名单模型 ID deepseek-flash").props.onClick();
+  addRecentTarget(ui, tree, "白名单模型 ID", "deepseek-flash", () => {
+    assert.equal(ui.find(ui.render(), "textarea", "白名单模型 ID").props.value, "");
+  });
   tree = ui.render();
   assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "deepseek-flash");
-  ui.find(tree, "button", "添加白名单厂商 / Provider ID deepseek-account").props.onClick();
+  addRecentTarget(ui, tree, "白名单厂商 / Provider ID", "deepseek-account");
   tree = ui.render();
   ui.find(tree, "button", "添加白名单对话 Session ID current-host-session").props.onClick();
   tree = ui.render();
@@ -395,6 +428,7 @@ test("model scope and advanced targets offer observed local choices while retain
   assert.deepEqual(Array.from(saved.data.profile.allowTargets.providers), ["deepseek-account"]);
   assert.deepEqual(Array.from(saved.data.profile.allowTargets.sessions), ["current-host-session"]);
   assert.deepEqual(Array.from(saved.data.profile.allowTargets.presets), ["cordis"]);
+  assert.equal(saved.data.profile.allowEnabled, false);
 });
 
 test("model selector supports removing picks without deleting manually entered wildcard targets", async () => {
@@ -402,7 +436,7 @@ test("model selector supports removing picks without deleting manually entered w
   let tree = await ui.initialize();
   ui.find(tree, "textarea", "白名单模型 ID").props.onChange({ target: { value: "*gpt*" } });
   tree = ui.render();
-  ui.find(tree, "button", "添加白名单模型 ID deepseek-flash").props.onClick();
+  addRecentTarget(ui, tree, "白名单模型 ID", "deepseek-flash");
   tree = ui.render();
   assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*\ndeepseek-flash");
   ui.find(tree, "button", "移除模型 ID deepseek-flash").props.onClick();
@@ -410,3 +444,20 @@ test("model selector supports removing picks without deleting manually entered w
   assert.equal(ui.find(tree, "textarea", "白名单模型 ID").props.value, "*gpt*");
 });
 
+test("recent picker distinguishes no observations, every ID added, and a stale selection", async () => {
+  const ui = mount();
+  const tree = await ui.initialize();
+  const props = recentTargetProps(ui, tree, "白名单模型 ID");
+  const renderPicker = mountRecentTargetPicker();
+  assert.match(renderPicker({ ...props, options: [] }).children[0], /暂无本机观测/);
+  assert.match(renderPicker({ ...props, selected: ["deepseek-flash"] }).children[0], /均已加入/);
+  const options = [...props.options, { id: "other-model", label: "另一模型" }];
+  let picker = renderPicker({ ...props, options });
+  ui.find(picker, "select", "从最近记录选择白名单模型 ID").props.onChange({ target: { value: "deepseek-flash" } });
+  picker = renderPicker({ ...props, options, selected: ["deepseek-flash"] });
+  assert.equal(ui.find(picker, "select", "从最近记录选择白名单模型 ID").props.value, "");
+  const add = ui.find(picker, "button", "添加到白名单模型 ID");
+  assert.equal(add.props.disabled, true);
+  add.props.onClick();
+  assert.equal(ui.find(ui.render(), "textarea", "白名单模型 ID").props.value, "");
+});

@@ -4962,7 +4962,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 return h("div", { key: field, className: "dshp-prompt-target", role: "group", "aria-label": listLabel + title },
                     h("strong", null, title),
                     h("div", { className: "dshp-prompt-target-picker" },
-                        h("div", { className: "dshp-prompt-target-options" },
+                        modelField(field) ? h(PromptObservedTargetSelect, {
+                            key: value.id + ":" + prefix + ":" + field, label: listLabel + title, options, selected,
+                            onAdd: id => addTargetValue(value, setValue, field, prefix, id),
+                        }) : h("div", { className: "dshp-prompt-target-options" },
                             options.length ? options.map(option => h("button", {
                                 type: "button", key: option.id, title: option.id,
                                 "aria-label": "添加" + listLabel + title + " " + option.id,
@@ -5205,6 +5208,28 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             : null)));
 
 		}
+
+        function PromptObservedTargetSelect({ label, options, selected, onAdd }) {
+            const [choice, setChoice] = useState("");
+            if (!options.length) return h("p", { className: "dshp-prompt-field-note" }, "暂无本机观测 ID，可直接输入。");
+            const selectable = options.filter(option => !selected.includes(option.id));
+            if (!selectable.length) return h("p", { className: "dshp-prompt-field-note" }, "最近记录的 ID 均已加入本名单。");
+            const value = selectable.some(option => option.id === choice) ? choice : "";
+            return h("div", { style: { display: "grid", gap: 6, minWidth: 0 } },
+                h("span", { className: "dshp-prompt-field-note" }, "最近记录（不代表当前会话）"),
+                h("div", { style: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 6 } },
+                    h("select", {
+                        className: "dshp-field", style: { minWidth: 0, width: "100%", textOverflow: "ellipsis" },
+                        "aria-label": "从最近记录选择" + label, value,
+                        onChange: event => setChoice(event.target.value),
+                    }, h("option", { value: "" }, "选择 ID…"),
+                        selectable.map(option => h("option", { key: option.id, value: option.id }, option.label))),
+                    h("button", { type: "button", "aria-label": "添加到" + label, disabled: !value, onClick: () => {
+                        if (!value) return;
+                        onAdd(value);
+                        setChoice("");
+                    } }, "添加")));
+        }
 
 		function PromptAssemblyEvidence({ report, unavailable }) {
 			const labels = {
