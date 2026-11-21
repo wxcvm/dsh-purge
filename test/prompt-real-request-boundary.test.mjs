@@ -62,6 +62,13 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
       contextKeys: Object.keys(context || {}),
       agentKeys: Object.keys(context?.agent || {}),
       lastEventTypes: hostEvents.slice(-5).map(event => event.type),
+      recentSpliced: hostEvents.filter(event => event.type === "agent/inbox/spliced")
+        .slice(-1).map(event => ({
+          dataKeys: Object.keys(event.data || {}),
+          dataExcerpt: JSON.stringify(event.data || {}).slice(0, 900),
+        })),
+      inboxKeys: Object.keys(context?.agent?.inbox || {}),
+      inboxExcerpt: JSON.stringify(context?.agent?.inbox || {}).slice(0, 350),
     });
     return rewriteLiveAssembly(config, await next(), context);
   });
