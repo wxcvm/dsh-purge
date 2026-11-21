@@ -190,3 +190,9 @@ gh issue view 351 -R wxcvm/dsh-purge
 - 可复跑：`node test/fixtures/clean-workspace-chromium.mjs "<Chromium 或 Chrome 可执行文件>"`。夹具读取真实 `client.js` 样式，以本地固定 DOM 运行，不执行宿主、插件脚本或接口。它所验证的是几何、计算样式和交互可达性，**不是** Windows Electron 的 GPU 绘制或原始空白复发验收。仍需隔离 Desktop 复验 DPI/最大化/全屏和页面切换。
 - [#336](https://github.com/wxcvm/dsh-purge/issues/336)：在新建 DSH_HOME 用本机 rc.5 桌面包自带 CLI，确认 Web profile 与插件管理入口可解析。没有启动第二个 Electron 桌面、挂载 Purge 到生产配置或发模型请求。这不是 Purge 在 Web/Desktop 中完整安装和恢复的证明。
 - [#346](https://github.com/wxcvm/dsh-purge/issues/346)：Windows 本机 ARTEX v0.6.0 的监听地址为 `127.0.0.1`；复用 Purge 的实际只读身份探针得到 HTTP 200、状态 `detected`。无独立凭据访问隐私总览返回 401。未发送凭据、未改两端数据；实际配对、权限内的回执、断线及冲突恢复继续单独验收。
+
+### ARTEX 人工回执的冲突处理
+
+新版页面保存人工备注时，会同时带上读到的本地回执修订号。响应丢失后重试同一内容不会再写一遍；另一窗口已改过时，页面显示已保存状态和备注，可用它作为新的比对基线，自己的草稿不会丢。已有明确证据版本的回执不会被旧版或缺少版本的报告覆盖。旧数据库自动补修订号，现有回执不迁走，导出的回执格式也不变。
+
+这只保护 Purge 现有的人工回执，不是双向同步。ARTEX 现行 SARIF 给出来源发现、任务 ID 与证据版本，不包含独立公司或数据库身份；不能从相同数字 ID 推断两份报告属于同一来源。跨端配对和身份验收仍以 [#346](https://github.com/wxcvm/dsh-purge/issues/346) 为准。
