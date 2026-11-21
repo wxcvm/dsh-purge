@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "a39ab2b6a892c2c5";
+		const CLIENT_BUILD_ID = "6fec4ed9fd867cf3";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -13580,6 +13580,192 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     }
 
     /**
+     * 持久任务独立于待阅回报与官方 Team 任务；所有变更都需要人工操作。
+     * Registry 是当次只读快照，不从“未找到”推断子任务已经中断。
+     */
+    function WorkItemsPanel(props) {
+      const eng = props.engagement
+      const masked = props.maskReportOrigin === true
+      const [listing, setListing] = React.useState(null)
+      const [detail, setDetail] = React.useState(null)
+      const [filter, setFilter] = React.useState('')
+      const [offset, setOffset] = React.useState(0)
+      const [busy, setBusy] = React.useState('')
+      const [notice, setNotice] = React.useState(null)
+      const [key, setKey] = React.useState('')
+      const [role, setRole] = React.useState('review')
+      const [objective, setObjective] = React.useState('')
+      const [session, setSession] = React.useState('')
+      const [run, setRun] = React.useState('')
+      const [outcome, setOutcome] = React.useState('ready')
+      const [summary, setSummary] = React.useState('')
+      const [hostChecked, setHostChecked] = React.useState(false)
+      const [reason, setReason] = React.useState('')
+      const active = React.useRef(null)
+      const lock = React.useRef(false)
+
+      const refresh = async (scope = active.current, page = offset) => {
+        if (!eng || !scope?.live) return
+        try {
+          const result = await api({ op: 'workItemReview', engagement: eng, limit: 30,
+            offset: page, ...(filter ? { status: filter } : {}) })
+          if (active.current !== scope || !scope.live) return
+          if (!result || result.ok !== true || result.engagement !== eng) throw Error(result?.error || '任务台账读取失败')
+          setListing(result)
+          setOffset(page)
+        } catch (error) {
+          if (active.current === scope && scope.live) setNotice({ error: true, text: error?.message || String(error) })
+        }
+      }
+      const open = async (id, scope = active.current) => {
+        if (!eng || !scope?.live) return
+        setDetail(null)
+        setHostChecked(false)
+        setSummary('')
+        setReason('')
+        try {
+          const result = await api({ op: 'workItemGet', engagement: eng, task_id: id })
+          if (active.current !== scope || !scope.live) return
+          if (!result || result.ok !== true || result.engagement !== eng) throw Error(result?.error || '读取任务详情失败')
+          setDetail(result.item)
+        } catch (error) {
+          if (active.current === scope && scope.live) setNotice({ error: true, text: error?.message || String(error) })
+        }
+      }
+      const mutate = async (request, label, selectedId) => {
+        const scope = active.current
+        if (!eng || masked || !scope?.live || lock.current) return
+        lock.current = true
+        setBusy(label)
+        setNotice(null)
+        try {
+          const result = await api({ ...request, engagement: eng })
+          if (active.current !== scope || !scope.live) return
+          if (!result || result.ok !== true) throw Error(result?.error || '任务操作失败')
+          if (result.recorded === false || result.assigned === false || result.closed === false) {
+            setNotice({ error: true, text: '操作未更新：' + (result.reason || '状态已变化') + '，请刷新后核对。' })
+          } else {
+            setNotice({ text: label + '已记录；请核对列表和真实宿主执行状态。' })
+          }
+          await refresh(scope, offset)
+          if (selectedId || result.item?.id) await open(selectedId || result.item.id, scope)
+        } catch (error) {
+          if (active.current === scope && scope.live) setNotice({ error: true, text: error?.message || String(error) })
+        } finally {
+          lock.current = false
+          if (active.current === scope && scope.live) setBusy('')
+        }
+      }
+      React.useEffect(() => {
+        if (!eng) return undefined
+        const scope = { live: true }
+        active.current = scope
+        setListing(null)
+        setDetail(null)
+        setNotice(null)
+        void refresh(scope, 0)
+        return () => {
+          scope.live = false
+          if (active.current === scope) active.current = null
+        }
+      }, [eng, filter, props.refreshKey])
+
+      const visible = listing?.engagement === eng ? listing : null
+      const statusLabels = { queued: '待关联执行', running: '已登记执行·待核对', waiting: '等待资源',
+        ready: '可人工验收', blocked: '阻塞', failed: '失败待处理', interrupted: '已记中断',
+        done: '人工验收完成', dropped: '已人工放弃' }
+      const registryLabels = {
+        'exact-run-end-observed': '已收到本次 run 的宿主结束事件，仍需结算',
+        'session-active-observed': '宿主当前观测到同 ID 会话在运行；未证实是本次 run',
+        'not-in-active-snapshot': '当前完整快照未列出该会话；不能据此认定结束',
+        unknown: '宿主注册表不可完整读取，运行状态未知',
+      }
+      const current = detail?.id && visible?.items?.find(item => item.id === detail.id)
+      const record = detail && current ? { ...detail, registry_activity: current.registry_activity } : detail
+      const assignment = record?.assignment
+      const canReassign = record && ['queued', 'waiting', 'blocked', 'failed', 'interrupted'].includes(record.status)
+      const canSettle = record?.status === 'running' && assignment
+      const settleAllowed = Boolean(canSettle && summary.trim() && (assignment.host_end_at || hostChecked))
+      const select = (id) => { if (!masked) void open(id) }
+
+      return h('section', { className: 'rt-card', 'aria-label': '持久任务台账' },
+        h('h4', null, 'SuperAgent · 持久任务' + (visible ? ' · ' + visible.total : '')),
+        h('p', { className: 'rt-note' }, '任务登记与真实派发是两件事。这里记录人工绑定、执行历史和待确认事项；不会自动启动子智能体或重试。'),
+        !eng ? h('p', { className: 'rt-note' }, '选择靶标后查看独立任务台账。') : null,
+        eng ? h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } },
+          h('select', { className: 'rt-input', 'aria-label': '筛选任务状态', value: filter,
+            onChange: e => { setFilter(e.target.value); setOffset(0); setListing(null); setDetail(null) } },
+          [['', '全部状态'], ...Object.entries(statusLabels)].map(([value, label]) =>
+            h('option', { key: value, value }, label))),
+          h('button', { className: 'rt-btn', type: 'button', onClick: () => refresh(), 'aria-label': '刷新持久任务' }, '刷新任务')) : null,
+        notice && !masked ? h('p', { className: notice.error ? 'rt-err' : 'rt-note', role: notice.error ? 'alert' : 'status' }, notice.text) : null,
+        masked ? h('p', { className: 'rt-note' }, '隐私显示已开启，任务内容、来源会话和编辑操作暂时隐藏。') : null,
+        visible && visible.items.length === 0 ? h('p', { className: 'rt-note' }, '当前筛选范围没有登记的持久任务。') : null,
+        visible?.items.map(item => h('article', { key: item.id, className: 'rt-card', style: { marginTop: 8, overflowWrap: 'anywhere' } },
+          h('strong', null, '#' + item.id + ' · ' + (statusLabels[item.status] || '未知') + ' · 第 ' + item.attempt + ' 次'),
+          !masked ? h('div', null, item.task_key + ' · ' + item.role) : null,
+          !masked ? h('div', { className: 'rt-note' }, item.objective) : null,
+          item.status === 'running' ? h('div', { className: 'rt-note' },
+            registryLabels[item.registry_activity?.state] || '已登记执行，宿主情况待核对') : null,
+          !masked ? h('button', { className: 'rt-btn', type: 'button',
+            'aria-label': '查看持久任务 #' + item.id, onClick: () => select(item.id) }, '查看历史与操作') : null)),
+        visible?.hasMore || (visible && offset > 0) ? h('div', { style: { display: 'flex', gap: 8, marginTop: 8 } },
+          h('button', { className: 'rt-btn', disabled: offset === 0, onClick: () => refresh(active.current, Math.max(0, offset - 30)) }, '上一页'),
+          h('button', { className: 'rt-btn', disabled: !visible.hasMore, onClick: () => refresh(active.current, offset + 30) }, '下一页')) : null,
+        eng && !masked ? h('details', { style: { marginTop: 10 } },
+          h('summary', null, '登记新任务（仅入库，不启动）'),
+          h('div', { style: { display: 'grid', gap: 6, marginTop: 6 } },
+            h('input', { className: 'rt-input', placeholder: '稳定任务键', 'aria-label': '新任务键', value: key, onChange: e => setKey(e.target.value) }),
+            h('input', { className: 'rt-input', placeholder: '角色，例如 review', 'aria-label': '新任务角色', value: role, onChange: e => setRole(e.target.value) }),
+            h('textarea', { className: 'rt-input', placeholder: '任务目标（不写秘密）', 'aria-label': '新任务目标', value: objective, onChange: e => setObjective(e.target.value) }),
+            h('button', { className: 'rt-btn', disabled: Boolean(busy) || !key.trim() || !role.trim() || !objective.trim(),
+              onClick: () => mutate({ op: 'workItemCreate', task_key: key, role, objective }, '登记', null) }, '登记任务'))) : null,
+        record && !masked ? h('div', { className: 'rt-card', style: { marginTop: 10, overflowWrap: 'anywhere' } },
+          h('h4', null, '任务 #' + record.id + ' · ' + (statusLabels[record.status] || record.status)),
+          h('div', null, record.task_key + ' / ' + record.role + ' · ' + record.objective),
+          record.last_outcome ? h('p', { className: 'rt-note' }, '最近记录：' + record.last_outcome) : null,
+          assignment ? h('div', { className: 'rt-note' },
+            '最新绑定：' + assignment.session_id + ' / ' + assignment.run_id + ' · 第 ' + assignment.attempt + ' 次',
+            assignment.host_end_at ? ' · 宿主结束事件：' + assignment.host_stop_reason : ' · 尚无精确运行结束事件') : null,
+          record.status === 'running' ? h('p', { className: 'rt-note' },
+            registryLabels[record.registry_activity?.state] || '仅有持久登记，运行状态未核实') : null,
+          h('h4', null, '历史 · ' + (record.history?.length || 0) + ' 次（最近至多 100 条）'),
+          record.history?.length ? record.history.map(at => h('div', { key: at.id, className: 'rt-kv' },
+            h('b', null, '第 ' + at.attempt + ' 次 · ' + at.status),
+            h('span', null, at.session_id + ' / ' + at.run_id,
+              at.host_end_at ? ' · 宿主结束 ' + (at.host_stop_reason || '未知') : ' · 无精确结束事件',
+              at.summary ? h('div', null, at.summary) : null)))
+            : h('p', { className: 'rt-note' }, '尚未绑定任何运行。'),
+          canSettle ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
+            h('h4', null, '人工结算当前 run'),
+            h('select', { className: 'rt-input', 'aria-label': '结算结果', value: outcome, onChange: e => setOutcome(e.target.value) },
+              ['ready', 'waiting', 'blocked', 'failed', 'interrupted'].map(v => h('option', { key: v, value: v }, statusLabels[v]))),
+            h('textarea', { className: 'rt-input', 'aria-label': '结算依据', placeholder: '请写入实际核验结果（避免秘密）', value: summary, onChange: e => setSummary(e.target.value) }),
+            !assignment.host_end_at ? h('label', null,
+              h('input', { type: 'checkbox', checked: hostChecked, onChange: e => setHostChecked(e.target.checked) }),
+              ' 我已在宿主外部核对当前 run；理解仅凭任务记录/会话快照不能判断已结束') : null,
+            h('button', { className: 'rt-btn', disabled: Boolean(busy) || !settleAllowed,
+              onClick: () => mutate({ op: 'workItemReport', task_id: record.id,
+                session_id: assignment.session_id, run_id: assignment.run_id, status: outcome, summary }, '结算', record.id) }, '记录结算')) : null,
+          canReassign ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
+            h('h4', null, '关联已有执行 / 重试记录'),
+            h('p', { className: 'rt-note' }, '先在 Harness 中实际派发，再填写真实 session_id 和 run_id；本操作不会启动或重启智能体。'),
+            h('input', { className: 'rt-input', 'aria-label': '宿主会话 ID', placeholder: '已存在的 session_id', value: session, onChange: e => setSession(e.target.value) }),
+            h('input', { className: 'rt-input', 'aria-label': '宿主运行 ID', placeholder: '已存在的 run_id', value: run, onChange: e => setRun(e.target.value) }),
+            h('button', { className: 'rt-btn', disabled: Boolean(busy) || !session.trim() || !run.trim(),
+              onClick: () => mutate({ op: 'workItemAssign', task_id: record.id, session_id: session, run_id: run }, '绑定', record.id) }, '记录已有执行')) : null,
+          record.status === 'ready' || canReassign ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
+            h('h4', null, '人工收尾'),
+            h('input', { className: 'rt-input', 'aria-label': '收尾依据', placeholder: '写明人工复核结果', value: reason, onChange: e => setReason(e.target.value) }),
+            h('div', { style: { display: 'flex', gap: 8 } },
+              record.status === 'ready' ? h('button', { className: 'rt-btn rt-btn-primary', disabled: Boolean(busy) || !reason.trim(),
+                onClick: () => mutate({ op: 'workItemClose', task_id: record.id, outcome: 'done', reason }, '确认完成', record.id) }, '确认完成') : null,
+              h('button', { className: 'rt-btn', disabled: Boolean(busy) || !reason.trim(),
+                onClick: () => mutate({ op: 'workItemClose', task_id: record.id, outcome: 'dropped', reason }, '放弃', record.id) }, '放弃任务'))) : null,
+          h('button', { className: 'rt-btn', onClick: () => setDetail(null) }, '关闭详情')) : null)
+    }
+
+    /**
      * 智能体页签：并发名额（最多 3 个）+ 六个角色与它们的提示词。
      * 主会话派活前先看这里的名额，用户也能一眼看到"现在还能拉起几个智能体"。
      */
@@ -13653,6 +13839,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           concurrency && concurrency.ok === false ? h('div', { className: 'rt-err' }, concurrency.error || '智能体状态读取失败') : null,
           h(AgentReports, { key: 'agent-reports:' + (eng || ''), engagement: eng, onReceipt: props.onReportReceipt,
             onSectionReady: props.onReportSectionReady, onOpenReportSession: props.onOpenReportSession,
+            maskReportOrigin: props.maskReportOrigin }),
+          h(WorkItemsPanel, { key: 'agent-work:' + (eng || ''), engagement: eng, refreshKey,
             maskReportOrigin: props.maskReportOrigin }),
           h('div', { className: 'rt-card' },
             h('h4', null, '并发规则（硬约束）'),
