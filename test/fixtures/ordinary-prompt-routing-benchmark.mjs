@@ -1,9 +1,15 @@
-// Optional offline baseline for #350. No model, real profile or host is used.
+// Optional offline #350 comparison; neither path touches the real profile, host or network.
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { routePrompt, savePromptProfile } from "../../lib/prompt-profiles.js";
+import { buildOrdinaryTaskClassifier } from "./ordinary-task-classifier.mjs";
+
+if (process.argv.slice(2).some(arg => arg !== "--model") || process.argv.length > 3) {
+  throw new Error("Usage: node test/fixtures/ordinary-prompt-routing-benchmark.mjs [--model]");
+}
+const useModel = process.argv[2] === "--model";
 
 const cases = [
   ["C01", "coding", "请读这段代码，列出更易读的命名。"],
@@ -34,8 +40,11 @@ try {
     ["writing", ["改写", "摘要", "翻译", "校对"], "Keep the prose concise and readable."],
   ]) savePromptProfile(home, { id, enabled: true, scope: "local", priority: 30,
     keywords, excludes: [], allowEnabled: false, blockEnabled: false, body });
-  const evaluate = text => routePrompt({ home, preset: "standard", text,
-    bundledDefault: false, redteamTaskRoute: false }).selected.filter(id => id === "coding" || id === "writing").sort().join("+") || "none";
+  const trainingStart = performance.now();
+  const model = useModel ? buildOrdinaryTaskClassifier() : null;
+  const trainingMs = model ? +(performance.now() - trainingStart).toFixed(3) : null;
+  const evaluate = model ? model.predict : (text => routePrompt({ home, preset: "standard", text,
+    bundledDefault: false, redteamTaskRoute: false }).selected.filter(id => id === "coding" || id === "writing").sort().join("+") || "none");
   const results = cases.map(([id, expected, text]) => ({ id, expected, observed: evaluate(text) }));
   const measurements = [];
   const rssBefore = process.memoryUsage().rss;
@@ -47,7 +56,7 @@ try {
   const labelCounts = new Map();
   for (const [, expected] of cases) labelCounts.set(expected, (labelCounts.get(expected) || 0) + 1);
   console.log(JSON.stringify({
-    suite: "ordinary-prompt-routing-v1", cases: results.length,
+    suite: "ordinary-prompt-routing-v1", mode: useModel ? "character-ngram" : "rules", cases: results.length,
     exact: results.filter(row => row.expected === row.observed).length,
     constantLabelBest: Math.max(...labelCounts.values()),
     misses: results.filter(row => row.expected !== row.observed),
@@ -55,7 +64,11 @@ try {
       p95Ms: +quantile(measurements, .95).toFixed(3) },
     rssBeforeMiB: +(rssBefore / (1024 * 1024)).toFixed(1),
     rssAfterMiB: +(process.memoryUsage().rss / (1024 * 1024)).toFixed(1),
-    modelCompared: false, networkRequests: 0,
+    peakProcessRssMiB: +(process.resourceUsage().maxRSS / 1024).toFixed(1),
+    modelCompared: useModel,
+    training: model ? { examples: model.trainingCount, vocabulary: model.vocabularySize, ms: trainingMs } : null,
+    benignFalsePositive: results.filter(row => row.expected === "none" && row.observed !== "none").length,
+    networkRequests: 0,
   }, null, 2));
 } finally {
   if (path.dirname(realpathSync(home)) !== parent) throw Error("Unexpected test home");
