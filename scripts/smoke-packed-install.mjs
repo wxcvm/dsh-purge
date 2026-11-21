@@ -67,11 +67,21 @@ try {
     name: 'dsh-purge-disposable-install-smoke',
     version: '0.0.0', private: true, type: 'module',
   }, null, 2) + '\n');
+  // redteam/tools is a host-scoped plugin: its defineTool comes from the
+  // official DSH host, not from Purge's own npm dependencies. A bare plugin
+  // folder correctly refuses to import that entrypoint without a host.
+  // Supply a reviewed host API fixture in the disposable installation only.
+  const hostToolsVersion = process.env.PURGE_PACK_SMOKE_TOOLS_VERSION || '0.2.2-rc.5';
+  assert.match(hostToolsVersion, /^\\d+\\.\\d+\\.\\d+-rc\\.\\d+$/,
+    'the host API fixture version must be explicitly pinned');
   command(npm, [
-    'install', '--prefix', home, archive,
+    'install', '--prefix', home, archive, '@deepseek-ai/dsh-tools@' + hostToolsVersion,
     '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund',
     '--no-save', '--package-lock=false', '--omit=optional', '--prefer-offline',
   ], temp);
+  const toolsManifest = JSON.parse(readFileSync(path.join(
+    home, 'node_modules', '@deepseek-ai', 'dsh-tools', 'package.json'), 'utf8'));
+  assert.equal(toolsManifest.version, hostToolsVersion, 'installed host tool fixture must match the pin');
 
   const installed = realpathSync(installedBefore);
   assert.equal(installed, realpathSync(path.join(home, 'node_modules', manifest.name)),
@@ -129,7 +139,7 @@ try {
   assert.equal(help.status, 0, 'packaged CLI --help failed: ' + String(help.stderr || help.error || ''));
   assert.match(String(help.stdout), /dsh-purge --status/, 'packaged CLI must expose its help entry');
   console.log(`Fresh packed install passed: ${manifest.name}@${manifest.version}; sha256=${sha256}; `
-    + 'new temporary DSH_HOME, five plugin imports, client syntax and CLI --help. '
+    + 'new temporary DSH_HOME, pinned official host tools, five plugin imports, client syntax and CLI --help. '
     + 'No real Desktop, host startup, patch application or Provider delivery was tested.');
 } finally {
   rmSync(temp, { recursive: true, force: true, maxRetries: 3, retryDelay: 250 });
