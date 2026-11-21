@@ -27,6 +27,13 @@ test('non-local API is closed by default, including localhost reverse proxies', 
     req('203.0.113.5', '127.0.0.1:53380'),
     req('127.0.0.1', 'example.test'),
     { ...req('127.0.0.1', '127.0.0.1:53380'), headers: { host: '127.0.0.1:53380', 'x-forwarded-for': '203.0.113.5' } },
+    { ...req('127.0.0.1', '127.0.0.1:53380'), headers: { host: '127.0.0.1:53380', forwarded: 'for=203.0.113.5' } },
+    ...['x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port',
+      'x-client-ip', 'cf-connecting-ip', 'true-client-ip', 'via',
+      'x-original-host', 'x-original-forwarded-for'].map(name => ({
+        ...req('127.0.0.1', '127.0.0.1:53380'),
+        headers: { host: '127.0.0.1:53380', [name]: '203.0.113.5' },
+      })),
   ]) {
     assert.equal(isLocalBridgePeer(request), false)
     assert.deepEqual(authorizeBridgeRequest(request, { token: '' }), {
