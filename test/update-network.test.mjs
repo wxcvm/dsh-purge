@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { gitHubCredential, parseUpdateProxy, updateProxy, publicUpstreamRefs } from '../lib/update-network.js'
 import { existsSync, readFileSync } from 'node:fs'
 import os from 'node:os'
@@ -69,6 +70,11 @@ test('public upstream refs isolate all private Git credentials and config while 
     run: (_command, args, options) => {
       cwd = options.cwd
       assert.ok(existsSync(cwd), 'the isolated working directory exists only for this request')
+      const effectiveConfig = execFileSync('git', ['config', '--list', '--show-origin'], {
+        cwd, env: options.env, encoding: 'utf8', windowsHide: true,
+      })
+      assert.match(effectiveConfig, /http\\.proxy=http:\/\/127\\.0\\.0\\.1:7890\\//)
+      assert.doesNotMatch(effectiveConfig, /private-token|github-token|gh-token|Authorization|private\\/askpass/i)
       assert.ok(args.includes('ls-remote'))
       assert.ok(!args.some(v => v.includes('7890')))
       assert.equal(options.env.DSH_PURGE_GITHUB_TOKEN, undefined)
