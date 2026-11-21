@@ -39,7 +39,8 @@ function mount(engagement, api, opts = {}) {
   const render = () => { state = ref = 0; return vm.runInContext('WorkItemsPanel({engagement,...opts})', ctx) }
   render()
   dispose = effect?.()
-  return { render, unmount() { dispose?.(); unmounted = true }, writes: () => unmountedWrites }
+  return { render, reloadScope() { dispose?.(); render(); dispose = effect?.() },
+    unmount() { dispose?.(); unmounted = true }, writes: () => unmountedWrites }
 }
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -267,5 +268,31 @@ test('a late detail response cannot replace a different selection or reopen a ca
   await setImmediate()
   assert.equal(control(ui, 'button', '关闭详情'), undefined)
   assert.doesNotMatch(content(ui), /正在读取任务 #1 的详情/)
+  ui.unmount()
+})
+
+test('manual action finishing after switching the list filter does not leave controls busy', async () => {
+  const pending = deferred()
+  const ready = full({ status: 'ready' })
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', [ready])
+    if (req.op === 'workItemGet') return { ok: true, engagement: 'one', item: ready }
+    return pending.promise
+  })
+  await setImmediate()
+  const open = async () => {
+    control(ui, 'button', '查看持久任务 #1').props.onClick()
+    await setImmediate()
+    control(ui, 'input', '收尾依据').props.onChange({ target: { value: 'Reviewed the draft' } })
+  }
+  await open()
+  const saving = control(ui, 'button', '确认完成').props.onClick()
+  assert.equal(control(ui, 'button', '确认完成').props.disabled, true)
+  control(ui, 'select', '筛选任务状态').props.onChange({ target: { value: 'ready' } })
+  ui.reloadScope()
+  pending.resolve({ ok: true, closed: true })
+  await saving
+  await open()
+  assert.equal(control(ui, 'button', '确认完成').props.disabled, false)
   ui.unmount()
 })
