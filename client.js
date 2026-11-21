@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e302782ca17fcfde";
+		const CLIENT_BUILD_ID = "f96060ec248a89b8";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1706,6 +1706,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 					h("p", { className: "dshp-hint" }, "目标：" + receipt.ref + " · 更新前：" + (receipt.before?.version || "未知") + " · 写入后：" + (receipt.after?.version || "未知")),
 					h("p", { className: "dshp-hint" }, "开始：" + (receipt.startedAt || "未知") + " · 阶段：" + receipt.phase),
 					h("p", { className: "dshp-hint" }, "目录：" + receipt.root),
+					receipt.disk?.missingFiles?.length ? h("p", { className: "dshp-hint" }, "本地缺失：" + receipt.disk.missingFiles.join("、")) : null,
 					h("p", { className: "dshp-hint" }, "前端磁盘文件：" + (receipt.clientDiskMatch === true ? "匹配" : receipt.clientDiskMatch === false ? "不匹配" : "未知") + "；与更新时记录比较。"),
 					h("p", { className: "dshp-hint" }, "后端进程：" + (receipt.processRestarted === true ? "已重新启动" : receipt.processRestarted === false ? "仍为更新前进程" : "缺少进程身份，重启未确认") + "；不代表整个桌面客户端已退出。"),
 					receipt.error ? h("p", { role: "alert" }, receipt.error) : null,
@@ -1718,8 +1719,8 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				h(Btn, { disabled: busy || targetBusy || !receipt?.targetSha, onClick: verifyTarget }, targetBusy ? "核对中…" : "核对远端目标"),
 				targetError ? h("p", { role: "alert" }, targetError) : null,
 				target && target.sha === receipt?.targetSha ? h("div", null,
-					h("p", { role: "status" }, target.status === "match" ? "四个关键文件与记录的远端提交一致" : target.status === "mismatch" ? "存在与远端目标不同的文件（含换行差异）" : "远端核对数据不足"),
-					target.files.map((row) => h("p", { key: row.file, className: "dshp-hint" }, row.file + " · " + ({ match: "一致", mismatch: "不同", unknown: "未知" }[row.status] || "未知"))),
+					h("p", { role: "status" }, target.status === "match" ? "四个关键文件与记录的远端提交一致" : target.status === "mismatch" ? "与远端目标相比，存在缺失或不同的文件（含换行差异）" : "远端核对数据不足"),
+					target.files.map((row) => h("p", { key: row.file, className: "dshp-hint" }, row.file + " · " + (row.reason === "local_missing" ? "本地缺失" : { match: "一致", mismatch: "不同", unknown: "未知" }[row.status] || "未知"))),
 				) : null,
 				h("div", { className: "dshp-sub" }, h("h4", null, "前端构建身份")),
 				h("p", { className: "dshp-hint" }, "实际运行前端：" + CLIENT_BUILD_ID + " · 磁盘构建：" + (diskBuild || "未知")),
