@@ -89,5 +89,6 @@
   "redteam_web_list",
   "redteam_webshell_add",
   "redteam_webshell_list",
-  "redteam_webshell_update"
+  "redteam_webshell_update",
+  "redteam_work_item"
 ]
