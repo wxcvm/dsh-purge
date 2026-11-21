@@ -263,3 +263,54 @@ test("ordinary profile save/delete do not overwrite a newer stored revision", ()
   deletePromptProfile(home, "personal-note", profile("personal-note").revision);
   assert.equal(profile("personal-note"), undefined);
 }));
+
+test("invalid manifest is preserved before any ordinary editor can rewrite it", () => withHome(home => {
+  savePromptProfile(home, { id: "personal-note", body: "Keep the original body" });
+  const manifest = path.join(home, "dsh-purge", "prompt-profiles.json");
+  const body = path.join(home, "dsh-purge", "prompt-profiles", "personal-note.md");
+  for (const text of ['{"profiles":', '{"profiles":{"bad":"shape"}}']) {
+    fs.writeFileSync(manifest, text, "utf8");
+    assert.throws(() => listEditablePromptProfiles(home), /原文件已保留/);
+    assert.throws(() => savePromptProfile(home, { id: "personal-note", body: "Do not write" }), /原文件已保留/);
+    assert.throws(() => deletePromptProfile(home, "personal-note"), /原文件已保留/);
+    assert.equal(fs.readFileSync(manifest, "utf8"), text);
+    assert.equal(fs.readFileSync(body, "utf8"), "Keep the original body");
+  }
+}));
+
+test("failed ordinary manifest publication restores the prior markdown and removes an unpublished draft", t => withHome(home => {
+  savePromptProfile(home, { id: "personal-note", body: "Visible saved text" });
+  const root = path.join(home, "dsh-purge");
+  const manifest = path.join(root, "prompt-profiles.json");
+  const body = path.join(root, "prompt-profiles", "personal-note.md");
+  const draft = path.join(root, "prompt-profiles", "unpublished.md");
+  const oldManifest = fs.readFileSync(manifest);
+  const rename = fs.renameSync;
+  let attempts = 0;
+  t.mock.method(fs, "renameSync", (src, dst) => {
+    if (dst === manifest) {
+      attempts++;
+      throw Object.assign(new Error("simulated manifest EBUSY"), { code: "EBUSY" });
+    }
+    return rename(src, dst);
+  });
+  assert.throws(() => savePromptProfile(home, { id: "personal-note", body: "Failed new text" }), /simulated manifest EBUSY/);
+  assert.throws(() => savePromptProfile(home, { id: "unpublished", body: "Failed create" }), /simulated manifest EBUSY/);
+  assert.equal(attempts, 2);
+  assert.deepEqual(fs.readFileSync(manifest), oldManifest);
+  assert.equal(fs.readFileSync(body, "utf8"), "Visible saved text");
+  assert.equal(fs.existsSync(draft), false);
+  assert.deepEqual(fs.readdirSync(path.dirname(body)), ["personal-note.md"]);
+}));
+
+test("ordinary profile save and delete preserve extension fields in the stored manifest", () => withHome(home => {
+  savePromptProfile(home, { id: "personal-note", body: "Some text" });
+  const manifest = path.join(home, "dsh-purge", "prompt-profiles.json");
+  const initial = JSON.parse(fs.readFileSync(manifest, "utf8"));
+  initial.extension = { kept: true };
+  fs.writeFileSync(manifest, JSON.stringify(initial));
+  savePromptProfile(home, { id: "personal-note", name: "Renamed" });
+  assert.deepEqual(JSON.parse(fs.readFileSync(manifest, "utf8")).extension, { kept: true });
+  deletePromptProfile(home, "personal-note");
+  assert.deepEqual(JSON.parse(fs.readFileSync(manifest, "utf8")).extension, { kept: true });
+}));
