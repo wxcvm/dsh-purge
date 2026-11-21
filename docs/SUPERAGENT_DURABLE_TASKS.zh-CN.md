@@ -20,9 +20,9 @@
 
 1. redteam_work_item action=create, task_key=docs-review-01, role=review, objective=核对本地文档。
 2. action=assign, task_id=返回的任务 ID, session_id=确切子会话 ID, run_id=确切轮次 ID。
-3. action=report, task_id=同上, session_id/run_id=同上, status=ready, summary=已整理证据待审查。
-4. action=close, task_id=同上, outcome=done, reason=已明确核对并收口。
-5. 宿主中途重启后先 action=recovery，人工对照宿主会话目录和当前活动状态；如果确认旧轮次已中断，再用 action=report status=interrupted 结算旧轮次，而后 action=assign 记录新的实际轮次。
+3. 确认宿主已发出精确匹配的 `subagent/end` 事件后，才可通过工具 `action=report` 登记该轮状态及简短摘要；运行结束仍不等于交付完成。
+4. 最终 `done/dropped` 收口需在作战台由操作者人工核验并提交，模型工具不再提供 `close`。若无精确宿主结束事件，操作者需在工作台独立核对旧 run，勾选人工核验声明才能结算；模型工具不能自报该声明。
+5. 宿主中途重启后先 `action=recovery`，人工对照真实会话目录；如确认旧轮次已中断，由工作台结算为 `interrupted`，再在 Harness 实际启动新轮次并记录新的 session/run。
 
 ## 第二阶段：真实子智能体结束事件对账（本 PR 增量）
 
@@ -45,7 +45,7 @@
 | redteam_task_block | 针对已有 next_action 任务键记录阻塞原因 |
 | 本轮 agent_work_item / assignment | 可追溯的长任务 ID、执行轮次、终态登记和恢复候选 |
 
-第一阶段**不会自动**调用 subagent、shell、漏洞验证、扫描、GitHub/飞书任务监听，也不会将任意历史记录当作授权。真正的 SuperAgent Source、Trigger、Eval、Ticket Engine、持久 Effects、异步投递和调度器仍未移植；不应将当前成果宣传为无人值守系统。
+后台强制区分真实宿主结束事件与人工 `host_checked` 声明；该声明只说明操作者在外部核验，不是技术上独立验证。第一阶段**不会自动**调用 subagent、shell、漏洞验证、扫描、GitHub/飞书任务监听，也不会将任意历史记录当作授权。真正的 SuperAgent Source、Trigger、Eval、Ticket Engine、持久 Effects、异步投递和调度器仍未移植；不应将当前成果宣传为无人值守系统。
 
 ## 验收与待办
 
