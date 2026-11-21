@@ -24,6 +24,17 @@
 4. action=close, task_id=同上, outcome=done, reason=已明确核对并收口。
 5. 宿主中途重启后先 action=recovery，人工对照宿主会话目录和当前活动状态；如果确认旧轮次已中断，再用 action=report status=interrupted 结算旧轮次，而后 action=assign 记录新的实际轮次。
 
+## 第二阶段：真实子智能体结束事件对账（本 PR 增量）
+
+- 现有 `subagent/end` 钩子已通过 `agent-attention.js` 接到持久账本：先按原有预留与绑定关系找到演练，再用**精确的 `session_id + run_id`**定位之前显式登记的 Assignment。既不按任务标题模糊匹配，也不跨演练扫描 SQLite。
+- 事件只在 Assignment 中写入 `host_end_at` 与白名单化的 `host_stop_reason`（completed/aborted/error/max-tokens/refusal/unknown），不自动写 `ready`、`done` 或释放额外名额。
+- 没有 `redteamReport` 也可以记录真实结束事件；旧的 `redteam_attention` 仍只在有结构化回报时创建。观察账本偶发写入失败不阻止原有结构化回报收集，错误单独写诊断日志。
+- `recovery` 显示 `host_activity=unverified`（还没看到真实终止事件）或 `end-observed`（宿主已发真实结束事件）。后者仍需要结算与人工核对，不能因为 `stopReason=completed` 就自行确认任务交付。
+- 对**上一轮已经结束后才迟到**的事件，最多补写上一轮的宿主终止字段，不改当前任务的状态和轮次。
+- 兼容正在使用阶段一旧表的测试库：`migrate()` 会给已存在的 Assignment 表补齐上述两列；不删除历史数据。
+
+**验收限制**：本轮新增的是宿主事件的准确入账逻辑，真实 Desktop rc.5 的事件发布、会话目录与升级重启仍待独立验证。没有自动调度器、不会重复执行任务。
+
 ## 与已有模块的边界
 
 | 模块 | 单一职责 |
