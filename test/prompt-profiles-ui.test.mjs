@@ -89,6 +89,52 @@ function mount({ querySession, readSettings, requestPreview, fullWriteResponse =
 
 const nextTask = () => new Promise(resolve => setImmediate(resolve));
 
+test("local rule list separates saved and draft model scopes; searching does not change the editor", async () => {
+  const ui = mount();
+  Object.assign(ui.profiles.find(p => p.id === "coding"), {
+    allowEnabled: true, allowTargets: { models: ["editor-old"], providers: ["local-writer"] },
+  });
+  Object.assign(ui.profiles.find(p => p.id === "writing"), { allowEnabled: true, allowTargets: {} });
+  let tree = await ui.initialize();
+  const local = () => ui.nodes(ui.render()).find(n => n.props.className === "dshp-prompt-local");
+  assert.match(JSON.stringify(local()), /白名单开启但未填条件/);
+  ui.find(local(), "textarea", "白名单模型 ID").props.onChange({ target: { value: "editor-draft" } });
+  const search = query => ui.find(ui.render(), "input", "查找局部提示词规则").props.onChange({ target: { value: query } });
+  search("LOCAL-WRITER");
+  tree = local();
+  assert.ok(ui.find(tree, "button", "编辑规则 coding"));
+  assert.equal(ui.find(tree, "button", "编辑规则 writing"), undefined);
+  const display = JSON.stringify(tree);
+  assert.match(display, /已保存启用 · 有草稿/);
+  assert.match(display, /已保存范围：","模型：editor-old · Provider：local-writer/);
+  assert.match(display, /未保存的范围：","模型：editor-draft · Provider：local-writer/);
+  search("editor-draft");
+  assert.ok(ui.find(local(), "button", "编辑规则 coding"));
+  search("nothing-here");
+  assert.equal(ui.find(local(), "button", "编辑规则 coding"), undefined);
+  assert.match(JSON.stringify(local()), /仍可继续编辑/);
+  assert.equal(ui.find(local(), "textarea", "白名单模型 ID").props.value, "editor-draft");
+  assert.equal(ui.actions.length, 0);
+});
+
+test("creating in a filtered list reveals the new draft and focuses its name once", async () => {
+  const ui = mount();
+  const tree = await ui.initialize();
+  const name = () => ui.find(ui.render(), "input", "局部规则名称");
+  let focused = 0;
+  const node = { focus() { focused++; } };
+  name().props.ref(node);
+  assert.equal(focused, 0, "opening the page does not steal focus");
+  ui.find(tree, "input", "查找局部提示词规则").props.onChange({ target: { value: "narrow-search" } });
+  ui.find(ui.render(), "button", "新建提示词规则").props.onClick();
+  name().props.ref(node);
+  name().props.ref(node);
+  assert.equal(focused, 1);
+  assert.equal(name().props.value, "新提示词规则");
+  assert.equal(ui.find(ui.render(), "input", "查找局部提示词规则").props.value, "");
+  assert.equal(ui.actions.length, 0, "new drafts are not auto-saved");
+});
+
 test("a late preview cannot replace results for a newer model; input and saved changes retire results", async () => {
   const replies = new Map();
   const ui = mount({ requestPreview: input => new Promise(resolve => { replies.set(input.model, resolve); }) });

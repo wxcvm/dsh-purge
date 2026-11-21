@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "fa1befb00a6d9de0";
+		const CLIENT_BUILD_ID = "6b02164630be408e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4681,6 +4681,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [profiles, setProfiles] = useState([]);
 			const [selectedId, setActive] = useState("coding");
 			const [drafts, setDrafts] = useState({});
+            const [ruleFilter, setRuleFilter] = useState("");
+            const focusNewRule = useRef(null);
 			const [newId, setNewId] = useState("");
 			const [sessionId, setSessionId] = useState("");
 			const [sessionLock, setSessionLock] = useState(null);
@@ -4746,15 +4748,21 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				}
 				return copy;
 			};
+            const savedProfiles = new Map(profiles.map(profile => [profile.id, profile]));
             const localRules = [
                 ...profiles.filter(p => p.id !== "redteam" && p.scope !== "global"),
-                ...Object.values(drafts).filter(p => p.scope === "local" && !profiles.some(saved => saved.id === p.id)),
+                ...Object.values(drafts).filter(p => p.scope === "local" && !savedProfiles.has(p.id)),
             ];
             const active = localRules.some(p => p.id === selectedId) ? selectedId : localRules[0]?.id;
+            const query = ruleFilter.trim().toLowerCase();
+            const shownRules = query ? localRules.filter(rule =>
+                [rule, drafts[rule.id]].filter(Boolean).some(item =>
+                    [item.id, item.name, ...promptScopeIds(item, "models"), ...promptScopeIds(item, "providers")]
+                        .some(value => typeof value === "string" && value.toLowerCase().includes(query)))) : localRules;
             const profileDraft = id => {
                 if (!id) return null;
                 if (Object.hasOwn(drafts, id)) return drafts[id];
-                const saved = profiles.find(p => p.id === id);
+                const saved = savedProfiles.get(id);
                 return saved ? prepare(saved) : null;
             };
             const globalDraft = profileDraft("global");
@@ -4876,11 +4884,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const create = () => {
 				const id = newId.trim() || "rule-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 				if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) { setNotice("规则 ID 只能使用小写英文字母开头，以及字母、数字、下划线和连字符"); return; }
-				if (profiles.some(p => p.id === id) || Object.hasOwn(drafts, id)) { setNotice("同名规则已存在，请换个 ID"); return; }
+				if (savedProfiles.has(id) || Object.hasOwn(drafts, id)) { setNotice("同名规则已存在，请换个 ID"); return; }
 				setDraft(prepare({ id, name: "新提示词规则", scope: "local", enabled: true, priority: 30,
 					body: "", keywords: [], excludes: [], allowEnabled: false, blockEnabled: false,
 					presetSwitches: { standard: true, ptc: true, minimal: true, cordis: true },
                     injectOtherPresets: true, allowTargets: {}, blockTargets: {} }));
+                focusNewRule.current = id;
+                setRuleFilter("");
 				setActive(id);
 				setNewId("");
 				setNotice("新规则已打开：填写正文与适用范围后点击「保存规则」。未保存前不会注入任何内容。");
@@ -5036,7 +5046,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                 h("div", { className: "dshp-prompt-targets" },
                                     fields.filter(([field]) => prefix === "block" || !modelField(field)).map(([field, title]) =>
                                         targetPicker(value, setValue, prefix, field, title))))))));
-            const currentIsNew = draft && !profiles.some(p => p.id === draft.id);
+            const currentIsNew = draft && !savedProfiles.has(draft.id);
             const panel = { border: "1px solid var(--dsw-alias-border-l1, #36506b)",
                 borderRadius: 12, padding: 16, minWidth: 0, background: "var(--dsw-specific-card-bg, rgba(100,130,170,.045))" };
             return h("section", { className: "dshp-prompt-page", style: {
@@ -5107,21 +5117,39 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             flexWrap: "wrap", gap: 10, marginBottom: 12 } },
                             h("h4", { style: { margin: 0 } }, "局部提示词"),
                             h("button", { type: "button", "aria-label": "新建提示词规则", disabled: busy, onClick: create }, "＋ 新建提示词规则")),
-                        h("div", { style: { display: "grid", gap: 8, marginBottom: 16 } },
-                            localRules.map(p => h("div", { key: p.id, style: { display: "flex", alignItems: "center",
-                                gap: 8, padding: "8px 10px", borderRadius: 8,
-                                border: "1px solid var(--dsw-alias-border-l1, #36506b)",
-                                background: active === p.id ? "rgba(80,145,218,.13)" : "transparent" } },
-                                h("button", { type: "button", "aria-label": "编辑规则 " + p.id,
-                                    "aria-pressed": active === p.id,
-                                    style: { flex: 1, textAlign: "left", minWidth: 0 }, onClick: () => setActive(p.id) },
-                                    drafts[p.id]?.name || p.name),
-                                h("span", { className: "dshp-hint" },
-                                    drafts[p.id] ? "未保存" : p.enabled ? "已启用" : "已停用")))),
+                        h("div", { className: "dshp-prompt-rule-list" },
+                            h("div", { className: "dshp-prompt-rule-search" },
+                                h("input", { type: "search", className: "dshp-field", value: ruleFilter,
+                                    "aria-label": "查找局部提示词规则", placeholder: "查找名称、编号、模型或 Provider",
+                                    onChange: e => setRuleFilter(e.target.value) }),
+                                query ? h("button", { type: "button", onClick: () => setRuleFilter("") }, "清除筛选") : null),
+                            query && shownRules.length === 0
+                                ? h("p", { className: "dshp-hint", role: "status" }, "没有找到规则；当前编辑未更改。") : null,
+                            shownRules.map(p => {
+                                const saved = savedProfiles.has(p.id);
+                                return h("div", { key: p.id, className: "dshp-prompt-rule-item",
+                                    "data-selected": active === p.id },
+                                    h("div", { className: "dshp-prompt-rule-header" },
+                                        h("button", { type: "button", "aria-label": "编辑规则 " + p.id,
+                                            "aria-pressed": active === p.id, onClick: () => setActive(p.id) }, drafts[p.id]?.name || p.name),
+                                        h("span", { className: "dshp-hint" },
+                                            saved ? (p.enabled ? "已保存启用" : "已保存停用") + (drafts[p.id] ? " · 有草稿" : "") : "仅草稿")),
+                                    h("p", { className: "dshp-hint" },
+                                        saved ? "已保存范围：" : "草稿范围：", promptScopeDescription(p)));
+                            })),
                         draft && draft.id !== "redteam" && draft.scope !== "global"
                         ? h("div", { style: { display: "grid", gap: 12 } },
+                            query && !shownRules.some(p => p.id === active)
+                                ? h("p", { className: "dshp-hint" }, "正在编辑的规则不在筛选结果中；仍可继续编辑。") : null,
+                            drafts[draft.id] && !currentIsNew ? h("p", { className: "dshp-hint" },
+                                "未保存的范围：", promptScopeDescription(draft)) : null,
                             h("label", null, "名称",
                                 h("input", { "aria-label": "局部规则名称", value: draft.name || "",
+                                    ref: node => {
+                                        if (!node || focusNewRule.current !== draft.id) return;
+                                        focusNewRule.current = null;
+                                        node.focus();
+                                    },
                                     style: { width: "100%" }, onChange: e => setDraft({ ...draft, name: e.target.value }) })),
                             h("textarea", { "aria-label": "局部提示词正文", className: "dshp-area",
                                 rows: 8, spellCheck: false, style: { minHeight: 180 },
@@ -5229,6 +5257,27 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         onAdd(value);
                         setChoice("");
                     } }, "添加")));
+        }
+
+        function promptScopeIds(rule, field) {
+            const draft = rule?.["allow_" + field];
+            const configured = typeof draft === "string" ? draft.split(/[\n,，]+/) : rule?.allowTargets?.[field];
+            return Array.isArray(configured) ? configured.filter(value => typeof value === "string")
+                .map(value => value.trim()).filter(Boolean) : [];
+        }
+
+        function promptScopeDescription(rule) {
+            const suffix = rule.blockEnabled ? " · 已开启排除项" : "";
+            if (!rule.allowEnabled) return "白名单关闭" + suffix;
+            const group = (label, values) => values.length
+                ? label + values.slice(0, 2).join("、") + (values.length > 2 ? " 等 " + values.length + " 项" : "") : "";
+            const targets = [
+                group("模型：", promptScopeIds(rule, "models")),
+                group("Provider：", promptScopeIds(rule, "providers")),
+                promptScopeIds(rule, "sessions").length ? "限制会话" : "",
+                promptScopeIds(rule, "presets").length ? "限制 Agent 预设" : "",
+            ].filter(Boolean);
+            return (targets.length ? targets.join(" · ") : "白名单开启但未填条件，不会匹配") + suffix;
         }
 
 		function PromptAssemblyEvidence({ report, unavailable }) {
@@ -15795,6 +15844,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 .dshp-prompt-scope-switch{display:flex;align-items:center;gap:7px}
 .dshp-prompt-target{display:flex;min-width:0;flex-direction:column;gap:6px;font-size:12px}
 .dshp-prompt-target textarea.dshp-area{width:100%;min-height:52px;resize:vertical;box-sizing:border-box}
+.dshp-prompt-rule-list{display:grid;gap:8px;margin-bottom:16px;min-width:0}
+.dshp-prompt-rule-search,.dshp-prompt-rule-header{display:flex;align-items:center;gap:8px;min-width:0}
+.dshp-prompt-rule-search input{flex:1;min-width:0}
+.dshp-prompt-rule-header button{flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}
+.dshp-prompt-rule-header span{white-space:nowrap}
+.dshp-prompt-rule-item{padding:8px 10px;border:1px solid var(--dshp-line);border-radius:8px;min-width:0}
+.dshp-prompt-rule-item[data-selected="true"]{border-color:var(--dshp-accent)}
+.dshp-prompt-rule-item p{margin:6px 0 0;overflow-wrap:anywhere}
 `;
 		const PURGE_WORKSPACE_PAINT_CSS = `
 /* Stop sampling behind the fullscreen shell and its scrolling content.
