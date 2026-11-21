@@ -9,7 +9,7 @@ const end = client.indexOf("function SettingsRoot(props)", start);
 assert.ok(start > 0 && end > start, "profile component must be included in the generated client");
 const source = client.slice(start, end);
 
-function mount({ querySession } = {}) {
+function mount({ querySession, readSettings, requestPreview, fullWriteResponse = false } = {}) {
   const profiles = [
     { id: "global", name: "全局", scope: "global", enabled: false, priority: 0, keywords: [], excludes: [], body: "" },
     { id: "redteam", name: "红队", enabled: true, priority: 100, keywords: ["红队演练"], excludes: [], body: "" },
@@ -18,7 +18,11 @@ function mount({ querySession } = {}) {
   ];
   const apiCalls = [], actions = [], values = [], refs = [], effectQueue = [];
   const routingSettings = { bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false };
+  const observed = [{ model: "deepseek-flash", provider: "deepseek-account", sessionId: "current-host-session", preset: "standard" }];
   let stateIndex = 0, refIndex = 0, sessionLock = "writing";
+  const snapshot = () => ({ ok: true, profiles: structuredClone(profiles),
+    routingSettings: structuredClone(routingSettings), observedTargets: structuredClone(observed),
+    lastAssembly: { stage: "assembled", delivery: "unverified" } });
   const context = vm.createContext({
     useState(initial) {
       const at = stateIndex++;
@@ -32,15 +36,12 @@ function mount({ querySession } = {}) {
     apiJson: async url => {
       apiCalls.push(url);
       if (querySession && url.includes("sessionId=")) return querySession(url);
-      return { ok: true, profiles: structuredClone(profiles),
-        routingSettings: structuredClone(routingSettings),
-        lastAssembly: { stage: "assembled", delivery: "unverified" },
-        observedTargets: [{ model: "deepseek-flash", provider: "deepseek-account",
-          sessionId: "current-host-session", preset: "standard" }],
-        sessionLock: url.includes("sessionId=") ? sessionLock : null };
+      if (readSettings && !url.includes("sessionId=")) return readSettings(snapshot());
+      return { ...snapshot(), sessionLock: url.includes("sessionId=") ? sessionLock : null };
     },
     promptProfilesApi: async (op, data) => {
       actions.push({ op, data });
+      if (op === "preview" && requestPreview) return requestPreview(data);
       if (op === "routing-settings") Object.assign(routingSettings, data.settings);
       if (op === "save") {
         const at = profiles.findIndex(p => p.id === data.profile.id);
@@ -49,7 +50,7 @@ function mount({ querySession } = {}) {
       }
       if (op === "lock") sessionLock = data.profileId;
       if (op === "unlock") sessionLock = null;
-      return { ok: true, sessionLock, routingSettings: structuredClone(routingSettings) };
+      return { ...(fullWriteResponse ? snapshot() : { ok: true, routingSettings: structuredClone(routingSettings) }), sessionLock };
     },
     rewindSessions: {},
     currentSessionId: () => "current-host-session",
@@ -83,8 +84,88 @@ function mount({ querySession } = {}) {
     await new Promise(resolve => setImmediate(resolve));
     return render();
   }
-  return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings };
+  return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings, observed };
 }
+
+const nextTask = () => new Promise(resolve => setImmediate(resolve));
+
+test("a late preview cannot replace results for a newer model; input and saved changes retire results", async () => {
+  const replies = new Map();
+  const ui = mount({ requestPreview: input => new Promise(resolve => { replies.set(input.model, resolve); }) });
+  await ui.initialize();
+  const field = model => ui.find(ui.render(), "input", "预览模型 ID").props.onChange({ target: { value: model } });
+  const preview = () => ui.find(ui.render(), "button", "预览规则").props.onClick();
+  field("writing-a");
+  const old = preview();
+  assert.match(JSON.stringify(ui.render()), /正在预览已保存规则/);
+  field("writing-b");
+  assert.match(JSON.stringify(ui.render()), /请重新预览/);
+  const latest = preview();
+  replies.get("writing-b")({ ok: true, selected: ["editor-b"], decisions: [] });
+  await latest;
+  replies.get("writing-a")({ ok: true, selected: ["editor-a"], decisions: [] });
+  await old;
+  const current = JSON.stringify(ui.render());
+  assert.match(current, /本次预览命中：editor-b/);
+  assert.doesNotMatch(current, /editor-a/);
+  ui.find(ui.render(), "button", "保存全局提示词").props.onClick();
+  await nextTask();
+  assert.doesNotMatch(JSON.stringify(ui.render()), /本次预览命中：editor-b/);
+});
+
+test("preview reports invalid data or failure distinctly from a genuine empty result", async () => {
+  let result = { ok: true, selected: [], decisions: [] };
+  const ui = mount({ requestPreview: async () => result });
+  await ui.initialize();
+  const preview = async () => {
+    await ui.find(ui.render(), "button", "预览规则").props.onClick();
+    return JSON.stringify(ui.render());
+  };
+  assert.match(await preview(), /本次预览命中：无匹配/);
+  result = { ok: true, selected: "not an array", decisions: {} };
+  assert.match(await preview(), /预览响应格式有误/);
+  assert.doesNotMatch(JSON.stringify(ui.render()), /本次预览命中/);
+  result = { ok: false, error: "server details" };
+  const failed = await preview();
+  assert.match(failed, /预览失败，未取得匹配结果/);
+  assert.doesNotMatch(failed, /本次预览命中|server details/);
+});
+
+test("write acknowledgement uses its full snapshot and does not issue a redundant GET", async () => {
+  const ui = mount({ fullWriteResponse: true });
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "Follow the editorial style." } });
+  ui.find(ui.render(), "button", "保存规则").props.onClick();
+  await nextTask();
+  tree = ui.render();
+  assert.equal(ui.apiCalls.length, 1);
+  assert.equal(ui.find(tree, "textarea", "局部提示词正文").props.value, "Follow the editorial style.");
+  assert.equal(ui.find(tree, "button", "恢复已保存的规则"), undefined);
+});
+
+test("legacy readback error is recoverable and refresh preserves drafts and updates recent model data", async () => {
+  let reads = 0;
+  const ui = mount({ readSettings: snapshot => {
+    if (++reads === 2) throw Error("temporary read failure");
+    return snapshot;
+  } });
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "全局提示词正文").props.onChange({ target: { value: "Unsubmitted general notes." } });
+  ui.find(ui.render(), "textarea", "局部提示词正文").props.onChange({ target: { value: "Keep the summary useful." } });
+  ui.find(ui.render(), "button", "保存规则").props.onClick();
+  await nextTask();
+  tree = ui.render();
+  assert.match(JSON.stringify(tree), /已保存；读回失败/);
+  assert.equal(ui.find(tree, "button", "保存规则").props.disabled, true);
+  ui.observed[0].model = "recently-observed-writing";
+  await ui.find(tree, "button", "重新读取").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.actions.length, 1, "recovery does not trigger another write");
+  assert.equal(ui.find(tree, "button", "保存规则").props.disabled, false);
+  assert.equal(ui.find(tree, "textarea", "全局提示词正文").props.value, "Unsubmitted general notes.");
+  assert.equal(ui.find(tree, "button", "恢复已保存的规则"), undefined);
+  assert.match(JSON.stringify(tree), /最近记录的模型 \/ Provider：recently-observed-writing/);
+});
 
 test("local editor saves its independent body through the API callback", async () => {
   const ui = mount();

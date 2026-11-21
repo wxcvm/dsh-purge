@@ -4691,8 +4691,12 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [previewModel, setPreviewModel] = useState("");
 			const [previewProvider, setPreviewProvider] = useState("");
 			const [preview, setPreview] = useState(null);
+            const previewRead = useRef(0);
             const [observedTargets, setObservedTargets] = useState([]);
 			const [busy, setBusy] = useState(false);
+            const [reading, setReading] = useState(true);
+            const loadRevision = useRef(0);
+            const pendingReadback = useRef(null);
 			const [notice, setNotice] = useState("");
 			const [loadError, setLoadError] = useState("");
             const [savedRouting, setSavedRouting] = useState({ bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false });
@@ -4757,37 +4761,73 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             const draft = profileDraft(active);
             const setDraft = value => setDrafts(current => ({ ...current, [value.id]: value }));
             const setGlobalDraft = setDraft;
-            const clearDraft = (id, savedDraft) => setDrafts(current => {
+            const clearDraft = useCallback((id, savedDraft) => setDrafts(current => {
                 if (!Object.hasOwn(current, id) || (savedDraft && current[id] !== savedDraft)) return current;
                 const next = { ...current };
                 delete next[id];
                 return next;
-            });
+            }), []);
+            const invalidatePreview = useCallback(() => {
+                ++previewRead.current;
+                setPreview(current => current ? { phase: "stale" } : null);
+            }, []);
 			const explainError = (error) => {
 				const message = String(error?.message || error);
 				return /\b404\b/.test(message)
 					? "提示词规则接口 404：当前前端与后端可能并非同版，或后端路由没有注册。请完全退出 Harness（包括托盘）再打开；如仍失败，到诊断中心核对磁盘插件与已加载后端版本。"
 					: "提示词规则请求失败：" + message;
 			};
+            const applySnapshot = useCallback(response => {
+                setProfiles(response.profiles);
+                setSavedRouting({
+                    bundledDefault: response.routingSettings?.bundledDefault === true,
+                    redteamTaskRoute: response.routingSettings?.redteamTaskRoute === true,
+                    modelAdaptive: response.routingSettings?.modelAdaptive === true,
+                });
+                setRoutingDiag(response.lastAssembly || null);
+                setObservedTargets(Array.isArray(response.observedTargets) ? response.observedTargets : []);
+                setLoadError("");
+                const confirmed = pendingReadback.current;
+                pendingReadback.current = null;
+                if (confirmed?.profile) clearDraft(confirmed.profile.id, confirmed.profile);
+                if (confirmed && Object.hasOwn(confirmed, "routing")) {
+                    setRoutingDraft(current => current === confirmed.routing ? null : current);
+                }
+            }, [clearDraft]);
 			const reload = useCallback(async () => {
+                const revision = ++loadRevision.current;
+                setReading(true);
+                invalidatePreview();
 				try {
 					const response = await apiJson("/dsh-purge/prompt-profiles");
-					if (!response?.ok) throw new Error(response?.error || "读取失败");
-					setProfiles(response.profiles || []);
-                    setSavedRouting({
-                        bundledDefault: response.routingSettings?.bundledDefault === true,
-                        redteamTaskRoute: response.routingSettings?.redteamTaskRoute === true,
-                        modelAdaptive: response.routingSettings?.modelAdaptive === true,
-                    });
-                    setRoutingDiag(response.lastAssembly || null);
-                    setObservedTargets(Array.isArray(response.observedTargets) ? response.observedTargets : []);
-					setLoadError("");
+                    if (revision !== loadRevision.current) return false;
+					if (!response?.ok || !Array.isArray(response.profiles)) throw new Error(response?.error || "读取失败");
+                    applySnapshot(response);
                     return true;
-				} catch (error) { setLoadError(explainError(error)); return false; }
-			}, []);
+				} catch (error) {
+                    if (revision === loadRevision.current) setLoadError(explainError(error));
+                    return false;
+                } finally {
+                    if (revision === loadRevision.current) setReading(false);
+                }
+			}, [applySnapshot, invalidatePreview]);
+            const readAfterWrite = response => {
+                if (Array.isArray(response.profiles) && response.routingSettings && typeof response.routingSettings === "object") {
+                    // The write response already contains the authoritative saved configuration.
+                    ++loadRevision.current;
+                    applySnapshot(response);
+                    setReading(false);
+                    return true;
+                }
+                return reload();
+            };
+            const refreshSettings = async () => {
+                if (await reload()) setNotice("已重新读取设置和本机记录。未提交的编辑仍保留。");
+            };
 			useEffect(() => { reload(); }, [reload]);
 			const perform = async (op, payload, savedDraft) => {
                 const sessionRevision = sessionRead.current;
+                invalidatePreview();
 				setBusy(true); setNotice("");
 				try {
 					const response = await promptProfilesApi(op, payload);
@@ -4796,20 +4836,26 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
                         if (op === "pause" || op === "resume") setSessionOverrides(response.sessionOverrides || {});
                     }
-					setNotice(op === "delete" ? "规则已删除" : op === "pause" ? "当前会话已暂停这条规则" : op === "resume" ? "已恢复按规则自动选择" : "已保存");
-					const readBack = await reload();
+                    if (op === "save" && savedDraft) pendingReadback.current = { profile: savedDraft };
+                    const savedMessage = op === "delete" ? "规则已删除" : op === "pause" ? "当前会话已暂停这条规则"
+                        : op === "resume" ? "已恢复按规则自动选择" : "已保存";
+                    const readBack = await readAfterWrite(response);
                     if (op === "delete") clearDraft(payload.id);
-                    if (op === "save" && savedDraft && readBack) clearDraft(savedDraft.id, savedDraft);
+                    setNotice(readBack ? savedMessage : savedMessage + "；读回失败，请用「重新读取」核对。");
 				} catch (error) { setNotice(explainError(error)); }
 				finally { setBusy(false); }
 			};
             const saveRouting = async () => {
+                invalidatePreview();
                 setBusy(true); setNotice("");
                 try {
                     const result = await promptProfilesApi("routing-settings", { settings: routingDraft });
                     if (!result?.ok) throw new Error(result?.error || "保存失败");
-                    setNotice("路由开关已保存。是否用于后续请求，请核对新的组装记录；保存不代表已投递。");
-                    if (await reload()) setRoutingDraft(current => current === routingEdits ? null : current);
+                    pendingReadback.current = { routing: routingEdits };
+                    const verified = await readAfterWrite(result);
+                    setNotice(verified
+                        ? "路由开关已保存。是否用于后续请求，请核对新的组装记录；保存不代表已投递。"
+                        : "路由开关已保存；读回失败，请用「重新读取」核对。保存不代表已投递。");
                 } catch (error) { setNotice(explainError(error)); }
                 finally { setBusy(false); }
             };
@@ -4851,6 +4897,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			};
             const changeSession = id => {
                 ++sessionRead.current;
+                invalidatePreview();
                 setSessionId(id);
                 setSessionLock(null);
                 setSessionOverrides({});
@@ -4860,6 +4907,31 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				if (!id) { setNotice("无法读取当前会话 ID，可以手动输入"); return; }
 				changeSession(id); void showLock(id);
 			};
+            const editPreviewField = (setter, value) => {
+                invalidatePreview();
+                setter(value);
+            };
+            const runPreview = async () => {
+                const request = ++previewRead.current;
+                const context = { preset, text: sample, model: previewModel, provider: previewProvider, sessionId };
+                setPreview({ phase: "loading" });
+                try {
+                    const result = await promptProfilesApi("preview", context);
+                    if (request !== previewRead.current) return;
+                    if (result?.ok !== true) throw new Error("preview unavailable");
+                    if (!Array.isArray(result.selected) || !result.selected.every(id => typeof id === "string") ||
+                        !Array.isArray(result.decisions) || !result.decisions.every(row =>
+                            typeof row?.id === "string" && typeof row?.reason === "string")) {
+                        setPreview({ phase: "failed", message: "预览响应格式有误，未取得匹配结果。" });
+                        return;
+                    }
+                    setPreview({ phase: "ready", result, model: context.model, provider: context.provider });
+                } catch {
+                    if (request === previewRead.current) {
+                        setPreview({ phase: "failed", message: "预览失败，未取得匹配结果。请重试。" });
+                    }
+                }
+            };
             const presetOptions = [["standard", "标准"], ["ptc", "PTC"], ["minimal", "极简"],
                 ["cordis", "创造"], ["redteam", "红队"]];
             const presetSelectors = (value, setValue) => h("div", { className: "dshp-preset-control" },
@@ -4969,6 +5041,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             } },
                 h("p", { className: "dshp-hint", style: { margin: 0 } },
                     "通用提示词和局部规则分别编辑、分别保存。按模型区分时，在对应规则下设置「适用模型 / Provider」，保存后可做不调用模型的预览。"),
+                h("div", null, h("button", { type: "button", disabled: busy || reading,
+                    onClick: refreshSettings }, reading ? "正在读取…" : "重新读取"),
+                    h("span", { className: "dshp-hint", style: { marginInlineStart: 8 } },
+                        "更新已保存设置和本机记录，不提交草稿。")),
                 loadError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, loadError) : null,
                 notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null,
                 h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) }),
@@ -4986,12 +5062,12 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         ["modelAdaptive", "按当前模型家族自动适配", "只对识别成功的当前模型生效；默认关闭"],
                     ].map(([key, title, hint]) => h("label", { key, style: { display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0" } },
                         h("input", { type: "checkbox", "aria-label": title, checked: routingDraft[key] === true,
-                            disabled: busy || Boolean(loadError),
+                            disabled: busy || reading || Boolean(loadError),
                             onChange: e => setRoutingDraft({ ...routingDraft, [key]: e.target.checked }) }),
                         h("span", null, h("strong", null, title),
                             h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
                     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
-                        h("button", { type: "button", disabled: busy || Boolean(loadError),
+                        h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
                             onClick: saveRouting }, "保存路由开关"))),
                 h("div", { className: "dshp-prompt-columns",
                     style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
@@ -5013,7 +5089,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             presetSelectors(globalDraft, setGlobalDraft),
                             advanced(globalDraft, setGlobalDraft),
                             h("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
-                                h("button", { type: "button", disabled: busy || Boolean(loadError),
+                                h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
                                     onClick: () => saveProfile(globalDraft) }, "保存全局提示词"),
                                 drafts.global ? h("button", { type: "button", disabled: busy,
                                     onClick: () => clearDraft("global") }, "恢复已保存的全局内容") : null)
@@ -5057,16 +5133,16 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             presetSelectors(draft, setDraft),
                             advanced(draft, setDraft),
                             h("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } },
-                                h("button", { type: "button", disabled: busy || Boolean(loadError), onClick: save },
+                                h("button", { type: "button", disabled: busy || reading || Boolean(loadError), onClick: save },
                                     "保存规则"),
                                 drafts[draft.id] ? h("button", { type: "button", disabled: busy,
                                     onClick: () => clearDraft(draft.id) },
                                     currentIsNew ? "放弃新规则" : "恢复已保存的规则") : null,
                                 !["coding", "writing"].includes(draft.id) && !currentIsNew
-                                    ? h("button", { type: "button", disabled: busy,
+                                    ? h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
                                         onClick: () => { if (window.confirm("删除提示词规则「" + draft.name + "」？"))
                                             void perform("delete", { id: draft.id }); } }, "删除规则") : null,
-                                sessionId ? h("button", { type: "button", disabled: busy,
+                                sessionId ? h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
                                     onClick: () => void perform(sessionOverrides[draft.id] === "off" ? "resume" : "pause",
                                         { sessionId, profileId: draft.id }) },
                                     sessionOverrides[draft.id] === "off" ? "在此会话恢复规则" : "仅在此会话暂停") : null)
@@ -5082,11 +5158,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         h("button", { type: "button", disabled: !sessionId,
                             onClick: () => showLock(sessionId) }, "查询锁定"),
                         h("select", { "aria-label": "锁定提示词", value: sessionLock || "",
-                            onChange: e => setSessionLock(e.target.value || null) },
+                            onChange: e => { ++sessionRead.current; setSessionLock(e.target.value || null); } },
                             h("option", { value: "" }, "自动选择"),
                             h("option", { value: "none" }, "不注入 Purge 提示词"),
                             profiles.map(p => h("option", { key: p.id, value: p.id }, p.name))),
-                        h("button", { type: "button", disabled: busy || !sessionId,
+                        h("button", { type: "button", disabled: busy || reading || !sessionId,
                             onClick: () => void perform(sessionLock ? "lock" : "unlock",
                                 sessionLock ? { sessionId, profileId: sessionLock } : { sessionId }) }, "应用锁定"))),
                 h("details", null,
@@ -5096,32 +5172,31 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             "只模拟已保存规则的匹配；不会读取未保存草稿，也不验证真实组装或投递。更改条件后请重新预览。"),
                         h("div", { style: { display: "flex", flexWrap: "wrap", gap: 8 } },
                             h("select", { "aria-label": "预设模式", value: preset,
-                                onChange: e => setPreset(e.target.value) },
+                                onChange: e => editPreviewField(setPreset, e.target.value) },
                                 [["standard", "标准"], ["ptc", "PTC"], ["minimal", "极简"],
                                  ["cordis", "创造"], ["redteam", "红队"]].map(([id, label]) =>
                                     h("option", { key: id, value: id }, label))),
                             h("input", { "aria-label": "预览模型 ID", placeholder: "模型 ID", value: previewModel,
-                                onChange: e => setPreviewModel(e.target.value) }),
+                                onChange: e => editPreviewField(setPreviewModel, e.target.value) }),
                             h("input", { "aria-label": "预览厂商 ID", placeholder: "Provider ID", value: previewProvider,
-                                onChange: e => setPreviewProvider(e.target.value) }),
+                                onChange: e => editPreviewField(setPreviewProvider, e.target.value) }),
                             observedTargets[0]?.model ? h("button", { type: "button", onClick: () => {
+                                invalidatePreview();
                                 setPreviewModel(observedTargets[0].model);
                                 setPreviewProvider(observedTargets[0].provider || "");
                             } }, "填入最近记录的模型") : null,
-                            h("button", { type: "button", disabled: busy, onClick: async () => {
-                                try {
-                                    const result = await promptProfilesApi("preview", {
-                                        preset, text: sample, model: previewModel, provider: previewProvider, sessionId });
-                                    if (!result?.ok) throw new Error(result.error);
-                                    setPreview(result);
-                                } catch (error) { setNotice(explainError(error)); }
-                            } }, "预览规则")),
-                        h("textarea", { className: "dshp-area", rows: 2, value: sample,
-                            onChange: e => setSample(e.target.value),
+                            h("button", { type: "button", disabled: busy || reading || preview?.phase === "loading",
+                                onClick: runPreview }, "预览规则")),
+                        h("textarea", { className: "dshp-area", rows: 2, value: sample, "aria-label": "预览示例文本",
+                            onChange: e => editPreviewField(setSample, e.target.value),
                             placeholder: "输入测试任务" }),
-                        preview ? h("div", { className: "dshp-hint" },
-                            h("p", null, "上次预览命中：" + (preview.selected?.length ? preview.selected.join(" + ") : "无")),
-                            (preview.decisions || []).map(item => h("p", { key: item.id },
+                        preview?.phase === "loading" ? h("p", { className: "dshp-hint", role: "status" }, "正在预览已保存规则…") : null,
+                        preview?.phase === "stale" ? h("p", { className: "dshp-hint", role: "status" }, "预览条件或已保存设置已更新，请重新预览。") : null,
+                        preview?.phase === "failed" ? h("p", { className: "dshp-runtime-warning", role: "alert" }, preview.message) : null,
+                        preview?.phase === "ready" ? h("div", { className: "dshp-hint", role: "status" },
+                            h("p", null, "本次预览命中：" + (preview.result.selected.length ? preview.result.selected.join(" + ") : "无匹配")),
+                            h("p", null, "模型 / Provider：" + (preview.model || "未指定") + " / " + (preview.provider || "未指定")),
+                            preview.result.decisions.map(item => h("p", { key: item.id },
                                 item.id + "："
                                 + ({ matched: "匹配", disabled: "已禁用", "preset-disabled": "当前预设已关闭",
                                     "preset-unselected": "未选择当前预设", "preset-unobserved": "当前 Agent 预设无法识别", "redteam-only": "红队模式独立",

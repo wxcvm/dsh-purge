@@ -43,6 +43,6 @@ test("normal prompt UI describes preview and saved settings as distinct from ver
   assert.match(panel, /h\(PromptAssemblyEvidence, /);
   assert.match(panel, /保存不代表已投递/);
   assert.match(panel, /只模拟已保存规则的匹配/);
-  assert.match(panel, /上次预览命中/);
+  assert.match(panel, /本次预览命中/);
   assert.doesNotMatch(panel, /将注入：|已保存并立即生效/);
 });
