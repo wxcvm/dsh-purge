@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f32338243837a4d9";
+		const CLIENT_BUILD_ID = "0e74807d6bdf30f4";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -14967,7 +14967,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setFeedbackBusy(true)
         setReviewError('')
         api({ op: 'artexReviewExport', engagement,
-          finding_ids: report.review_queue.map((item) => item.finding_id) })
+          source_id: report.source_id, finding_ids: report.review_queue.map((item) => item.finding_id) })
           .then((result) => {
             if (!result || result.ok === false || !result.feedback) throw new Error((result && result.error) || '回执导出失败')
             const data = result.feedback
@@ -14995,7 +14995,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setReviewError('')
         if (!report || !props.engagement || !Array.isArray(report.review_queue)) return undefined
         api({ op: 'artexReviewList', engagement: props.engagement,
-          finding_ids: report.review_queue.map((item) => item.finding_id) })
+          source_id: report.source_id, finding_ids: report.review_queue.map((item) => item.finding_id) })
           .then((result) => {
             if (!live) return
             if (!result || result.ok === false) throw new Error((result && result.error) || '无法读取本地核查进度')
@@ -15139,7 +15139,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setReviewSaving(finding.finding_id)
         setReviewSaved(null)
         setReviewError('')
-        api({ op: 'artexReviewSave', engagement,
+        api({ op: 'artexReviewSave', engagement, source_id: report.source_id,
           finding_id: finding.finding_id, task_id: finding.task_id,
           evidence_version: finding.evidence_version, status, note,
           expected_revision: progressByFinding.get(finding.finding_id)?.revision ?? 0 })
@@ -15326,6 +15326,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               handoffMessage ? h('p', { className: 'rt-foot', role: 'status' }, handoffMessage) : null,
               props.engagement ? h('details', null,
                 h('summary', null, '记录 DSH 人工核查进度（' + reviewQueue.length + ' 条）'),
+                h('p', { className: 'rt-foot' }, report.source_id
+                  ? '报告声明的来源：' + report.source_id.slice(0, 8) + '…；不代表已配对公司。'
+                  : '旧报告没有来源标识；旧回执单独保存，不自动归属到新来源。'),
                 activeProgress ? h('p', { className: 'rt-foot', role: 'status' },
                   '已记录 ' + reviewSummary.recorded + '/' + reviewSummary.total
                   + ' · 已人工复核 ' + reviewSummary.reviewed

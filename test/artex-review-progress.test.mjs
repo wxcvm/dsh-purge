@@ -221,3 +221,31 @@ test('manual comparison applies only the matching report and saved row; draft in
   assert.match(source, /expected_revision: progressByFinding/)
   assert.match(source, /用已保存版本比对（保留草稿）/)
 })
+
+test('identical finding IDs in separate declared report sources never share manual progress', t => {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  db.exec(DDL)
+  const store = { ...methods, databases: { lab: db } }
+  const a = '0123456789abcdef0123456789abcdef'
+  const b = 'fedcba9876543210fedcba9876543210'
+  const save = { op: 'artexReviewSave', engagement: 'lab', finding_id: 24, task_id: 7,
+    evidence_version: 3, expected_revision: 0, status: 'in_progress', note: 'Legacy note' }
+  const list = { op: 'artexReviewList', engagement: 'lab', finding_ids: [24] }
+  assert.equal(dispatch(store, save).ok, true)
+  assert.deepEqual(dispatch(store, { ...list, source_id: a }).items, [])
+  assert.equal(dispatch(store, { ...save, source_id: a, note: 'Source A' }).review.revision, 1)
+  assert.equal(dispatch(store, { ...save, source_id: b, note: 'Source B' }).review.revision, 1)
+  assert.equal(dispatch(store, { ...save, source_id: a.toUpperCase(), expected_revision: 1,
+    note: 'Source A newer note' }).review.revision, 2)
+  assert.equal(dispatch(store, list).items[0].note, 'Legacy note')
+  assert.equal(dispatch(store, { ...list, source_id: b }).items[0].note, 'Source B')
+  const read = { ...list, op: 'artexReviewExport' }
+  const out = dispatch(store, { ...read, source_id: a })
+  assert.equal(out.feedback.artex_source_id, a)
+  assert.equal(out.feedback.reviews[0].note, 'Source A newer note')
+  assert.equal(Object.hasOwn(dispatch(store, read).feedback, 'artex_source_id'), false)
+  assert.equal(dispatch(store, { ...save, source_id: 'fake' }).ok, false)
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM artex_review_scoped').get().n, 2)
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, 0)
+})
