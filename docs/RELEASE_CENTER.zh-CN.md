@@ -4,17 +4,34 @@
 
 > 本页为维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前 Release 查询快照 · 2026-11-20
+## 当前 Release 查询快照 · 2026-11-21
 
-| 渠道 | 最新可见版本 | 证据与边界 |
+| 渠道 | 版本 / 固定提交 | 实际核验 |
 | --- | --- | --- |
-| 最新 Release | [v1.1.92-wxcvm.18](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.18) | 对应 [`0bd3a58`](https://github.com/wxcvm/dsh-purge/commit/0bd3a58ba1981c61193e898a2d1ba4f3517d7f5d)，已下载 ZIP 与 SHA256SUMS，校验、包内版本和入口通过（见下） |
-| 当前 master | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | [发布提交 Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44724659602) 已通过；后续主分支改动与旧发布包不混同 |
-| 实际安装 / Provider | [#336](https://github.com/wxcvm/dsh-purge/issues/336) | 另行验收，不从版本字段、CI 或 Release 可见性推断 |
+| Stable | [v1.1.92-wxcvm.18](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.18) · [`0bd3a58`](https://github.com/wxcvm/dsh-purge/commit/0bd3a58ba1981c61193e898a2d1ba4f3517d7f5d) | ZIP 4,210,929 字节；SHA-256 `310ec43c2a0821ee1e266dc62e0be2ead876218a51b05b267e74c3501d4b75df`；下载、清单、GitHub 资产摘要与标签关键文件一致。 |
+| Beta | [v1.1.92-wxcvm.7-beta.11](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.7-beta.11) · [`2c7ab65`](https://github.com/wxcvm/dsh-purge/commit/2c7ab6550953e27def091e641ce84cc11878fbe0) | ZIP 3,691,603 字节；SHA-256 `e1cefe83502b7a19cbb36a25ecf52ac0a52831589832f5165418db1805c9541e`；下载、清单、GitHub 资产摘要与标签关键文件一致。 |
+| 主线源码（不是发布） | [`59df66b`](https://github.com/wxcvm/dsh-purge/commit/59df66b8ec3b1ba7cc883860a057287dc9910d0d) | [Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44901063903) 通过，含隔离 DSH_HOME 中的 npm 打包安装测试；.18 标签另有[发布提交 Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44724659602)。 |
+| ARTEX 独立发行 | [v0.6.0](https://github.com/wxcvm/ARTEX/releases/tag/v0.6.0) · [`0a548c5`](https://github.com/wxcvm/ARTEX/commit/0a548c564bfd98036d78c4e011639eb369a2a9a4) | 下载 Windows Desktop ZIP 70,664,366 字节；SHA-256 `a0c0455d192c96b75c13d9f3367acb62cd408d4d70bdbb84b1698600fa698a43` 与该 Release 清单及 GitHub 资产摘要一致。没有运行 ARTEX 或验证双端协作。 |
 
-已校验发布 ZIP 的 SHA-256：`310ec43c2a0821ee1e266dc62e0be2ead876218a51b05b267e74c3501d4b75df`。下载字节、包内清单与版本通过，不等于已安装或已加载。
+### 重查已发布 Purge ZIP（只读）
 
-有关上游接手版和 Codex 实施：[根目录 AGENTS.md](../AGENTS.md)、[上游吸收执行方案](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md)。发布前仍须执行当前提交的打包、干净配置、Windows Desktop / Web 安装与恢复检查，不能拿 CI 或 .11 的校验结果替代。
+在源码仓库的 Node.js 24 环境中，确保已有对应 Git 标签，并把 Release 下载的 ZIP 与 `SHA256SUMS.txt` 放在同一目录。例如核对正式版：
+
+```powershell
+node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
+  --archive 'C:\downloads\dsh-purge-1.1.92-wxcvm.18.zip' `
+  --checksums 'C:\downloads\SHA256SUMS.txt' `
+  --commit 0bd3a58ba1981c61193e898a2d1ba4f3517d7f5d `
+  --digest sha256:310ec43c2a0821ee1e266dc62e0be2ead876218a51b05b267e74c3501d4b75df
+```
+
+脚本不联网、不解包落盘、不运行归档代码。它核对资产名、SHA-256、标签提交、包名/版本及四个文件（`package.json`、`client.js`、`lib/index.js`、`lib/update.js`）与标签源码的字节一致性。不要把覆盖四个文件当成全包源码比对，也不等于签名、安装或运行验收；输出 `signatureVerified` 和 `runtimeVerified` 均为 `false`。
+
+### 本机 Windows 安装只读对账（未验证已加载）
+
+以主线 `748192d` 为比对基准：实读官方 Desktop `0.2.2-rc.5` 安装清单及必需 runtime 文件，Desktop profile 的磁盘插件声明 `1.1.92-wxcvm.18`，已存在打包入口与插入配置。显式只读跟随该 profile 的 DSH_HOME 内链接后，`lib/index.js`、`lib/prompt-profiles.js`、`client.js` 与主线不同；`lib/response-context.js`、`lib/prompt-assembly-router.js` 相同。所查的 Web / Default profile 位置没有插件。没有修改安装、启动/重启宿主或调用 Provider；不能判定正运行的 Desktop 加载了哪个副本。实际安装、更新回退、界面和 Provider 见 [#336](https://github.com/wxcvm/dsh-purge/issues/336)、[#337](https://github.com/wxcvm/dsh-purge/issues/337) 和 [#340](https://github.com/wxcvm/dsh-purge/issues/340)。
+
+上游与后续进度见[总计划 0–8 项本轮对账](CODEX_UPSTREAM_ADOPTION_PLAN.zh-CN.md#8--版本中心发布证据与远期研究)；每次发布都要重查对应候选提交，不沿用其他版本的结果。
 
 ## .11 历史验证快照 · 2026-11-18
 
@@ -78,12 +95,11 @@
 
 预览版不自动等于正式版。不要用旧版本的验收结果替代新版本实机验收。
 
-## 私有交付
+## 仓库访问与历史私有交付
 
-- 在已登录且具备仓库权限的 GitHub 会话中访问 Releases，选择明确的版本和实际上传资产。
-- 若版本提供 SHA256SUMS，下载后核对相应文件的 SHA-256；没有校验文件时不记录为已完成校验。
-- 匿名安装地址和 codeload URL 不能直接访问私有仓库。#268 已合并授权更新与恢复实现；实际安装、升级和重启结果仍需核验。参见 [更新恢复](UPDATE_RECOVERY.zh-CN.md)。
-- GitHub 访问令牌不得写入发布文件、日志或仓库文档。
+- GitHub API 在 2026-11-21 返回仓库为公开、默认分支 `master`；当前发布资产从对应 Release 核对。过去转为 Private 的时段仍记在[开发进度历史快照](DEVELOPMENT_STATUS.zh-CN.md)，不作为当前说明。
+- 私有仓库的授权下载与恢复属于独立兼容路径（[#268](https://github.com/wxcvm/dsh-purge/pull/268)）；公开资产核验不能证明该路径实机可用。私有资产需由已登录且有访问权限的账号下载，不能依赖匿名安装地址。
+- 下载后核对 Release 的 SHA-256；没有校验文件不记为已通过。访问令牌不得写入发布文件、日志或文档。
 
 ## 发布与验收记录模板
 

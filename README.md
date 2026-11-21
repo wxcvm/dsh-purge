@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="PURGE — Private Workspace" width="960">
+  <img src="docs/banner.svg" alt="PURGE — Personal Workspace" width="960">
 </p>
 
 <p align="center">
   <strong>个人开发工作台 · DeepSeek Harness 扩展</strong><br>
-  <sub>PRIVATE WORKSPACE / WXCVM</sub><br>
+  <sub>PERSONAL WORKSPACE / WXCVM</sub><br>
   <a href="README.en.md">English</a> &nbsp;·&nbsp; 中文
 </p>
 
@@ -21,7 +21,7 @@
 
 ## 01 / 工作台
 
-Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检查、配置管理、维护与恢复，以及授权安全研究的项目管理界面。本仓库为个人维护版本，代码、开发记录和发布资源通过 GitHub 私有仓库管理。
+Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检查、配置管理、维护与恢复，以及授权安全研究的项目管理界面。本仓库为个人维护的公开版本；代码、开发记录及发布资产分别在 GitHub 的代码页、Issues/PR 和 Releases 查看。
 
 | 模块 | 定位 |
 | --- | --- |
@@ -31,7 +31,7 @@ Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检�
 | **维护中心 · Maintenance** | 版本信息、构建、诊断、备份与恢复 |
 
 > [!NOTE]
-> 当前仓库不再提供匿名公开下载。历史版本的公开链接不代表当前可用的私有安装渠道。请登录获授权的 GitHub 账号访问本仓库与发布资源。
+> 以对应 Release 实际列出的资产为准。主线版本号、分支源码与已发布包不能互相代替；下载后先核对校验文件。
 
 ## 02 / 版本与交付
 
@@ -46,9 +46,9 @@ Purge 是面向本机 DeepSeek Harness 的扩展项目，提供宿主状态检�
 | [Actions](https://github.com/wxcvm/dsh-purge/actions) | 查看 CI、构建结果及产物 |
 | [提交历史](https://github.com/wxcvm/dsh-purge/commits/master/) | 追踪变更与回归来源 |
 
-**发布状态（2026-11-20 核对）：** 最新可见 Release 为 [`.17`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.17)，而主线在该标签后又合并了多个 PR，**已合并源码不等于 `.17` 包含这些功能**。较早 [`.11`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) 的资产与实机验收另见[历史交付台账](docs/DELIVERY_STATUS_11.zh-CN.md)，不能移用到 `.17`。当前详情见[版本中心](docs/RELEASE_CENTER.zh-CN.md)；支持目标以[包元数据](package.json)为准，不等于 Windows Desktop 或 Web 已通过实机兼容验收。
+**发布状态（2026-11-21 核对）：** 最新正式版为 [.18](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.18)，最新已发布预览版为 [.7-beta.11](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.7-beta.11)。主线后续合并不属于已发布的 .18。较早 [`.11`](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.11) 的资产与实机验收另见[历史交付台账](docs/DELIVERY_STATUS_11.zh-CN.md)，不能移用到 .18。当前详情见[版本中心](docs/RELEASE_CENTER.zh-CN.md)；支持目标以[包元数据](package.json)为准，不等于 Windows Desktop 或 Web 已通过实机兼容验收。
 
-**私有交付：** 下载通过已授权的 GitHub 会话完成；本地安装与更新只使用可信的对应版本包。不要将 GitHub 访问令牌写入 README、配置文件或安装包。旧的匿名下载与自动更新链路仍需单独完成适配。
+**安装与更新：** 公开资产校验不替代实机验收。私有部署需使用具有访问权限的 GitHub 会话，授权下载与恢复路径单独验证；不要将访问令牌写入文档或安装包。
 
 ## Codex / DSH 任务交接
 
@@ -93,8 +93,8 @@ npm run test:all
 
 ## 06 / 许可证与来源
 
-本仓库沿用 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的历史来源与署名（该原始 GitHub URL 于 2026-11-20 查询返回 404，可能已私有、迁移或下架，并非仍可直接获取源码的保证）。原作者署名：YuJunZhiXue。保留 [Apache License 2.0](LICENSE)、[NOTICE](NOTICE) 与原作者署名。原作者要求不得转售原始构建、衍生项目必须注明来源。私有仓库可见性不撤销既有开源许可，也不改变已有第三方代码的授权义务。
+本仓库沿用 [YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge) 的历史来源与署名（该原始 GitHub URL 于 2026-11-20 查询返回 404，可能已私有、迁移或下架，并非仍可直接获取源码的保证）。原作者署名：YuJunZhiXue。保留 [Apache License 2.0](LICENSE)、[NOTICE](NOTICE) 与原作者署名。原作者要求不得转售原始构建、衍生项目必须注明来源。仓库可见性变化不撤销既有开源许可，也不改变已有第三方代码的授权义务。
 
 <p align="center">
-  <sub>PURGE / WXCVM · PRIVATE DEVELOPMENT</sub>
+  <sub>PURGE / WXCVM · PROJECT MAINTENANCE</sub>
 </p>
