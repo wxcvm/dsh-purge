@@ -147,3 +147,31 @@ test('pending or malformed journals block a fresh update until restored', async 
   assert.equal((await readUpdateRecovery(pending)).phase,'restored');
   assert.equal((await readUpdateRecovery(complete)).phase,'complete');
 });
+
+
+test('an interrupted update can restore third-party notices as well as plugin files', async t => {
+  const {source,one,two,backup} = await fixture(t);
+  const notice = path.join('third_party', 'example', 'NOTICE');
+  for (const [dir, text] of [[source, 'new notice'], [one, 'old notice']]) {
+    await fsp.mkdir(path.dirname(path.join(dir,notice)), {recursive:true});
+    await fsp.writeFile(path.join(dir,notice),text);
+  }
+  const manifest = JSON.parse(read(source,'package.json'));
+  manifest.files.push('third_party');
+  await fsp.writeFile(path.join(source,'package.json'),JSON.stringify(manifest));
+  const copyNames = [...names,'third_party'];
+  const moduleUrl = new URL('../lib/update-payload.js',import.meta.url).href;
+  const child = spawnSync(process.execPath,['--input-type=module','-e',
+    'import {copyUpdatePayload} from '+JSON.stringify(moduleUrl)+';'+
+    'await copyUpdatePayload(...'+JSON.stringify([source,[one,two],backup,copyNames])+', {onProgress: p => {if(p.copied===p.copyTotal) process.exit(73);}});'
+  ],{encoding:'utf8'});
+  assert.equal(child.status,73,child.stderr);
+  assert.equal(read(one,notice),'new notice');
+  assert.equal(read(two,notice),'new notice');
+  assert.equal((await readUpdateRecovery(backup)).phase,'copying');
+  await restoreInterruptedUpdate(backup);
+  assert.equal(read(one,notice),'old notice');
+  assert.equal(fs.existsSync(path.join(two,'third_party')),false);
+  assert.equal(read(one,'user-config.json'),'keep');
+  assert.equal((await readUpdateRecovery(backup)).phase,'restored');
+});
