@@ -34,7 +34,7 @@
 
 ## Windows 本地文档工作台预览
 
-`tools/superagent-preview` 可将当前 Git 提交明确列出的预览文件安装到当前 Windows 用户的 `%LOCALAPPDATA%/Purge-SuperAgent-Preview`。每次按完整提交单独放置，生成每个文件的 SHA-256。它不注册 Harness 插件、不修改 DSH_HOME、不迁入现有项目；独立数据目录在更新后保留。预览复用 Super Agent 的 SQLite 任务、尝试、精确结束和人工验收逻辑，但执行器仅为本地 Node worker。两项固定检查分别读取粘贴文本的一级标题和附录标题，各自在独立 worker 并行发起；汇总等待两个 worker 都退出，任一失败不进入待验收。工作台显示进行中步骤，历史保留两个 worker 的耗时（仅检查逻辑，不含启动时间，不能据此推断并行加速）。正文不写入任务数据库，不调用任何模型或外部工具。
+`tools/superagent-preview` 可将当前 Git 提交明确列出的预览文件安装到当前 Windows 用户的 `%LOCALAPPDATA%/Purge-SuperAgent-Preview`。每次按完整提交单独放置，生成每个文件的 SHA-256。它不注册 Harness 插件、不修改 DSH_HOME、不迁入现有项目；独立数据目录在更新后保留。预览复用 Super Agent 的 SQLite 任务、尝试、精确结束和人工验收逻辑，但执行器仅为本地 Node worker。两项固定检查分别读取粘贴文本的一级标题和附录标题，各自在独立 worker 并行发起；汇总等待两个 worker 都退出，任一失败不进入待验收。工作台显示进行中步骤，历史保留两个 worker 的耗时（仅检查逻辑，不含启动时间，不能据此推断并行加速）。正文不写入任务数据库，文档检查不调用模型或联网工具。
 
 在 Node.js 24 的 Windows PowerShell 中，从仓库根目录执行：
 
@@ -49,3 +49,10 @@ $preview = node tools/superagent-preview/install.mjs HEAD | ConvertFrom-Json
 ### 运行中断后的处理
 
 独立预览重启后，读取不会自动重跑，也不会把入库的「运行中」当成当前活动。新版尝试带本机进程标记：原进程已不在且没有结果时，可填写依据并手动标记中断，然后重新提交正文。仍存在同一进程号只是「尚不能证实中断」，旧记录没有身份信息也不猜测。若已有精确结束事件但未结算，界面单独说明。手动标记保留原运行及原因，不添加虚假的结束事件。Markdown 正文不存入数据库，所以重跑需重新粘贴。
+
+
+### GitHub 交付证据（只读）
+
+待验收时可选填公开 PR、Issue 和需要核对的完整 SHA。只读查询 GitHub [PR](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request)、[Issue](https://docs.github.com/en/rest/issues/issues#get-an-issue) 和该提交的 [Check Runs](https://docs.github.com/en/rest/checks/runs#list-check-runs-for-a-git-reference)；仅发送公开标识，不传任务正文、反馈、原始日志或凭据。读取后再次核对 PR 的 head SHA；若 PR 更新或本地任务已经被退回或验收，旧请求不会保存。公开 API 限流时保留已保存的证据，不自动用本机 GitHub 账号重试。
+
+快照附在当次运行历史下，保留时间、精确 SHA、链接和匹配到的检查状态。空列表、不同 SHA、未完成、超出一页或非成功检查，都不会被当成成功；「返回的检查全部成功」也不证明仓库分支保护定义的全部必需检查。允许人工验收未关联 CI 的任务，不自动评论、合并、关闭 Issue 或向 ARTEX 写入。

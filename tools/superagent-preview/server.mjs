@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { AGENT_WORK_DDL, migrateAgentWork } from '../../lib/redteam/agent-work-schema.js'
 import { createWorkItem, assignWorkItem, observeWorkItemEnd, reportWorkItem,
   getWorkItem, listWorkItems, requestWorkItemChanges, closeWorkItem } from '../../lib/redteam/agent-work-items.js'
+import { GITHUB_EVIDENCE_DDL, evidenceForTask, readGitHubEvidence, saveGitHubEvidence } from './github-evidence.mjs'
 
 const assets = new Map(Object.entries({
   '/': ['index.html', 'text/html; charset=utf-8'],
@@ -52,7 +53,7 @@ const checks = Object.freeze([
   { id: 'appendix', label: '附录标题' },
 ])
 
-export function createPreview({ dataDir, checkDocument = runCheck }) {
+export function createPreview({ dataDir, checkDocument = runCheck, readEvidence = readGitHubEvidence }) {
   mkdirSync(dataDir, { recursive: true })
   for (const name of ['tasks.sqlite', 'tasks.sqlite-journal', 'tasks.sqlite-wal', 'tasks.sqlite-shm']) {
     const existing = lstatSync(join(dataDir, name), { throwIfNoEntry: false })
@@ -62,6 +63,7 @@ export function createPreview({ dataDir, checkDocument = runCheck }) {
   db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;')
   db.exec(AGENT_WORK_DDL)
   migrateAgentWork(db)
+  db.exec(GITHUB_EVIDENCE_DDL)
   let active = null
   const instance = 'preview-v1:' + process.pid + ':' + randomUUID() + ':'
 
@@ -166,7 +168,10 @@ export function createPreview({ dataDir, checkDocument = runCheck }) {
           const item = getWorkItem(db, url.searchParams.get('id'))
           if (!item) return json(404, { error: '找不到该任务' })
           const evidence = recovery(item)
-          return json(200, { ...item, ...(evidence ? { recovery: evidence } : {}),
+          const snapshots = evidenceForTask(db, item.id)
+          return json(200, { ...item, history: item.history.map(run => snapshots.has(run.id)
+            ? { ...run, github_evidence: snapshots.get(run.id) } : run),
+            ...(evidence ? { recovery: evidence } : {}),
             ...(evidence?.state === 'observed' ? { preview_steps: active.steps } : {}) })
         }
       }
@@ -174,6 +179,17 @@ export function createPreview({ dataDir, checkDocument = runCheck }) {
         if (req.headers.origin !== 'http://' + host) return json(403, { error: '请在本机工作台提交' })
         const body = await input(req)
         if (url.pathname === '/run') return json(202, run(body))
+        if (url.pathname === '/github-evidence') {
+          const item = getWorkItem(db, body.task_id)
+          if (item?.status !== 'ready' || item.revision !== body.expected_revision || !item.assignment) {
+            return json(409, { error: '任务已变化或不在待验收状态，请重新读取' })
+          }
+          const evidence = await readEvidence({ pr_url: body.pr_url, issue_url: body.issue_url, expected_sha: body.expected_sha })
+          if (!saveGitHubEvidence(db, { taskId: item.id, revision: item.revision, assignmentId: item.assignment.id, evidence })) {
+            return json(409, { error: '读取期间任务已变化，未保存旧证据' })
+          }
+          return json(200, { evidence })
+        }
         if (url.pathname === '/interrupt') {
           const result = markInterrupted(body)
           return json(result.recorded ? 200 : 409, result)
