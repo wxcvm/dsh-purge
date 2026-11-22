@@ -149,3 +149,15 @@ test('optional community installer help runs without network or a checkout', () 
   assert.match(result.stdout, /--source hack-skills\|yak-skills\|all/)
   assert.match(result.stdout, /--update/)
 })
+
+
+test('bundled skills expose the pinned upstream revision and license', () => {
+  const skill = listLocalSkills().find((item) => item.name === 'active-scan')
+  assert.ok(skill)
+  assert.equal(skill.sourceMeta.repository, 'CallMeGuLab/dsh-purge-safe')
+  assert.equal(skill.sourceMeta.revision, 'd0a9abda6e2eb020dde85b48b5727b45d26582a7')
+  assert.equal(skill.sourceMeta.version, 'v2.0.1')
+  assert.equal(skill.sourceMeta.license, 'Apache-2.0')
+  assert.equal(skill.sourceMeta.adoption, 'adapted')
+  assert.match(skill.sourceMeta.upstreamBlobSha, /^[a-f0-9]{40}$/)
+})

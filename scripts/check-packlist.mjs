@@ -49,6 +49,7 @@ const required = [
   'bin/dsh-purge.js',
   'scripts/secret-vault.mjs',
   'skills/redteam/deepseek-web-intel.md',
+  'skills/redteam/source-manifest.json',
   'maintenance/Harness-Recovery.ps1',
   'docs/OPERATIONS_GUIDE.zh-CN.md',
   'README.md',

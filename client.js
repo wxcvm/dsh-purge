@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "15fc2fa70cacc82f";
+		const CLIENT_BUILD_ID = "58172d6bfa55afb7";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8195,6 +8195,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-item-desc' }, s.description || '（无描述）'),
         h('div', { className: 'rt-kb-sub' },
           [s.source ? '来源 ' + s.source : null,
+            s.sourceMeta ? '上游 ' + s.sourceMeta.repository + '@' + s.sourceMeta.version
+              + ' · ' + (s.sourceMeta.revision ? s.sourceMeta.revision.slice(0, 12) : '未知版本')
+              + ' · ' + (s.sourceMeta.license || '许可证未知') + ' · 已适配' : null,
             s.fromPlugin ? '本插件自带' : null,
             s.provider ? s.provider : null,
             s.dir ? s.dir : null].filter(Boolean).join(' · ')),

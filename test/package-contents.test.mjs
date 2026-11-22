@@ -26,6 +26,7 @@ const required = [
   'NOTICE',
   'scripts/redteam-setup.sh',
   'skills/redteam/active-scan.md',
+  'skills/redteam/source-manifest.json',
   'maintenance/inject-switch/Build.ps1',
 ]
 
