@@ -48,8 +48,8 @@ mkdir -p runs
 ## 4. 结果解释与资产记录
 
 - NetSpy 结果只证明在本次时间窗和探测方式下观察到可达/响应，不证明资产归属、登录权限、漏洞或边界突破。
-- 只对授权范围内的具体 IPv4 地址使用 `redteam_asset_add` 登记，填写真实 IP、`provenance=active`、`tool=netspy` 和 `state=live`。
-- 用 `redteam_asset_test` 追加“NetSpy 发现可达，尚未做服务/漏洞验证”，状态保持 untested；不得因此记入权限或边界得分。
+- 只有结果明确包含具体 IPv4 主机时，才对授权范围内的地址使用 `redteam_asset_add` 登记，填写真实 IP、`provenance=active`、`tool=netspy` 和 `state=live`。若输出只有 `/24` 等网段 CIDR，只把它作为网段线索保留在报告/结果文件中；不要把网络地址伪造成单主机资产。
+- 对已存在且对应具体 IP 的资产，用 `redteam_asset_test` 追加“NetSpy 发现可达，尚未做服务/漏洞验证”，状态保持 untested；不得因此记入权限或边界得分。
 - 结果文件只保存必要摘要，不记录凭据、用户数据或无关第三方地址。
 
 禁止默认全网段探测、暴力枚举端口、弱口令测试、漏洞利用、横向移动、隧道建立或持久化。
