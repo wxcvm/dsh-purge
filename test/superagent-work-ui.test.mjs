@@ -24,8 +24,8 @@ const full = (overrides = {}) => {
 }
 
 function mount(engagement, api, opts = {}) {
-  const states = [], refs = []
-  let state = 0, ref = 0, effect, dispose, unmounted = false, unmountedWrites = 0
+  const states = [], refs = [], effects = [], registered = []
+  let state = 0, ref = 0, unmounted = false, unmountedWrites = 0
   const ctx = vm.createContext({ engagement, opts, api: request => api(structuredClone(request)),
     React: {
       useState(initial) {
@@ -34,17 +34,31 @@ function mount(engagement, api, opts = {}) {
         return [states[index], value => { if (unmounted) unmountedWrites++; states[index] = value }]
       },
       useRef(initial) { return refs[ref++] ??= { current: initial } },
-      useEffect(fn) { effect = fn },
+      useEffect(fn, deps) { registered.push({ fn, deps }) },
     },
     h: (type, props, ...children) => ({ type, props: props || {}, children }),
   })
   vm.runInContext(client.slice(start, end), ctx)
-  const render = () => { state = ref = 0; return vm.runInContext('WorkItemsPanel({engagement,...opts})', ctx) }
-  render()
-  dispose = effect?.()
-  return { render, reloadScope() { dispose?.(); render(); dispose = effect?.() },
-    unmount() { dispose?.(); unmounted = true }, writes: () => unmountedWrites }
+  const render = () => {
+    state = ref = 0
+    registered.length = 0
+    return vm.runInContext('WorkItemsPanel({engagement,...opts})', ctx)
+  }
+  const commit = () => {
+    render()
+    const changed = registered.map((effect, index) => ({ ...effect, index }))
+      .filter(({ deps, index }) => !effects[index] || deps.length !== effects[index].deps.length
+        || deps.some((dep, i) => !Object.is(dep, effects[index].deps[i])))
+    for (const { index } of changed) effects[index]?.dispose?.()
+    for (const { deps, fn, index } of changed) effects[index] = { deps, dispose: fn() }
+  }
+  commit()
+  return { render, reloadScope: commit,
+    refreshWorkbench() { opts.refreshKey = (opts.refreshKey ?? 0) + 1; commit() },
+    unmount() { for (const { dispose } of effects) dispose?.(); unmounted = true },
+    writes: () => unmountedWrites }
 }
+
 function elements(node) {
   if (Array.isArray(node)) return node.flatMap(elements)
   return node && typeof node === 'object' ? [node, ...elements(node.children)] : []
@@ -474,5 +488,55 @@ test('registering an existing task key never claims a new item', async () => {
   await control(ui, 'button', '登记任务').props.onClick()
   assert.match(content(ui), /此任务键已有记录，未新增或覆盖/)
   assert.doesNotMatch(content(ui), /登记已记录/)
+  ui.unmount()
+})
+
+
+test('refreshing the board rechecks the open run and withholds controls until confirmed', async () => {
+  const calls = []
+  const delayed = deferred()
+  let reads = 0
+  const task = full()
+  const ui = mount('docs', async req => {
+    calls.push(req)
+    if (req.op === 'workItemReview') return list('docs', [task])
+    assert.equal(req.op, 'workItemGet')
+    if (++reads === 2) return delayed.promise
+    return { ok: true, engagement: 'docs', item: task }
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  control(ui, 'textarea', '结算依据').props.onChange({ target: { value: 'Reviewed the appendix' } })
+  const refreshing = control(ui, 'button', '刷新持久任务').props.onClick()
+  assert.match(content(ui), /正在读取任务 #1 的详情/)
+  assert.equal(control(ui, 'button', '记录结算'), undefined)
+  delayed.resolve({ ok: true, engagement: 'docs', item: task })
+  await refreshing
+  assert.equal(control(ui, 'textarea', '结算依据').props.value, 'Reviewed the appendix')
+  assert.deepEqual(calls.map(req => req.op), ['workItemReview', 'workItemGet', 'workItemReview', 'workItemGet'])
+  ui.unmount()
+})
+
+test('a workbench refresh does not close the detail, but a changed run invalidates the draft', async () => {
+  let task = full()
+  const ui = mount('docs', async req => {
+    if (req.op === 'workItemReview') return list('docs', [task])
+    assert.equal(req.op, 'workItemGet')
+    return { ok: true, engagement: 'docs', item: task }
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  control(ui, 'textarea', '结算依据').props.onChange({ target: { value: 'Draft for only the first run' } })
+  ui.refreshWorkbench()
+  await setImmediate()
+  assert.equal(control(ui, 'textarea', '结算依据').props.value, 'Draft for only the first run')
+  task = full({ revision: 4, assignment: { ...task.assignment, id: 2, run_id: 'new-run' } })
+  ui.refreshWorkbench()
+  await setImmediate()
+  assert.match(content(ui), /new-run/)
+  assert.equal(control(ui, 'textarea', '结算依据').props.value, '')
+  assert.equal(control(ui, 'button', '记录结算').props.disabled, true)
   ui.unmount()
 })
