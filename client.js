@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4d2ed542f0a18b52";
+		const CLIENT_BUILD_ID = "ae0da286d7187af4";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -3200,7 +3200,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				// h(ContinueRetrySection, null),
 				cleanPane(["prompt"], h("div", { className: "dshp-sub" },
 					h("h4", null, "红队专用主提示词"),
-					h("p", { className: "dshp-hint" }, "此处编辑红队预设的独立正文（prompt-inject.md）。普通全局与局部规则请在「通用与局部提示词」中管理；局部规则只有勾选红队预设才会附加到红队模式。"),
+					h("p", { className: "dshp-hint" }, "此处编辑红队预设的独立正文（prompt-inject.md）。通用、模型专属及局部规则在本页上方管理；局部规则只有勾选红队预设才会附加到红队模式。"),
 					h("div", { className: "dshp-row", style: { margin: 0 } },
 						h(Btn, { kind: "primary", tiny: true, disabled: patchBusy || !overrideLoaded, onClick: saveOverride }, t("btn.saveInject")),
 						h(Btn, { tiny: true, disabled: patchBusy || !overrideLoaded || !defaultOverride, onClick: restoreOverride }, t("btn.restoreInject")),
@@ -4735,6 +4735,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             const [routingEdits, setRoutingDraft] = useState(null);
             const routingDraft = { ...savedRouting, ...routingEdits };
             const [savedBackup, setSavedBackup] = useState(null);
+            const [backupHealth, setBackupHealth] = useState(null);
+            const [modelCatalog, setModelCatalog] = useState(null);
             const editRouting = (key, checked) => setRoutingDraft(previous => {
                 const next = { ...previous, [key]: checked };
                 if (checked === savedRouting[key]) delete next[key];
@@ -4850,7 +4852,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     bundledDefault: response.routingSettings?.bundledDefault === true,
                     redteamTaskRoute: response.routingSettings?.redteamTaskRoute === true,
                     modelAdaptive: response.routingSettings?.modelAdaptive === true,
+                    upstreamSafeBackup: backup === true,
                 });
+                setBackupHealth(response.backupSource && typeof response.backupSource === "object"
+                    ? response.backupSource : null);
+                setModelCatalog(Array.isArray(response.modelPromptCatalog)
+                    ? response.modelPromptCatalog.filter(item => item && typeof item.id === "string"
+                        && typeof item.text === "string") : null);
                 setRoutingDiag(response.lastAssembly || null);
                 setObservedTargets(Array.isArray(response.observedTargets) ? response.observedTargets : []);
                 setLoadError("");
@@ -4873,7 +4881,14 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     });
                 }
                 if (confirmed && Object.hasOwn(confirmed, "routing")) {
-                    setRoutingDraft(current => current === confirmed.routing ? null : current);
+                    setRoutingDraft(current => {
+                        if (!current) return null;
+                        const next = { ...current };
+                        for (const [key, value] of Object.entries(confirmed.routing)) {
+                            if (next[key] === value) delete next[key];
+                        }
+                        return Object.keys(next).length ? next : null;
+                    });
                 }
             }, []);
 			const reload = useCallback(async () => {
@@ -4936,14 +4951,17 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 }
 				finally { setBusy(false); }
 			};
-            const saveRouting = async () => {
+            const saveRouting = async (keys = ["bundledDefault", "redteamTaskRoute", "modelAdaptive"]) => {
                 if (!routingEdits || busy || reading || loadError) return;
+                const changes = Object.fromEntries(Object.entries(routingEdits)
+                    .filter(([key]) => keys.includes(key)));
+                if (!Object.keys(changes).length) return;
                 invalidatePreview();
                 setBusy(true); setNotice("");
                 try {
-                    const result = await promptProfilesApi("routing-settings", { settings: routingEdits });
+                    const result = await promptProfilesApi("routing-settings", { settings: changes });
                     if (!result?.ok) throw new Error(result?.error || "保存失败");
-                    pendingReadback.current = { routing: routingEdits };
+                    pendingReadback.current = { routing: changes };
                     const verified = await readAfterWrite(result);
                     setNotice(verified
                         ? "路由开关已保存。是否用于后续请求，请核对新的组装记录；保存不代表已投递。"
@@ -4979,6 +4997,32 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				setNewId("");
 				setNotice("新规则已打开：填写正文与适用范围后点击「保存规则」。未保存前不会注入任何内容。");
 			};
+            const modelFamilies = [
+                { id: "openai", label: "GPT", models: ["gpt-*", "openai/gpt-*", "chatgpt*", "o1*", "o3*", "o4*"] },
+                { id: "claude", label: "Claude", models: ["claude-*", "anthropic/claude-*"] },
+                { id: "gemini", label: "Gemini", models: ["gemini-*", "google/gemini-*"] },
+                { id: "glm", label: "GLM", models: ["glm-*", "chatglm*"] },
+            ];
+            const createFamilyRule = family => {
+                const id = "model-" + family.id;
+                if (savedProfiles.has(id) || Object.hasOwn(drafts, id)) {
+                    setActive(id);
+                    setRuleFilter("");
+                    setNotice("已打开该模型的现有规则；请核对适用范围。");
+                    return;
+                }
+                setDraft(prepare({
+                    id, name: family.label + " 专属规则", scope: "local", revision: null,
+                    enabled: false, priority: 50, body: "", keywords: [], excludes: [],
+                    allowEnabled: true, allowTargets: { models: family.models }, blockEnabled: false,
+                    blockTargets: {}, presetSwitches: { standard: true, ptc: true, minimal: true, cordis: true },
+                    injectOtherPresets: true,
+                }));
+                focusNewRule.current = id;
+                setRuleFilter("");
+                setActive(id);
+                setNotice("已建立" + family.label + " 专属规则草稿：先编辑正文和实际模型 ID，再启用并保存；不会自动注入。");
+            };
 			const showLock = async (id) => {
                 const request = ++sessionRead.current;
 				try {
@@ -5151,8 +5195,61 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 h("div", { className: "dshp-prompt-help", role: "status", "aria-label": "主副提示词来源" },
                     h("strong", null, "主 / 副提示词来源 · " + backupStatus),
                     h("p", null, "主来源是 Purge；副来源是接手版 dsh-purge-safe。来源选择不等同于「无匹配时使用内置兜底」，也不覆盖自定义正文。"),
-                    h("p", null, "此处只显示宿主返回的配置，不表示当前会话已组装或模型已收到。")),
+                    h("p", null, "这里不表示当前会话已组装或模型已收到；需要核对实际路由与请求。"),
+                    h("div", { className: "dshp-prompt-backup", style: panel },
+                        h("h4", { style: { margin: "0 0 8px" } }, "副提示词系统 · 接手版备用方案"),
+                        h("p", { className: "dshp-hint" }, "默认关闭。开启后仅替换红队或明确启用的内置兜底默认正文，已保存的全局/局部规则正文不变；已命中正文使用备用 persona-prefix 组装。"),
+                        h("label", { style: { display: "flex", gap: 8, alignItems: "center" } },
+                            h("input", { type: "checkbox", "aria-label": "启用接手版副提示词",
+                                checked: routingDraft.upstreamSafeBackup === true,
+                                disabled: busy || reading || Boolean(loadError) || savedBackup === null,
+                                onChange: e => editRouting("upstreamSafeBackup", e.target.checked) }),
+                            "启用副提示词方案"),
+                        h("p", { className: "dshp-hint", role: "status" },
+                            !backupHealth ? "备用资源未核验（旧版宿主可能没有返回状态）"
+                                : backupHealth.ready ? "备用资源可读取 · " + (backupHealth.version || "版本未标识")
+                                    + " · " + Number(backupHealth.bytes || 0) + " 字节；不代表已经投递"
+                                : "备用资源不可用：" + (backupHealth.code || "UNKNOWN") + "；实际组装将使用现有正文"),
+                        h("button", { type: "button", disabled: busy || reading || Boolean(loadError)
+                            || savedBackup === null || !routingEdits
+                            || !Object.hasOwn(routingEdits, "upstreamSafeBackup"),
+                            onClick: () => saveRouting(["upstreamSafeBackup"]) }, "保存副提示词方案"),
+                        h("p", { className: "dshp-hint" }, "副方案资源是随包封装的只读默认提示词，不直接编辑加密资源。要编写自己的专属正文，请使用下面的全局或局部规则。"))),
                 h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) }),
+                h("section", { className: "dshp-model-family-panel", style: panel, "aria-label": "模型专属提示词" },
+                    h("h3", { style: { margin: "0 0 8px" } }, "模型专属提示词 · GPT / Claude / Gemini / GLM"),
+                    h("p", { className: "dshp-hint" }, "内置适配依据每次请求的实际模型 / Provider 家族自动追加，开关默认关闭；不会修改主提示词正文。下面可查看内置内容，也可以为每个模型建立独立、可编辑的局部规则。"),
+                    h("label", { style: { display: "flex", alignItems: "center", gap: 9, paddingBottom: 9 } },
+                        h("input", { type: "checkbox", "aria-label": "按当前模型家族自动适配",
+                            disabled: busy || reading || Boolean(loadError),
+                            checked: routingDraft.modelAdaptive === true,
+                            onChange: e => editRouting("modelAdaptive", e.target.checked) }),
+                        "对识别成功的模型自动追加内置适配段",
+                        routingEdits?.modelAdaptive !== undefined ? " · 未保存" : ""),
+                    h("button", { type: "button", disabled: busy || reading || Boolean(loadError)
+                        || !routingEdits || !Object.hasOwn(routingEdits, "modelAdaptive"),
+                        onClick: () => saveRouting(["modelAdaptive"]) }, "保存模型适配开关"),
+                    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                        gap: 10, marginTop: 10 } },
+                        modelFamilies.map(family => {
+                            const builtIn = modelCatalog?.find(item => item.id === family.id);
+                            return h("div", { key: family.id, className: "dshp-prompt-family-card", style: {
+                                padding: 12, border: "1px solid var(--dsw-alias-border-l1, #36506b)",
+                                borderRadius: 9, minWidth: 0 } },
+                                h("strong", null, family.label),
+                                h("p", { className: "dshp-hint" },
+                                    "示例模型：" + (builtIn?.sampleModel || family.models[0])
+                                    + " · 内置适配：" + (routingDraft.modelAdaptive ? "已选择启用" : "未启用")),
+                                builtIn ? h("details", null, h("summary", null, "查看内置适配正文（只读）"),
+                                    h("pre", { style: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 240,
+                                        overflow: "auto", fontSize: 12 } }, builtIn.text))
+                                    : h("p", { className: "dshp-hint" }, "当前宿主未返回内置适配正文；不能据此判断已注入。"),
+                                h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
+                                    "aria-label": "编辑" + family.label + "专属规则",
+                                    onClick: () => createFamilyRule(family) },
+                                    "建立 / 编辑" + family.label + "专属规则"));
+                        }))),
+
                 h("p", { className: "dshp-hint", style: { margin: 0, overflowWrap: "anywhere" } },
                     observedTargets.length
                         ? "最近记录的模型 / Provider：" + (observedTargets[0]?.model || "未识别") + " / "
@@ -5164,7 +5261,6 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     [
                         ["bundledDefault", "无匹配时注入内置提示词", "无规则命中时才兜底；默认关闭"],
                         ["redteamTaskRoute", "普通模式识别红队任务", "按任务词和对应规则范围识别；默认关闭"],
-                        ["modelAdaptive", "按当前模型家族自动适配", "只对识别成功的当前模型生效；默认关闭"],
                     ].map(([key, title, hint]) => h("label", { key, style: { display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0" } },
                         h("input", { type: "checkbox", "aria-label": title, checked: routingDraft[key] === true,
                             disabled: busy || reading || Boolean(loadError),
@@ -5173,7 +5269,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
                     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
                         h("button", { type: "button", disabled: busy || reading || Boolean(loadError) || !routingEdits,
-                            onClick: saveRouting }, "保存路由开关"))),
+                            onClick: () => saveRouting(["bundledDefault", "redteamTaskRoute", "modelAdaptive"]) }, "保存路由开关"))),
                 h("div", { className: "dshp-prompt-columns" },
                     h("section", { className: "dshp-prompt-global", style: panel },
                         h("h4", { style: { margin: "0 0 10px" } }, "通用提示词", drafts.global ? " · 未保存" : ""),
@@ -5402,12 +5498,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const t = typeof props.t === "function" ? props.t : ((key) => key);
 			const [theme, setTheme] = useState(readTheme);
 			const [section, setSection] = useState("overview");
-			const [promptPane, setPromptPane] = useState("library");
+			const [redteamExpanded, setRedteamExpanded] = useState(false);
 			const [diagnosticsPane, setDiagnosticsPane] = useState("health");
 			const [profilesVisited, setProfilesVisited] = useState(true);
 			const [runtimeVisited, setRuntimeVisited] = useState(false);
 			const pageHeading = useRef(null);
 			const activePaneButton = useRef(null);
+            const redteamButton = useRef(null);
 			const pendingFocus = useRef(null);
 			const navigate = (next) => {
 				let target = next;
@@ -5418,9 +5515,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					setRuntimeVisited(true);
 					target = "diagnostics";
 				} else if (next === "profiles") {
-					changesPane = promptPane !== "library";
-					setPromptPane("library");
-					setProfilesVisited(true);
+                    setProfilesVisited(true);
 					target = "prompt";
 				} else if (next === "diagnostics") {
 					changesPane = diagnosticsPane !== "health";
@@ -5434,9 +5529,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				const destination = pendingFocus.current;
 				if (!destination) return;
 				pendingFocus.current = null;
-				const focusTarget = destination === "pane" ? (activePaneButton.current ?? pageHeading.current) : pageHeading.current;
+				const focusTarget = destination === "redteam" ? redteamButton.current
+                    : destination === "pane" ? (activePaneButton.current ?? pageHeading.current) : pageHeading.current;
 				focusTarget?.focus();
-			}, [section, promptPane, diagnosticsPane]);
+			}, [section, diagnosticsPane, redteamExpanded]);
 			const handleCleanNavKey = (event) => {
 				const { key, currentTarget, altKey, ctrlKey, metaKey, shiftKey } = event;
 				if (altKey || ctrlKey || metaKey || shiftKey) return;
@@ -5493,7 +5589,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const sections = [
 				{ id: "overview", title: "状态总览", description: "宿主、清洗进度与快捷操作" },
 				{ id: "patches", title: "补丁管理", description: "分类、筛选、检测与诊断" },
-				{ id: "prompt", title: "提示词管理", description: "通用、局部与红队专用提示词分类管理" },
+				{ id: "prompt", title: "提示词管理", description: "通用、模型专属、局部、红队与主副方案统一管理" },
 				{ id: "rules", title: "规则与技能", description: "规则预设、项目规则与技能" },
 				{ id: "maintenance", title: "版本与恢复", description: "版本更新、备份与恢复" },
 				{ id: "diagnostics", title: "诊断中心", description: "宿主故障、补丁核验与 Provider 运行记录" },
@@ -5516,26 +5612,28 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 						h("p", null, selected.description),
 						section === "diagnostics" ? h("button", { type: "button", className: "dshp-runtime-action", onClick: () => navigate("overview") }, t("diag.overview.back")) : null,
 					),
-					section === "prompt" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "提示词管理分组" },
-						[["library", "通用与局部提示词"], ["source", "红队专用提示词"]].map(([id, label]) => h("button", {
-							key: id, type: "button", className: "dshp-clean-filter" + (promptPane === id ? " is-on" : ""),
-							ref: promptPane === id ? activePaneButton : null,
-							"aria-pressed": promptPane === id, onClick: () => { setPromptPane(id); if (id === "library") setProfilesVisited(true); },
-						}, label))) : null,
 					section === "diagnostics" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "诊断中心分组" },
 						[["health", "宿主与故障"], ["runtime", "Provider 与运行记录"]].map(([id, label]) => h("button", {
 							key: id, type: "button", className: "dshp-clean-filter" + (diagnosticsPane === id ? " is-on" : ""),
 							ref: diagnosticsPane === id ? activePaneButton : null,
 							"aria-pressed": diagnosticsPane === id, onClick: () => { setDiagnosticsPane(id); if (id === "runtime") setRuntimeVisited(true); },
 						}, label))) : null,
-					h("div", { className: "dshp-clean-pane", hidden: section === "rules" || (section === "prompt" && promptPane === "library") || (section === "diagnostics" && diagnosticsPane === "runtime") },
-						h(PurgifySection, { section, onNavigate: navigate })),
-					h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
-						h(RulesSection, null)),
-					profilesVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "prompt" || promptPane !== "library" },
-						h(PromptProfilesSection, { onRedteam: () => {
-							if (promptPane !== "source") { pendingFocus.current = "pane"; setPromptPane("source"); }
-						} })) : null,
+                    profilesVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "prompt" },
+                        h(PromptProfilesSection, { onRedteam: () => {
+                            pendingFocus.current = "redteam"; setRedteamExpanded(true);
+                        } }),
+                        h("div", { style: { marginTop: 14 } },
+                            h("button", { type: "button", className: "dshp-clean-filter",
+                                ref: redteamButton, "aria-expanded": redteamExpanded,
+                                "aria-controls": "dshp-redteam-prompt-editor",
+                                onClick: () => setRedteamExpanded(open => !open) },
+                                redteamExpanded ? "收起红队专用提示词" : "红队专用提示词"))) : null,
+                    h("div", { id: "dshp-redteam-prompt-editor", className: "dshp-clean-pane",
+                        hidden: section === "rules" || (section === "prompt" && !redteamExpanded)
+                            || (section === "diagnostics" && diagnosticsPane === "runtime") },
+                        h(PurgifySection, { section, onNavigate: navigate })),
+                    h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
+                        h(RulesSection, null)),
 					runtimeVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "diagnostics" || diagnosticsPane !== "runtime" },
 						h(RuntimeObservationsSection, { onNavigate: navigate, active: section === "diagnostics" && diagnosticsPane === "runtime" })) : null,
 				),

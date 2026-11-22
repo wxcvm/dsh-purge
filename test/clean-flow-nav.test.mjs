@@ -121,20 +121,23 @@ test('cleaning panel no longer houses ARTEX and embedded drill gets the updated 
 })
 
 
-test('prompt and diagnostics are consolidated into two pages with internal tabs', () => {
+test('prompt sources and model families share one workbench page; diagnostics retain their own tabs', () => {
   const settings = root.slice(root.indexOf('function SettingsRoot(props)'), root.indexOf('const REWIND_CSS'));
   assert.match(settings, /id: "prompt", title: "提示词管理"/);
   assert.match(settings, /id: "diagnostics", title: "诊断中心"/);
-  assert.match(settings, /\[promptPane, setPromptPane\] = useState\("library"\)/);
-  assert.match(settings, /\[profilesVisited, setProfilesVisited\] = useState\(true\)/);
-  assert.ok(settings.indexOf('["library", "通用与局部提示词"]') < settings.indexOf('["source", "红队专用提示词"]'));
-  assert.doesNotMatch(settings, /id: "profiles"|id: "runtime"/);
-  assert.match(settings, /\["source", "红队专用提示词"\]/);
-  assert.match(settings, /\["library", "通用与局部提示词"\]/);
+  assert.match(settings, /\[redteamExpanded, setRedteamExpanded\] = useState\(false\)/);
+  assert.doesNotMatch(settings, /\[promptPane, setPromptPane\]|"通用与局部提示词"\], \["source"/);
+  assert.match(settings, /"dshp-redteam-prompt-editor"/);
+  assert.match(settings, /"aria-expanded": redteamExpanded/);
+  assert.match(settings, /h\(PromptProfilesSection, \{ onRedteam:/);
+  assert.match(settings, /h\(PurgifySection, \{ section, onNavigate: navigate \}\)/);
   assert.match(settings, /\["health", "宿主与故障"\]/);
   assert.match(settings, /\["runtime", "Provider 与运行记录"\]/);
-  assert.match(settings, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "prompt" \|\| promptPane !== "library"/);
   assert.match(settings, /runtimeVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "diagnostics" \|\| diagnosticsPane !== "runtime"/);
+  const profile = root.slice(root.indexOf('function PromptProfilesSection('), root.indexOf('function SettingsRoot('));
+  assert.match(profile, /模型专属提示词 · GPT \/ Claude \/ Gemini \/ GLM/);
+  assert.match(profile, /副提示词系统 · 接手版备用方案/);
+  assert.match(profile, /createFamilyRule/);
 });
 test('patch page explains coverage versus loaded host and treats skips separately', () => {
   assert.match(root, /当前定位宿主的磁盘补丁覆盖情况，不等于当前进程已经加载/);
