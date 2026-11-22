@@ -232,6 +232,16 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 
 用户可以在智能体会话中让它先搜索、再按条目 ID 读取；但这不是自动发现或执行漏洞的功能。运行于 DSH 的宿主必须能直接访问本机 ARTEX 知识库，单纯远程部署的数据库不能凭空读取。
 
+### `redteam_kev`
+【CISA KEV 已知在野利用公告参考】读取本地 CISA 官方公告缓存，**不扫描目标、不改变资产记录或漏洞结论**。与 `redteam_cve_match` 的离线指纹候选不同：它只说明某 CVE 是否在指定时间的 KEV 公告中被收录，不意味着某台主机受影响。
+
+参数：
+- `action=status`：只读显示缓存是否可用、更新时刻、条目数量和是否超过 24 小时；缺库时明确返回 unavailable，**不会联网**。
+- `action=lookup` + `cve=CVE-2021-44228`：只查本地缓存；未下载时 `known_exploited=null`，未被当前缓存收录时为 `false`，两者不能混淆。
+- `action=refresh`：仅在用户明确要求更新公告时手动请求 CISA 官方 JSON，失败保留旧缓存；不会启动自动更新、下载 Nuclei 模板或执行 PoC。
+
+公开数据源：[CISA Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)，使用上游 [dsh-purge-safe KEV 层](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d0a9abda6e2eb020dde85b48b5727b45d26582a7/lib/redteam/kev.js) 的分层设计思路，现有知识/模板库和工具权限保持不变。
+
 ### `redteam_cve_match`
 【离线只读】按现有 SQLite 资产的服务、指纹、产品与端口，或直接输入 CVE / 产品名，查找随包公开漏洞候选索引。只返回候选与原始资料链接，**不执行 PoC、不联网、不写漏洞库、不自动确认成功**。同产品命中不代表版本确实受影响。
 
