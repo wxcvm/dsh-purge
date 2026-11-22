@@ -35,11 +35,13 @@ test('explicit nuclei index refresh discovers updates inside an existing nested 
   assert.match(cache.items[0][1], /Updated Template/)
 })
 
-test('explicit refresh gracefully reports an unavailable local template directory', t => {
+test('explicit refresh handles an isolated empty local templates directory', t => {
   const root = mkdtempSync(join(tmpdir(), 'purge-nuclei-empty-'))
+  const templates = join(root, 'toolkit', 'nuclei-templates')
+  mkdirSync(templates, { recursive: true })
   const store = new RedteamStore(root)
   t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
   assert.deepEqual(store.templateStats({ refresh: true }), {
-    dir: null, total: 0, cve: 0, reindexed: false,
+    dir: templates, total: 0, cve: 0, reindexed: true,
   })
 })
