@@ -448,6 +448,19 @@ _confirmed/exploited 才算成果；claimed 必须用 evidence_upgrade 升级成
 - `limit`
 - `offset`
 
+### `redteam_cleanup`
+清理台账只登记本次演练创建的临时资源，不执行删除、禁用、关闭或远程清理。交付前检查 open 项；用户明确要求保留的资源标记为 kept 并写明原因。`done` 表示操作者已确认清理完成，不代表工具执行过清理。不要记录口令、令牌、私钥、Cookie 或其他秘密值。
+
+参数：
+- `engagement`
+- `op` — add | list | update
+- `id` — op=update 的台账 id
+- `kind` — webshell | account | tunnel | file | task | ssh_key | other
+- `target` — 资源所属主机、资产或目标
+- `location` — URL / 路径 / 主机:端口
+- `detail` — 脱敏说明、清理方式或保留原因
+- `status` — open | done | kept；list 另支持 all，默认只列 open
+- `limit` — list 默认 100，最多 500
 ### `redteam_evidence_upgrade`
 把 claimed / inferred 升级为 observed。必须带 verified_result（亲自验证的回显/数据）。
 
