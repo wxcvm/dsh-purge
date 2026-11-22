@@ -1,3 +1,22 @@
+# 1.1.92-wxcvm.21
+
+## 中文
+
+本次发行重点是让用户可直接试用**统一提示词工作区**与**HTTP 403 观察页**，不改变模型请求授权、上游拒绝或原有用户保存的配置。该版本在已发布 .20 的基础上，整合 [#487](https://github.com/wxcvm/dsh-purge/pull/487) 与 [#488](https://github.com/wxcvm/dsh-purge/pull/488)；旧 .20 等标签、ZIP 和校验文件保持不变。
+
+- **提示词管理统一单页**（#487）：在清洗台同一「提示词管理」页查看 GPT、Claude、Gemini、GLM 四家真实内置适配段（只读）；支持分别建立默认停用、未保存的模型专属局部规则，保留实际模型 ID 白名单与会话/Agent 约束。接手版副方案可查看资源状态并独立保存开关，不覆盖未保存的普通路由或既有正文。红队主提示词编辑器同页展开，继续使用原有保存/恢复接口。
+- **HTTP 状态观察**（#488）：新增「清洗台 → 诊断中心 → HTTP 响应观察」，复用只读运行记录，仅观察 Host 已提供的错误元数据、`CONTENT_REFUSED` 与近期 HTTP 403。未知 HTTP 状态明确标为未观测，Host 记录不等于抓到上游原始 HTTP 包。
+- **403 → 200 离线对照**（#488）：页面内模拟展示 HTTP 状态变为 200，保留原始 403、原错误码和错误终态，说明数字变成 200 并不能使服务商接受请求。**不会修改真实 Provider 响应、鉴权、Origin、内容安全或错误正文；不会偷偷重试请求。**
+- **回归与隐私**：增加模拟状态映射、缺失状态、诊断焦点、主副方案独立保存和模型规则草稿测试；页面不显示 HTTP URL、敏感 Header、Cookie、Token、Prompt 与原始响应正文。运行记录仅限内存窗口，页面离开/隐藏停止刷新。
+
+**验收边界**：Windows/Ubuntu 的 UI/打包与官方 rc.5/rc.3 隔离宿主合约仅证明源码和发行物可构建。仍须在实际 Windows Harness Desktop 下载 .21、核对 ZIP、退出重开与加载版本，再检查三个新入口及真实 Provider 请求。真实 Wire 403 是否到达 Host 仍依赖对应适配器的状态透传，不能从“未观测”推断成功。任务继续跟踪 #336/#340/#341/#343。此版本不承诺解除 Daybreak 或任何服务商权限限制。
+
+## English
+
+Version .21 ships the unified prompt-management page (#487) and a new read-only HTTP response observation page (#488). The prompt workspace displays actual built-in GPT/Claude/Gemini/GLM overlays, creates disabled and unsaved model-scoped drafts, exposes independent backup-source controls, and unfolds the original red-team editor in place. The new diagnostic page summarizes Host-observed status and `CONTENT_REFUSED`, with an **offline display-only 403→200 experiment** that retains the true 403 and its failure semantics. It does not change upstream responses, authentication, safety controls or error payloads. Pinned Windows/Ubuntu CI and packaging checks are not a substitute for a real Desktop installation, runtime load, or Provider wire delivery. Earlier tags and assets remain immutable.
+
+---
+
 # 1.1.92-wxcvm.20
 
 ## 中文
