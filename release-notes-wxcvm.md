@@ -10,11 +10,15 @@
 - **兼容、更新与交付验证**：核实 Windows Desktop 插件安装、链接目录与构建字节的只读证据；改进 release/npm 双归档对账、干净 `DSH_HOME` 安装和回退隔离测试。CI、宿主只读检测、真实加载与实际模型输出仍是不同的验收等级。
 - **ARTEX 与其他 UI**：手动审查按明确来源隔离、保存冲突时保留草稿；进一步调整清洗台窗口布局、状态提示与相关管理页面，不把外部系统的状态误认成 Purge 自身确认的结果。
 
+- **Super Agent 本地预览与交付**：普通文档任务支持两项独立检查、依赖汇总、人工要求补充/确认、中断后人工恢复、精确提交的公开 GitHub 检查证据及可核对 SHA-256 的 ARTEX Markdown 手动交接；旧任务列表可翻阅超过 30 条记录（#459–#465、#467）。这是独立 Windows 本地预览，不是正式 Desktop 自动执行器，也未自动同步 ARTEX。
+- **官方 Agent Teams 运行基线**：在隔离官方 Harness `0.2.2-rc.5` 的固定无密钥夹具中确认真实 Team 会话、任务依赖顺序和队友消息（#466）。该基线未调用真实 Provider，也不证明 Purge 已在现用 Desktop 加载。
+- **版本与发布安全**：版本中心明确区分主线候选、正式 Release、磁盘安装和已加载后端（#458）；正式与历史恢复发布工作流禁止覆盖现有 ZIP / SHA256 资产（#452、#453），本机桥接来源仅接受明确支持的 Desktop 来源（#454），可选 Windows 制品上传故障独立警告、不再误伤编译或 API 测试门槛（#455）；个人知识库增加预览和来源核对（#456）。
+
 **发布前剩余门槛**：候选新 SHA 的 Windows/Ubuntu CI 与打包核对、不可变标签与 Release SHA256、Windows 11 Harness Desktop 真正加载/重启/配置开关/回退、实际 Provider 请求送达以及 ARTEX 双端联动仍需分别确认，追踪 #336、#337、#338、#339、#340、#343。当前发布版依旧是 `v1.1.92-wxcvm.18`。
 
 ## English
 
-Candidate notes for the changes on master since the immutable `.18` release: safer ordinary prompt save and draft conflict handling, Super Agent work/review improvements, late-stream observation reconciliation, local browser-origin checks, isolated public-upstream Git credentials, private-key and YAML multiline masking in opt-in shareable reports, and improved read-only package/Desktop evidence. No claim of actual Provider delivery or Desktop/ARTEX end-to-end acceptance. This text and candidate package metadata do not publish a release. Previous tags and assets remain untouched.
+Candidate notes for the changes on master since the immutable `.18` release: safer ordinary prompt save and draft conflict handling, Super Agent work/review improvements, late-stream observation reconciliation, local browser-origin checks, isolated public-upstream Git credentials, private-key and YAML multiline masking in opt-in shareable reports, and improved read-only package/Desktop evidence. The standalone Windows Super Agent document preview now supports independent checks, manual review/recovery, SHA-bound public GitHub check evidence, deterministic Markdown handoff to ARTEX and task pagination (#459–#465, #467); the official Agent Teams runtime was exercised with an isolated keyless fixture (#466), not a real Provider. Version identity and immutable Release/recovery asset protections were strengthened (#452–#455, #458), and personal knowledge import preview was added (#456). No claim of actual Provider delivery or Desktop/ARTEX end-to-end acceptance. This text and candidate package metadata do not publish a release. Previous tags and assets remain untouched.
 
 ---
 
