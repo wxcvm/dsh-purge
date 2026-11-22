@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "ae0da286d7187af4";
+		const CLIENT_BUILD_ID = "9c69ac55ffcd1402";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4104,7 +4104,7 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 
 /* __DSH_PURGE_RUNTIME_BEGIN__ */
 /** All scheduled cases are the denominator; missing captures are not successful delivery. */
-function completionSummary(counts, total) {
+export function completionSummary(counts, total) {
   const captured = total - counts.missing;
   return {
     planned: total, captured, correct: counts.correct,
@@ -4115,7 +4115,7 @@ function completionSummary(counts, total) {
 }
 
 /** Browser/CLI shared report projection. No responses or user-supplied markup escape into the UI. */
-function qualityReportSummary(report) {
+export function qualityReportSummary(report) {
   if (!report || typeof report !== 'object') throw new Error('Expected a quality report object');
   const reports = report.comparisons ? Object.entries(report.comparisons) : [['paired', report]];
   if (!reports.length || reports.length > 3) throw new Error('Invalid comparisons');
@@ -4170,13 +4170,13 @@ function qualityReportSummary(report) {
 }
 
 // Display-only experiment. Never forwards text to a model or writes host history.
-const THINKING_EXPERIMENT_KEY = 'dshp.thinking-experiment.v1';
-const THINKING_DEFAULT_TEMPLATE = '模型：{{model}}\n思考事件：{{reasoning_chunks}}\n首思考延迟：{{first_reasoning_ms}} ms\n{{reasoning}}';
-function renderThinkingExperiment(template, values = {}) {
+export const THINKING_EXPERIMENT_KEY = 'dshp.thinking-experiment.v1';
+export const THINKING_DEFAULT_TEMPLATE = '模型：{{model}}\n思考事件：{{reasoning_chunks}}\n首思考延迟：{{first_reasoning_ms}} ms\n{{reasoning}}';
+export function renderThinkingExperiment(template, values = {}) {
   return String(template ?? '').replace(/\{\{(model|provider|reasoning_chunks|reasoning_chars|reasoning_block_starts|durable_reasoning_block_starts|durable_reasoning_delta_chunks|durable_reasoning_delta_chars|durable_reasoning_blocks|durable_reasoning_text_blocks|durable_reasoning_chars|durable_compact_reasoning_records|durable_compact_reasoning_chunks|durable_compact_reasoning_chars|durable_compact_text_chunks|durable_compact_invalid_records|first_reasoning_ms|last_reasoning_ms|first_text_ms|first_tool_ms|reasoning_span_ms|reasoning)\}\}/g,
     (_, key) => values[key] == null ? '未观测' : String(values[key]));
 }
-function thinkingEventValues(row) {
+export function thinkingEventValues(row) {
   return { model: row?.model ?? null, provider: row?.provider ?? null,
     reasoning_chunks: row?.reasoningChunks ?? null, reasoning_chars: row?.reasoningChars ?? null,
     first_reasoning_ms: row?.firstReasoningMs ?? null, last_reasoning_ms: row?.lastReasoningMs ?? null,
@@ -4190,7 +4190,7 @@ function thinkingEventValues(row) {
     durable_compact_invalid_records: row?.durableCompactInvalidRecords ?? null, reasoning: null };
 }
 // These are client-observed offsets, not model-side compute duration.
-function thinkingTimeline(row) {
+export function thinkingTimeline(row) {
   const valid = value => Number.isFinite(value) && value >= 0 ? value : null;
   const first = valid(row?.firstReasoningMs), last = valid(row?.lastReasoningMs);
   const text = valid(row?.firstTextMs), tool = valid(row?.firstToolMs), end = valid(row?.elapsedMs);
@@ -4199,11 +4199,11 @@ function thinkingTimeline(row) {
   return { first, last, text, tool, end, span, interleaved, gap: row?.streamGap === true,
     textGap: !interleaved && last !== null && text !== null && text >= last ? text - last : null };
 }
-function compareThinkingTemplates(enabled, a, b, values, original) {
+export function compareThinkingTemplates(enabled, a, b, values, original) {
   return { baseline: String(original ?? ''), a: enabled ? renderThinkingExperiment(a, values) : String(original ?? ''),
     b: enabled ? renderThinkingExperiment(b, values) : String(original ?? ''), enabled: !!enabled };
 }
-function parseThinkingExperiment(raw) {
+export function parseThinkingExperiment(raw) {
   try {
     const data = JSON.parse(raw);
     if (!Array.isArray(data?.profiles)) throw new Error('profiles');
@@ -4213,7 +4213,7 @@ function parseThinkingExperiment(raw) {
   } catch {}
   return { profiles: [{ name: '默认实验', template: THINKING_DEFAULT_TEMPLATE }], selected: 0, enabled: true };
 }
-function hasThinkingEvidence(row) {
+export function hasThinkingEvidence(row) {
   return [row?.reasoningChunks,row?.reasoningBlockStarts,row?.durableReasoningBlockStarts,row?.durableReasoningDeltaChunks,row?.durableReasoningBlocks,row?.durableCompactReasoningChunks,row?.durableCompactReasoningRecords].some(n=>n>0);
 }
 function ThinkingExperimentPanel({ rows = [], mask = false, snapshotAvailable = false } = {}) {
@@ -4287,7 +4287,7 @@ function ThinkingExperimentPanel({ rows = [], mask = false, snapshotAvailable = 
 
 // Normal-task continuity benchmark. The checkpoint is an explicit user-visible
 // summary of fixture facts, never hidden reasoning or a provider replay block.
-const THINKING_TASK_CASES = Object.freeze([
+export const THINKING_TASK_CASES = Object.freeze([
   { id:'config', title:'配置解析', task:'配置优先级为 CLI > 环境变量 > 文件。文件 port=8080, mode=dev；环境 port=9000；CLI mode=prod。输出仅 JSON，字段 port（数字）、mode（字符串）、portSource、modeSource（cli/env/file）。',
     checkpoint:'已核对：文件是默认值，环境变量覆盖 port，CLI 覆盖 mode。继续按已给优先级核对并交付。',
     expected:{port:9000,mode:'prod',portSource:'env',modeSource:'cli'} },
@@ -4298,12 +4298,12 @@ const THINKING_TASK_CASES = Object.freeze([
     checkpoint:'已核对：记录按 A/B/C 分组，入库加、出库减；每种物品分别汇总后再计算总数。',
     expected:{A:5,B:5,C:0,total:10} }
 ]);
-function thinkingTaskPrompt(id, group) {
+export function thinkingTaskPrompt(id, group) {
   const item = THINKING_TASK_CASES.find(c=>c.id===id);
   if (!item || !['A','B'].includes(group)) return null;
   return item.task + (group==='B' ? '\n\n任务进度备注（来自用户提供的已核对事实）：'+item.checkpoint : '');
 }
-function scoreThinkingTask(id, answer) {
+export function scoreThinkingTask(id, answer) {
   const item=THINKING_TASK_CASES.find(c=>c.id===id);
   if (!item) return {status:'unknown-case',correct:false};
   if (typeof answer!=='string' || !answer.trim()) return {status:'missing',correct:false};
@@ -4316,16 +4316,16 @@ function scoreThinkingTask(id, answer) {
   return {status:correct?'correct':'wrong',correct};
 }
 // Bind only to explicit observed attempts; no transcript or hidden reasoning is retained.
-function thinkingEvidenceKey(row) {
+export function thinkingEvidenceKey(row) {
   if (!row?.sessionId || !row?.attemptId || !Number.isSafeInteger(row.generation) || !Number.isFinite(row.startedAt)) return '';
   return JSON.stringify([row.sessionId,row.generation,row.attemptId,row.startedAt]);
 }
-function thinkingEvidenceRow(rows,key) {
+export function thinkingEvidenceRow(rows,key) {
   if (!key) return null;
   const matches=rows.filter(r=>thinkingEvidenceKey(r)===key);
   return matches.length===1?matches[0]:null;
 }
-function thinkingEvidencePair(a,b) {
+export function thinkingEvidencePair(a,b) {
   if (!thinkingEvidenceKey(a)||!thinkingEvidenceKey(b)) return 'missing';
   if (a.sessionId===b.sessionId) return 'same-session';
   if (!a.provider||!a.model||!b.provider||!b.model) return 'unknown-route';
@@ -4333,7 +4333,7 @@ function thinkingEvidencePair(a,b) {
   if ([a,b].some(r=>r.streamGap||r.terminalConflict||r.interrupted||!r.streamEnded||!r.finishObserved||r.finish!=='stop'||r.settlement!=='committed'||r.turnOutcome!=='completed')) return 'incomplete';
   return 'comparable-attempts';
 }
-function thinkingEvidenceMetrics(row) {
+export function thinkingEvidenceMetrics(row) {
   const n=v=>Number.isFinite(v)&&v>=0?v:null;
   if(!row) return null;
   return { elapsedMs:n(row.elapsedMs), firstReasoningMs:n(row.firstReasoningMs), firstTextMs:n(row.firstTextMs),
@@ -4345,7 +4345,7 @@ function thinkingEvidenceMetrics(row) {
 }
 // A bounded parent-turn projection. Child lifecycle is session scoped and is
 // deliberately not included in parent token/time totals.
-function thinkingTurnEvidence(snapshot, anchor) {
+export function thinkingTurnEvidence(snapshot, anchor) {
   if (!thinkingEvidenceKey(anchor) || !Number.isSafeInteger(anchor.turn) || !snapshot || !Array.isArray(snapshot.items)) return null;
   if (!thinkingEvidenceRow(snapshot.items,thinkingEvidenceKey(anchor))) return null;
   const rows=snapshot.items.filter(r=>r.sessionId===anchor.sessionId&&r.generation===anchor.generation&&r.turn===anchor.turn);
@@ -4376,7 +4376,7 @@ function thinkingTurnEvidence(snapshot, anchor) {
     unknownStepAttempts:rows.filter(r=>!Number.isSafeInteger(r.step)).length,child,
     childTokenTotals:null, repeatedToolOperations:null };
 }
-function thinkingComparisonReport({id,results,pairState,turnA,turnB,stale=false,confirmed=false}) {
+export function thinkingComparisonReport({id,results,pairState,turnA,turnB,stale=false,confirmed=false}) {
   return {schemaVersion:1,kind:'thinking-task-continuity',caseId:id,source:'user-pasted-answer-and-observed-runtime-metadata',
     environmentConfirmed:!!confirmed,requestPairState:pairState,stale:!!stale,
     scores:results?{a:results.a.status,b:results.b.status}:null,
@@ -4703,6 +4703,112 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     h('input', { type: 'file', accept: '.json,application/json', 'aria-label': '导入任务质量报告', onChange: importReport }),
     reportError ? h('p', { role: 'alert', className: 'dshp-runtime-warning' }, maskRuntime ? '导入失败，详情已隐藏。' : '导入失败：' + reportError) : null,
     report ? h('div', null, h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => { setReport(null); setReportError(''); } }, '清除报告'), maskRuntime ? h('p', null, '报告已读取，详细内容已隐藏。') : h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } }, JSON.stringify(report, null, 2))) : null);
+}
+
+/** Read-only Host status metadata + an offline display-only 403→200 comparison. */
+function projectHttpStatuses(snapshot, simulated = false) {
+  const items = Array.isArray(snapshot?.items) ? snapshot.items.slice(0, 50) : [];
+  return items.map(item => {
+    const raw = Number.isInteger(item?.httpStatus) && item.httpStatus >= 100 && item.httpStatus <= 599
+      ? item.httpStatus : null;
+    const errorCode = typeof item?.errorCode === 'string' && /^[A-Za-z0-9_./-]{1,64}$/.test(item.errorCode)
+      ? item.errorCode : null;
+    const displayed = simulated && raw === 403 ? 200 : raw;
+    const source = ['host-stream', 'durable-stream'].includes(item?.reasonSource)
+      ? item.reasonSource : 'not-observed';
+    return {
+      rawStatus: raw, displayedStatus: displayed, errorCode,
+      reasonSource: source,
+      finish: ['error', 'stop', 'content_filter', 'aborted', 'tool-calls', 'max-tokens'].includes(item?.finish)
+        ? item.finish : 'unknown',
+      turnOutcome: ['error', 'completed', 'aborted'].includes(item?.turnOutcome) ? item.turnOutcome : 'unknown',
+      simulated: simulated && raw === 403,
+    };
+  });
+}
+
+function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
+  const [snapshot, setSnapshot] = useState(null);
+  const [readError, setReadError] = useState('');
+  const [receivedAt, setReceivedAt] = useState(null);
+  const [simulate, setSimulate] = useState(false);
+  const root = useRef(null);
+  useEffect(() => {
+    if (!active) return;
+    let stopped = false, timer, controller;
+    async function refresh() {
+      if (stopped) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'hidden'
+          && root.current?.getClientRects().length) {
+        controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(apiUrl('/dsh-purge/runtime-observations?limit=50'),
+            { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+          if (!response.ok) {
+            if (!stopped) setReadError('诊断接口 HTTP ' + response.status + '；这不是模型 Provider 的状态码');
+          } else {
+            const value = await response.json();
+            if (value?.ok !== true || !Array.isArray(value.items)) throw new Error('invalid-observation-schema');
+            if (!stopped) { setSnapshot(value); setReadError(''); setReceivedAt(Date.now()); }
+          }
+        } catch (error) {
+          if (!stopped) setReadError(error?.name === 'AbortError'
+            ? '读取超时' : '读取失败或响应格式不兼容');
+        } finally { clearTimeout(timeout); }
+      }
+      if (!stopped) timer = setTimeout(refresh, 1500);
+    }
+    refresh();
+    return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
+  }, [active]);
+  const rows = projectHttpStatuses(snapshot, simulate);
+  const known = rows.filter(row => row.rawStatus !== null);
+  const denied = known.filter(row => row.rawStatus === 403);
+  const refused = rows.filter(row => row.errorCode === 'CONTENT_REFUSED');
+  const sample = { rawStatus: 403, displayedStatus: simulate ? 200 : 403,
+    errorCode: 'FORBIDDEN', simulated: simulate };
+  const statusText = value => value === null ? '未观测' : String(value);
+  return h('section', { ref: root, className: 'dshp-runtime-observations dshp-http-status-observer',
+      'aria-label': 'HTTP 响应观察' },
+    h('div', { className: 'dshp-runtime-heading' },
+      h('div', null, h('h3', null, 'HTTP 响应观察 · 只读实验'),
+        h('p', null, '区分 Host 记录的 HTTP 状态、模型内容拒答与清洗台接口错误；不抓取正文、凭据或提示词。')),
+      h('button', { type: 'button', className: 'dshp-runtime-action',
+        onClick: () => onNavigate?.('runtime') }, '返回 Provider 与运行记录')),
+    h('p', { className: 'dshp-runtime-meta' },
+      '仅显示宿主提供的终态元数据，未观测不等于 200。请求经过中转或 Provider 适配器时，Host 状态不一定是原始上游 HTTP 状态。'),
+    h('div', { className: 'dshp-runtime-metrics' },
+      h('div', { className: 'dshp-runtime-metric' }, h('small', null, '近期请求'), h('strong', null, snapshot ? rows.length : '—')),
+      h('div', { className: 'dshp-runtime-metric' }, h('small', null, 'Host 报告 HTTP 403'), h('strong', null, snapshot ? denied.length : '—')),
+      h('div', { className: 'dshp-runtime-metric' }, h('small', null, '内容拒答码 CONTENT_REFUSED'), h('strong', null, snapshot ? refused.length : '—')),
+      h('div', { className: 'dshp-runtime-metric' }, h('small', null, '无 HTTP 状态证据'), h('strong', null, snapshot ? rows.length - known.length : '—'))),
+    h('div', { className: 'dshp-runtime-toolbar' },
+      h('label', null, h('input', { type: 'checkbox', checked: simulate,
+        'aria-label': '本地模拟将 403 显示为 200', onChange: event => setSimulate(event.target.checked) }),
+        ' 本地模拟：403 → 200（仅改本页展示）')),
+    h('p', { role: 'status', className: 'dshp-runtime-meta' },
+      '离线示例：原始 HTTP ' + sample.rawStatus + ' → 当前显示 HTTP ' + sample.displayedStatus
+      + '；响应仍包含 error.code=' + sample.errorCode + '，没有模型生成结果。'
+      + (simulate ? ' 本模拟不会修改任何网络请求或上游拒绝。' : ' 勾选后仅比较展示层效果。')),
+    readError ? h('p', { role: 'alert' }, readError
+      + (snapshot ? '；下方数据来自上次成功读取，已停止更新。' : '')) : null,
+    receivedAt ? h('p', { className: 'dshp-runtime-meta' },
+      '最近成功读取：' + new Date(receivedAt).toLocaleString()) : null,
+    !snapshot ? h('p', null, readError ? '暂无可用观测数据。' : '正在读取只读运行元数据…') :
+      !rows.length ? h('p', null, '近期没有模型运行记录；先运行一次普通无害任务。') :
+      h('div', { className: 'dshp-runtime-cards' }, rows.map((row, i) =>
+        h('article', { key: String(i), className: 'dshp-runtime-card', 'data-status': row.rawStatus === 403 ? 'attention' : 'ended' },
+          h('div', { className: 'dshp-runtime-summary' },
+            h('strong', null, '请求 ' + (i + 1) + ' · HTTP ' + statusText(row.rawStatus)
+              + (row.simulated ? ' → 200（模拟）' : '')),
+            h('span', null, ' · 错误码 ' + (row.errorCode || '未观测'))),
+          h('p', { className: 'dshp-runtime-meta' },
+            '终态：' + row.finish + ' · 运行结果：' + row.turnOutcome
+            + ' · 来源：' + row.reasonSource
+            + (row.simulated ? ' · 原始 403 保留，未改变错误分类' : ''))))),
+    h('p', { className: 'dshp-runtime-meta' },
+      '页面只读、内存快照、最多 50 条；不保留完整 URL、请求头、Cookie、Token、正文或会话 ID。真实 Provider 的 403 不会被改写成网络 200。'));
 }
 /* __DSH_PURGE_RUNTIME_END__ */
 
@@ -5514,6 +5620,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 					setDiagnosticsPane("runtime");
 					setRuntimeVisited(true);
 					target = "diagnostics";
+				} else if (next === "http-status") {
+                    changesPane = diagnosticsPane !== "http";
+                    setDiagnosticsPane("http");
+                    setRuntimeVisited(true);
+                    target = "diagnostics";
 				} else if (next === "profiles") {
                     setProfilesVisited(true);
 					target = "prompt";
@@ -5613,10 +5724,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 						section === "diagnostics" ? h("button", { type: "button", className: "dshp-runtime-action", onClick: () => navigate("overview") }, t("diag.overview.back")) : null,
 					),
 					section === "diagnostics" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "诊断中心分组" },
-						[["health", "宿主与故障"], ["runtime", "Provider 与运行记录"]].map(([id, label]) => h("button", {
+						[["health", "宿主与故障"], ["runtime", "Provider 与运行记录"], ["http", "HTTP 响应观察"]].map(([id, label]) => h("button", {
 							key: id, type: "button", className: "dshp-clean-filter" + (diagnosticsPane === id ? " is-on" : ""),
 							ref: diagnosticsPane === id ? activePaneButton : null,
-							"aria-pressed": diagnosticsPane === id, onClick: () => { setDiagnosticsPane(id); if (id === "runtime") setRuntimeVisited(true); },
+							"aria-pressed": diagnosticsPane === id, onClick: () => { setDiagnosticsPane(id); if (id === "runtime" || id === "http") setRuntimeVisited(true); },
 						}, label))) : null,
                     profilesVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "prompt" },
                         h(PromptProfilesSection, { onRedteam: () => {
@@ -5630,12 +5741,14 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                 redteamExpanded ? "收起红队专用提示词" : "红队专用提示词"))) : null,
                     h("div", { id: "dshp-redteam-prompt-editor", className: "dshp-clean-pane",
                         hidden: section === "rules" || (section === "prompt" && !redteamExpanded)
-                            || (section === "diagnostics" && diagnosticsPane === "runtime") },
+                            || (section === "diagnostics" && diagnosticsPane !== "health") },
                         h(PurgifySection, { section, onNavigate: navigate })),
                     h("div", { className: "dshp-clean-pane", hidden: section !== "rules" },
                         h(RulesSection, null)),
 					runtimeVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "diagnostics" || diagnosticsPane !== "runtime" },
 						h(RuntimeObservationsSection, { onNavigate: navigate, active: section === "diagnostics" && diagnosticsPane === "runtime" })) : null,
+                    runtimeVisited ? h("div", { className: "dshp-clean-pane", hidden: section !== "diagnostics" || diagnosticsPane !== "http" },
+                        h(HttpStatusObservationPanel, { onNavigate: navigate, active: section === "diagnostics" && diagnosticsPane === "http" })) : null,
 				),
 			);
 		}
