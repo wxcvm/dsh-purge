@@ -9,6 +9,7 @@ import { AGENT_WORK_DDL, migrateAgentWork } from '../../lib/redteam/agent-work-s
 import { createWorkItem, assignWorkItem, observeWorkItemEnd, reportWorkItem,
   getWorkItem, listWorkItems, requestWorkItemChanges, closeWorkItem } from '../../lib/redteam/agent-work-items.js'
 import { GITHUB_EVIDENCE_DDL, evidenceForTask, readGitHubEvidence, saveGitHubEvidence } from './github-evidence.mjs'
+import { makeDocumentHandoff, verifyDocumentHandoff } from './document-handoff.mjs'
 
 const assets = new Map(Object.entries({
   '/': ['index.html', 'text/html; charset=utf-8'],
@@ -150,6 +151,11 @@ export function createPreview({ dataDir, checkDocument = runCheck, readEvidence 
     return { started: true, item: assigned.item }
   }
 
+  function handoff(id) {
+    const item = getWorkItem(db, id)
+    return item ? makeDocumentHandoff(item, evidenceForTask(db, item.id).get(item.assignment?.id)) : null
+  }
+
   const app = createServer(async (req, res) => {
     const host = '127.0.0.1:' + app.address().port
     res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -164,12 +170,20 @@ export function createPreview({ dataDir, checkDocument = runCheck, readEvidence 
         if (asset) return res.writeHead(200, { 'Content-Type': asset.type }).end(asset.body)
         if (url.pathname === '/health') return json(200, { preview, commit: manifest.commit, harness: false })
         if (url.pathname === '/tasks') return json(200, listWorkItems(db, { limit: 30 }))
+        if (url.pathname === '/handoff') {
+          const artifact = handoff(url.searchParams.get('id'))
+          if (!artifact) return json(404, { error: '没有可交接的已验收文档成果' })
+          return res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8',
+            'Content-Disposition': 'attachment; filename="' + artifact.filename + '"',
+            'X-Document-SHA256': artifact.sha256 }).end(artifact.markdown)
+        }
         if (url.pathname === '/task') {
           const item = getWorkItem(db, url.searchParams.get('id'))
           if (!item) return json(404, { error: '找不到该任务' })
           const evidence = recovery(item)
           const snapshots = evidenceForTask(db, item.id)
-          return json(200, { ...item, history: item.history.map(run => snapshots.has(run.id)
+          const artifact = makeDocumentHandoff(item, snapshots.get(item.assignment?.id))
+          return json(200, { ...item, ...(artifact ? { document_handoff: { filename: artifact.filename, sha256: artifact.sha256 } } : {}), history: item.history.map(run => snapshots.has(run.id)
             ? { ...run, github_evidence: snapshots.get(run.id) } : run),
             ...(evidence ? { recovery: evidence } : {}),
             ...(evidence?.state === 'observed' ? { preview_steps: active.steps } : {}) })
@@ -179,6 +193,11 @@ export function createPreview({ dataDir, checkDocument = runCheck, readEvidence 
         if (req.headers.origin !== 'http://' + host) return json(403, { error: '请在本机工作台提交' })
         const body = await input(req)
         if (url.pathname === '/run') return json(202, run(body))
+        if (url.pathname === '/handoff/verify') {
+          const artifact = handoff(body.task_id)
+          if (!artifact) return json(404, { error: '没有可核对的已验收文档成果' })
+          return json(200, verifyDocumentHandoff(artifact, body.markdown))
+        }
         if (url.pathname === '/github-evidence') {
           const item = getWorkItem(db, body.task_id)
           if (item?.status !== 'ready' || item.revision !== body.expected_revision || !item.assignment) {

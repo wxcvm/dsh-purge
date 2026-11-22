@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
+import { createHash } from 'node:crypto'
 import { fork } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -216,4 +217,49 @@ test('GitHub evidence stays on one attempt, survives reopening and is not added 
     assert.equal((await server.post('/review', { task_id: id, expected_revision: second.revision, decision: 'accept',
       reason: 'Accepted without requiring external CI' })).status, 200)
   } finally { resolveRequest?.(sample); await server.close() }
+})
+
+
+test('approved work exports one deterministic Markdown handoff and comparisons never write', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'purge-doc-handoff-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const head = 'b'.repeat(40)
+  const receipt = { sha: head, source: 'github-public-check-runs', state: 'observed-success', verified_count: 2,
+    checked_at: '2026-11-22T06:00:00Z', checks: [{ name: 'Sensitive check name not to export' }],
+    pr: { url: 'https://github.com/example/docs/pull/4', number: 4 },
+    issue: { url: 'https://github.com/example/docs/issues/7', number: 7 },
+    commit_url: 'https://github.com/example/docs/commit/' + head }
+  let server = await listen(dir, undefined, async () => receipt)
+  try {
+    const created = await (await server.post('/run', { title: 'Do not export the internal title', document: '# Raw document not for export\n## Appendix' })).json()
+    const id = created.item.id
+    const ready = await until(server, id, t => t.status === 'ready')
+    assert.equal((await server.get('/handoff?id=' + id)).status, 404)
+    assert.equal((await server.post('/github-evidence', { task_id: id, expected_revision: ready.revision })).status, 200)
+    assert.equal((await server.post('/review', { task_id: id, expected_revision: ready.revision,
+      decision: 'accept', reason: 'Unexported internal approval comment' })).status, 200)
+    const downloaded = await server.get('/handoff?id=' + id)
+    assert.equal(downloaded.status, 200)
+    assert.match(downloaded.headers.get('content-type'), /^text\/markdown/)
+    const text = await downloaded.text()
+    const hash = createHash('sha256').update(text).digest('hex')
+    assert.equal(downloaded.headers.get('x-document-sha256'), hash)
+    assert.ok(downloaded.headers.get('content-disposition').includes(hash.slice(0, 16)))
+    assert.match(text, /一级标题：有/)
+    assert.ok(text.includes(head))
+    assert.doesNotMatch(text, /Raw document|internal title|approval comment|Sensitive check name|preview-v1:/)
+    await server.close()
+    server = await listen(dir)
+    const accepted = await (await server.get('/task?id=' + id)).json()
+    assert.equal(accepted.document_handoff.sha256, hash)
+    assert.equal(await (await server.get('/handoff?id=' + id)).text(), text)
+    const verify = markdown => server.post('/handoff/verify', { task_id: id, markdown }).then(r => r.json())
+    assert.deepEqual(await verify('\uFEFF' + text.replaceAll('\n', '\r\n')),
+      { matches: true, expected: hash, received: hash, writes: false })
+    const altered = await verify(text.replace('附录标题：有', '附录标题：缺少'))
+    assert.equal(altered.matches, false)
+    assert.notEqual(altered.received, hash)
+    assert.equal(altered.writes, false)
+    assert.equal(await (await server.get('/handoff?id=' + id)).text(), text)
+  } finally { await server.close() }
 })
