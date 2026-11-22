@@ -39,6 +39,7 @@ curl -s --socks5 127.0.0.1:1080 http://10.0.0.5:8080/ -I
 - 先将资产单独登记为 live，并把已确认开放的 TCP 端口写入资产库。
 - 隧道登记并通过 `redteam_session_check` 确认 active 后，使用 `redteam_pivot_probe` 对一个 asset_id + port 做一次 TCP CONNECT。
 - 工具会同时检查 engagement scope、tunnel reach、隧道入口归属和 loopback 监听；任一缺失都拒绝执行。
+- 内置探测只支持 loopback 无认证 SOCKS5；若启动时启用 `--auth`，该工具不会尝试认证。不要把 SOCKS5 监听暴露到局域网或公网。
 - 不做网段扫描、端口范围扫描、批量目标探测、banner grabbing、凭据尝试或数据读取。TCP 可达不等于取得主机权限。
 
 ## 落库
