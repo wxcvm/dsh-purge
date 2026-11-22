@@ -169,7 +169,10 @@ export function createPreview({ dataDir, checkDocument = runCheck, readEvidence 
         const asset = assets.get(url.pathname)
         if (asset) return res.writeHead(200, { 'Content-Type': asset.type }).end(asset.body)
         if (url.pathname === '/health') return json(200, { preview, commit: manifest.commit, harness: false })
-        if (url.pathname === '/tasks') return json(200, listWorkItems(db, { limit: 30 }))
+        if (url.pathname === '/tasks') {
+          const offset = url.searchParams.get('offset')
+          return json(200, listWorkItems(db, { limit: 30, ...(offset === null ? {} : { offset }) }))
+        }
         if (url.pathname === '/handoff') {
           const artifact = handoff(url.searchParams.get('id'))
           if (!artifact) return json(404, { error: '没有可交接的已验收文档成果' })
