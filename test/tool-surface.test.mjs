@@ -114,6 +114,42 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(dispatched.total, 2)
   assert.equal(dispatched.items.length, 1, 'fractional limits clamp to one result')
 
+  const dataProofTool = registered.get('redteam_data_proof')
+  assert.equal(Object.hasOwn(dataProofTool.parameters, 'sample'), false)
+  assert.equal(Object.hasOwn(dataProofTool.parameters, 'query'), false)
+  const proof = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
+    source: 'db', interface: 'users', fields: ['name', 'phone', 'name'], row_count: 12000,
+    sample_count: 2, evidence_ref: 'evidence://redacted/001', pii_type: 'pii', note: 'synthetic metadata only' }, {}))
+  assert.equal(proof.ok, true)
+  assert.deepEqual(proof.proof.fields, ['name', 'phone'])
+  assert.equal(proof.proof.sample_count, 2)
+  assert.equal(Object.hasOwn(proof.proof, 'meets_threshold'), false, 'data proof must not invent a score threshold')
+  const proofList = JSON.parse(await dataProofTool.execute({ op: 'list', engagement }, {}))
+  assert.equal(proofList.total, 1)
+  assert.equal(proofList.items[0].fields.length, 2)
+  assert.equal(Object.hasOwn(proofList.items[0], 'sample'), false)
+  assert.equal(Object.hasOwn(proofList.items[0], 'query'), false)
+  const isolatedProofs = JSON.parse(await dataProofTool.execute({ op: 'list', engagement: otherEngagement }, {}))
+  assert.equal(isolatedProofs.total, 0)
+  const rawRejected = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
+    source: 'db', interface: 'users', fields: ['name'], row_count: 1, sample: 'RAW_SAMPLE_MARKER' }, {}))
+  assert.equal(rawRejected.ok, false, 'raw sample values must be rejected')
+  const valueRejected = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
+    source: 'db', interface: 'users', fields: ['name=example'], row_count: 1 }, {}))
+  assert.equal(valueRejected.ok, false, 'fields must be names, not key/value samples')
+  const dispatchedProof = dispatch(redteam, { op: 'addDataProof', engagement, proof: {
+    target: 'fixture-host', source: 'file', interface: '/exports/users.csv', fields: ['email'],
+    row_count: 3, sample_count: 1, evidence_ref: 'evidence://redacted/002', pii_type: 'pii', note: 'dispatch fixture',
+  } })
+  assert.equal(dispatchedProof.ok, true)
+  const dispatchedProofs = dispatch(redteam, { op: 'dataProofs', engagement })
+  assert.equal(dispatchedProofs.total, 2)
+  const report = redteam.report(engagement)
+  assert.equal(report.stats.dataProofs, 2)
+  assert.ok(report.markdown.includes('Structured data exposure records (metadata only)'))
+  assert.ok(report.markdown.includes('evidence://redacted/001'))
+  assert.ok(!report.markdown.includes('RAW_SAMPLE_MARKER'))
+
   const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item
   const unifiedSearch = registered.get('redteam_knowledge_search')
