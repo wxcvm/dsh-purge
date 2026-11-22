@@ -30,7 +30,7 @@ test('source license status distinguishes MIT, unrecognized and undeclared', (t)
   assert.deepEqual(readSourceLicense(root), {
     license: 'Apache-2.0', licenseFile: 'LICENSE.md', licenseStatus: 'identified',
   })
-  writeFileSync(join(root, 'LICENSE.md'), 'GNU GENERAL PUBLIC LICENSE\\nVersion 3, 29 June 2007\\n')
+  writeFileSync(join(root, 'LICENSE.md'), 'GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n')
   assert.deepEqual(readSourceLicense(root), {
     license: null, licenseFile: 'LICENSE.md', licenseStatus: 'unrecognized',
   })
@@ -68,7 +68,7 @@ test('reads the exact HEAD of a real local checkout', (t) => {
   execFileSync('git', ['-C', root, 'config', 'user.name', 'Purge Test'])
   execFileSync('git', ['-C', root, 'config', 'user.email', 'purge-test@example.invalid'])
   execFileSync('git', ['-C', root, 'config', 'commit.gpgsign', 'false'])
-  writeFileSync(join(root, 'LICENSE'), 'MIT License\\n')
+  writeFileSync(join(root, 'LICENSE'), 'MIT License\n')
   execFileSync('git', ['-C', root, 'add', 'LICENSE'], { stdio: 'ignore' })
   execFileSync('git', ['-C', root, 'commit', '-m', 'provenance fixture'], { stdio: 'ignore' })
   const result = inspectGitSource(root)
