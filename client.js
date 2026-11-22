@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "365b1377c1d83493";
+		const CLIENT_BUILD_ID = "b2ba5f2016826ab5";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -14083,18 +14083,25 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setDetail(null)
         setDetailRead(null)
       }
-      const open = async (id, scope = active.current) => {
+      const open = async (id, scope = active.current, previous = null) => {
         if (!eng || !scope?.live) return
         const request = ++reads.current.detail
         setDetail(null)
         setDetailRead({ phase: 'loading', id })
-        setHostChecked(false)
-        setSummary('')
-        setReason('')
+        const clearDraft = () => {
+          setHostChecked(false)
+          setSummary('')
+          setReason('')
+        }
+        if (!previous) clearDraft()
         try {
-          const result = await api({ op: 'workItemGet', engagement: eng, task_id: id })
+          const result = await api({ op: 'workItemGet', engagement: eng, task_id: id, include_registry: true })
           if (!accepts(scope, 'detail', request)) return
           if (result?.ok !== true || result.engagement !== eng || result.item?.id !== id) throw Error('读取任务详情失败')
+          if (previous && (previous.id !== result.item.id || previous.revision !== result.item.revision
+            || previous.assignment?.id !== result.item.assignment?.id
+            || previous.assignment?.session_id !== result.item.assignment?.session_id
+            || previous.assignment?.run_id !== result.item.assignment?.run_id)) clearDraft()
           setDetail(result.item)
           setDetailRead(null)
         } catch {
@@ -14157,15 +14164,22 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         ? '待补充' : statusLabels[item.status] || item.status || '未知'
       const registryLabels = {
         'exact-run-end-observed': '已收到本次 run 的宿主结束事件，仍需结算',
-        'session-active-observed': '宿主当前观测到同 ID 会话在运行；未证实是本次 run',
+        'session-active-observed': '读取时宿主观测到同 ID 会话在运行；未证实是本次 run',
         'not-in-active-snapshot': '当前完整快照未列出该会话；不能据此认定结束',
         unknown: '宿主注册表不可完整读取，运行状态未知',
       }
-      const current = detail?.id && visible?.items?.find(item => item.id === detail.id)
-      const record = detail && current ? { ...detail, registry_activity: current.registry_activity } : detail
+      const record = detail
+      const current = record?.id && visible?.items?.find(item => item.id === record.id)
+      const newerTask = Boolean(current && current.revision > record.revision)
       const assignment = record?.assignment
-      const canReassign = record && ['queued', 'waiting', 'blocked', 'failed', 'interrupted'].includes(record.status)
-      const canSettle = record?.status === 'running' && assignment
+      const activity = record?.registry_activity
+      const nextStep = record?.status === 'running'
+        ? (assignment?.host_end_at ? '核对实际产物，再记录本次结算。' : '先打开来源会话核对这次运行；会话状态不能代替结算。')
+        : record?.status === 'ready' ? '核对成果，然后确认完成或要求补充。'
+        : record?.status === 'waiting' && assignment?.review_returned_at ? '按历史中的补充要求处理，已有新执行时再关联。'
+        : null
+      const canReassign = record && !newerTask && ['queued', 'waiting', 'blocked', 'failed', 'interrupted'].includes(record.status)
+      const canSettle = !newerTask && record?.status === 'running' && assignment
       const settleAllowed = Boolean(canSettle && summary.trim() && (assignment.host_end_at || hostChecked))
       const select = (id) => { if (!masked) void open(id) }
 
@@ -14233,8 +14247,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           assignment ? h('div', { className: 'rt-note' },
             '最新绑定：' + assignment.session_id + ' / ' + assignment.run_id + ' · 第 ' + assignment.attempt + ' 次',
             assignment.host_end_at ? ' · 宿主结束事件：' + assignment.host_stop_reason : ' · 尚无精确运行结束事件') : null,
-          record.status === 'running' ? h('p', { className: 'rt-note' },
-            registryLabels[record.registry_activity?.state] || '仅有持久登记，运行状态未核实') : null,
+          newerTask ? h('p', { className: 'rt-note', role: 'status' },
+            '任务列表已读到更新版本；此处仍是原详情，未套用其他运行的观测。重新读取后再操作。') : null,
+          record.status === 'running' ? h('div', { className: 'rt-note' },
+            registryLabels[activity?.state] || '仅有持久登记，运行状态未核实',
+            workEvidenceTime('状态核对时间', activity?.checked_at),
+            activity?.state === 'session-active-observed' && activity.parent_session
+              ? h('div', null, '宿主观测到的归属会话：' + activity.parent_session) : null) : null,
+          nextStep && !newerTask ? h('p', { className: 'rt-note' }, '下一步：' + nextStep) : null,
           h('h4', null, '历史 · ' + (record.history?.length || 0) + ' 次（最近至多 100 条）'),
           record.history?.length ? record.history.map(at => h('div', { key: at.id, className: 'rt-kv' },
             h('b', null, '第 ' + at.attempt + ' 次 · ' + at.status),
@@ -14261,7 +14281,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('input', { className: 'rt-input', 'aria-label': '宿主运行 ID', placeholder: '已存在的 run_id', value: run, onChange: e => setRun(e.target.value) }),
             h('button', { className: 'rt-btn', disabled: Boolean(busy) || !session.trim() || !run.trim(),
               onClick: () => mutate({ op: 'workItemAssign', task_id: record.id, session_id: session, run_id: run }, '绑定', record.id) }, '记录已有执行')) : null,
-          record.status === 'ready' || canReassign ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
+          !newerTask && (record.status === 'ready' || canReassign) ? h('div', { style: { display: 'grid', gap: 6, marginTop: 10 } },
             h('h4', null, record.status === 'ready' ? '验收结果' : '人工收尾'),
             h('input', { className: 'rt-input', 'aria-label': '收尾依据', placeholder: '写明验收结论、需补充的内容或放弃原因', value: reason, onChange: e => setReason(e.target.value) }),
             h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
@@ -14271,6 +14291,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 onClick: () => mutate({ op: 'workItemRequestChanges', task_id: record.id, expected_revision: record.revision, reason }, '要求补充', record.id) }, '要求补充') : null,
               h('button', { className: 'rt-btn', disabled: Boolean(busy) || !reason.trim(),
                 onClick: () => mutate({ op: 'workItemClose', task_id: record.id, expected_revision: record.revision, outcome: 'dropped', reason }, '放弃', record.id) }, '放弃任务'))) : null,
+          h('button', { className: 'rt-btn', disabled: Boolean(busy),
+            onClick: () => open(record.id, active.current, record) }, '重新读取详情'),
           h('button', { className: 'rt-btn', onClick: closeDetail }, '关闭详情')) : null)
     }
 
@@ -14283,19 +14305,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (result !== 'opened') setError(result === 'archived'
           ? '来源会话或其所属会话已归档。' : '当前宿主无法打开此来源会话。')
       }
-      const time = (label, value) => {
-        const date = typeof value === 'string' && value ? new Date(value) : null
-        return date && Number.isFinite(date.getTime())
-          ? h('div', { className: 'rt-note' }, label + '：', h('time', { dateTime: date.toISOString() }, date.toLocaleString()))
-          : null
-      }
       return h('div', null,
-        time('登记执行', attempt.started_at),
+        workEvidenceTime('登记执行', attempt.started_at),
         attempt.host_end_at
           ? h('div', { className: 'rt-note' }, '已观测精确结束事件 · ' + (attempt.host_stop_reason || '原因未知'),
-            time('宿主观测结束', attempt.host_end_at))
+            workEvidenceTime('宿主观测结束', attempt.host_end_at))
           : h('div', { className: 'rt-note' }, '未观测到精确结束事件'),
-        time('记录结算', attempt.finished_at),
+        workEvidenceTime('记录结算', attempt.finished_at),
         sessionId && typeof onOpenSession === 'function' ? h('button', {
           type: 'button', className: 'rt-btn',
           'aria-label': '查看第 ' + attempt.attempt + ' 次尝试的来源会话',
@@ -14303,6 +14319,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           onClick: open,
         }, '查看来源会话') : null,
         error ? h('p', { className: 'rt-err', role: 'alert' }, error) : null)
+    }
+
+    function workEvidenceTime(label, value) {
+      const date = typeof value === 'string' && value ? new Date(value) : null
+      return date && Number.isFinite(date.getTime())
+        ? h('div', { className: 'rt-note' }, label + '：', h('time', { dateTime: date.toISOString() }, date.toLocaleString()))
+        : null
     }
 
     function SuperAgentTab(props) {

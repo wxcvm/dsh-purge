@@ -325,3 +325,52 @@ test('returning reviewed work shows durable feedback and does not issue a launch
     'workItemReview', 'workItemGet', 'workItemRequestChanges', 'workItemReview', 'workItemGet',
   ])
 })
+
+test('task detail only uses its own run evidence and can reload without inheriting stale list data', async () => {
+  const older = full({ registry_activity: { state: 'unknown' } })
+  const newer = full({ revision: 4, assignment: { ...older.assignment, id: 2, run_id: 'run-2' },
+    registry_activity: { state: 'session-active-observed', parent_session: 'parent-for-latest',
+      checked_at: '2026-11-22T08:00:00.000Z' } })
+  const calls = []
+  let refreshed = false
+  const ui = mount('one', async req => {
+    calls.push(req)
+    if (req.op === 'workItemReview') return list('one', [newer])
+    if (req.op === 'workItemGet') return { ok: true, engagement: 'one', item: refreshed ? newer : older }
+    assert.fail('opening and reloading a task is read-only')
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  assert.match(content(ui), /run-1/)
+  assert.match(content(ui), /此处仍是原详情/)
+  assert.doesNotMatch(content(ui), /parent-for-latest/)
+  assert.equal(control(ui, 'button', '记录结算'), undefined)
+  assert.equal(calls.at(-1).include_registry, true)
+
+  refreshed = true
+  await control(ui, 'button', '重新读取详情').props.onClick()
+  assert.doesNotMatch(content(ui), /此处仍是原详情|run-1/)
+  assert.match(content(ui), /run-2/)
+  assert.match(content(ui), /归属会话：parent-for-latest/)
+  assert.match(content(ui), /状态核对时间/)
+  assert.match(content(ui), /先打开来源会话核对这次运行/)
+  assert.equal(control(ui, 'button', '记录结算').props.disabled, true, 'session activity is not settlement')
+})
+
+test('refresh preserves the settlement draft for the same run but never carries it to a new run', async () => {
+  const older = full()
+  let detail = older
+  const ui = mount('one', async req => req.op === 'workItemReview'
+    ? list('one', [older]) : { ok: true, engagement: 'one', item: detail })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  const field = () => control(ui, 'textarea', '结算依据')
+  field().props.onChange({ target: { value: 'Checked the original worksheet' } })
+  await control(ui, 'button', '重新读取详情').props.onClick()
+  assert.equal(field().props.value, 'Checked the original worksheet')
+  detail = full({ revision: 4, assignment: { ...older.assignment, id: 2, run_id: 'run-2' } })
+  await control(ui, 'button', '重新读取详情').props.onClick()
+  assert.equal(field().props.value, '')
+})
