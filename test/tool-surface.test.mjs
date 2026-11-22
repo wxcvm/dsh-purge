@@ -154,12 +154,13 @@ test('reviewed tool names match source declarations and actual registrations', a
   } })
   assert.equal(dispatchedProof.ok, true)
   const dispatchedProofs = dispatch(redteam, { op: 'dataProofs', engagement })
-  assert.equal(dispatchedProofs.total, 2)
+  assert.equal(dispatchedProofs.total, 3)
   const report = redteam.report(engagement)
-  assert.equal(report.stats.dataProofs, 2)
+  assert.equal(report.stats.dataProofs, 3)
   assert.ok(report.markdown.includes('Structured data exposure records (metadata only)'))
   assert.ok(report.markdown.includes('evidence://redacted/001'))
   assert.ok(!report.markdown.includes('RAW_SAMPLE_MARKER'))
+  assert.ok(!report.markdown.includes('SELECT * FROM users'))
 
   const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item
