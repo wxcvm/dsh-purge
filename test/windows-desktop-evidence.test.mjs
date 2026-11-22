@@ -8,6 +8,7 @@ import { inspectReadOnlyDesktopEvidence } from '../scripts/inspect-windows-deskt
 const sampleFiles = [
   'lib/index.js', 'lib/prompt-profiles.js', 'lib/response-context.js',
   'lib/prompt-assembly-router.js', 'client.js',
+  'lib/redteam/ui.js', 'lib/redteam/bridge-auth.js', 'lib/redteam/bridge-origin.js',
 ];
 function workspace(t) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'purge-desktop-evidence-'));
@@ -79,6 +80,22 @@ test('checks actual installed bytes and runtime files, without exposing private 
   assert.ok(!emitted.includes('sensitive local prompt'));
   assert.deepEqual(fs.readFileSync(path.join(p.profile, 'cordis.patch.yml')), before,
     'inspection must not edit local Cordis config');
+});
+
+test('matching version and client do not hide stale Desktop bridge code', t => {
+  const f = workspace(t);
+  const { installed } = plugin(f);
+  fs.writeFileSync(path.join(installed, 'lib', 'redteam', 'bridge-origin.js'), 'stale origin check');
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  const desktop = result.profiles[0];
+  assert.equal(desktop.version, result.candidate.version);
+  assert.equal(desktop.sourceBytesEqual, false);
+  assert.equal(desktop.sourceFileComparison['client.js'], 'identical');
+  assert.equal(desktop.sourceFileComparison['lib/redteam/bridge-origin.js'], 'different');
+  assert.equal(desktop.sourceFileComparison['lib/redteam/bridge-auth.js'], 'identical');
+  assert.equal(desktop.sourceFileComparison['lib/redteam/ui.js'], 'identical');
+  assert.equal(result.runtimeLoadVerified, false);
+  assert.ok(!JSON.stringify(result).includes('stale origin check'));
 });
 
 test('invalid desktop manifest is not misreported as a verified installation', t => {

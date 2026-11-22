@@ -16,6 +16,7 @@ const repository = fileURLToPath(new URL('../', import.meta.url));
 const CHECK_FILES = Object.freeze([
   'lib/index.js', 'lib/prompt-profiles.js', 'lib/response-context.js',
   'lib/prompt-assembly-router.js', 'client.js',
+  'lib/redteam/ui.js', 'lib/redteam/bridge-auth.js', 'lib/redteam/bridge-origin.js',
 ]);
 const PROFILES = Object.freeze(['desktop', 'web', 'default']);
 
