@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Super Agent · 文档工作台预览</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<main>
+  <h1>Super Agent · 文档工作台预览</h1>
+  <p>独立 Windows 本地预览。检查 Markdown 是否包含一级标题和附录标题，不调用 Harness、模型服务或联网工具。</p>
+  <p id="build"></p>
+  <div class="layout">
+    <section>
+      <h2>任务</h2>
+      <button id="new">新建文档任务</button>
+      <ul id="tasks" aria-label="文档任务"></ul>
+    </section>
+    <div>
+      <section id="detail" hidden>
+        <h2 id="taskTitle"></h2>
+        <p id="taskStatus"></p>
+        <h3>运行历史</h3>
+        <ol id="history"></ol>
+        <form id="review" hidden>
+          <label for="feedback">验收结论或补充要求</label>
+          <input id="feedback" required maxlength="1000">
+          <div class="actions"><button type="submit" value="accept">确认完成</button><button type="submit" value="changes">要求补充</button></div>
+        </form>
+      </section>
+      <section id="input">
+        <h2 id="editorTitle">提交文档</h2>
+        <form id="run">
+          <label for="title">任务标题</label>
+          <input id="title" required maxlength="160">
+          <label for="text">Markdown 正文（不写入数据库）</label>
+          <textarea id="text" rows="8" required maxlength="40000"></textarea>
+          <div class="actions"><button type="submit">运行检查</button><button type="button" id="sample">填入示例</button></div>
+        </form>
+      </section>
+      <p id="message" role="status"></p>
+    </div>
+  </div>
+</main>
+</body>
+</html>
