@@ -139,6 +139,20 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用 asset_assess 打 priority/potential/reason。_
 
+### `redteam_asset_batch`
+
+【手工资产批量登记】选择性吸收上游 `redteam_batch(kind=assets)` 的独有能力；不再需要一次一次调用 `redteam_asset_add`。已经有扫描文件时仍使用现有 `redteam_ingest`，本工具**不读取/扫描目标，不更新漏洞、HTTP 证据或分数**。
+
+参数：
+- `engagement` — 可选，默认会话绑定的演练
+- `items` — 1–500 条已获取的 IPv4 资产，字段和 `redteam_asset_add` 一致，包括 `ip`、必填 `provenance=active|passive`，以及可选 `tool`、`state`、`primary_name`、`names`、`ports`、`discovered_at`、`first_seen`
+- `commit` — 默认 false，只返回接受数量、最多十条预览和按原始下标标识的 `rejected` 原因；设为 true 才经现有 `store.importBundle` 事务入库
+- `confirm` — 当前演练没有登记允许范围时，正式 `commit=true` 需明确确认；已登记范围的记录按 IP 逐条核对，范围外跳过
+
+成功写入时 `results` 逐条返回原数组 `index`、`ip` 和真实 `asset_id`；同一 IP 重复提交仍使用原资产 ID，发现时间不会被重复写入覆盖。同一批次重复 IP 作为 `duplicate_in_batch` 返回。批量记录不是已验证漏洞或网络探测证据，来源字段必须据实填写。
+
+源码来源：[上游 redteam_batch](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）；本仓只增加必要的人工资产批量入口。直接批量评估与漏洞对象的写入未移植，后续按需求裁定。
+
 ### `redteam_asset_add`
 把一个资产及其端口/服务/指纹写入资产库（幂等 upsert）。每条发现必须标注 provenance：被动收集填 passive，主动探测填 active，并填写 tool（数据源或工具名）。
 
