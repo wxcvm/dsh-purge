@@ -461,6 +461,7 @@ _confirmed/exploited 才算成果；claimed 必须用 evidence_upgrade 升级成
 - `detail` — 脱敏说明、清理方式或保留原因
 - `status` — open | done | kept；list 另支持 all，默认只列 open
 - `limit` — list 默认 100，最多 500
+
 ### `redteam_evidence_upgrade`
 把 claimed / inferred 升级为 observed。必须带 verified_result（亲自验证的回显/数据）。
 
