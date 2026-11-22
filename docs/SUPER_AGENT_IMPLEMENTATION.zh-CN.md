@@ -63,3 +63,16 @@ $preview = node tools/superagent-preview/install.mjs HEAD | ConvertFrom-Json
 在已验收任务的「交接到 ARTEX」下载 Markdown，文件名带 SHA-256 前缀。它只包含固定检查结果、此次任务/运行的标识和验收时间，以及可选的公开 GitHub 证据；不携带原文、内部说明、原始日志、工作站路径或凭据。只有最终验收的尝试可导出。同一成果重复下载产生相同文件名与摘要。
 
 用 ARTEX 现有的「知识文档」上传入口，在选定的目标任务下导入；不要把有任务归属的证据误放到全局库。推荐先按文件名搜索已有交接，再由操作者决定是否上传。把 ARTEX 所见的文档正文复制回预览可对照 SHA-256（只规范化 Windows CRLF 和开头 BOM）；不一致时只报告冲突，不自动覆盖任何一端。此比较证明内容一致，不证明上传成功、ARTEX 身份或双端配对，不替代既有的 SARIF 人工回执。
+
+
+### 官方原生 Team 运行契约（Windows，0.2.2-rc.5）
+
+在新的工作目录用官方 npm registry 安装精确版本的 `@deepseek-ai/dsh`、`@deepseek-ai/dsh-base` 和 `@deepseek-ai/dsh-headless`，三者均为 `0.2.2-rc.5`。使用 npm 正常 peer 解析，不用 `--legacy-peer-deps` 跳过宿主需要的 Cordis peer；可以使用 `--ignore-scripts`。保存生成的 package-lock。将 [官方固定提交的 team-llm.mjs](https://github.com/deepseek-ai/deepseek-harness/blob/2e39e70496aa02986ca6a820c5d497e816b69d7e/apps/cli/tests/profiles/headless/tests/fixtures/team-llm.mjs) 按原始字节放在临时目录（不要用会改换行的文本复制）。
+
+```text
+node scripts/verify-stock-harness-teams.mjs <npm-install-dir> <team-llm.mjs>
+```
+
+探针验证官方版本、CLI npm integrity、夹具 SHA-256，另建临时 HOME、DSH_HOME 与工作目录；不传递现用账号、模型密钥、日志正文或 Purge 配置。临时 profile 只将模型输出替换为上游固定夹具；真正的队友和任务状态由原生 Harness 执行。实际从持久会话日志验收：4 份会话（root、工作流子会话和两位队友）、2 个已完成的 Team 任务、2 条队友消息，前置任务完成早于依赖任务认领。脚本输出计数与证据目录，不把暂存目录当作正式安装。
+
+现用机器的 headless 配置只读检查中，含 Purge 字样的内容甚至出现在默认配置转储中；不足以作为干净官方对照，未就地执行模型。上述官方发布包的通过说明原生 Team 运行契约，**未验收当前 Desktop、Purge 联动或真实 Provider**。
