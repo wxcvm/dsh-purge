@@ -20,11 +20,13 @@
 | 仅上游存在 | 5 |
 | 仅 Purge 存在 | 19 |
 
-### 同路径文件（均为适配版，不能直接覆盖）
+### 同路径文件（35 个，均为适配版，不能直接覆盖）
 
 - active-scan.md
 - ad-attack.md
+- ai-agent-attack.md
 - asset-correlation.md
+- asset-deep-scan.md
 - browser-automation.md
 - campaign-planning.md
 - chisel-tunnel.md
@@ -38,13 +40,18 @@
 - gogo-intranet.md
 - kimi-webbridge.md
 - lateral-movement.md
+- mobile-code-recon.md
+- network-device.md
 - nuclei-scan.md
+- oob-verify.md
+- opsec-hygiene.md
 - passive-recon.md
 - recon-pipeline.md
 - redteam-setup.md
 - score-coverage.md
 - shell-handler.md
 - specialist-paths.md
+- supply-chain.md
 - suo5-tunnel.md
 - unauth-exploit.md
 - vps-reverse-shell.md
@@ -93,13 +100,13 @@
 
 ## 已确认的吸收原则
 
-1. 不按文件名相同就覆盖；同路径的 28 个文件都存在正文差异，Purge 版本包含本项目工具接口、证据流程和 VPS 环境适配。
-2. asset-correlation.md 是明确内容缺口：当前 Purge 版本明显短于上游，应补齐资产分层、关联和证据闭环。
-3. 上游独有技能中，AI Agent 攻击面、API 数据暴露、资产深度扫描、C2 基础设施、移动端代码侦察、网络设备、带工具前置检查的 NetSpy、OOB 验证、OPSEC、供应链和主机后渗透有独立价值；Cloud/Kubernetes 与现有 cloud-container 需要合并，避免重复。
-4. 不全局替换 redteam_chain_add。按记录对象使用专用 redteam_score_hit、redteam_vuln_add、redteam_tunnel_add；只有真实攻击路径事件才保留 chain_add。
-5. recon-pipeline 保留 Purge 的 FOFA 非默认策略；Purge 独有技能继续保留。
+1. 不按文件名相同就覆盖；当前 35 个同路径技能均保留 Purge 工具接口、证据流程和本地化适配。
+2. `asset-correlation.md` 已补齐授权范围核对、归属证据分级、共享基础设施排除和真实资产关系 ID。
+3. 第一批新增 AI Agent、单资产深挖、移动端、网络设备、OOB、OPSEC、供应链 7 个技能；API 数据暴露和 Cloud/Kubernetes 分别合并进既有 `api-attack.md` 与 `cloud-container.md`。
+4. 不全局替换 `redteam_chain_add`。按记录对象使用 Purge 已注册的专用工具；上游独有接口不伪装成当前能力。
+5. `recon-pipeline` 保留 Purge 的 FOFA 非默认策略；Purge 独有技能继续保留。
 6. 需要外部二进制的技能必须明确前置检查，不得把未安装工具描述成可直接使用。
-
+7. 后续只吸收能证明有独立价值、能映射现有接口且具备授权/安全边界的内容；不以复制数量作为完成指标。
 ## 下一步
 
 - 对第一批新增/合并的 9 个映射继续做宿主加载、技能面板和真实使用反馈验收。

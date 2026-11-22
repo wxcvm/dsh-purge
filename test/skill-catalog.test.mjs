@@ -189,7 +189,7 @@ test('2026-11-22 upstream absorption batch is discoverable and provenance-mapped
 
 test('newly absorbed skills reference only registered Purge tools', () => {
   const toolSource = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
-  const registered = new Set([...toolSource.matchAll(/name:\\s*['"]((?:redteam)_[a-z0-9_]+)['"]/g)].map(match => match[1]))
+  const registered = new Set([...toolSource.matchAll(/name:\s*['"]((?:redteam)_[a-z0-9_]+)['"]/g)].map(match => match[1]))
   const names = [
     'ai-agent-attack', 'asset-correlation', 'asset-deep-scan', 'mobile-code-recon',
     'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain',
@@ -201,5 +201,7 @@ test('newly absorbed skills reference only registered Purge tools', () => {
     for (const match of skill.content.matchAll(/\x60(redteam_[a-z0-9_]+)\x60/g)) {
       assert.ok(registered.has(match[1]), name + ' references unregistered tool ' + match[1])
     }
+    assert.doesNotMatch(skill.content, /\x60redteam_(?:data_proof|cleanup|pivot_probe)\x60/,
+      name + ' must not claim unsupported upstream-only tools')
   }
 })
