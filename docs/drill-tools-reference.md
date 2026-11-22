@@ -987,3 +987,5 @@ Purge 的 `privacyPosture.bridge` 现在会在 Node HTTP 请求能获取所属�
 
 - `redteam_knowledge_search`: browse bundled Chinese reference articles or search personal documents, CVE references, skills and local ARTEX knowledge. Results preserve source and ID; semantic mode uses only the explicitly configured local embedding service.
 - `redteam_knowledge_get`: read a selected reference by source and ID. Returns bounded text and attribution; does not execute reference content or verify a target.
+
+- Pagination: choose a specific source and pass `offset` for `bundled`, `personal`, `cve`, `redteam`, or `aboutsecurity` (20 items per page). `source=all` returns each source's first page; the ARTEX adapter has no `offset` and uses its separate search tool.
