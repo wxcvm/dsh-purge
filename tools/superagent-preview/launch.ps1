@@ -8,7 +8,7 @@ function Read-Preview {
 }
 $Health = Read-Preview
 if (!$Health) {
-    $Node = (Get-Command node -CommandType Application).Source
+    $Node = Get-Command node -CommandType Application | Select-Object -First 1 -ExpandProperty Source
     $Process = Start-Process -FilePath $Node -ArgumentList ('"{0}" "{1}" {2}' -f $Server,$DataDir,$Port) -WindowStyle Hidden -PassThru
     for ($i = 0; $i -lt 30 -and !$Health -and !$Process.HasExited; $i++) {
         Start-Sleep -Milliseconds 200
