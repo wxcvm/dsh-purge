@@ -82,7 +82,7 @@ curl -s "https://target.example.com/upload/x.jsp?cmd=id"
 ```
 
 ## 注意事项
-- 生成的 shell 只能上传到**本次授权演练的目标**；用完按需清理（删除文件、恢复原状）。
+- 生成的 shell 只能上传到**本次授权演练的目标**；上传成功后用 `redteam_cleanup(kind=webshell,status=open)` 登记，实际删除并验证不可访问后标 `done`；用户要求保留的标 `kept` 并写明原因。
 - 工具 GUI 需要图形会话（`DISPLAY=:10.0` 可用）。
 - 凭据用 `redteam_credential_add` 落库：**明文写 `secret_value`**（面板直接显示，便于复用），同时把证据文件写 `runs/` 并在 `secret_ref` 里引用。资产库只在本机，别把库或导出内容带走。
 - 目标可能有 EDR/查杀：先测试 shell 是否存活，避免反复落地触发告警；落地失败就换语言/编码（JSP→JSPX→PHP）或换上传点。
