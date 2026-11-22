@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
+import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
 import { join } from 'node:path'
 
 const expected = JSON.parse(readFileSync(new URL('./fixtures/tool-surface.json', import.meta.url), 'utf8'))
@@ -19,7 +20,9 @@ test('reviewed tool names match source declarations and actual registrations', a
   const home = mkdtempSync(join(tmpdir(), 'purge-tool-surface-'))
   const previousHome = process.env.DSH_HOME
   const previousKBDir = process.env.ARTEX_KB_DIR
+  let redteam
   t.after(() => {
+    redteam?.close()
     if (previousHome === undefined) delete process.env.DSH_HOME
     else process.env.DSH_HOME = previousHome
     if (previousKBDir === undefined) delete process.env.ARTEX_KB_DIR
@@ -49,9 +52,13 @@ test('reviewed tool names match source declarations and actual registrations', a
   process.env.ARTEX_KB_DIR = knowledgeDir
 
   const { apply } = await import('../lib/redteam/tools.js')
+  redteam = new RedteamStore(home)
+  const engagement = redteam.openEngagement('fixture').id
+  const otherEngagement = redteam.openEngagement('cleanup-other').id
+  redteam.dataQuality = id => ({ missing_evidence: 2, target: id })
   const registered = new Map()
   const ctx = {
-    redteam: { root: home, listEngagements: () => [], dataQuality: id => ({ missing_evidence: 2, target: id }) },
+    redteam,
     tools: { register(tool) {
       assert.ok(!registered.has(tool.name), `duplicate tool registration: ${tool.name}`)
       registered.set(tool.name, tool)
@@ -66,8 +73,46 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.deepEqual(read, {
     ok: true, engagement: 'fixture', quality: { missing_evidence: 2, target: 'fixture' },
   })
+  assert.equal(redteam.setActiveEngagement(engagement), true)
   const noTarget = JSON.parse(await quality.execute({}, {}))
-  assert.equal(noTarget.ok, false)
+  assert.equal(noTarget.ok, true)
+  assert.equal(noTarget.engagement, engagement, 'unbound tool calls use the selected active engagement')
+
+  const cleanupTool = registered.get('redteam_cleanup')
+  const marker = join(home, 'cleanup-marker.txt')
+  writeFileSync(marker, 'synthetic cleanup ledger fixture')
+  const added = JSON.parse(await cleanupTool.execute({ op: 'add', engagement, kind: 'file', target: 'fixture-host',
+    location: marker, detail: 'synthetic marker only' }, {}))
+  assert.equal(added.ok, true)
+  assert.equal(added.item.status, 'open')
+  const pending = JSON.parse(await cleanupTool.execute({ op: 'list', engagement }, {}))
+  assert.equal(pending.total, 1)
+  assert.equal(pending.items[0].kind, 'file')
+  const isolated = JSON.parse(await cleanupTool.execute({ op: 'list', engagement: otherEngagement }, {}))
+  assert.equal(isolated.total, 0)
+  const kept = JSON.parse(await cleanupTool.execute({ op: 'update', engagement, id: added.item.id,
+    status: 'kept', detail: 'user requested retention' }, {}))
+  assert.equal(kept.item.status, 'kept')
+  assert.equal(JSON.parse(await cleanupTool.execute({ op: 'list', engagement }, {})).total, 0)
+  const invalidOp = JSON.parse(await cleanupTool.execute({ op: 'delete', engagement }, {}))
+  assert.equal(invalidOp.ok, false, 'unknown operations must not fall through to add')
+  assert.equal(invalidOp.error_kind, 'bad_input')
+  const dispatchedAdd = dispatch(redteam, { op: 'addCleanup', engagement,
+    item: { kind: 'task', target: 'fixture-host', location: 'synthetic task', detail: 'dispatch fixture' } })
+  assert.equal(dispatchedAdd.ok, true)
+  const dispatchedUpdate = dispatch(redteam, { op: 'updateCleanup', engagement,
+    item: { id: dispatchedAdd.id, status: 'done' } })
+  assert.equal(dispatchedUpdate.ok, true)
+  assert.equal(dispatchedUpdate.status, 'done')
+  const all = JSON.parse(await cleanupTool.execute({ op: 'list', engagement, status: 'all' }, {}))
+  assert.equal(all.total, 2)
+  assert.equal(all.items[0].detail, 'dispatch fixture')
+  assert.equal(all.items[1].detail, 'user requested retention')
+  assert.equal(existsSync(marker), true, 'cleanup ledger records state but never deletes the resource')
+  const dispatched = dispatch(redteam, { op: 'cleanup', engagement, status: 'all', limit: 0.5 })
+  assert.equal(dispatched.ok, true)
+  assert.equal(dispatched.total, 2)
+  assert.equal(dispatched.items.length, 1, 'fractional limits clamp to one result')
 
   const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item

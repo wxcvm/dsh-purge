@@ -41,6 +41,7 @@ enabled: true
 
 - 用 `redteam_scope_review` 确认仓库/域名/Runner 所属范围。
 - 用 `redteam_asset_test` 追加工作流文件、权限配置、Runner 标签/隔离方式和日志来源。
+- 若在隔离环境创建临时 Runner 工作目录、测试账号或合成制品，用 `redteam_cleanup(op=add)` 分别登记；确认回收后标 `done`，用户要求保留的标 `kept`。不在台账记录 Secret。
 - 对可重复的配置缺陷用 `redteam_vuln_add` 记录；证据只保留最小脱敏配置片段，不保存 Secret。
 - 修复优先级：最小 Token 权限、隔离 Runner、保护发布环境、固定依赖、验证制品来源、轮换疑似泄露的凭据。
 

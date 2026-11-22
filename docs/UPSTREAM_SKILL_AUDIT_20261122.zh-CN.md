@@ -100,7 +100,7 @@
 
 ## 已确认的吸收原则
 
-1. 不按文件名相同就覆盖；当前 35 个同路径技能均保留 Purge 工具接口、证据流程和本地化适配。
+1. 不按文件名相同就覆盖；当前 37 个同路径技能均保留 Purge 工具接口、证据流程和本地化适配。
 2. `asset-correlation.md` 已补齐授权范围核对、归属证据分级、共享基础设施排除和真实资产关系 ID。
 3. 第一批新增 AI Agent、单资产深挖、移动端、网络设备、OOB、OPSEC、供应链 7 个技能；API 数据暴露和 Cloud/Kubernetes 分别合并进既有 `api-attack.md` 与 `cloud-container.md`。
 4. 不全局替换 `redteam_chain_add`。按记录对象使用 Purge 已注册的专用工具；上游独有接口不伪装成当前能力。
@@ -127,11 +127,20 @@
 
 - 不导入上游的批量数据导出、凭据明文收集、默认口令猜测、限速绕过、隐蔽 C2、载荷投递、主机横向扩展和容器逃逸步骤。
 - 新技能只引用当前 Purge 已注册的工具接口；测试仅在明确授权范围、测试账号、合成数据和可回滚环境内进行。
-- `redteam_data_proof`、`redteam_cleanup`、`redteam_pivot_probe` 等上游独有接口未被伪装成 Purge 现有工具。
+- `redteam_cleanup` 已按账本语义吸收为 Purge 独立工具（add/list/update，仅记录状态，不执行删除）；`redteam_data_proof` 与 `redteam_pivot_probe` 仍未实现，前者待最小脱敏数据证明设计，后者需先补强范围约束。
 - `c2-infra` 保留为明确暂缓项；`host-post-exploit` 与 `netspy-recon` 在第二批中以安全边界明确的适配版吸收。
 
 验证范围：技能目录/来源元数据/工具引用契约测试；npm 包含技能目录的既有打包契约；真实 Windows Harness GUI 和 Provider 行为不由这些静态测试替代。
 
+
+
+
+## 工具差异补齐（2026-11-22）
+
+- 上游 `redteam_cleanup` 源码核对固定在 `CallMeGuLab/dsh-purge-safe@d0a9abda6e2eb020dde85b48b5727b45d26582a7`；本地实现为按演练隔离的 SQLite 清理台账，提供 `add/list/update`，默认列出 open 项并支持 all。
+- `done` 仅表示操作者确认已清理，`kept` 表示用户明确要求保留；工具本身不执行删除、禁用、关闭或远程清理，也不存放凭据/秘密值。
+- 仍未吸收 `redteam_data_proof` 与 `redteam_pivot_probe`：分别待最小脱敏数据证明模型、显式范围复核与目标/端口/超时约束设计。
+- 本批真实 Harness Desktop GUI 与 Provider 请求仍未验收；Hosted UI 和 Windows/WSL CI 不替代实机验证。
 
 ## 第二批内容吸收（2026-11-22）
 
