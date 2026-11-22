@@ -809,6 +809,7 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `source` — web（互联网）| self（手搓）| manual（人工）| nuclei-template
 - `verified` — true 只看实测验证过的（优先用这些）
 - `templateLimit` — 本机 nuclei 模板最多返回几条，默认 20
+- `refresh_index` — 默认 false。手动运行过 nuclei 模板更新、复制/修改嵌套 YAML 以后，显式设为 true，**只重建本机检索索引**，让新增/更新的模板立即可搜索；不会联网、不下载模板、不启动扫描或修改模板内容。响应的 `local_templates.reindexed` 报告是否找到目录并重建索引。
 - `limit` — 知识库条目上限，默认 200
 
 ### `redteam_poc_get`
