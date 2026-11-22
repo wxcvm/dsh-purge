@@ -1,3 +1,22 @@
+# 1.1.92-wxcvm.22
+
+## 中文
+
+本次是在已发布、不可覆盖的 .21 之上，交付**更新中断恢复修复**和**CISA KEV 公告参考查询**，并让后续 Release 在 GitHub 托管 Ubuntu Runner 上运行。不改动 .21 的统一提示词管理、HTTP 观察页、授权或真实模型通信。
+
+- **更新失败回退**（[#486](https://github.com/wxcvm/dsh-purge/pull/486)）：更新事务已经会复制 `third_party` 目录；恢复日志白名单现在也识别同一个目录，在中途中断时恢复已有 NOTICE、移除新创建但未完成的目录，保留用户配置。Windows/Ubuntu 相关测试通过；本修复在 .21 之后合并，因此 .21 ZIP 不含此修复。
+- **CISA KEV 公告层**（[#491](https://github.com/wxcvm/dsh-purge/pull/491)）：新增 `redteam_kev(action=status|lookup|refresh)`，本地缓存和精确 CVE 命中查询完全离线；只有明确调用 refresh 时才请求 CISA 官方 JSON，异常时保留旧缓存。缺库 `known_exploited=null` 与未收录 `false` 不混同。被 KEV 收录不表示特定资产确实存在或已验证漏洞，不自动改分、不扫描、不自动下载模板。
+- **发布 Runner 独立于本机 WSL**（[#490](https://github.com/wxcvm/dsh-purge/pull/490)）：Release 工作流改在 GitHub 托管 Ubuntu 上执行，保留已有固定分支/当前主线 SHA、标签、不可覆盖资产与 ZIP/校验和合约。插件运行时和 Desktop 仍由原宿主决定。
+- **向后兼容**：.21 的提示词页面、离线 HTTP 403→200 展示实验均保持不变；不调整用户已保存配置、不新增默认联网定时任务或付费依赖。
+
+**验收边界**：候选提交须通过 Windows/Ubuntu API 合约、UI/打包与独立干净安装检查，Release 需核对标签、ZIP、SHA256SUMS、工作流。真实 Windows Harness Desktop 中的 .22 安装、退出重启、KEV 工具可见性、Prompt 最终 Provider 请求与 ARTEX 联动仍须人工实机验收；CI 和公开 Release 不能代替这些证据。任务继续跟踪 #336/#337/#340/#341/#343/#347/#351。
+
+## English
+
+Version .22 builds on immutable .21 with recovery of the shipped `third_party` notices directory after interrupted updates (#486), opt-in CISA KEV cached reference status and exact CVE lookup (#491), and a release workflow moved to GitHub-hosted Ubuntu (#490). KEV status/lookup are offline; only an explicit refresh downloads the public feed. Missing cache is not reported as a negative finding, and inclusion does not establish an affected asset. No changes to the default prompts, provider permissions, wire HTTP responses or local user configuration. Windows/Ubuntu CI and release assets are not a substitute for real Desktop installation or Provider delivery checks.
+
+---
+
 # 1.1.92-wxcvm.21
 
 ## 中文
