@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "672c14daffe2762d";
+		const CLIENT_BUILD_ID = "b2ba5f2016826ab5";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -14251,7 +14251,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             '任务列表已读到更新版本；此处仍是原详情，未套用其他运行的观测。重新读取后再操作。') : null,
           record.status === 'running' ? h('div', { className: 'rt-note' },
             registryLabels[activity?.state] || '仅有持久登记，运行状态未核实',
-            h(WorkEvidenceTime, { label: '状态核对时间', value: activity?.checked_at }),
+            workEvidenceTime('状态核对时间', activity?.checked_at),
             activity?.state === 'session-active-observed' && activity.parent_session
               ? h('div', null, '宿主观测到的归属会话：' + activity.parent_session) : null) : null,
           nextStep && !newerTask ? h('p', { className: 'rt-note' }, '下一步：' + nextStep) : null,
@@ -14296,13 +14296,6 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('button', { className: 'rt-btn', onClick: closeDetail }, '关闭详情')) : null)
     }
 
-    function WorkEvidenceTime({ label, value }) {
-      const date = typeof value === 'string' && value ? new Date(value) : null
-      return date && Number.isFinite(date.getTime())
-        ? h('div', { className: 'rt-note' }, label + '：', h('time', { dateTime: date.toISOString() }, date.toLocaleString()))
-        : null
-    }
-
     function WorkAttemptEvidence({ attempt, onOpenSession }) {
       const [error, setError] = React.useState('')
       const sessionId = typeof attempt.session_id === 'string' && attempt.session_id.trim() ? attempt.session_id : null
@@ -14313,12 +14306,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ? '来源会话或其所属会话已归档。' : '当前宿主无法打开此来源会话。')
       }
       return h('div', null,
-        h(WorkEvidenceTime, { label: '登记执行', value: attempt.started_at }),
+        workEvidenceTime('登记执行', attempt.started_at),
         attempt.host_end_at
           ? h('div', { className: 'rt-note' }, '已观测精确结束事件 · ' + (attempt.host_stop_reason || '原因未知'),
-            h(WorkEvidenceTime, { label: '宿主观测结束', value: attempt.host_end_at }))
+            workEvidenceTime('宿主观测结束', attempt.host_end_at))
           : h('div', { className: 'rt-note' }, '未观测到精确结束事件'),
-        h(WorkEvidenceTime, { label: '记录结算', value: attempt.finished_at }),
+        workEvidenceTime('记录结算', attempt.finished_at),
         sessionId && typeof onOpenSession === 'function' ? h('button', {
           type: 'button', className: 'rt-btn',
           'aria-label': '查看第 ' + attempt.attempt + ' 次尝试的来源会话',
@@ -14326,6 +14319,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           onClick: open,
         }, '查看来源会话') : null,
         error ? h('p', { className: 'rt-err', role: 'alert' }, error) : null)
+    }
+
+    function workEvidenceTime(label, value) {
+      const date = typeof value === 'string' && value ? new Date(value) : null
+      return date && Number.isFinite(date.getTime())
+        ? h('div', { className: 'rt-note' }, label + '：', h('time', { dateTime: date.toISOString() }, date.toLocaleString()))
+        : null
     }
 
     function SuperAgentTab(props) {
