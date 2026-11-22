@@ -146,3 +146,4 @@ proxychains4 -f runs/proxychains-1080.conf enum4linux -a 10.0.0.6
    **`tool` 写实际命令原文**（含 `-hashes`、`-k -no-pass` 等关键参数，以及 `proxychains4 -f ...` 前缀），
    `result` 写回显摘要——报告要能照着复现。
 6. **回填知识库**：验证有效的通用利用脚本 `redteam_poc_add`（带 `category` + `engagement` + `asset_target` + `verified_note`，脱敏）。
+7. **清理台账**：本次创建的临时 SSH key、账号、隧道或文件用 `redteam_cleanup` 登记；仅在用户明确要求保留时标 `kept` 并说明原因，实际清理并核实后标 `done`。
