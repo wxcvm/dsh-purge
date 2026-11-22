@@ -45,6 +45,7 @@
   "redteam_knowledge_search",
   "redteam_local_asset_search",
   "redteam_next_action",
+  "redteam_pivot_probe",
   "redteam_poc_add",
   "redteam_poc_get",
   "redteam_poc_list",
