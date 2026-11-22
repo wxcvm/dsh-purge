@@ -1,5 +1,21 @@
 # Purge 接手版上游吸收 · Codex 可执行总方案
 
+## 2026-11-22 · 上游 v2.0.2 / DSH rc.5 增量裁定（最新入口）
+
+**双仓实查快照**：重点上游 [CallMeGuLab/dsh-purge-safe v2.0.2](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.2)、[main@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69)（相对 v2.0.1 @d0a9abd 仅新增一个提交，13 个文件）；我方 [master@70d2956](https://github.com/wxcvm/dsh-purge/commit/70d29566431bac6730755b581c1ec3275f4b2b65)，最新已发布 [v1.1.92-wxcvm.19](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.19)（发布于上游 .2 之前）；该 master 的 [Windows/WSL CI](https://github.com/wxcvm/dsh-purge/actions/runs/45004337249) 成功。**CI 成功不等于真实 rc.5 Desktop / Provider 已验收**，也不意味着本仓已经吸收上游 2.0.2。
+
+| 优先 | 上游新差异 / 原始入口 | 我方目前证据 / 裁定 | 最小后续工作（原 Issue） |
+| --- | --- | --- | --- |
+| **P0** | [2.0.2 package.json](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/package.json)：rc.5 客户端 inject 移除 `dsh-client-runtime`、`dsh-client-ui-slots`，实际使用三个服务 | [我方 package.json](../package.json) 的 `dsh.client.inject` 仍含上述两个旧名，且另有 `dsh-client-ui-conversation`；需要验证 Cordis 服务图和现有 UI 依赖，不可只改元数据假装已修 | #336/#339/#343：针对 rc.5 建独立最小启动/客户端注入契约，消除确认不存在的强依赖，保持现用 UI 功能；保留 rc.3/rc.5 分开验证，Desktop 插件可加载、设置页和交互为通过条件 |
+| **P0** | [上游 core.js #100](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/core.js)：新会话 `REPLACEMENT_AGENT_INSTRUCTIONS_INTRO` / 追加 / 空基线 / compact 路径 | [我方 patches-definitions.js](../lib/patches-definitions.js) 已有 #1 和 #2 的 replacement 回归，#2 **明确恢复 system/developer 优先级**；与上游的“把工作区指令改成最高强制优先级”不是同一目标 | #340/#341：先以 rc.5 固定夹具核对四条分支、开关前后首次请求与 Provider 投递证据；只修漏注入/误序/误判，不照搬提升低优先级指令的修改 |
+| **P0 对账** | [上游 core.js #101](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/core.js)：PTC `run_code` 的审批字段文字变更 | 该补丁把审批描述改为“auto-granted”，与宿主实际许可状态可能不一致；不作为普通兼容性修复直接移植 | #355/#341：核对 rc.5 PTC 参数、真实授权/拒绝及可追责提示，修字段不匹配；**不伪报审批通过、不暗改权限或沙箱** |
+| **P1** | [上游 2.0.2 release-notes](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/release-notes.md)：桌面壳自愈锚点 `DSH_PROFILE` → `app.setAppLogsPath();` | 我方存在独立桌面壳 #82 补丁和运行健康模块，但不是上游同一套代理自愈；尚未证实我方出现失配 | #337/#336：仅在实际 patch 状态/代理行为有失败时对照定位最小锚点修复，记录原样与修后标记数、重启回读，不移植上游整套自愈 |
+| **去重** | [上游 2.0.2 net-scope.js](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/net-scope.js)：子会话因区域闸门被伪造拒答，修复 delegated-session 判定和模型来源标注 | [我方 net-scope.js](../lib/net-scope.js) 已整体停用区域硬闸，`installRegionGate` 不安装 `agent/pre-step`；**该根因在我方不存在**，不能重复移植 | #345/#342：仅保留真实子会话“插件拦截/模型拒答/无请求”三类证据区分的无害任务回归；新故障再按真实来源处理 |
+| **已知 P1** | 上游 [v2.0.1](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.1) 修红队模式、自定义权限与运行窗口查看 | 已在先前 #343/#347 的 UI/Agent 设计和我方当前实现中分别有对应入口，不按发布说明重建 | #343：核对现有功能在 rc.5 Desktop 的实际可见性/可点性后再提小修 |
+
+**执行顺序**：先 P0 客户端服务依赖的 rc.5 最小修正 + 安装/开页验证 → 新会话四类提示词真实投递对账 → PTC 实际权限语义对账 → Desktop 自愈/Agent 无害回归；不重写已合并的备用提示词、Team、agent_attention/ack、技能/知识、ARTEX。上游宣称的“62/64 条补丁命中”仅是**其自身**核查结果，不能移作我方兼容性结论。只做必要测试、提交对应小 PR 和 CI；真 Desktop/Provider 仍须单列。无需新开总 Issue 或提前发布。
+
+
 > **2026-11-20 源码/任务快照**。维护仓库 [wxcvm/dsh-purge](https://github.com/wxcvm/dsh-purge)，默认分支 `master`。本文是**任务导航与执行方案**，不是“全部已完成”声明，也不代替当前 GitHub PR、CI、Release 和实机验收记录。
 >
 > **Codex 先读**：仓库根目录 [`AGENTS.md`](../AGENTS.md) → 本文 → [#347 接手版/社区上游追踪](https://github.com/wxcvm/dsh-purge/issues/347) → [#351 全项目总台账](https://github.com/wxcvm/dsh-purge/issues/351)。随后检查最新 `master`、未合并 PR、CI 和目标文件；旧文档中的 commit SHA 和技能数量都是当时的快照，不能替代最新核查。
