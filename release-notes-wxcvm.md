@@ -1,3 +1,20 @@
+# 1.1.92-wxcvm.23
+
+## 中文
+
+本版将 .22 之后完成的两项**接手版上游选择性吸收**合并发行：人工资产批量登记、Nuclei 本地模板索引显式刷新。其余提示词、Provider 请求和已保存的用户配置保持原样；历史 .22 标签及资产不覆盖。
+
+- **人工资产批量登记**（[#493](https://github.com/wxcvm/dsh-purge/pull/493)）：新增 `redteam_asset_batch`，允许一次预览/提交最多 500 条已有 IPv4 资产记录；默认 dry-run，仅 `commit:true` 使用既有 `importBundle` 事务和幂等 upsert。逐条返回拒绝原因、写入资产 ID，拒绝超出已登记 scope 的记录；未登记 scope 的实际提交须再明确 `confirm:true`。不会扫描目标、创建漏洞结论或自动记分。扫描文件仍走既有 `redteam_ingest`，不重复开发解析器。
+- **Nuclei 本地模板索引刷新**（[#494](https://github.com/wxcvm/dsh-purge/pull/494)）：已有 `redteam_poc_search` 增加可选 `refresh_index:true`。手动更新深层 YAML 后可强制重建既有索引，避免模板根目录 `mtime` 未变化时最多 7 天的旧缓存。默认仍使用原缓存；此参数不会下载安装模板、后台联网或执行扫描。Windows/Ubuntu 有针对性回归，测试临时模板目录与预装工具隔离。
+- **去重和上游取舍**：未照搬上游自动 Nuclei/KEV 启动下载、任意目标 SOCKS5 批量探测、批量评估/漏洞直接写库和未证实的审批/模型指令优先级调整。完整裁定与未完成的真实宿主验收继续由 #347/#351 管理。
+
+**验收边界**：Windows/Ubuntu CI、正式 ZIP 和 SHA256SUMS 只能证明发行候选及构建正常。用户 Windows Harness Desktop 0.2.2-rc.5 的安装、退出/重启加载、新工具展示与真实 Provider 最终请求，仍须按 #336/#340/#341/#343 实机验收。此版不声称完成全部上游/ARTEX 联动。
+
+## English
+
+Version .23 selectively adds manual multi-asset registration (#493) and an explicit offline rebuild of the existing local Nuclei template-search index (#494). Batch ingestion defaults to preview, requires explicit `commit:true` for existing SQLite upsert, returns per-item rejects/asset IDs, and does not scan or confirm findings. `redteam_poc_search(refresh_index:true)` rebuilds the cached YAML search metadata after manually updated nested templates without downloading anything. Existing prompts, provider behavior, runtime credentials and .22 assets remain untouched. Windows/Ubuntu CI and release artifacts do not establish successful live Windows Desktop installation or Provider delivery.
+
+---
 # 1.1.92-wxcvm.22
 
 ## 中文
