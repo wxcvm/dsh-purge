@@ -89,6 +89,54 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(noTarget.ok, true)
   assert.equal(noTarget.engagement, engagement, 'unbound tool calls use the selected active engagement')
 
+  const batchTool = registered.get('redteam_asset_batch')
+  const scopedEngagement = redteam.openEngagement('manual-batch-scope',
+    ['192.0.2.0/24'], { bindCurrent: false }).id
+  const batchItems = [
+    { ip: '192.0.2.10', provenance: 'passive', tool: 'manual-catalog',
+      discovered_at: '2026-11-01T00:00:00Z',
+      names: [{ name: 'host.example.test', kind: 'hostname' }],
+      ports: [{ port: 443, proto: 'tcp', service: 'https', title: 'Example' }] },
+    { ip: '198.51.100.10', provenance: 'active', tool: 'manual-catalog' },
+  ]
+  const batchPreview = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, items: batchItems,
+  }, {}))
+  assert.equal(batchPreview.dry_run, true)
+  assert.equal(batchPreview.accepted, 1)
+  assert.deepEqual(batchPreview.rejected.map(item => item.reason), ['outside-scope'])
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 0)
+  const batchCommit = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, items: batchItems, commit: true,
+  }, {}))
+  assert.equal(batchCommit.ok, true)
+  assert.equal(batchCommit.written, 1)
+  assert.ok(Number.isInteger(batchCommit.results[0].asset_id))
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 1)
+  const batchAsset = redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id)
+  assert.equal(batchAsset.ip, '192.0.2.10')
+  assert.equal(batchAsset.discovered_at, '2026-11-01T00:00:00Z')
+  assert.equal(batchAsset.ports[0].port, 443)
+  const repeated = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, items: batchItems, commit: true,
+  }, {}))
+  assert.equal(repeated.written, 1)
+  assert.equal(repeated.results[0].asset_id, batchCommit.results[0].asset_id)
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 1, 'upsert reuses existing asset')
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).discovered_at,
+    '2026-11-01T00:00:00Z', 'existing discovery time survives a repeat import')
+  const unscopedDenied = JSON.parse(await batchTool.execute({
+    engagement, items: [{ ip: '203.0.113.9', provenance: 'passive' }], commit: true,
+  }, {}))
+  assert.equal(unscopedDenied.written, 0)
+  assert.equal(redteam.listAssets(engagement, {}).total, 0)
+  const unscopedAllowed = JSON.parse(await batchTool.execute({
+    engagement, items: [{ ip: '203.0.113.9', provenance: 'passive' }],
+    commit: true, confirm: true,
+  }, {}))
+  assert.equal(unscopedAllowed.written, 1)
+  assert.equal(redteam.listAssets(engagement, {}).total, 1)
+
   const cleanupTool = registered.get('redteam_cleanup')
   const marker = join(home, 'cleanup-marker.txt')
   writeFileSync(marker, 'synthetic cleanup ledger fixture')

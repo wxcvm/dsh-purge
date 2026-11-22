@@ -7,6 +7,7 @@
   "redteam_artex_knowledge_search",
   "redteam_asset_add",
   "redteam_asset_assess",
+  "redteam_asset_batch",
   "redteam_asset_get",
   "redteam_asset_graph",
   "redteam_asset_link",
