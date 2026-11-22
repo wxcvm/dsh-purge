@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "70d15e599e6c70f4";
+		const CLIENT_BUILD_ID = "ae0da286d7187af4";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -5195,7 +5195,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                 h("div", { className: "dshp-prompt-help", role: "status", "aria-label": "主副提示词来源" },
                     h("strong", null, "主 / 副提示词来源 · " + backupStatus),
                     h("p", null, "主来源是 Purge；副来源是接手版 dsh-purge-safe。来源选择不等同于「无匹配时使用内置兜底」，也不覆盖自定义正文。"),
-                    h("p", null, "实际生效仍取决于当前会话的路由与组装；这里不代表模型已收到。"),
+                    h("p", null, "这里不表示当前会话已组装或模型已收到；需要核对实际路由与请求。"),
                     h("div", { className: "dshp-prompt-backup", style: panel },
                         h("h4", { style: { margin: "0 0 8px" } }, "副提示词系统 · 接手版备用方案"),
                         h("p", { className: "dshp-hint" }, "默认关闭。开启后仅替换红队或明确启用的内置兜底默认正文，已保存的全局/局部规则正文不变；已命中正文使用备用 persona-prefix 组装。"),
@@ -5269,7 +5269,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                             h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
                     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
                         h("button", { type: "button", disabled: busy || reading || Boolean(loadError) || !routingEdits,
-                            onClick: () => saveRouting(["bundledDefault", "redteamTaskRoute"]) }, "保存路由开关"))),
+                            onClick: () => saveRouting(["bundledDefault", "redteamTaskRoute", "modelAdaptive"]) }, "保存路由开关"))),
                 h("div", { className: "dshp-prompt-columns" },
                     h("section", { className: "dshp-prompt-global", style: panel },
                         h("h4", { style: { margin: "0 0 10px" } }, "通用提示词", drafts.global ? " · 未保存" : ""),
