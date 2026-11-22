@@ -34,7 +34,7 @@ NetSpy 不是 Purge 内置工具，也不随插件或工具箱安装包分发。
 NETSPY="$DSH_HOME/redteam/toolkit/netspy/netspy"
 "$NETSPY" version
 mkdir -p runs
-"$NETSPY" -c "<已批准 CIDR>" -t 20 -m 150 -r 1 -s \\
+"$NETSPY" -c "<已批准 CIDR>" -t 20 -m 150 -r 1 -s \
   -o "runs/netspy-<资产ID>-<时间>.txt" is
 ```
 
