@@ -196,7 +196,7 @@ test('newly absorbed skills reference only registered Purge tools', () => {
   const registered = new Set([...toolSource.matchAll(/name:\s*['"]((?:redteam)_[a-z0-9_]+)['"]/g)].map(match => match[1]))
   const names = [
     'ai-agent-attack', 'asset-correlation', 'asset-deep-scan', 'mobile-code-recon',
-    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain',
+    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain', 'host-post-exploit', 'netspy-recon',
     'api-attack', 'cloud-container',
   ]
   for (const name of names) {

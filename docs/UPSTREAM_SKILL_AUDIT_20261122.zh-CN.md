@@ -65,8 +65,6 @@
 - api-data-exfil.md → 已合并适配到本地 api-attack.md
 - cloud-k8s.md → 已合并适配到本地 cloud-container.md
 - c2-infra.md → 暂缓：不移植长期控制、载荷投递和规避检测流程
-- host-post-exploit.md → 已新增只读主机基线审计适配版，不引入凭据收集/横向移动
-- netspy-recon.md → 已新增可选依赖适配版；明确二进制不随包分发、缺失时阻断，不自动下载
 
 ### 第一批新增独立技能（7）
 
@@ -130,7 +128,7 @@
 - 不导入上游的批量数据导出、凭据明文收集、默认口令猜测、限速绕过、隐蔽 C2、载荷投递、主机横向扩展和容器逃逸步骤。
 - 新技能只引用当前 Purge 已注册的工具接口；测试仅在明确授权范围、测试账号、合成数据和可回滚环境内进行。
 - `redteam_data_proof`、`redteam_cleanup`、`redteam_pivot_probe` 等上游独有接口未被伪装成 Purge 现有工具。
-- `c2-infra`、`host-post-exploit` 和 `netspy-recon` 保留为明确暂缓项，不宣称已吸收。
+- `c2-infra` 保留为明确暂缓项；`host-post-exploit` 与 `netspy-recon` 在第二批中以安全边界明确的适配版吸收。
 
 验证范围：技能目录/来源元数据/工具引用契约测试；npm 包含技能目录的既有打包契约；真实 Windows Harness GUI 和 Provider 行为不由这些静态测试替代。
 
