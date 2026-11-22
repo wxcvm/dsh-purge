@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "170478a67128d682";
+		const CLIENT_BUILD_ID = "7ea007bcd9106fa4";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -14116,22 +14116,26 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (accepts(scope, 'list', request)) setListRead('failed')
         }
       }
+      const clearReviewDraft = () => {
+        setSession('')
+        setRun('')
+        setOutcome('ready')
+        setHostChecked(false)
+        setSummary('')
+        setReason('')
+      }
       const closeDetail = () => {
         reads.current.detail++
         setDetail(null)
         setDetailRead(null)
+        clearReviewDraft()
       }
       const open = async (id, scope = active.current, previous = null) => {
         if (!eng || !scope?.live) return
         const request = ++reads.current.detail
         setDetail(null)
         setDetailRead({ phase: 'loading', id })
-        const clearDraft = () => {
-          setHostChecked(false)
-          setSummary('')
-          setReason('')
-        }
-        if (!previous) clearDraft()
+        if (!previous) clearReviewDraft()
         try {
           const result = await api({ op: 'workItemGet', engagement: eng, task_id: id, include_registry: true })
           if (!accepts(scope, 'detail', request)) return
@@ -14139,11 +14143,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (previous && (previous.id !== result.item.id || previous.revision !== result.item.revision
             || previous.assignment?.id !== result.item.assignment?.id
             || previous.assignment?.session_id !== result.item.assignment?.session_id
-            || previous.assignment?.run_id !== result.item.assignment?.run_id)) clearDraft()
+            || previous.assignment?.run_id !== result.item.assignment?.run_id)) clearReviewDraft()
           setDetail(result.item)
           setDetailRead(null)
         } catch {
-          if (accepts(scope, 'detail', request)) setDetailRead({ phase: 'failed', id })
+          if (accepts(scope, 'detail', request)) setDetailRead({ phase: 'failed', id, previous })
         }
       }
       const mutate = async (request, label, selectedId) => {
@@ -14157,14 +14161,21 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           const result = await api({ ...request, engagement: eng })
           if (active.current !== scope || !scope.live) return
           if (!result || result.ok !== true) throw Error(result?.error || '任务操作失败')
-          if (result.recorded === false || result.assigned === false || result.closed === false || result.returned === false) {
+          const unchanged = result.created === false || result.recorded === false || result.assigned === false
+            || result.closed === false || result.returned === false
+          if (result.created === false) {
+            setNotice({ text: '此任务键已有记录，未新增或覆盖。' })
+          } else if (unchanged) {
             setNotice({ error: true, text: '操作未更新：' + (result.reason || '状态已变化') + '，请刷新后核对。' })
           } else {
             setNotice({ text: label + '已记录；请核对列表和真实宿主执行状态。' })
           }
           await refresh(scope, offset)
           if (reads.current.detail === detailBeforeWrite && (selectedId || result.item?.id)) {
-            await open(selectedId || result.item.id, scope)
+            const id = selectedId || result.item.id
+            // A no-op can leave a draft on the same record; a changed version
+            // or run will invalidate it in open() after the authoritative read.
+            await open(id, scope, unchanged && detail?.id === id ? detail : null)
           }
         } catch (error) {
           if (active.current === scope && scope.live) setNotice({ error: true, text: error?.message || String(error) })
@@ -14273,10 +14284,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onClick: () => mutate({ op: 'workItemCreate', task_key: key, role, objective }, '登记', null) }, '登记任务'))) : null,
         detailRead && !masked ? h('div', { className: 'rt-note' },
           detailRead.phase === 'failed'
-            ? h('p', { role: 'alert' }, '任务 #' + detailRead.id + ' 的详情读取失败。')
+            ? h('p', { role: 'alert' }, '任务 #' + detailRead.id + ' 的详情读取失败。',
+              detailRead.previous ? ' 草稿暂留；只在读回同一版本和运行后恢复。' : null)
             : h('p', { role: 'status' }, '正在读取任务 #' + detailRead.id + ' 的详情…'),
           detailRead.phase === 'failed' ? h('button', { className: 'rt-btn', type: 'button',
-            onClick: () => select(detailRead.id) }, '重试读取详情') : null,
+            onClick: () => open(detailRead.id, active.current, detailRead.previous) }, '重试读取详情') : null,
           h('button', { className: 'rt-btn', type: 'button', onClick: closeDetail }, '取消查看')) : null,
         record && !masked ? h('div', { className: 'rt-card', style: { marginTop: 10, overflowWrap: 'anywhere' } },
           h('h4', null, '任务 #' + record.id + ' · ' + taskStatus(record)),

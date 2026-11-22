@@ -18,7 +18,10 @@ const item = (overrides = {}) => ({
   ...overrides,
 })
 const list = (engagement, items) => ({ ok: true, engagement, total: items.length, items, hasMore: false })
-const full = (overrides = {}) => ({ ...item(overrides), history: [item(overrides).assignment] })
+const full = (overrides = {}) => {
+  const record = item(overrides)
+  return { ...record, history: record.assignment ? [record.assignment] : [] }
+}
 
 function mount(engagement, api, opts = {}) {
   const states = [], refs = []
@@ -373,4 +376,103 @@ test('refresh preserves the settlement draft for the same run but never carries 
   detail = full({ revision: 4, assignment: { ...older.assignment, id: 2, run_id: 'run-2' } })
   await control(ui, 'button', '重新读取详情').props.onClick()
   assert.equal(field().props.value, '')
+})
+
+
+test('a failed detail refresh retains the exact-run draft through retry without recording anything', async () => {
+  const existing = full()
+  let loads = 0
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', [existing])
+    assert.equal(req.op, 'workItemGet')
+    if (++loads === 2) throw new Error('temporarily offline')
+    return { ok: true, engagement: 'one', item: existing }
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  control(ui, 'select', '结算结果').props.onChange({ target: { value: 'waiting' } })
+  control(ui, 'textarea', '结算依据').props.onChange({ target: { value: 'Need the missing appendix' } })
+  elements(ui.render()).find(node => node.type === 'input' && node.props.type === 'checkbox')
+    .props.onChange({ target: { checked: true } })
+  await control(ui, 'button', '重新读取详情').props.onClick()
+  assert.match(content(ui), /草稿暂留/)
+  assert.equal(control(ui, 'button', '记录结算'), undefined)
+  await control(ui, 'button', '重试读取详情').props.onClick()
+  assert.equal(control(ui, 'textarea', '结算依据').props.value, 'Need the missing appendix')
+  assert.equal(control(ui, 'select', '结算结果').props.value, 'waiting')
+  assert.equal(control(ui, 'button', '记录结算').props.disabled, false)
+  ui.unmount()
+})
+
+test('switching tasks does not carry binding IDs or the settlement outcome', async () => {
+  const tasks = [
+    full({ id: 1, status: 'queued', assignment: null }),
+    full({ id: 2, status: 'queued', assignment: null }),
+    full({ id: 3 }),
+    full({ id: 4 }),
+  ]
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', tasks)
+    assert.equal(req.op, 'workItemGet')
+    return { ok: true, engagement: 'one', item: tasks[req.task_id - 1] }
+  })
+  await setImmediate()
+  const open = async id => {
+    control(ui, 'button', '查看持久任务 #' + id).props.onClick()
+    await setImmediate()
+  }
+  await open(1)
+  control(ui, 'input', '宿主会话 ID').props.onChange({ target: { value: 'draft-session' } })
+  control(ui, 'input', '宿主运行 ID').props.onChange({ target: { value: 'draft-run' } })
+  await open(2)
+  assert.equal(control(ui, 'input', '宿主会话 ID').props.value, '')
+  assert.equal(control(ui, 'input', '宿主运行 ID').props.value, '')
+  assert.equal(control(ui, 'button', '记录已有执行').props.disabled, true)
+  await open(3)
+  control(ui, 'select', '结算结果').props.onChange({ target: { value: 'failed' } })
+  await open(4)
+  assert.equal(control(ui, 'select', '结算结果').props.value, 'ready')
+  ui.unmount()
+})
+
+test('a no-op review retains the draft only while the confirmed version is unchanged', async () => {
+  let current = full({ status: 'ready' })
+  let writes = 0
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', [current])
+    if (req.op === 'workItemGet') return { ok: true, engagement: 'one', item: current }
+    assert.equal(req.op, 'workItemRequestChanges')
+    assert.equal(req.expected_revision, 3)
+    if (++writes === 2) current = { ...current, revision: 4 }
+    return { ok: true, returned: false, reason: 'test-conflict' }
+  })
+  await setImmediate()
+  control(ui, 'button', '查看持久任务 #1').props.onClick()
+  await setImmediate()
+  control(ui, 'input', '收尾依据').props.onChange({ target: { value: 'Please add section A' } })
+  await control(ui, 'button', '要求补充').props.onClick()
+  assert.match(content(ui), /操作未更新/)
+  assert.equal(control(ui, 'input', '收尾依据').props.value, 'Please add section A')
+  await control(ui, 'button', '要求补充').props.onClick()
+  assert.equal(control(ui, 'input', '收尾依据').props.value, '')
+  assert.equal(control(ui, 'button', '要求补充').props.disabled, true)
+  ui.unmount()
+})
+
+test('registering an existing task key never claims a new item', async () => {
+  const existing = full({ status: 'queued', assignment: null })
+  const ui = mount('one', async req => {
+    if (req.op === 'workItemReview') return list('one', [existing])
+    if (req.op === 'workItemGet') return { ok: true, engagement: 'one', item: existing }
+    assert.equal(req.op, 'workItemCreate')
+    return { ok: true, created: false, item: existing }
+  })
+  await setImmediate()
+  control(ui, 'input', '新任务键').props.onChange({ target: { value: 'doc-review' } })
+  control(ui, 'textarea', '新任务目标').props.onChange({ target: { value: 'Read the draft' } })
+  await control(ui, 'button', '登记任务').props.onClick()
+  assert.match(content(ui), /此任务键已有记录，未新增或覆盖/)
+  assert.doesNotMatch(content(ui), /登记已记录/)
+  ui.unmount()
 })
