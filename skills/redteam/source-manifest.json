@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "CallMeGuLab/dsh-purge-safe",
+    "url": "https://github.com/CallMeGuLab/dsh-purge-safe",
+    "revision": "d0a9abda6e2eb020dde85b48b5727b45d26582a7",
+    "version": "v2.0.1",
+    "license": "Apache-2.0",
+    "licenseFile": "third_party/CallMeGuLab-dsh-purge-safe/LICENSE",
+    "noticeFile": "third_party/CallMeGuLab-dsh-purge-safe/NOTICE",
+    "verifiedAt": "2026-11-22"
+  },
+  "files": [
+    {
+      "local": "active-scan.md",
+      "upstream": "skills/redteam/active-scan.md",
+      "upstreamBlobSha": "76d54e0d48124b230efded2071539447bf58842b",
+      "adoption": "adapted"
+    },
+    {
+      "local": "ad-attack.md",
+      "upstream": "skills/redteam/ad-attack.md",
+      "upstreamBlobSha": "394d269ba139b57b7f61263587efeaeb9f55b07a",
+      "adoption": "adapted"
+    },
+    {
+      "local": "asset-correlation.md",
+      "upstream": "skills/redteam/asset-correlation.md",
+      "upstreamBlobSha": "dcece9b470236e3190817289dcc3534a57bc0abe",
+      "adoption": "adapted"
+    },
+    {
+      "local": "browser-automation.md",
+      "upstream": "skills/redteam/browser-automation.md",
+      "upstreamBlobSha": "ac211017fcf46eea18e5a22c77d76444d301a265",
+      "adoption": "adapted"
+    },
+    {
+      "local": "campaign-planning.md",
+      "upstream": "skills/redteam/campaign-planning.md",
+      "upstreamBlobSha": "d9492bb6f67072e6071f7a2640ce3b4d4839fd22",
+      "adoption": "adapted"
+    },
+    {
+      "local": "chisel-tunnel.md",
+      "upstream": "skills/redteam/chisel-tunnel.md",
+      "upstreamBlobSha": "35ec3315820009a5a2fe9a28ce1a0f58af256de4",
+      "adoption": "adapted"
+    },
+    {
+      "local": "cn-proxy-pool.md",
+      "upstream": "skills/redteam/cn-proxy-pool.md",
+      "upstreamBlobSha": "f95c6336388fd8652a3f4cdb9d30fdd2ca0c60ca",
+      "adoption": "adapted"
+    },
+    {
+      "local": "credential-attack.md",
+      "upstream": "skills/redteam/credential-attack.md",
+      "upstreamBlobSha": "83a8a25ebf72e72d7aab26dedd2342379b6b3c55",
+      "adoption": "adapted"
+    },
+    {
+      "local": "deepseek-web-intel.md",
+      "upstream": "skills/redteam/deepseek-web-intel.md",
+      "upstreamBlobSha": "2b39eb4a3f18ff36ea2ee81d50c2d92f7149c79c",
+      "adoption": "adapted"
+    },
+    {
+      "local": "dir-bruteforce.md",
+      "upstream": "skills/redteam/dir-bruteforce.md",
+      "upstreamBlobSha": "979a7dd3b905e771276f910d8597eea6ec0c8d3b",
+      "adoption": "adapted"
+    },
+    {
+      "local": "fofa-recon.md",
+      "upstream": "skills/redteam/fofa-recon.md",
+      "upstreamBlobSha": "a46993688a8aac990e8d3309da517a628e982f3c",
+      "adoption": "adapted"
+    },
+    {
+      "local": "frp-tunnel.md",
+      "upstream": "skills/redteam/frp-tunnel.md",
+      "upstreamBlobSha": "ad363aa2cddb546471bfc18a85bd2a961405b4d7",
+      "adoption": "adapted"
+    },
+    {
+      "local": "fscan-intranet.md",
+      "upstream": "skills/redteam/fscan-intranet.md",
+      "upstreamBlobSha": "2ad8675ae5310800fbee06569caf4855c50ad402",
+      "adoption": "adapted"
+    },
+    {
+      "local": "gogo-intranet.md",
+      "upstream": "skills/redteam/gogo-intranet.md",
+      "upstreamBlobSha": "581baa91eb160d2e9d9c3a2ea18cc3b6a2dc0c6c",
+      "adoption": "adapted"
+    },
+    {
+      "local": "kimi-webbridge.md",
+      "upstream": "skills/redteam/kimi-webbridge.md",
+      "upstreamBlobSha": "38a3311c8979077cc154727017fdd680d7f49a6b",
+      "adoption": "adapted"
+    },
+    {
+      "local": "lateral-movement.md",
+      "upstream": "skills/redteam/lateral-movement.md",
+      "upstreamBlobSha": "24c7e39ae0f6d8a8aa266c3b951fe4f0bdad518d",
+      "adoption": "adapted"
+    },
+    {
+      "local": "nuclei-scan.md",
+      "upstream": "skills/redteam/nuclei-scan.md",
+      "upstreamBlobSha": "9b42b97f1e4a0cebe23b2fcc60c20b6c07d1f1c1",
+      "adoption": "adapted"
+    },
+    {
+      "local": "passive-recon.md",
+      "upstream": "skills/redteam/passive-recon.md",
+      "upstreamBlobSha": "26c919e4944b8092b2837c42aaca22c86689b445",
+      "adoption": "adapted"
+    },
+    {
+      "local": "recon-pipeline.md",
+      "upstream": "skills/redteam/recon-pipeline.md",
+      "upstreamBlobSha": "7e0974905dbc7182ba8659f9d3486c91d1af73f6",
+      "adoption": "adapted"
+    },
+    {
+      "local": "redteam-setup.md",
+      "upstream": "skills/redteam/redteam-setup.md",
+      "upstreamBlobSha": "e4adcd0d8b4fd1c65f92a360e4a2c9db7464f690",
+      "adoption": "adapted"
+    },
+    {
+      "local": "score-coverage.md",
+      "upstream": "skills/redteam/score-coverage.md",
+      "upstreamBlobSha": "0e2e72d02404384a7ca49b0410642c30cbbd69da",
+      "adoption": "adapted"
+    },
+    {
+      "local": "shell-handler.md",
+      "upstream": "skills/redteam/shell-handler.md",
+      "upstreamBlobSha": "bbeb0910d2bc49b2cb44fc7e57b5282975451fb6",
+      "adoption": "adapted"
+    },
+    {
+      "local": "specialist-paths.md",
+      "upstream": "skills/redteam/specialist-paths.md",
+      "upstreamBlobSha": "5437211bae45e15bf2acd580bf16204050e512e4",
+      "adoption": "adapted"
+    },
+    {
+      "local": "suo5-tunnel.md",
+      "upstream": "skills/redteam/suo5-tunnel.md",
+      "upstreamBlobSha": "90b915e17bcbed7c6b31f2ebf0849074527cee51",
+      "adoption": "adapted"
+    },
+    {
+      "local": "unauth-exploit.md",
+      "upstream": "skills/redteam/unauth-exploit.md",
+      "upstreamBlobSha": "1f24b34ef9107b75d9047d62ea96474cf727d48a",
+      "adoption": "adapted"
+    },
+    {
+      "local": "vps-reverse-shell.md",
+      "upstream": "skills/redteam/vps-reverse-shell.md",
+      "upstreamBlobSha": "2593971108cb016d613bb82d33fdf65ab41e59d5",
+      "adoption": "adapted"
+    },
+    {
+      "local": "web-fingerprint.md",
+      "upstream": "skills/redteam/web-fingerprint.md",
+      "upstreamBlobSha": "a5f3e1bdaae160e38edd1bc4a2682d2c5ec9e8b1",
+      "adoption": "adapted"
+    },
+    {
+      "local": "webshell-toolkit.md",
+      "upstream": "skills/redteam/webshell-toolkit.md",
+      "upstreamBlobSha": "30d8d0bbf6f5e8a5de741341af846ef8c152b785",
+      "adoption": "adapted"
+    }
+  ]
+}
