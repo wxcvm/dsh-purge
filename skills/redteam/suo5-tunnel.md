@@ -30,30 +30,21 @@ $SUO5 -t "https://target.example.com/upload/x.jsp" -l 127.0.0.1:8081 -m http
 ```
 参数速查：`-t` 目标 shell URL、`-l` 本地监听、`-m socks5|http`、`--auth user:pass`、`-r` 重连间隔、`--debug` 看流量。
 
-## 通过隧道做内网操作
+## 单目标可达性验证
 ```bash
-# curl 走 socks5
+# 仅对已登记、明确授权的单个资产与端口做应用层 HEAD 检查
 curl -s --socks5 127.0.0.1:1080 http://10.0.0.5:8080/ -I
-
-# nmap 必须用 -sT（全连接）+ proxychains，或直接 --proxies（新版）
-proxychains4 -q nmap -sT -Pn -p 22,80,445,3389,3306,6379,8080 10.0.0.0/24 -oN runs/internal-nmap.txt
-
-# 数据库 / 中间件
-proxychains4 -q redis-cli -h 10.0.0.6 -p 6379 info
-proxychains4 -q mysql -h 10.0.0.7 -u root -p --connect-timeout=5
-
-# 浏览器/接口测试走隧道
-curl -s --socks5 127.0.0.1:1080 "http://10.0.0.8:8080/api/user/1" -H "Cookie: JSESSIONID=..."
 ```
 
-## 内网扫描节奏（避免告警）
-- 先 `/24` 存活探测（`nmap -sn` 经隧道或 ICMP），再对存活主机做常见端口。
-- 速率降到 `-T2 --max-rate 50`，避免 IDS 触发。
-- 新发现的资产全部 `redteam_asset_add`（会自动按 /24 建 C 段），并标 `provenance="active"`、`tool="suo5+nmap"`。
+- 先将资产单独登记为 live，并把已确认开放的 TCP 端口写入资产库。
+- 隧道登记并通过 `redteam_session_check` 确认 active 后，使用 `redteam_pivot_probe` 对一个 asset_id + port 做一次 TCP CONNECT。
+- 工具会同时检查 engagement scope、tunnel reach、隧道入口归属和 loopback 监听；任一缺失都拒绝执行。
+- 不做网段扫描、端口范围扫描、批量目标探测、banner grabbing、凭据尝试或数据读取。TCP 可达不等于取得主机权限。
 
 ## 落库
 - **建好立刻登记（强制）**：`redteam_tunnel_add`（`kind=suo5`、`listen=127.0.0.1:1080`、`entry=<WebShell URL>`、`reach=可达网段`、`command=完整启动命令`），`webshell_id` 指向对应的 WebShell 记录；随后 `redteam_session_check` 实测连通性，确认 status=active 再往下走。
 - 隧道本身写 `redteam_chain_add`（stage=pivot，detail 写隧道端点与本地端口）。
+- 单目标 TCP 可达性验证使用 `redteam_pivot_probe`；若要形成正式结论，再由操作者把验证结果写入资产测试记录，不把一次 TCP 成功自动升级为漏洞或控制权。
 - 每个内网资产、每次成功登录、每条凭据分别落库（asset/access/credential）。
 - 隧道掉了用 `redteam_tunnel_update` 标 down；不要留一个"看起来在跑其实不通"的隧道给后续角色踩空。
 
