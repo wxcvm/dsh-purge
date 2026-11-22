@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
+import { DDL, migrate } from '../lib/redteam/schema.js'
 import { join } from 'node:path'
 
 const expected = JSON.parse(readFileSync(new URL('./fixtures/tool-surface.json', import.meta.url), 'utf8'))
@@ -55,6 +56,16 @@ test('reviewed tool names match source declarations and actual registrations', a
   redteam = new RedteamStore(home)
   const engagement = redteam.openEngagement('fixture').id
   const otherEngagement = redteam.openEngagement('cleanup-other').id
+  const legacySchemaDb = new DatabaseSync(':memory:')
+  try {
+    legacySchemaDb.exec(DDL)
+    legacySchemaDb.exec('ALTER TABLE data_proof DROP COLUMN sample_count; ALTER TABLE data_proof ADD COLUMN sample TEXT; ALTER TABLE data_proof ADD COLUMN query TEXT;')
+    migrate(legacySchemaDb)
+    const legacyColumns = legacySchemaDb.prepare('PRAGMA table_info(data_proof)').all().map(column => column.name)
+    assert.ok(legacyColumns.includes('sample_count'), 'existing upstream proof tables gain the safe sample-count column')
+  } finally {
+    legacySchemaDb.close()
+  }
   redteam.dataQuality = id => ({ missing_evidence: 2, target: id })
   const registered = new Map()
   const ctx = {
@@ -113,6 +124,54 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(dispatched.ok, true)
   assert.equal(dispatched.total, 2)
   assert.equal(dispatched.items.length, 1, 'fractional limits clamp to one result')
+
+  const dataProofTool = registered.get('redteam_data_proof')
+  assert.equal(Object.hasOwn(dataProofTool.parameters, 'sample'), false)
+  assert.equal(Object.hasOwn(dataProofTool.parameters, 'query'), false)
+  const proof = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
+    source: 'db', interface: 'users', fields: ['name', 'phone', 'name'], row_count: 12000,
+    sample_count: 2, evidence_ref: 'evidence://redacted/001', pii_type: 'pii', note: 'synthetic metadata only' }, {}))
+  assert.equal(proof.ok, true)
+  assert.deepEqual(proof.proof.fields, ['name', 'phone'])
+  assert.equal(proof.proof.sample_count, 2)
+  assert.equal(Object.hasOwn(proof.proof, 'meets_threshold'), false, 'data proof must not invent a score threshold')
+  const proofList = JSON.parse(await dataProofTool.execute({ op: 'list', engagement }, {}))
+  assert.equal(proofList.total, 1)
+  assert.equal(proofList.items[0].fields.length, 2)
+  assert.equal(Object.hasOwn(proofList.items[0], 'sample'), false)
+  assert.equal(Object.hasOwn(proofList.items[0], 'query'), false)
+  const isolatedProofs = JSON.parse(await dataProofTool.execute({ op: 'list', engagement: otherEngagement }, {}))
+  assert.equal(isolatedProofs.total, 0)
+  const rawRejected = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
+    source: 'db', interface: 'users', fields: ['name'], row_count: 1, sample: 'RAW_SAMPLE_MARKER' }, {}))
+  assert.equal(rawRejected.ok, false, 'raw sample values must be rejected')
+  const valueRejected = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
+    source: 'db', interface: 'users', fields: ['name=example'], row_count: 1 }, {}))
+  assert.equal(valueRejected.ok, false, 'fields must be names, not key/value samples')
+  const proofDb = redteam.db(engagement)
+  proofDb.exec('ALTER TABLE data_proof ADD COLUMN sample TEXT; ALTER TABLE data_proof ADD COLUMN query TEXT;')
+  proofDb.prepare(`INSERT INTO data_proof(target, source, interface, fields, row_count, sample_count, evidence_ref, pii_type, note, created_by, created_at, sample, query)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run('legacy-host', 'db', 'users', 'name,phone', 5, 1,
+      'evidence://redacted/legacy', 'pii', 'legacy fixture', 'legacy', new Date().toISOString(),
+      'LEGACY_RAW_SAMPLE_MARKER', 'SELECT * FROM users')
+  const legacyList = JSON.parse(await dataProofTool.execute({ op: 'list', engagement }, {}))
+  assert.equal(legacyList.total, 2)
+  assert.deepEqual(legacyList.items[0].fields, ['name', 'phone'], 'legacy comma-separated fields remain readable')
+  assert.equal(Object.hasOwn(legacyList.items[0], 'sample'), false)
+  assert.equal(Object.hasOwn(legacyList.items[0], 'query'), false)
+  const dispatchedProof = dispatch(redteam, { op: 'addDataProof', engagement, proof: {
+    target: 'fixture-host', source: 'file', interface: '/exports/users.csv', fields: ['email'],
+    row_count: 3, sample_count: 1, evidence_ref: 'evidence://redacted/002', pii_type: 'pii', note: 'dispatch fixture',
+  } })
+  assert.equal(dispatchedProof.ok, true)
+  const dispatchedProofs = dispatch(redteam, { op: 'dataProofs', engagement })
+  assert.equal(dispatchedProofs.total, 3)
+  const report = redteam.report(engagement)
+  assert.equal(report.stats.dataProofs, 3)
+  assert.ok(report.markdown.includes('Structured data exposure records (metadata only)'))
+  assert.ok(report.markdown.includes('evidence://redacted/001'))
+  assert.ok(!report.markdown.includes('RAW_SAMPLE_MARKER'))
+  assert.ok(!report.markdown.includes('SELECT * FROM users'))
 
   const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item

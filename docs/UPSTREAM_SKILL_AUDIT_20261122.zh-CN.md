@@ -127,7 +127,7 @@
 
 - 不导入上游的批量数据导出、凭据明文收集、默认口令猜测、限速绕过、隐蔽 C2、载荷投递、主机横向扩展和容器逃逸步骤。
 - 新技能只引用当前 Purge 已注册的工具接口；测试仅在明确授权范围、测试账号、合成数据和可回滚环境内进行。
-- `redteam_cleanup` 已按账本语义吸收为 Purge 独立工具（add/list/update，仅记录状态，不执行删除）；`redteam_data_proof` 与 `redteam_pivot_probe` 仍未实现，前者待最小脱敏数据证明设计，后者需先补强范围约束。
+- `redteam_cleanup` 已合并；`redteam_data_proof` 正在按元数据-only 方案实现，明确不接收样本/原始查询、不自动评分；`redteam_pivot_probe` 仍未实现，需先补强显式范围约束。
 - `c2-infra` 保留为明确暂缓项；`host-post-exploit` 与 `netspy-recon` 在第二批中以安全边界明确的适配版吸收。
 
 验证范围：技能目录/来源元数据/工具引用契约测试；npm 包含技能目录的既有打包契约；真实 Windows Harness GUI 和 Provider 行为不由这些静态测试替代。
@@ -136,6 +136,9 @@
 
 
 ## 工具差异补齐（2026-11-22）
+- 上游 `redteam_data_proof` 的旧实现保存 `sample` 与 `query` 原文，并使用 1 万条 `meets_threshold` 标记；这与当前 Purge `score-rules.js` 的量级粗筛（100 万行）及 G5 正式门槛（超 1 亿条或 10TB）不一致。本分支只记录字段名、条数、样本数量和脱敏证据引用，不存原始样本/查询，也不返回自动阈值或得分。
+- 兼容旧上游 `data_proof` 表时只补 `sample_count`；列表和报告显式选择安全列，不读取旧 `sample/query` 列。历史原始值不会被自动删除，分享旧数据库前仍需人工检查和脱敏。
+
 
 - 上游 `redteam_cleanup` 源码核对固定在 `CallMeGuLab/dsh-purge-safe@d0a9abda6e2eb020dde85b48b5727b45d26582a7`；本地实现为按演练隔离的 SQLite 清理台账，提供 `add/list/update`，默认列出 open 项并支持 all。
 - `done` 仅表示操作者确认已清理，`kept` 表示用户明确要求保留；工具本身不执行删除、禁用、关闭或远程清理，也不存放凭据/秘密值。
