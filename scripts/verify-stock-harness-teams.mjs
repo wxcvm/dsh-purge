@@ -6,6 +6,9 @@ import { createHash } from 'node:crypto'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { DatabaseSync } from 'node:sqlite'
+import { listWorkItems } from '../lib/redteam/agent-work-items.js'
+import { reconcileWorkItemRegistry } from '../lib/redteam/agent-status.js'
 
 const release = '0.2.2-rc.5'
 const upstream = '2e39e70496aa02986ca6a820c5d497e816b69d7e'
@@ -30,6 +33,8 @@ function run(npmDir, fixture) {
   const home = join(cwd, '.dsh')
   const profile = join(home, 'profiles', 'headless')
   const sessions = join(home, 'sessions')
+  const ledger = join(cwd, 'work-ledger.sqlite')
+  const observer = new URL('../test/fixtures/stock-team-ledger-observer.mjs', import.meta.url)
   mkdirSync(profile, { recursive: true })
   const fixtureCopy = join(cwd, 'team-llm.mjs')
   copyFileSync(fixture, fixtureCopy)
@@ -41,6 +46,7 @@ function run(npmDir, fixture) {
     '- id: llm-deepseek', '  disabled: true',
     '- id: session-persistence-jsonl', '  config:', '    root: ' + JSON.stringify(sessions), '    compression: none',
     '- insert:', '    - id: team-fixture-llm', '      name: ' + JSON.stringify(pathToFileURL(fixtureCopy).href),
+    '    - id: stock-team-ledger-observer', '      name: ' + JSON.stringify(observer.href),
     '',
   ].join('\n'))
 
@@ -51,7 +57,8 @@ function run(npmDir, fixture) {
     /^(?:PATH|PATHEXT|SYSTEMROOT|WINDIR|COMSPEC|TEMP|TMP|LANG|LC_ALL)$/i.test(key)))
   Object.assign(env, { HOME: osHome, USERPROFILE: osHome, APPDATA: join(osHome, 'appdata'),
     LOCALAPPDATA: join(osHome, 'localappdata'), XDG_CONFIG_HOME: join(osHome, 'config'),
-    DSH_HOME: home, DSH_AGENTS_HOME: join(cwd, '.agents'), DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_API_KEY: '' })
+    DSH_HOME: home, DSH_AGENTS_HOME: join(cwd, '.agents'), DSH_TELEMETRY_DISABLED: '1', DEEPSEEK_API_KEY: '',
+    PURGE_STOCK_TEAM_LEDGER: ledger })
 
   const invoke = (args, timeout) => spawnSync(process.execPath, [cli, '--profile', 'headless', ...args],
     { cwd, env, input: '', encoding: 'utf8', timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true })
@@ -77,9 +84,34 @@ function run(npmDir, fixture) {
     && row.data.source.senderSessionId !== main[0]?.id)
   assert.equal(messages.length, 2, 'peer message delivery must appear in the native session journals')
   assert.ok(main.some(row => row.type === 'tool-workflow/run-end' && row.data.stopReason === 'completed'))
+  const db = new DatabaseSync(ledger, { readOnly: true })
+  let ledgerEvidence
+  try {
+    // Reopen the same SQLite after the real host exits and project the status
+    // used by the WorkItemsPanel, independent of the host's stdout.
+    const listing = listWorkItems(db)
+    const projected = reconcileWorkItemRegistry(listing, { available: false, running: [] })
+    const observed = projected.items.filter(item => item.task_key.startsWith('observed-'))
+    const other = projected.items.filter(item => item.task_key.startsWith('other-run-'))
+    assert.equal(observed.length, 3, 'every native child activation must have a fixture binding')
+    assert.equal(other.length, 3, 'same-session/different-run controls')
+    for (const item of observed) {
+      assert.equal(item.status, 'running', 'observation must not settle a task')
+      assert.equal(item.assignment.finished_at, null)
+      assert.equal(item.assignment.host_stop_reason, 'completed')
+      assert.equal(item.registry_activity.state, 'exact-run-end-observed')
+      assert.equal(item.needs_settlement, true)
+    }
+    for (const item of other) {
+      assert.equal(item.assignment.host_end_at, null, 'never observe a different run from the same session')
+      assert.equal(item.registry_activity.exact_run_verified, false)
+      assert.equal(item.assignment.finished_at, null)
+    }
+    ledgerEvidence = { exactHostEnds: observed.length, untouchedDifferentRuns: other.length, automaticSettlements: 0 }
+  } finally { db.close() }
   return { release, upstream, isolation: 'temporary-profile', model: 'upstream-keyless-fixture', desktop: false, providerRequests: false,
     currentProfileChanged: false, sessions: files.length, completedTeamTasks: completed.length, peerMessages: messages.length,
-    dependencyOrderVerified: true, artifactDir: relative(root, cwd) }
+    dependencyOrderVerified: true, ledgerEvidence, artifactDir: relative(root, cwd) }
 }
 
 if (process.argv.length !== 4) {
