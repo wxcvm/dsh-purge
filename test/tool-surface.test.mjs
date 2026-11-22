@@ -137,6 +137,17 @@ test('reviewed tool names match source declarations and actual registrations', a
   const valueRejected = JSON.parse(await dataProofTool.execute({ op: 'add', engagement, target: 'fixture-host',
     source: 'db', interface: 'users', fields: ['name=example'], row_count: 1 }, {}))
   assert.equal(valueRejected.ok, false, 'fields must be names, not key/value samples')
+  const proofDb = redteam.db(engagement)
+  proofDb.exec('ALTER TABLE data_proof ADD COLUMN sample TEXT; ALTER TABLE data_proof ADD COLUMN query TEXT;')
+  proofDb.prepare(`INSERT INTO data_proof(target, source, interface, fields, row_count, sample_count, evidence_ref, pii_type, note, created_by, created_at, sample, query)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run('legacy-host', 'db', 'users', 'name,phone', 5, 1,
+      'evidence://redacted/legacy', 'pii', 'legacy fixture', 'legacy', new Date().toISOString(),
+      'LEGACY_RAW_SAMPLE_MARKER', 'SELECT * FROM users')
+  const legacyList = JSON.parse(await dataProofTool.execute({ op: 'list', engagement }, {}))
+  assert.equal(legacyList.total, 2)
+  assert.deepEqual(legacyList.items[0].fields, ['name', 'phone'], 'legacy comma-separated fields remain readable')
+  assert.equal(Object.hasOwn(legacyList.items[0], 'sample'), false)
+  assert.equal(Object.hasOwn(legacyList.items[0], 'query'), false)
   const dispatchedProof = dispatch(redteam, { op: 'addDataProof', engagement, proof: {
     target: 'fixture-host', source: 'file', interface: '/exports/users.csv', fields: ['email'],
     row_count: 3, sample_count: 1, evidence_ref: 'evidence://redacted/002', pii_type: 'pii', note: 'dispatch fixture',
