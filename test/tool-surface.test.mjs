@@ -73,6 +73,24 @@ test('reviewed tool names match source declarations and actual registrations', a
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item
   const unifiedSearch = registered.get('redteam_knowledge_search')
   const unifiedGet = registered.get('redteam_knowledge_get')
+  const paginationIds = []
+  for (let i = 0; i < 21; i++) {
+    const item = knowledgeRequest(home, {
+      op: 'knowledgeSave', title: 'Pagination note ' + String(i).padStart(2, '0'), body: 'Pagination fixture ' + i,
+    }).item
+    paginationIds.push(String(item.id))
+  }
+  const personalFirst = JSON.parse(await unifiedSearch.execute({ query: 'Pagination note', source: 'personal' }))
+  const personalNext = JSON.parse(await unifiedSearch.execute({ query: 'Pagination note', source: 'personal', offset: 20 }))
+  assert.equal(personalFirst.groups[0].total, 21)
+  assert.equal(personalFirst.groups[0].items.length, 20)
+  assert.equal(personalFirst.groups[0].offset, 0)
+  assert.equal(personalFirst.groups[0].hasMore, true)
+  assert.equal(personalNext.groups[0].offset, 20)
+  assert.equal(personalNext.groups[0].items.length, 1)
+  assert.equal(personalNext.groups[0].hasMore, false)
+  assert.equal(new Set([...personalFirst.groups[0].items, ...personalNext.groups[0].items].map(item => String(item.id))).size, 21)
+  assert.equal(paginationIds.length, 21)
   const results = JSON.parse(await unifiedSearch.execute({ query: 'Example', source: 'personal' }))
   assert.equal(results.ok, true)
   assert.deepEqual(results.groups[0].items[0].reference, { source: 'personal', id: String(saved.id) })
