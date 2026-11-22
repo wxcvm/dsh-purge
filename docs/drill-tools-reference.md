@@ -630,6 +630,17 @@ _隧道必须写 entry_kind（target-http / target-outbound / target-agent）；
 - `engagement`
 - `host`
 
+### `redteam_pivot_probe`
+经已登记的合法隧道，对一个已登记、live 且已确认开放的 IPv4/TCP 资产端口执行一次 SOCKS5 CONNECT。
+
+参数：
+- `engagement`
+- `tunnel_id` — 已登记且 active、`legit=true`、入口归属为 target-side 的隧道
+- `asset_id` — 已登记且 state=live 的资产
+- `port` — 资产库中已登记为 open 的单个 TCP 端口
+- `timeout_ms` — 默认 3000ms，范围 1000–5000ms
+
+执行前同时校验 engagement scope 与 tunnel reach；隧道监听地址必须是本机 loopback。一次只探测一个资产和一个端口，不接受目标列表、CIDR 或端口范围；不读取 banner/数据、不尝试凭据、不执行漏洞利用，也不修改隧道状态。结果只代表 SOCKS5 TCP CONNECT 可达，不代表已取得主机权限或漏洞成立。
 ### `redteam_session_check`
 实测所有 WebShell 与隧道的连通性（由 host 侧真实发起 HTTP / TCP 连接），并把在线/离线状态回写数据库。开工前和长时间任务后各跑一次。
 
