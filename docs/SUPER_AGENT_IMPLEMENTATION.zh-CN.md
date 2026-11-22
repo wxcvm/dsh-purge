@@ -34,7 +34,7 @@
 
 ## Windows 本地文档工作台预览
 
-`tools/superagent-preview` 可将当前 Git 提交明确列出的预览文件安装到当前 Windows 用户的 `%LOCALAPPDATA%/Purge-SuperAgent-Preview`。每次按完整提交单独放置，生成每个文件的 SHA-256。它不注册 Harness 插件、不修改 DSH_HOME、不迁入现有项目；独立数据目录在更新后保留。预览复用 Super Agent 的 SQLite 任务、尝试、精确结束和人工验收逻辑，但执行器仅为本地 Node worker，检查用户粘贴的 Markdown 一级标题和附录标题。正文不写入任务数据库，不调用任何模型或外部工具。
+`tools/superagent-preview` 可将当前 Git 提交明确列出的预览文件安装到当前 Windows 用户的 `%LOCALAPPDATA%/Purge-SuperAgent-Preview`。每次按完整提交单独放置，生成每个文件的 SHA-256。它不注册 Harness 插件、不修改 DSH_HOME、不迁入现有项目；独立数据目录在更新后保留。预览复用 Super Agent 的 SQLite 任务、尝试、精确结束和人工验收逻辑，但执行器仅为本地 Node worker。两项固定检查分别读取粘贴文本的一级标题和附录标题，各自在独立 worker 并行发起；汇总等待两个 worker 都退出，任一失败不进入待验收。工作台显示进行中步骤，历史保留两个 worker 的耗时（仅检查逻辑，不含启动时间，不能据此推断并行加速）。正文不写入任务数据库，不调用任何模型或外部工具。
 
 在 Node.js 24 的 Windows PowerShell 中，从仓库根目录执行：
 

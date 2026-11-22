@@ -17,3 +17,4 @@ button:disabled{opacity:.6;cursor:default}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 #message{min-height:1.5em}
 @media(max-width:680px){main{margin:16px auto}.layout{display:block}}
+.summary{white-space:pre-line}
