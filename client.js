@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "2d178583ec49cc8d";
+		const CLIENT_BUILD_ID = "170478a67128d682";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4733,7 +4733,13 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 			const [loadError, setLoadError] = useState("");
             const [savedRouting, setSavedRouting] = useState({ bundledDefault: false, redteamTaskRoute: false, modelAdaptive: false });
             const [routingEdits, setRoutingDraft] = useState(null);
-            const routingDraft = routingEdits || savedRouting;
+            const routingDraft = { ...savedRouting, ...routingEdits };
+            const [savedBackup, setSavedBackup] = useState(null);
+            const editRouting = (key, checked) => setRoutingDraft(previous => {
+                const next = { ...previous, [key]: checked };
+                if (checked === savedRouting[key]) delete next[key];
+                return Object.keys(next).length ? next : null;
+            });
             const [routingDiag, setRoutingDiag] = useState(null);
 			const parseLines = (value) => String(value || "").split(/[\n,，]+/).map(x => x.trim()).filter(Boolean);
             const availableTargetOptions = field => {
@@ -4829,12 +4835,17 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             }, []);
 			const explainError = (error) => {
 				const message = String(error?.message || error);
+                if (/\blocal-only\b/i.test(message)) {
+                    return "当前 Harness 拒绝了这次本机设置请求（local-only）。页面会保留尚未提交的草稿；请在当前桌面确认 Purge 与宿主版本相容后重新读取。";
+                }
 				return /\b404\b/.test(message)
 					? "提示词规则接口 404：当前前端与后端可能并非同版，或后端路由没有注册。请完全退出 Harness（包括托盘）再打开；如仍失败，到诊断中心核对磁盘插件与已加载后端版本。"
 					: "提示词规则请求失败：" + message;
 			};
             const applySnapshot = useCallback(response => {
                 setProfiles(response.profiles);
+                const backup = response.routingSettings?.upstreamSafeBackup;
+                setSavedBackup(typeof backup === "boolean" ? backup : null);
                 setSavedRouting({
                     bundledDefault: response.routingSettings?.bundledDefault === true,
                     redteamTaskRoute: response.routingSettings?.redteamTaskRoute === true,
@@ -4926,10 +4937,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
 				finally { setBusy(false); }
 			};
             const saveRouting = async () => {
+                if (!routingEdits || busy || reading || loadError) return;
                 invalidatePreview();
                 setBusy(true); setNotice("");
                 try {
-                    const result = await promptProfilesApi("routing-settings", { settings: routingDraft });
+                    const result = await promptProfilesApi("routing-settings", { settings: routingEdits });
                     if (!result?.ok) throw new Error(result?.error || "保存失败");
                     pendingReadback.current = { routing: routingEdits };
                     const verified = await readAfterWrite(result);
@@ -5119,6 +5131,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     fields.filter(([field]) => prefix === "block" || !modelField(field)).map(([field, title]) =>
                                         targetPicker(value, setValue, prefix, field, title))))))));
             const currentIsNew = draft && !savedProfiles.has(draft.id);
+            const backupStatus = loadError ? "读取失败，当前状态未确认"
+                : reading ? "正在读取已保存方案…"
+                : savedBackup === null ? "宿主未返回备用方案状态"
+                : savedBackup ? "配置已选择副方案" : "配置使用主方案";
             const panel = { border: "1px solid var(--dsw-alias-border-l1, #36506b)",
                 borderRadius: 12, padding: 16, minWidth: 0, background: "var(--dsw-specific-card-bg, rgba(100,130,170,.045))" };
             return h("section", { className: "dshp-prompt-page", style: {
@@ -5132,6 +5148,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                         "更新已保存设置和本机记录，不提交草稿。")),
                 loadError ? h("p", { role: "alert", className: "dshp-runtime-warning" }, loadError) : null,
                 notice ? h("p", { role: "status", className: "dshp-hint" }, notice) : null,
+                h("div", { className: "dshp-prompt-help", role: "status", "aria-label": "主副提示词来源" },
+                    h("strong", null, "主 / 副提示词来源 · " + backupStatus),
+                    h("p", null, "主来源是 Purge；副来源是接手版 dsh-purge-safe。来源选择不等同于「无匹配时使用内置兜底」，也不覆盖自定义正文。"),
+                    h("p", null, "此处只显示宿主返回的配置，不表示当前会话已组装或模型已收到。")),
                 h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) }),
                 h("p", { className: "dshp-hint", style: { margin: 0, overflowWrap: "anywhere" } },
                     observedTargets.length
@@ -5148,11 +5168,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                     ].map(([key, title, hint]) => h("label", { key, style: { display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 0" } },
                         h("input", { type: "checkbox", "aria-label": title, checked: routingDraft[key] === true,
                             disabled: busy || reading || Boolean(loadError),
-                            onChange: e => setRoutingDraft({ ...routingDraft, [key]: e.target.checked }) }),
+                            onChange: e => editRouting(key, e.target.checked) }),
                         h("span", null, h("strong", null, title),
                             h("span", { className: "dshp-hint", style: { display: "block" } }, hint)))),
                     h("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" } },
-                        h("button", { type: "button", disabled: busy || reading || Boolean(loadError),
+                        h("button", { type: "button", disabled: busy || reading || Boolean(loadError) || !routingEdits,
                             onClick: saveRouting }, "保存路由开关"))),
                 h("div", { className: "dshp-prompt-columns" },
                     h("section", { className: "dshp-prompt-global", style: panel },
@@ -5177,7 +5197,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
                                     onClick: () => saveProfile(globalDraft) }, "保存全局提示词"),
                                 drafts.global ? h("button", { type: "button", disabled: busy,
                                     onClick: () => clearDraft("global") }, "恢复已保存的全局内容") : null)
-                        ) : h("p", { className: "dshp-hint" }, "正在读取全局提示词配置……"),
+                        ) : h("p", { className: "dshp-hint" }, loadError ? "未取得全局提示词配置。"
+                            : reading ? "正在读取全局提示词配置…" : "宿主未返回全局提示词配置。"),
                         h("details", { style: { marginTop: 18 } },
                             h("summary", { style: { cursor: "pointer" } }, "红队模式专用（独立）"),
                             h("p", { className: "dshp-hint" },

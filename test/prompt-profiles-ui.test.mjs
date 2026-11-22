@@ -408,13 +408,66 @@ test("prompt routing switches persist through the existing settings API without 
   await ui.find(tree, "button", "保存路由开关").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
   const saved = ui.actions.find(item => item.op === "routing-settings");
-  assert.equal(saved.data.settings.bundledDefault, false);
+  assert.equal(Object.hasOwn(saved.data.settings, "bundledDefault"), false, "unmodified routing settings must not be written");
+  assert.equal(Object.hasOwn(saved.data.settings, "upstreamSafeBackup"), false, "ordinary controls never write source selection");
   assert.equal(saved.data.settings.redteamTaskRoute, true);
   assert.equal(saved.data.settings.modelAdaptive, true);
   assert.equal(ui.routingSettings.redteamTaskRoute, true);
   tree = ui.render();
   assert.equal(ui.find(tree, "input", "普通模式识别红队任务").props.checked, true);
   assert.equal(ui.find(tree, "input", "按当前模型家族自动适配").props.checked, true);
+});
+
+test("source status is readable on the same page, independently of ordinary routing edits", async () => {
+  const ui = mount({ fullWriteResponse: true });
+  ui.routingSettings.upstreamSafeBackup = true;
+  let tree = await ui.initialize();
+  const status = () => JSON.stringify(ui.nodes(tree).find(n => n.props["aria-label"] === "主副提示词来源"));
+  assert.match(status(), /配置已选择副方案/);
+  assert.match(status(), /不表示当前会话已组装或模型已收到/);
+  assert.equal(ui.find(tree, "button", "保存路由开关").props.disabled, true);
+  ui.find(tree, "input", "按当前模型家族自动适配").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  await ui.find(tree, "button", "保存路由开关").props.onClick();
+  tree = ui.render();
+  const write = ui.actions.find(item => item.op === "routing-settings");
+  assert.deepEqual(structuredClone(write.data.settings), { modelAdaptive: true });
+  assert.equal(ui.routingSettings.upstreamSafeBackup, true);
+  assert.match(status(), /配置已选择副方案/);
+});
+
+test("local-only leaves the source unconfirmed and preserves an edited prompt", async () => {
+  let refuse = false;
+  const ui = mount({ readSettings(result) {
+    if (refuse) throw new Error("local-only");
+    return result;
+  } });
+  ui.routingSettings.upstreamSafeBackup = false;
+  let tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /配置使用主方案/);
+  ui.find(tree, "textarea", "全局提示词正文").props.onChange({ target: { value: "keep this draft" } });
+  refuse = true;
+  tree = ui.render();
+  await ui.find(tree, "button", "重新读取").props.onClick();
+  tree = ui.render();
+  assert.match(JSON.stringify(tree), /当前 Harness 拒绝了这次本机设置请求/);
+  assert.match(JSON.stringify(tree), /读取失败，当前状态未确认/);
+  assert.doesNotMatch(JSON.stringify(tree), /配置使用主方案/);
+  assert.equal(ui.find(tree, "textarea", "全局提示词正文").props.value, "keep this draft");
+  assert.equal(ui.find(tree, "button", "保存全局提示词").props.disabled, true);
+  refuse = false;
+  await ui.find(tree, "button", "重新读取").props.onClick();
+  tree = ui.render();
+  assert.match(JSON.stringify(tree), /配置使用主方案/);
+  assert.equal(ui.find(tree, "textarea", "全局提示词正文").props.value, "keep this draft");
+  assert.deepEqual(ui.actions, []);
+});
+
+test("a legacy payload without a source setting must not be reported as the main source", async () => {
+  const ui = mount();
+  const tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /宿主未返回备用方案状态/);
+  assert.doesNotMatch(JSON.stringify(tree), /配置使用主方案|配置已选择副方案/);
 });
 
 test("advanced list controls explain wildcard scope and save GPT exclusion", async () => {
