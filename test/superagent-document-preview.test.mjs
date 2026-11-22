@@ -10,6 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createPreview } from '../tools/superagent-preview/server.mjs'
+import { AGENT_WORK_DDL, migrateAgentWork } from '../lib/redteam/agent-work-schema.js'
+import { createWorkItem } from '../lib/redteam/agent-work-items.js'
 
 function api(base) {
   const post = (path, data, origin = base) => fetch(base + path, {
@@ -35,6 +37,52 @@ async function until(server, id, condition) {
   }
   assert.fail('document task did not reach the expected state')
 }
+
+test('document preview pages across persisted tasks without hiding older work', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'purge-doc-pages-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const db = new DatabaseSync(join(dir, 'tasks.sqlite'))
+  try {
+    db.exec(AGENT_WORK_DDL)
+    migrateAgentWork(db)
+    for (let index = 1; index <= 34; index++) {
+      const result = createWorkItem(db, {
+        task_key: 'preview-page-' + index, role: 'document-review', objective: 'Document task ' + index,
+      })
+      assert.equal(result.created, true)
+    }
+  } finally { db.close() }
+
+  let server = await listen(dir)
+  try {
+    const first = await (await server.get('/tasks')).json()
+    const second = await (await server.get('/tasks?offset=30')).json()
+    assert.equal(first.total, 34)
+    assert.equal(first.offset, 0)
+    assert.equal(first.items.length, 30)
+    assert.equal(first.hasMore, true)
+    assert.equal(second.total, 34)
+    assert.equal(second.offset, 30)
+    assert.equal(second.items.length, 4)
+    assert.equal(second.hasMore, false)
+    assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 34)
+    const oldest = second.items.at(-1)
+    const detail = await (await server.get('/task?id=' + oldest.id)).json()
+    assert.equal(detail.id, oldest.id)
+    assert.equal(detail.objective, oldest.objective)
+    for (const offset of ['-1', 'oops', '2.5']) {
+      assert.equal((await server.get('/tasks?offset=' + offset)).status, 400)
+    }
+    const beyond = await (await server.get('/tasks?offset=60')).json()
+    assert.equal(beyond.total, 34)
+    assert.deepEqual(beyond.items, [])
+    await server.close()
+    server = await listen(dir)
+    const again = await (await server.get('/tasks?offset=30')).json()
+    assert.deepEqual(again.items.map(item => item.id), second.items.map(item => item.id),
+      'a restart must not lose access to older tasks')
+  } finally { await server.close() }
+})
 
 test('local document worker produces a real two-attempt review whose decisions survive restarting', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'purge-doc-preview-'))
