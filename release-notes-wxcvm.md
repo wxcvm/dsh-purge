@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.20
+
+## 中文
+
+此版本集中交付 **.19 正式包尚未包含** 的 Harness Desktop `0.2.2-rc.5` 兼容修复及其后已合并改动。发布时以本次独立标签、Release ZIP 和 SHA256SUMS.txt 为准；旧版资产和标签不覆盖。
+
+- **rc.5 Desktop 本机接口恢复**（#470、#479）：兼容官方 rc.5 主进程转发的、绑定当前 Host 的 `dsh-auth-*` Cookie，保留新版 Desktop 会话路径以及跨来源/远端请求的既有限制；诊断会区分“同为 .19 但安装代码早于修复”的情况。解决已定位的 `cross-origin request rejected` 源码兼容根因，**真实用户 Desktop 是否已恢复仍需安装此版后验证**。
+- **rc.5 客户端入口**（#482）：移除不存在的旧客户端依赖 `dsh-client-runtime`、`dsh-client-ui-slots`，保留本插件实际使用的 `uiConversation`，增加客户端注入清单回归。Windows/Ubuntu CI 通过不等于用户已运行的桌面进程加载了本次代码。
+- **提示词和页面交互**（#480、#481）：修复工作台首次列表读取失败时的错误空状态、刷新后未选项目与概览回报入口异常；在现有提示词管理页显示主/备来源只读状态，保存普通路由仅发送修改过的字段、失败时保留草稿。不改变既有用户提示词正文和实际权限。
+- **知识与技能来源**（#471–#475）：显示技能来源、修订和许可，随安装包保留上游 LICENSE/NOTICE 和来源映射；选择性增加已登记的授权审查技能，修复分来源知识检索分页。外部 NetSpy 为可选依赖，不声称随包安装，也不自动联网执行。
+- **作战台与 Agent**（#476–#478、#483）：新增按演练隔离的清理登记台账、仅存脱敏元数据的数据存在性证明；官方 Team 任务结束通过隔离夹具核验；修复持久任务审核草稿跨 run/attempt 错带的问题。登记工具本身不删除真实资源，测试不等于实际 Provider 或远程靶标验收。
+
+**验收范围**：本次候选需以同一提交完成 Windows/Ubuntu CI、官方 rc.5/rc.3 隔离宿主合约、npm/Git ZIP 制品和发行包核验。Windows 11 当前 Harness Desktop 的实际安装、重启加载、首次访问与提示词设置保存、Provider 请求交付、回退、ARTEX 双端联动依旧分别追踪 #336/#337/#338/#340/#341/#343；**不得把 CI 绿灯当作这些实机项目已通过**。
+
+## English
+
+Version .20 delivers rc.5 compatibility changes missing from the immutable .19 release: the authority-bound legacy Desktop forwarding cookie (#470), inspection of stale installed bridge bytes (#479), and removal of retired client boot dependencies while preserving the conversation service (#482). It also brings workbench error-state repairs (#480), visible main/backup prompt source with sparse route saves (#481), source/license provenance and curated skills (#471–#475), per-engagement cleanup and redacted data-proof ledgers (#476–#478), stock keyless Team run checks (#477), and exact-attempt review draft handling (#483). No published older archive is replaced. Official pinned CI and packaging checks do not establish a successful live Windows Desktop upgrade, remote Provider delivery, or ARTEX pairing; those remain separate acceptance tasks.
+
+---
+
 # 1.1.92-wxcvm.19
 
 ## 中文
