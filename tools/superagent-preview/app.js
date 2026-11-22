@@ -60,6 +60,14 @@ function show(item) {
   el('input').hidden = Boolean(item && !['waiting', 'failed', 'interrupted'].includes(item.status))
   el('review').hidden = item?.status !== 'ready'
   el('github').hidden = item?.status !== 'ready'
+  el('handoff').hidden = !item?.document_handoff
+  el('handoff').open = false
+  el('handoffText').value = ''
+  el('handoffResult').textContent = ''
+  if (item?.document_handoff) {
+    el('handoffDownload').href = '/handoff?id=' + item.id
+    el('handoffDigest').textContent = item.document_handoff.sha256
+  }
   const latestEvidence = item?.history?.[0]?.github_evidence
   el('githubPR').value = latestEvidence?.pr.url || ''
   el('githubIssue').value = latestEvidence?.issue?.url || ''
@@ -149,6 +157,16 @@ el('interruption').addEventListener('submit', event => {
     await api('/interrupt', { task_id: id, run_id: selected.assignment.run_id,
       expected_revision: selected.revision, reason: el('interruptionReason').value })
     await refresh(id)
+  })
+})
+el('handoffVerify').addEventListener('submit', event => {
+  event.preventDefault()
+  if (!selected?.document_handoff) return
+  runAction(async () => {
+    const result = await api('/handoff/verify', { task_id: selected.id, markdown: el('handoffText').value })
+    el('handoffResult').textContent = result.matches
+      ? '正文一致（忽略 Windows 换行和开头 BOM）；不代表已经确认 ARTEX 身份或配对。'
+      : '正文不同；没有覆盖本机或 ARTEX 的任何记录。'
   })
 })
 el('github').addEventListener('submit', event => {

@@ -56,3 +56,10 @@ $preview = node tools/superagent-preview/install.mjs HEAD | ConvertFrom-Json
 待验收时可选填公开 PR、Issue 和需要核对的完整 SHA。只读查询 GitHub [PR](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request)、[Issue](https://docs.github.com/en/rest/issues/issues#get-an-issue) 和该提交的 [Check Runs](https://docs.github.com/en/rest/checks/runs#list-check-runs-for-a-git-reference)；仅发送公开标识，不传任务正文、反馈、原始日志或凭据。读取后再次核对 PR 的 head SHA；若 PR 更新或本地任务已经被退回或验收，旧请求不会保存。公开 API 限流时保留已保存的证据，不自动用本机 GitHub 账号重试。
 
 快照附在当次运行历史下，保留时间、精确 SHA、链接和匹配到的检查状态。空列表、不同 SHA、未完成、超出一页或非成功检查，都不会被当成成功；「返回的检查全部成功」也不证明仓库分支保护定义的全部必需检查。允许人工验收未关联 CI 的任务，不自动评论、合并、关闭 Issue 或向 ARTEX 写入。
+
+
+### 手工交接给 ARTEX 知识文档
+
+在已验收任务的「交接到 ARTEX」下载 Markdown，文件名带 SHA-256 前缀。它只包含固定检查结果、此次任务/运行的标识和验收时间，以及可选的公开 GitHub 证据；不携带原文、内部说明、原始日志、工作站路径或凭据。只有最终验收的尝试可导出。同一成果重复下载产生相同文件名与摘要。
+
+用 ARTEX 现有的「知识文档」上传入口，在选定的目标任务下导入；不要把有任务归属的证据误放到全局库。推荐先按文件名搜索已有交接，再由操作者决定是否上传。把 ARTEX 所见的文档正文复制回预览可对照 SHA-256（只规范化 Windows CRLF 和开头 BOM）；不一致时只报告冲突，不自动覆盖任何一端。此比较证明内容一致，不证明上传成功、ARTEX 身份或双端配对，不替代既有的 SARIF 人工回执。

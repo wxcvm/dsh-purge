@@ -25,6 +25,17 @@
         </form>
         <h3>运行历史</h3>
         <ol id="history"></ol>
+        <details id="handoff" hidden>
+          <summary>交接到 ARTEX</summary>
+          <p>下载已验收结果的 Markdown，在 ARTEX 知识文档里手动上传到你选的任务。这里不会自动上传。</p>
+          <p><a id="handoffDownload">下载交接文件</a> · SHA-256：<code id="handoffDigest"></code></p>
+          <form id="handoffVerify">
+            <label for="handoffText">粘贴从 ARTEX 读回的 Markdown 正文</label>
+            <textarea id="handoffText" rows="4" required maxlength="50000"></textarea>
+            <button type="submit">比较正文</button>
+            <p id="handoffResult" role="status"></p>
+          </form>
+        </details>
         <form id="github" hidden>
           <h3>关联 GitHub 交付证据（可选）</h3>
           <label for="githubPR">公开 GitHub PR 链接</label>
