@@ -92,13 +92,24 @@ test('reviewed tool names match source declarations and actual registrations', a
     status: 'kept', detail: 'user requested retention' }, {}))
   assert.equal(kept.item.status, 'kept')
   assert.equal(JSON.parse(await cleanupTool.execute({ op: 'list', engagement }, {})).total, 0)
+  const invalidOp = JSON.parse(await cleanupTool.execute({ op: 'delete', engagement }, {}))
+  assert.equal(invalidOp.ok, false, 'unknown operations must not fall through to add')
+  const dispatchedAdd = dispatch(redteam, { op: 'addCleanup', engagement,
+    item: { kind: 'task', target: 'fixture-host', location: 'synthetic task', detail: 'dispatch fixture' } })
+  assert.equal(dispatchedAdd.ok, true)
+  const dispatchedUpdate = dispatch(redteam, { op: 'updateCleanup', engagement,
+    item: { id: dispatchedAdd.id, status: 'done' } })
+  assert.equal(dispatchedUpdate.ok, true)
+  assert.equal(dispatchedUpdate.status, 'done')
   const all = JSON.parse(await cleanupTool.execute({ op: 'list', engagement, status: 'all' }, {}))
-  assert.equal(all.total, 1)
-  assert.equal(all.items[0].detail, 'user requested retention')
+  assert.equal(all.total, 2)
+  assert.equal(all.items[0].detail, 'dispatch fixture')
+  assert.equal(all.items[1].detail, 'user requested retention')
   assert.equal(existsSync(marker), true, 'cleanup ledger records state but never deletes the resource')
-  const dispatched = dispatch(redteam, { op: 'cleanup', engagement, status: 'all' })
+  const dispatched = dispatch(redteam, { op: 'cleanup', engagement, status: 'all', limit: 0.5 })
   assert.equal(dispatched.ok, true)
-  assert.equal(dispatched.total, 1)
+  assert.equal(dispatched.total, 2)
+  assert.equal(dispatched.items.length, 1, 'fractional limits clamp to one result')
 
   const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item
