@@ -2,9 +2,20 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
+## 2026-11-22 · Stable .20 正式交付
+
+- **实际发布**：[v1.1.92-wxcvm.20](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.20)，独立轻量标签指向 [`8fa76dda23a59984040c3af61a7134616c51d168`](https://github.com/wxcvm/dsh-purge/commit/8fa76dda23a59984040c3af61a7134616c51d168)，与发布工作流的 `head_sha` 一致；`.19` 等旧标签和资产未覆盖。
+- **同提交主线 CI**：[Local Compatibility #45006809228](https://github.com/wxcvm/dsh-purge/actions/runs/45006809228) Windows/Ubuntu 两项通过；候选 [#485](https://github.com/wxcvm/dsh-purge/pull/485) 的 Windows/Ubuntu API 合约及双平台真实打包安装检查均通过；[Release #45007055483](https://github.com/wxcvm/dsh-purge/actions/runs/45007055483) completed/success。
+- **GitHub 实际上传资产**：`dsh-purge-1.1.92-wxcvm.20.zip` 大小 **4,471,904 字节**，GitHub 资产 `digest` 为 `sha256:e06595448d5cd45b7d70dea9c2a4794178f06fd5bc86dd0a635be4d8571d89fe`；`SHA256SUMS.txt` 大小 96 字节，资产自身 `digest` 为 `sha256:c4960e3bfb0dcfd0387f3c4dfc2ae35ad6cf4e397f6c9a96932e0ac12022e7f4`。本轮通过 GitHub Release API 验证两个资产处于 `uploaded`，并核对标签、工作流同一提交；**没有宣称已独立下载并校验 ZIP 内容及 SHA256SUMS 的文本**。安装前请仍使用对应版本的校验文件核验本地下载。
+- **本轮解决的交付缺口**：`.19` 资产没有 [#470](https://github.com/wxcvm/dsh-purge/pull/470) 的 Harness rc.5 Desktop Cookie 兼容和 [#482](https://github.com/wxcvm/dsh-purge/pull/482) 的旧客户端依赖修复；`.20` 新标签已打包这些主线代码，并合入 #484 的 Super Agent 刷新改善。具体改动见本版发行说明。
+- **真实验收仍未完成**：用户当前 Windows Harness Desktop 从 `.19` 升级到 `.20`、关闭并重开后实际加载代码、作战台 `cross-origin request rejected` 是否解除、提示词页单独的 `local-only` 错误、首次 Provider 请求、后续回退与 ARTEX 双端联动仍须独立留证。CI 成功、上传成功、源码有修复均不等于这些运行时目标已通过。记录归 #336/#338/#340/#343。
+
+> 下方是较早的历史快照，请勿把当时的 `.18` 或 `.19` 描述当作今日最新 Release。
+
+
 > 本页为维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前 Release 查询快照 · 2026-11-21
+## 历史 Release 查询快照 · 2026-11-21
 
 | 渠道 | 版本 / 固定提交 | 实际核验 |
 | --- | --- | --- |
