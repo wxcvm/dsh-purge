@@ -143,6 +143,7 @@ test('publishing sends only the current version notes rather than the historical
     '- Only this version may appear in the GitHub Release.', '',
     '---', '', '# 0.9.9', '', '- Historical text must not appear.', '',
   ].join('\n'))
+  const candidate = f.commit('fixture release with historical changelog')
   const captured = f.path('published-notes.txt')
   writeFileSync(f.ghExecutable, [
     '#!/bin/sh',
@@ -160,7 +161,7 @@ test('publishing sends only the current version notes rather than the historical
   const result = f.run('bash', ['-c', releaseStep.run], {
     GITHUB_REPOSITORY: 'wxcvm/dsh-purge',
     GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_NAME: 'master',
-    GITHUB_SHA: f.head, DRY_RUN: 'false', PREFLIGHT_NOTES_CAPTURE: captured,
+    GITHUB_SHA: candidate, DRY_RUN: 'false', PREFLIGHT_NOTES_CAPTURE: captured,
   })
   assert.equal(result.status, 0, result.stdout + result.stderr)
   const notes = readFileSync(captured, 'utf8')
