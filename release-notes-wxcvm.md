@@ -2,7 +2,7 @@
 
 ## 中文
 
-本条是 **.19 发布候选说明**，按 `.18` 正式版固定标签 `0bd3a58` 之后的主线增量整理。准备候选不等于已发布；不得移动、复写 `.18` 标签或资产，实际交付以未来新标签、ZIP、SHA-256 和实机记录为准。
+本次 `.19` 正式版本整合 `.18` 固定标签 `0bd3a58` 之后的主线改动。独立发布标签、实际 ZIP 与 SHA-256 以本次 GitHub Release 资产为准；`.18` 及更早标签和资产保持不变。
 
 - **提示词与工作区保存**：保护普通全局/局部提示词的编辑草稿、保存冲突和文件写入失败路径；完善实际组装时的当轮请求归属和工作区 UI，避免编辑界面“保存成功”与磁盘状态不一致（#433、#442–#445 等）。
 - **Agent 与运行时观测**：扩充 Super Agent 持久任务、人工审核和来源区分；修复 Agent 替换后迟到持久流事件归属，明确“观测到”与“真实 Provider 投递成功”的区别（#429–#430、#446）。
@@ -14,11 +14,11 @@
 - **官方 Agent Teams 运行基线**：在隔离官方 Harness `0.2.2-rc.5` 的固定无密钥夹具中确认真实 Team 会话、任务依赖顺序和队友消息（#466）。该基线未调用真实 Provider，也不证明 Purge 已在现用 Desktop 加载。
 - **版本与发布安全**：版本中心明确区分主线候选、正式 Release、磁盘安装和已加载后端（#458）；正式与历史恢复发布工作流禁止覆盖现有 ZIP / SHA256 资产（#452、#453），本机桥接来源仅接受明确支持的 Desktop 来源（#454），可选 Windows 制品上传故障独立警告、不再误伤编译或 API 测试门槛（#455）；个人知识库增加预览和来源核对（#456）。
 
-**发布前剩余门槛**：候选新 SHA 的 Windows/Ubuntu CI 与打包核对、不可变标签与 Release SHA256、Windows 11 Harness Desktop 真正加载/重启/配置开关/回退、实际 Provider 请求送达以及 ARTEX 双端联动仍需分别确认，追踪 #336、#337、#338、#339、#340、#343。当前发布版依旧是 `v1.1.92-wxcvm.18`。
+**已知尚未完成的实机验收**：Windows 11 Harness Desktop 原位升级、重启加载、实际提示词配置开关与回退；真实 Provider 请求送达，以及 ARTEX 双端登录态联动。Windows/Ubuntu CI 和构建包核对不等于这些实机测试；继续追踪 #336、#337、#338、#339、#340、#343。请从本次 Release 下载 ZIP 并核对随附的 SHA256SUMS.txt，不沿用候选包摘要。
 
 ## English
 
-Candidate notes for the changes on master since the immutable `.18` release: safer ordinary prompt save and draft conflict handling, Super Agent work/review improvements, late-stream observation reconciliation, local browser-origin checks, isolated public-upstream Git credentials, private-key and YAML multiline masking in opt-in shareable reports, and improved read-only package/Desktop evidence. The standalone Windows Super Agent document preview now supports independent checks, manual review/recovery, SHA-bound public GitHub check evidence, deterministic Markdown handoff to ARTEX and task pagination (#459–#465, #467); the official Agent Teams runtime was exercised with an isolated keyless fixture (#466), not a real Provider. Version identity and immutable Release/recovery asset protections were strengthened (#452–#455, #458), and personal knowledge import preview was added (#456). No claim of actual Provider delivery or Desktop/ARTEX end-to-end acceptance. This text and candidate package metadata do not publish a release. Previous tags and assets remain untouched.
+Release notes for changes since the immutable `.18` release: safer ordinary prompt save and draft conflict handling, Super Agent work/review improvements, late-stream observation reconciliation, local browser-origin checks, isolated public-upstream Git credentials, private-key and YAML multiline masking in opt-in shareable reports, and improved read-only package/Desktop evidence. The standalone Windows Super Agent document preview now supports independent checks, manual review/recovery, SHA-bound public GitHub check evidence, deterministic Markdown handoff to ARTEX and task pagination (#459–#465, #467); the official Agent Teams runtime was exercised with an isolated keyless fixture (#466), not a real Provider. Version identity and immutable Release/recovery asset protections were strengthened (#452–#455, #458), and personal knowledge import preview was added (#456). Windows Desktop upgrade/restart/rollback, actual Provider delivery, and ARTEX end-to-end pairing remain unverified and are not implied by CI. Download and verify this release's ZIP and SHA256SUMS.txt; previously published tags and assets remain untouched.
 
 ---
 
