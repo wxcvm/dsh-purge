@@ -120,6 +120,12 @@
       "adoption": "adapted"
     },
     {
+      "local": "host-post-exploit.md",
+      "upstream": "skills/redteam/host-post-exploit.md",
+      "upstreamBlobSha": "8340c3759d368fe30562e6d91889c37a6f57cdeb",
+      "adoption": "adapted"
+    },
+    {
       "local": "kimi-webbridge.md",
       "upstream": "skills/redteam/kimi-webbridge.md",
       "upstreamBlobSha": "38a3311c8979077cc154727017fdd680d7f49a6b",
@@ -135,6 +141,12 @@
       "local": "mobile-code-recon.md",
       "upstream": "skills/redteam/mobile-code-recon.md",
       "upstreamBlobSha": "e958fb7b61e7f4a3a764893339f6714e1adbaae2",
+      "adoption": "adapted"
+    },
+    {
+      "local": "netspy-recon.md",
+      "upstream": "skills/redteam/netspy-recon.md",
+      "upstreamBlobSha": "147129ea24e2cd024ab22555b964430221dd4aac",
       "adoption": "adapted"
     },
     {

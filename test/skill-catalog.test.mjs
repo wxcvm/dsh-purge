@@ -166,7 +166,7 @@ test('bundled skills expose the pinned upstream revision and license', () => {
 test('2026-11-22 upstream absorption batch is discoverable and provenance-mapped', () => {
   const expected = [
     'ai-agent-attack', 'asset-correlation', 'asset-deep-scan', 'mobile-code-recon',
-    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain',
+    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain', 'host-post-exploit', 'netspy-recon',
     'api-attack', 'cloud-container',
   ]
   const rows = listLocalSkills()
@@ -185,6 +185,10 @@ test('2026-11-22 upstream absorption batch is discoverable and provenance-mapped
     'skills/redteam/api-data-exfil.md')
   assert.equal(rows.find(row => row.name === 'cloud-container').sourceMeta.upstreamPath,
     'skills/redteam/cloud-k8s.md')
+  assert.equal(rows.find(row => row.name === 'host-post-exploit').sourceMeta.upstreamPath,
+    'skills/redteam/host-post-exploit.md')
+  assert.equal(rows.find(row => row.name === 'netspy-recon').sourceMeta.upstreamPath,
+    'skills/redteam/netspy-recon.md')
 })
 
 test('newly absorbed skills reference only registered Purge tools', () => {
@@ -192,7 +196,7 @@ test('newly absorbed skills reference only registered Purge tools', () => {
   const registered = new Set([...toolSource.matchAll(/name:\s*['"]((?:redteam)_[a-z0-9_]+)['"]/g)].map(match => match[1]))
   const names = [
     'ai-agent-attack', 'asset-correlation', 'asset-deep-scan', 'mobile-code-recon',
-    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain',
+    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain', 'host-post-exploit', 'netspy-recon',
     'api-attack', 'cloud-container',
   ]
   for (const name of names) {

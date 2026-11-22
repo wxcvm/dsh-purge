@@ -15,12 +15,12 @@
 | 对比 | 数量 |
 |---|---:|
 | 上游技能文件 | 40 |
-| Purge 技能文件 | 54 |
-| 同路径文件 | 35 |
-| 仅上游存在 | 5 |
+| Purge 技能文件 | 56 |
+| 同路径文件 | 37 |
+| 仅上游存在 | 3 |
 | 仅 Purge 存在 | 19 |
 
-### 同路径文件（35 个，均为适配版，不能直接覆盖）
+### 同路径文件（37 个，均为适配版，不能直接覆盖）
 
 - active-scan.md
 - ad-attack.md
@@ -38,10 +38,12 @@
 - frp-tunnel.md
 - fscan-intranet.md
 - gogo-intranet.md
+- host-post-exploit.md
 - kimi-webbridge.md
 - lateral-movement.md
 - mobile-code-recon.md
 - network-device.md
+- netspy-recon.md
 - nuclei-scan.md
 - oob-verify.md
 - opsec-hygiene.md
@@ -58,13 +60,11 @@
 - web-fingerprint.md
 - webshell-toolkit.md
 
-### 原始路径差异（5 个；2 个已合并适配，3 个暂缓）
+### 原始路径差异（3 个；2 个已合并适配，1 个暂缓）
 
 - api-data-exfil.md → 已合并适配到本地 api-attack.md
 - cloud-k8s.md → 已合并适配到本地 cloud-container.md
 - c2-infra.md → 暂缓：不移植长期控制、载荷投递和规避检测流程
-- host-post-exploit.md → 暂缓：现有 privesc/lateral-movement 已覆盖部分内容，需先做更细语义去重与凭据边界设计
-- netspy-recon.md → 暂缓：上游依赖外部 netspy 二进制，当前没有可验证的本地工具/安装交付，不将其描述成已安装能力
 
 ### 第一批新增独立技能（7）
 
@@ -109,8 +109,8 @@
 7. 后续只吸收能证明有独立价值、能映射现有接口且具备授权/安全边界的内容；不以复制数量作为完成指标。
 ## 下一步
 
-- 对第一批新增/合并的 9 个映射继续做宿主加载、技能面板和真实使用反馈验收。
-- 继续复核剩余 3 项：c2-infra、host-post-exploit、netspy-recon；只有存在安全、工具和授权边界闭环时才吸收。
+- 对两批新增/合并的 11 个映射继续做宿主加载、技能面板和真实使用反馈验收。
+- 仅剩 c2-infra 暂缓：不移植长期控制、载荷投递和规避检测流程。
 - 后续社区来源按源码证据、许可证、真实工具映射和必要回归逐批吸收；不按数量追求复制率。
 
 ## 第一批内容吸收（2026-11-22）
@@ -128,6 +128,15 @@
 - 不导入上游的批量数据导出、凭据明文收集、默认口令猜测、限速绕过、隐蔽 C2、载荷投递、主机横向扩展和容器逃逸步骤。
 - 新技能只引用当前 Purge 已注册的工具接口；测试仅在明确授权范围、测试账号、合成数据和可回滚环境内进行。
 - `redteam_data_proof`、`redteam_cleanup`、`redteam_pivot_probe` 等上游独有接口未被伪装成 Purge 现有工具。
-- `c2-infra`、`host-post-exploit` 和 `netspy-recon` 保留为明确暂缓项，不宣称已吸收。
+- `c2-infra` 保留为明确暂缓项；`host-post-exploit` 与 `netspy-recon` 在第二批中以安全边界明确的适配版吸收。
 
 验证范围：技能目录/来源元数据/工具引用契约测试；npm 包含技能目录的既有打包契约；真实 Windows Harness GUI 和 Provider 行为不由这些静态测试替代。
+
+
+## 第二批内容吸收（2026-11-22）
+
+- 新增 `host-post-exploit.md`：只读 Linux/Windows 主机基线、服务/权限/补丁和配置风险审查；不读取凭据、不转储秘密、不提权、不横向。
+- 新增 `netspy-recon.md`：保留 NetSpy 可达网段发现价值，但标为可选外部依赖；必须由用户提供并验证可信二进制，只能针对显式授权 CIDR 低噪声执行。
+- source manifest 增至 39 项，新增两个来源映射均固定到上游 revision/blob SHA。
+- `skill-fixes.js` 为 NetSpy 提供专门的可选依赖说明，缺少二进制不会误导用户运行 setup 脚本下载不存在的工具。
+- 目前唯一暂缓的上游独有技能为 `c2-infra.md`：长期控制、载荷投递和规避检测流程不直接移植；Purge 已有的合法隧道技能继续独立维护。
