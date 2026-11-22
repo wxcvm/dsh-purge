@@ -96,6 +96,7 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(JSON.parse(await cleanupTool.execute({ op: 'list', engagement }, {})).total, 0)
   const invalidOp = JSON.parse(await cleanupTool.execute({ op: 'delete', engagement }, {}))
   assert.equal(invalidOp.ok, false, 'unknown operations must not fall through to add')
+  assert.equal(invalidOp.error_kind, 'bad_input')
   const dispatchedAdd = dispatch(redteam, { op: 'addCleanup', engagement,
     item: { kind: 'task', target: 'fixture-host', location: 'synthetic task', detail: 'dispatch fixture' } })
   assert.equal(dispatchedAdd.ok, true)
