@@ -73,8 +73,10 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.deepEqual(read, {
     ok: true, engagement: 'fixture', quality: { missing_evidence: 2, target: 'fixture' },
   })
+  assert.equal(redteam.setActiveEngagement(engagement), true)
   const noTarget = JSON.parse(await quality.execute({}, {}))
-  assert.equal(noTarget.ok, false)
+  assert.equal(noTarget.ok, true)
+  assert.equal(noTarget.engagement, engagement, 'unbound tool calls use the selected active engagement')
 
   const cleanupTool = registered.get('redteam_cleanup')
   const marker = join(home, 'cleanup-marker.txt')
