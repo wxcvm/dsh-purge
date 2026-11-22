@@ -4,7 +4,7 @@
 <body>
 <main>
   <h1>Super Agent · 文档工作台预览</h1>
-  <p>独立 Windows 本地预览。检查 Markdown 是否包含一级标题和附录标题，不调用 Harness、模型服务或联网工具。</p>
+  <p>独立 Windows 本地预览。检查 Markdown 是否包含一级标题和附录标题，不调用 Harness 或模型。文档本身离线检查；GitHub 证据由你主动读取。</p>
   <p id="build"></p>
   <div class="layout">
     <section>
@@ -25,6 +25,17 @@
         </form>
         <h3>运行历史</h3>
         <ol id="history"></ol>
+        <form id="github" hidden>
+          <h3>关联 GitHub 交付证据（可选）</h3>
+          <label for="githubPR">公开 GitHub PR 链接</label>
+          <input id="githubPR" type="url" required placeholder="https://github.com/owner/repo/pull/123">
+          <label for="githubIssue">公开 Issue 链接（可选）</label>
+          <input id="githubIssue" type="url">
+          <label for="githubSHA">核对完整 SHA（可选；留空则读取当前 PR 提交）</label>
+          <input id="githubSHA" maxlength="40" autocomplete="off">
+          <div class="actions"><button type="submit">读取并保存该提交的 CI</button></div>
+          <p><small>只发送公开仓库标识，不发送正文、任务内容或凭据；不会修改 GitHub。</small></p>
+        </form>
         <form id="review" hidden>
           <label for="feedback">验收结论或补充要求</label>
           <input id="feedback" required maxlength="1000">

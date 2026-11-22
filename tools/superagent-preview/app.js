@@ -10,6 +10,8 @@ const recoveryLabels = {
   'owner-unknown': '旧执行记录缺少可核对的进程身份，不能仅凭这一页认定中断。',
   'ended-unreported': '本次运行已有结束记录，但没有提交结果。它尚未完成验收。',
 }
+const checkLabels = { 'observed-success': '返回的检查全部成功（不等于所有必需检查）',
+  failure: '发现未通过检查', pending: '检查尚未全部结束', unconfirmed: '缺少完整成功证据', empty: '未找到该提交的检查' }
 let selected = null, pending = false
 const msg = text => { el('message').textContent = text }
 const api = async (path, body) => {
@@ -26,11 +28,42 @@ function add(parent, type, content) {
   parent.append(child)
   return child
 }
+function githubLink(parent, url, text) {
+  if (typeof url !== 'string' || !url.startsWith('https://github.com/')) return
+  const link = add(parent, 'a', text)
+  link.href = url
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+}
+function showEvidence(parent, evidence) {
+  const box = document.createElement('details')
+  parent.append(box)
+  add(box, 'summary', 'GitHub · ' + evidence.sha.slice(0, 12) + ' · ' + (checkLabels[evidence.state] || '待核对'))
+  const links = add(box, 'p', '')
+  githubLink(links, evidence.pr.url, 'PR #' + evidence.pr.number)
+  if (evidence.issue) {
+    links.append(' · ')
+    githubLink(links, evidence.issue.url, 'Issue #' + evidence.issue.number)
+  }
+  links.append(' · ')
+  githubLink(links, evidence.commit_url, '精确提交')
+  add(box, 'p', '核对时间：' + new Date(evidence.checked_at).toLocaleString()
+    + '；已匹配 ' + evidence.verified_count + ' / ' + evidence.total_count + ' 条检查。')
+  if (evidence.checks.length) {
+    const checks = add(box, 'ul', '')
+    for (const check of evidence.checks) add(checks, 'li', check.name + ' · ' + (check.conclusion || check.status))
+  }
+}
 function show(item) {
   selected = item
   el('detail').hidden = !item
   el('input').hidden = Boolean(item && !['waiting', 'failed', 'interrupted'].includes(item.status))
   el('review').hidden = item?.status !== 'ready'
+  el('github').hidden = item?.status !== 'ready'
+  const latestEvidence = item?.history?.[0]?.github_evidence
+  el('githubPR').value = latestEvidence?.pr.url || ''
+  el('githubIssue').value = latestEvidence?.issue?.url || ''
+  el('githubSHA').value = latestEvidence?.sha || ''
   el('editorTitle').textContent = item ? '提交补充正文' : '提交文档'
   el('title').disabled = Boolean(item)
   el('title').value = item?.objective || ''
@@ -54,6 +87,7 @@ function show(item) {
     if (run.summary) add(li, 'p', run.summary).className = 'summary'
     if (run.host_end_at) add(li, 'small', '本地文档 worker 结束：' + new Date(run.host_end_at).toLocaleString())
     if (run.review_feedback) add(li, 'p', '补充要求：' + run.review_feedback)
+    if (run.github_evidence) showEvidence(li, run.github_evidence)
   }
   if (item.status === 'done') add(el('history'), 'li', '验收结论：' + item.last_outcome)
 }
@@ -115,6 +149,18 @@ el('interruption').addEventListener('submit', event => {
     await api('/interrupt', { task_id: id, run_id: selected.assignment.run_id,
       expected_revision: selected.revision, reason: el('interruptionReason').value })
     await refresh(id)
+  })
+})
+el('github').addEventListener('submit', event => {
+  event.preventDefault()
+  if (selected?.status !== 'ready') return
+  runAction(async () => {
+    const { id, revision } = selected
+    const draft = el('feedback').value
+    await api('/github-evidence', { task_id: id, expected_revision: revision,
+      pr_url: el('githubPR').value, issue_url: el('githubIssue').value, expected_sha: el('githubSHA').value })
+    await refresh(id)
+    if (selected?.id === id && selected.revision === revision) el('feedback').value = draft
   })
 })
 el('review').addEventListener('submit', event => {

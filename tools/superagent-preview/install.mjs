@@ -14,6 +14,7 @@ const files = [
   'tools/superagent-preview/app.js', 'tools/superagent-preview/index.html',
   'tools/superagent-preview/style.css', 'tools/superagent-preview/server.mjs',
   'tools/superagent-preview/review-worker.mjs', 'tools/superagent-preview/launch.ps1',
+  'tools/superagent-preview/github-evidence.mjs',
   'lib/redteam/agent-work-items.js', 'lib/redteam/agent-work-schema.js',
   'lib/redteam/report-shareable.js',
 ]

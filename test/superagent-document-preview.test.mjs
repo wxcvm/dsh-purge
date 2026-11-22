@@ -17,8 +17,8 @@ function api(base) {
   return { post, get: path => fetch(base + path) }
 }
 
-async function listen(dataDir, checkDocument) {
-  const app = createPreview({ dataDir, checkDocument })
+async function listen(dataDir, checkDocument, readEvidence) {
+  const app = createPreview({ dataDir, checkDocument, readEvidence })
   app.listen(0, '127.0.0.1')
   await once(app, 'listening')
   const base = 'http://127.0.0.1:' + app.address().port
@@ -168,4 +168,52 @@ test('interrupted preview runs are recovered only after the owning process exits
     await exited
     await reader?.close()
   }
+})
+
+
+test('GitHub evidence stays on one attempt, survives reopening and is not added by a stale request', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'purge-doc-github-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const sha = 'a'.repeat(40)
+  const sample = { sha, source: 'github-public-check-runs', state: 'pending', checks: [], marker: 'first' }
+  let resolveRequest, signalStarted
+  const started = new Promise(resolve => { signalStarted = resolve })
+  let reads = 0
+  const reader = async request => {
+    assert.deepEqual(Object.keys(request), ['pr_url', 'issue_url', 'expected_sha'])
+    assert.equal(request.expected_sha, sha)
+    if (++reads === 1) return sample
+    if (reads === 2) throw Error('simulated GitHub rate limit')
+    return new Promise(resolve => { resolveRequest = resolve; signalStarted() })
+  }
+  let server = await listen(dir, undefined, reader)
+  try {
+    const created = await (await server.post('/run', { title: 'Review notes', document: '# Example' })).json()
+    const id = created.item.id
+    const first = await until(server, id, t => t.status === 'ready')
+    const action = { task_id: id, expected_revision: first.revision, pr_url: 'https://github.com/owner/repo/pull/7',
+      issue_url: 'https://github.com/owner/repo/issues/8', expected_sha: sha }
+    assert.equal((await server.post('/github-evidence', { ...action, expected_revision: 0 })).status, 409)
+    assert.equal(reads, 0, 'ignore stale requests before contacting GitHub')
+    assert.equal((await server.post('/github-evidence', action)).status, 200)
+    assert.deepEqual((await (await server.get('/task?id=' + id)).json()).history[0].github_evidence, sample)
+    assert.equal((await server.post('/github-evidence', action)).status, 400)
+    assert.deepEqual((await (await server.get('/task?id=' + id)).json()).history[0].github_evidence, sample)
+    const stale = server.post('/github-evidence', action)
+    await started
+    assert.equal((await server.post('/review', { ...action, decision: 'changes', reason: 'Please add appendix' })).status, 200)
+    resolveRequest({ ...sample, marker: 'should not overwrite' })
+    assert.equal((await stale).status, 409)
+    await server.close()
+    server = await listen(dir)
+    const reopened = await (await server.get('/task?id=' + id)).json()
+    assert.equal(reopened.status, 'waiting')
+    assert.deepEqual(reopened.history[0].github_evidence, sample)
+    assert.equal((await server.post('/run', { task_id: id, document: '# Example\n## Appendix' })).status, 202)
+    const second = await until(server, id, t => t.status === 'ready')
+    assert.equal(second.history[0].github_evidence, undefined)
+    assert.deepEqual(second.history[1].github_evidence, sample)
+    assert.equal((await server.post('/review', { task_id: id, expected_revision: second.revision, decision: 'accept',
+      reason: 'Accepted without requiring external CI' })).status, 200)
+  } finally { resolveRequest?.(sample); await server.close() }
 })
