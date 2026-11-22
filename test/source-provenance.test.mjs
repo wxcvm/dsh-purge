@@ -25,6 +25,10 @@ test('source license status distinguishes MIT, unrecognized and undeclared', (t)
   assert.deepEqual(readSourceLicense(root), {
     license: null, licenseFile: null, licenseStatus: 'not-declared',
   })
+  writeFileSync(join(root, 'LICENSE.md'), 'Apache License\nVersion 2.0, January 2004\n')
+  assert.deepEqual(readSourceLicense(root), {
+    license: 'Apache-2.0', licenseFile: 'LICENSE.md', licenseStatus: 'identified',
+  })
 })
 
 test('SPDX identifiers are preserved and exact Git HEAD is reported without a shell', (t) => {
