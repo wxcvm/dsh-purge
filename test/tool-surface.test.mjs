@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
+import { DDL, migrate } from '../lib/redteam/schema.js'
 import { join } from 'node:path'
 
 const expected = JSON.parse(readFileSync(new URL('./fixtures/tool-surface.json', import.meta.url), 'utf8'))
@@ -55,6 +56,16 @@ test('reviewed tool names match source declarations and actual registrations', a
   redteam = new RedteamStore(home)
   const engagement = redteam.openEngagement('fixture').id
   const otherEngagement = redteam.openEngagement('cleanup-other').id
+  const legacySchemaDb = new DatabaseSync(':memory:')
+  try {
+    legacySchemaDb.exec(DDL)
+    legacySchemaDb.exec('ALTER TABLE data_proof DROP COLUMN sample_count; ALTER TABLE data_proof ADD COLUMN sample TEXT; ALTER TABLE data_proof ADD COLUMN query TEXT;')
+    migrate(legacySchemaDb)
+    const legacyColumns = legacySchemaDb.prepare('PRAGMA table_info(data_proof)').all().map(column => column.name)
+    assert.ok(legacyColumns.includes('sample_count'), 'existing upstream proof tables gain the safe sample-count column')
+  } finally {
+    legacySchemaDb.close()
+  }
   redteam.dataQuality = id => ({ missing_evidence: 2, target: id })
   const registered = new Map()
   const ctx = {
