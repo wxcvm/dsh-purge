@@ -24,9 +24,27 @@
       "adoption": "adapted"
     },
     {
+      "local": "ai-agent-attack.md",
+      "upstream": "skills/redteam/ai-agent-attack.md",
+      "upstreamBlobSha": "69becd6446ed8b734a702a8991d450ee11a1ea8b",
+      "adoption": "adapted"
+    },
+    {
+      "local": "api-attack.md",
+      "upstream": "skills/redteam/api-data-exfil.md",
+      "upstreamBlobSha": "f1235e7d8e34749fd28215e5c27c44296025ca4a",
+      "adoption": "adapted"
+    },
+    {
       "local": "asset-correlation.md",
       "upstream": "skills/redteam/asset-correlation.md",
       "upstreamBlobSha": "dcece9b470236e3190817289dcc3534a57bc0abe",
+      "adoption": "adapted"
+    },
+    {
+      "local": "asset-deep-scan.md",
+      "upstream": "skills/redteam/asset-deep-scan.md",
+      "upstreamBlobSha": "0e0be1582015ff892176593687420df7e3c80908",
       "adoption": "adapted"
     },
     {
@@ -45,6 +63,12 @@
       "local": "chisel-tunnel.md",
       "upstream": "skills/redteam/chisel-tunnel.md",
       "upstreamBlobSha": "35ec3315820009a5a2fe9a28ce1a0f58af256de4",
+      "adoption": "adapted"
+    },
+    {
+      "local": "cloud-container.md",
+      "upstream": "skills/redteam/cloud-k8s.md",
+      "upstreamBlobSha": "52f4e7fb7247bb1420832c10af703113be6a7015",
       "adoption": "adapted"
     },
     {
@@ -108,9 +132,33 @@
       "adoption": "adapted"
     },
     {
+      "local": "mobile-code-recon.md",
+      "upstream": "skills/redteam/mobile-code-recon.md",
+      "upstreamBlobSha": "e958fb7b61e7f4a3a764893339f6714e1adbaae2",
+      "adoption": "adapted"
+    },
+    {
+      "local": "network-device.md",
+      "upstream": "skills/redteam/network-device.md",
+      "upstreamBlobSha": "071c1de8980552a2f8dcb792e3ed655a9f0f69cc",
+      "adoption": "adapted"
+    },
+    {
       "local": "nuclei-scan.md",
       "upstream": "skills/redteam/nuclei-scan.md",
       "upstreamBlobSha": "9b42b97f1e4a0cebe23b2fcc60c20b6c07d1f1c1",
+      "adoption": "adapted"
+    },
+    {
+      "local": "oob-verify.md",
+      "upstream": "skills/redteam/oob-verify.md",
+      "upstreamBlobSha": "e234c3d4f757968fd532d444b6df7e37a2bbc47e",
+      "adoption": "adapted"
+    },
+    {
+      "local": "opsec-hygiene.md",
+      "upstream": "skills/redteam/opsec-hygiene.md",
+      "upstreamBlobSha": "439029b9a056bc4cc095a08b532ebaa37d660b3e",
       "adoption": "adapted"
     },
     {
@@ -153,6 +201,12 @@
       "local": "suo5-tunnel.md",
       "upstream": "skills/redteam/suo5-tunnel.md",
       "upstreamBlobSha": "90b915e17bcbed7c6b31f2ebf0849074527cee51",
+      "adoption": "adapted"
+    },
+    {
+      "local": "supply-chain.md",
+      "upstream": "skills/redteam/supply-chain.md",
+      "upstreamBlobSha": "2be4f75bc838ca3ad5b5a0e5f8ec52aa1ebeb10b",
       "adoption": "adapted"
     },
     {
