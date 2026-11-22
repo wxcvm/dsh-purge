@@ -12,7 +12,7 @@ const recoveryLabels = {
 }
 const checkLabels = { 'observed-success': '返回的检查全部成功（不等于所有必需检查）',
   failure: '发现未通过检查', pending: '检查尚未全部结束', unconfirmed: '缺少完整成功证据', empty: '未找到该提交的检查' }
-let selected = null, pending = false
+let selected = null, pending = false, taskOffset = 0, taskHasMore = false
 const msg = text => { el('message').textContent = text }
 const api = async (path, body) => {
   const result = await fetch(path, body === undefined ? {} : {
@@ -99,10 +99,17 @@ function show(item) {
   }
   if (item.status === 'done') add(el('history'), 'li', '验收结论：' + item.last_outcome)
 }
-async function refresh(id) {
-  const page = await api('/tasks')
+async function refresh(id, offset = taskOffset) {
+  const page = await api('/tasks?offset=' + offset)
   const item = id ? await api('/task?id=' + id) : null
+  taskOffset = page.offset
+  taskHasMore = page.hasMore
   show(item)
+  el('taskPage').textContent = page.total
+    ? '第 ' + (page.offset + 1) + '–' + (page.offset + page.items.length) + ' 条，共 ' + page.total + ' 条'
+    : '暂无任务'
+  el('newer').disabled = pending || taskOffset === 0
+  el('older').disabled = pending || !taskHasMore
   el('tasks').replaceChildren()
   for (const row of page.items) {
     const li = add(el('tasks'), 'li', '')
@@ -112,7 +119,7 @@ async function refresh(id) {
     if (row.id === id) open.setAttribute('aria-current', 'true')
     open.addEventListener('click', () => runAction(() => follow(row.id)))
   }
-  if (page.items.length === 0) add(el('tasks'), 'li', '还没有文档任务')
+  if (page.items.length === 0) add(el('tasks'), 'li', page.total ? '本页无任务，请返回上一页' : '还没有文档任务')
 }
 async function follow(id) {
   await refresh(id)
@@ -134,9 +141,15 @@ async function runAction(action) {
   finally {
     pending = false
     for (const button of document.querySelectorAll('button')) button.disabled = false
+    el('newer').disabled = taskOffset === 0
+    el('older').disabled = !taskHasMore
   }
 }
-el('new').addEventListener('click', () => runAction(() => refresh(null)))
+el('new').addEventListener('click', () => runAction(() => refresh(null, 0)))
+el('newer').addEventListener('click', () => runAction(() => refresh(null, Math.max(0, taskOffset - 30))))
+el('older').addEventListener('click', () => {
+  if (taskHasMore) runAction(() => refresh(null, taskOffset + 30))
+})
 el('sample').addEventListener('click', () => {
   if (!selected) el('title').value = '部署说明示例'
   el('text').value = '# 部署说明\n\n示例正文。\n' + (selected ? '\n## 附录\n\n补充说明。\n' : '')
@@ -145,7 +158,9 @@ el('sample').addEventListener('click', () => {
 el('run').addEventListener('submit', event => {
   event.preventDefault()
   runAction(async () => {
+    const creating = !selected
     const result = await api('/run', { task_id: selected?.id, title: el('title').value, document: el('text').value })
+    if (creating) taskOffset = 0
     await follow(result.item.id)
   })
 })
