@@ -42,8 +42,9 @@ enabled: true
 ## 6. 记录与收口
 
 - 用 `redteam_asset_test` 的 `test` 追加每个维度的检查结果，`surface` 写仍未覆盖的部分。
-- 没有对应服务的维度标记为 not applicable；被授权边界、账号或环境阻断时标记 blocked 并说明原因。
+- 没有对应服务的维度，在 `test` 记录中写明 `not applicable` 和原因；这不是 `redteam_asset_test` 的独立 status 值。
 - 发现问题先以 `redteam_vuln_add(status=candidate)` 记录；只有在测试环境中可重复且证据充分时才确认。
-- 只有五个维度均有明确状态，才把该资产标记为已完成评估；不要把“扫过”写成“已验证”。
+- 五个维度均完成或明确不适用后，用 `redteam_asset_test(status=tested)` 收口；被授权边界、账号或环境阻断时用 `status=blocked` 并说明原因。只有整个资产确实没有可评估面时才使用 `status=no_surface`。
+- 不在授权范围或授权无法确认时不要开始主动测试；保留未测试状态并写明原因。不要把“扫过”写成“已验证”。
 
 不批量扫描多个目标，不收集真实凭据，不导出全库，不删除/修改业务数据，也不把未验证假设写成 confirmed。
