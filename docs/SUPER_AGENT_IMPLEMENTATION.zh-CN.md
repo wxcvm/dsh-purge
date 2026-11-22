@@ -30,3 +30,17 @@
 第二批补齐任务详情的运行证据：打开或主动重新读取详情时，仅对该任务当前尝试单独核对宿主；异步查询期间换绑后，不把旧查询结果套到新执行。已收到该 run 的精确结束事件时，直接显示已观测结束，仍要求人工结算。界面列出核对时间、可证实的归属会话和下一步。保留清单与详情各自的读取证据；清单读到更新任务时提醒重读详情。
 
 **真实验收前置检查（2026-11-22）**：现场官方 Windows CLI 自报 `0.2.2-rc.5`；Desktop 有活动进程，但只读探针看到的桌面 profile 插件是 `.18`，源码候选是 `.19` 且关键文件不同。没有取得候选在当前 Desktop 加载的证据，没有用旧插件冒充新版、修改活动 profile 或发送 Provider 请求。这批仅记录磁盘/进程/CLI 与回归，仍需最新版的普通文档任务实跑。
+
+
+## Windows 本地文档工作台预览
+
+`tools/superagent-preview` 可将当前 Git 提交明确列出的预览文件安装到当前 Windows 用户的 `%LOCALAPPDATA%/Purge-SuperAgent-Preview`。每次按完整提交单独放置，生成每个文件的 SHA-256。它不注册 Harness 插件、不修改 DSH_HOME、不迁入现有项目；独立数据目录在更新后保留。预览复用 Super Agent 的 SQLite 任务、尝试、精确结束和人工验收逻辑，但执行器仅为本地 Node worker，检查用户粘贴的 Markdown 一级标题和附录标题。正文不写入任务数据库，不调用任何模型或外部工具。
+
+在 Node.js 24 的 Windows PowerShell 中，从仓库根目录执行：
+
+```powershell
+$preview = node tools/superagent-preview/install.mjs HEAD | ConvertFrom-Json
+& $preview.launcher -DataDir $preview.dataDir
+```
+
+打开后可用「填入示例」生成没有附录的初稿；运行后填写补充要求并退回。再次填入示例会包含附录，重新运行并确认完成。关掉浏览器不会停止后台本地进程；重新打开同一 URL 仍能看到历史。测试脚本用重开服务验证数据库恢复，不依赖真实 Provider。相同端口已有不同提交的预览时，启动器会报错而不是切回旧构建。预览没有开机自启、没有发布动作，也不代表正式 Purge 或 Harness 原生 Teams 已验收。
