@@ -66,7 +66,7 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 
 ### 2026-11-21 · DSH_HOME 共享 pnpm 目录对账规则
 
-仓库中的 profile 安装脚本和 Windows junction 回退夹具均说明：`node_modules/dsh-purge` 可以是 junction，不能以“不是本 profile .pnpm 目录”推断损坏。新增的只读校验将同一 DSH_HOME 的**共享 profile 虚拟存储**列为第二个受信任布局，但仅在真实路径严格匹配 `profiles/node_modules/.pnpm/dsh-purge@*/node_modules/dsh-purge`，并且各级都是实体目录（而非再次跳转的链接）后才读取其**固定的五个插件代码文件和 package.json**。版本相等不代表代码相等；必须逐文件判定 `identical/different/missing`。共享目录下其他包、非标准文件夹、外部目录、断开的链接、嵌套逃逸和私人开发链接仍拒绝读取。整个过程不显示任何用户路径/正文/源码哈希，不进行安装或重启。
+仓库中的 profile 安装脚本和 Windows junction 回退夹具均说明：`node_modules/dsh-purge` 可以是 junction，不能以“不是本 profile .pnpm 目录”推断损坏。新增的只读校验将同一 DSH_HOME 的**共享 profile 虚拟存储**列为第二个受信任布局，但仅在真实路径严格匹配 `profiles/node_modules/.pnpm/dsh-purge@*/node_modules/dsh-purge`，并且各级都是实体目录（而非再次跳转的链接）后才读取其**固定的插件代码文件和 package.json**。版本相等不代表代码相等；必须逐文件判定 `identical/different/missing`。共享目录下其他包、非标准文件夹、外部目录、断开的链接、嵌套逃逸和私人开发链接仍拒绝读取。整个过程不显示任何用户路径/正文/源码哈希，不进行安装或重启。
 
 这个只读结果仍只代表 **Runner 磁盘上**的版本，不代表已运行 Desktop 的插件模块、Provider HTTP 内容或用户点击开关后的行为已验证。
 
@@ -79,7 +79,7 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 如果 Windows Runner 自动探针继续显示 `linked-uninspected / inside-dsh-home-untrusted`，这**不能证明插件安装失败**。不要把所有 DSH_HOME 内的未知目录直接加入自动白名单。仓库现在提供仅由操作者主动触发的只读核验：
 
 1. 打开 [Local Compatibility (Windows + WSL)](https://github.com/wxcvm/dsh-purge/actions/workflows/compatibility.yml)，选择 **Run workflow**，选择正式 `master`，勾选 **inspect_home_plugin_link**。默认不勾选，PR 与普通主线 push 绝不启用。
-2. Windows Runner 将只在该项**明确开启**时，沿当前 desktop profile 的 `node_modules/dsh-purge` 已存在的链接，检查目标是否为 `DSH_HOME` 内的**实体目录**，且 `package.json` 必须声明 `name: dsh-purge`。仅读取这一包固定的五个代码文件进行源码逐字节比对；任何离开包目录的文件/目录 symlink 都拒绝哈希。外部于 DSH_HOME 的目标始终拒绝读取。
+2. Windows Runner 将只在该项**明确开启**时，沿当前 desktop profile 的 `node_modules/dsh-purge` 已存在的链接，检查目标是否为 `DSH_HOME` 内的**实体目录**，且 `package.json` 必须声明 `name: dsh-purge`。仅读取这一包固定的代码文件进行源码逐字节比对；任何离开包目录的文件/目录 symlink 都拒绝哈希。外部于 DSH_HOME 的目标始终拒绝读取。
 3. 结果依旧仅列公开版本号、固定文件相对名及 `identical/different/missing` 状态，**不包含**真实路径、个人配置、聊天记录、Prompt 正文、源文件字节或哈希值。也可在自己控制的 Windows 终端显式执行 `node scripts/inspect-windows-desktop-evidence.mjs --inspect-home-plugin-link`，脚本本身不写配置。
 
 此选项授予的只是**读取 DSH_HOME 内链接所指插件代码文件**的临时权限，并非同意更新、重启 Desktop、清洗宿主、运行 Provider 或向云端发送本地私密数据。无论勾选与否，`runtimeLoadVerified` 仍为 `false`：插件磁盘字节一致不等于当前 Electron 进程已经加载该代码。#336 的真实 GUI 与 Provider 请求验收继续独立进行。
@@ -87,6 +87,12 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 ## 如何区分同版本的不同提交
 
 「检查更新」仍按发布版本判断是否有可更新版本，不会因为同版本的分支提交变化就写入安装或请求重启。版本列表同时显示提交短号；本机记录只与实际对应的提交核对。当版本号相同但提交不同，界面单独说明差异；记录缺失时明确显示未核实。即使提交记录一致，也必须从宿主状态总览确认实际加载的前端构建和后端，不能从版本号或安装记录推出已加载。
+
+### Harness Desktop 已打开，但页面提示 cross-origin request rejected
+
+先区分官方 Harness 宿主版本、Purge 已安装版本、发布标签与当前源码。已发布的 [Purge .19](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.19) 标签对应提交 `ef10e66`，早于 [#470](https://github.com/wxcvm/dsh-purge/pull/470) 对官方 Harness `0.2.2-rc.5` Desktop 请求转发的兼容修复。因此重新安装同一份 .19 或仅重启它不会获得修复；主线上 `package.json` 仍可能同样显示 .19。
+
+现有 Windows 只读探针也逐项比较请求路由、桥接鉴权和来源校验三个固定文件（`lib/redteam/ui.js`、`lib/redteam/bridge-auth.js`、`lib/redteam/bridge-origin.js`）。即使 `client.js` 和版本号完全一致，也能发现后端桥接代码不同。若已安装文件与包含 #470 的可信候选一致，仍需在实际 Desktop 完成正常退出重开，从宿主页面复查；不能从磁盘匹配推断页面恢复。不要为排障放开来源校验、复制会话凭据或使用其他宿主代验。
 
 ## 后续发布预检
 
