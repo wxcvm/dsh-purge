@@ -61,6 +61,11 @@ jobs:
             echo "$notes 第一行必须是 # ${version}，现在是: ${first}"
             exit 1
           fi
+          # Keep the release description scoped to this candidate; the notes
+          # file is a changelog and also includes all older version sections.
+          current_notes="$(mktemp)"
+          trap 'rm -f "$current_notes"' EXIT
+          awk 'NR > 1 && /^# / { exit } { print }' "$notes" > "$current_notes"
           zip="dsh-purge-$version.zip"
           # Never package an older tagged source under a new master candidate.
           commit="$GITHUB_SHA"
@@ -106,9 +111,9 @@ jobs:
           fi
           case "$version" in
             *beta*|*alpha*|*rc*)
-              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" --prerelease ;;
+              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$current_notes" --prerelease ;;
             *)
-              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" ;;
+              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$current_notes" ;;
           esac
           # GitHub must reject any existing asset name instead of silently replacing it.
           gh release upload "$tag" "$zip" SHA256SUMS.txt
