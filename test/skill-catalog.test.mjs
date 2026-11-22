@@ -198,7 +198,7 @@ test('newly absorbed skills reference only registered Purge tools', () => {
   for (const name of names) {
     const skill = readLocalSkill('redteam:' + name)
     assert.ok(skill && skill.content, name + ' body must be readable')
-    for (const match of skill.content.matchAll(/\x60(redteam_[a-z0-9_]+)\x60/g)) {
+    for (const match of skill.content.matchAll(/\x60(redteam_[a-z0-9_]+)(?:\([^`\n]*\))?\x60/g)) {
       assert.ok(registered.has(match[1]), name + ' references unregistered tool ' + match[1])
     }
     assert.doesNotMatch(skill.content, /\x60redteam_(?:data_proof|cleanup|pivot_probe)\x60/,

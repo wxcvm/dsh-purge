@@ -58,7 +58,7 @@
 - web-fingerprint.md
 - webshell-toolkit.md
 
-### 原始上游独有路径（第一批吸收后仍有 5 个）
+### 原始路径差异（5 个；2 个已合并适配，3 个暂缓）
 
 - api-data-exfil.md → 已合并适配到本地 api-attack.md
 - cloud-k8s.md → 已合并适配到本地 cloud-container.md
@@ -76,13 +76,13 @@
 - opsec-hygiene.md
 - supply-chain.md
 
-### Purge 独有（保留）
+### Purge 本地文件名独有（19 个；其中 2 个已合并上游内容）
 
-- api-attack.md
+- api-attack.md（已映射上游 api-data-exfil.md）
 - armory-index.md
 - auth-attack.md
 - business-security-controls.md
-- cloud-container.md
+- cloud-container.md（已映射上游 cloud-k8s.md）
 - credential-to-access.md
 - deserialize.md
 - evidence-discipline.md
