@@ -1,7 +1,11 @@
-import { parentPort, workerData } from 'node:worker_threads'
+import { parentPort, threadId, workerData } from 'node:worker_threads'
+const start = performance.now()
+const { check, text } = workerData
+if (check !== 'heading' && check !== 'appendix') throw Error('不支持的文档检查')
 
-const lines = workerData.split(/\r?\n/)
-let fence = null, title = false, appendix = false
+const lines = text.split(/\r?\n/)
+let fence = null, found = false
+const pattern = check === 'heading' ? /^ {0,3}#\s+\S/ : /^ {0,3}#{1,6}\s+(?:附录|appendix)(?:\s|[：:]|$)/i
 for (const line of lines) {
   const marker = /^ {0,3}(\x60{3,}|~{3,})(.*)$/.exec(line)
   if (marker) {
@@ -10,7 +14,6 @@ for (const line of lines) {
     continue
   }
   if (fence) continue
-  if (/^ {0,3}#\s+\S/.test(line)) title = true
-  if (/^ {0,3}#{1,6}\s+(?:附录|appendix)(?:\s|[：:]|$)/i.test(line)) appendix = true
+  if (pattern.test(line)) { found = true; break }
 }
-parentPort.postMessage({ title, appendix })
+parentPort.postMessage({ found, threadId, ms: performance.now() - start })

@@ -20,15 +20,15 @@ const manifest = (() => {
   catch { return { commit: null } }
 })()
 
-function review(text) {
+function runCheck(check, text) {
   return new Promise((done, fail) => {
-    const worker = new Worker(new URL('review-worker.mjs', import.meta.url), { workerData: text })
+    const worker = new Worker(new URL('review-worker.mjs', import.meta.url), { workerData: { check, text } })
     let result, error
     worker.on('message', value => { result = value })
     worker.once('error', value => { error = value })
     worker.once('exit', code => {
       if (error) fail(error)
-      else if (code !== 0 || typeof result?.title !== 'boolean' || typeof result?.appendix !== 'boolean') fail(Error('文档检查未返回有效结果'))
+      else if (code !== 0 || typeof result?.found !== 'boolean' || !Number.isFinite(result.ms) || !Number.isSafeInteger(result.threadId)) fail(Error('文档检查未返回有效结果'))
       else done(result)
     })
   })
@@ -47,7 +47,12 @@ async function input(req) {
   return value
 }
 
-export function createPreview({ dataDir }) {
+const checks = Object.freeze([
+  { id: 'heading', label: '一级标题' },
+  { id: 'appendix', label: '附录标题' },
+])
+
+export function createPreview({ dataDir, checkDocument = runCheck }) {
   mkdirSync(dataDir, { recursive: true })
   for (const name of ['tasks.sqlite', 'tasks.sqlite-journal', 'tasks.sqlite-wal', 'tasks.sqlite-shm']) {
     const existing = lstatSync(join(dataDir, name), { throwIfNoEntry: false })
@@ -57,9 +62,34 @@ export function createPreview({ dataDir }) {
   db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;')
   db.exec(AGENT_WORK_DDL)
   migrateAgentWork(db)
-  let active = false
+  let active = null
 
-  async function run(body) {
+  async function finish(job, text) {
+    // The executor is deliberately limited to these two checks. A document
+    // never supplies step names, tools or an executable plan.
+    const results = await Promise.allSettled(checks.map(async ({ id, label }, i) => {
+      job.steps[i].status = 'running'
+      try {
+        const result = await checkDocument(id, text)
+        job.steps[i].status = 'done'
+        return { label, ...result }
+      } catch (error) {
+        job.steps[i].status = 'failed'
+        throw error
+      }
+    }))
+    const ready = results.every(result => result.status === 'fulfilled')
+    job.steps[2].status = ready ? 'done' : 'blocked'
+    const resultText = ready
+      ? results.map(({ value }) => value.label + '：' + (value.found ? '有' : '缺少')).join('；') + '。'
+        + '\n两项检查均退出后汇总。'
+        + results.map(({ value }) => value.label + ' worker #' + value.threadId + '：' + value.ms.toFixed(2) + ' ms').join('；')
+      : '至少一项文档检查失败，未生成验收报告。可重新提交正文。'
+    observeWorkItemEnd(db, { ...job.identity, stop_reason: ready ? 'completed' : 'error' })
+    reportWorkItem(db, { ...job.identity, status: ready ? 'ready' : 'failed', summary: resultText })
+  }
+
+  function run(body) {
     if (active) throw Error('已有一次文档检查正在进行')
     if (typeof body.document !== 'string' || !body.document.trim() || body.document.length > 40000) {
       throw Error('请粘贴 1 到 40000 字符的 Markdown')
@@ -68,24 +98,18 @@ export function createPreview({ dataDir }) {
       ? createWorkItem(db, { task_key: randomUUID(), objective: body.title, role: 'document-review' }).item
       : getWorkItem(db, body.task_id)
     if (!item) throw Error('找不到该任务')
-    const run_id = randomUUID()
-    const session_id = 'preview-' + item.id
-    const identity = { task_id: item.id, session_id, run_id }
-    const assignment = assignWorkItem(db, identity)
-    if (!assignment.assigned) throw Error('没有登记本次执行')
-    active = true
-    try {
-      let report
-      try {
-        const result = await review(body.document)
-        report = { status: 'ready', stop_reason: 'completed',
-          summary: '一级标题：' + (result.title ? '有' : '缺少') + '；附录标题：' + (result.appendix ? '有' : '缺少') + '。' }
-      } catch {
-        report = { status: 'failed', stop_reason: 'error', summary: '本地文档检查失败。可重新提交正文。' }
-      }
-      observeWorkItemEnd(db, { ...identity, stop_reason: report.stop_reason })
-      return reportWorkItem(db, { ...identity, status: report.status, summary: report.summary })
-    } finally { active = false }
+    const identity = { task_id: item.id, session_id: 'preview-' + item.id, run_id: randomUUID() }
+    const assigned = assignWorkItem(db, identity)
+    if (!assigned.assigned) throw Error('没有登记本次执行')
+    const job = { identity, steps: [...checks.map(check => ({ ...check, status: 'queued' })),
+      { id: 'summary', label: '汇总', status: 'waiting' }] }
+    active = job
+    job.finished = finish(job, body.document).catch(() => {
+      // On a database write failure there is no proof that settlement
+      // committed. Preserve the running record and do not auto-retry.
+      console.error('预览工作台未能持久化本次结算。请核对任务记录。')
+    }).finally(() => { active = null })
+    return { started: true, item: assigned.item }
   }
 
   const app = createServer(async (req, res) => {
@@ -104,13 +128,16 @@ export function createPreview({ dataDir }) {
         if (url.pathname === '/tasks') return json(200, listWorkItems(db, { limit: 30 }))
         if (url.pathname === '/task') {
           const item = getWorkItem(db, url.searchParams.get('id'))
-          return item ? json(200, item) : json(404, { error: '找不到该任务' })
+          if (!item) return json(404, { error: '找不到该任务' })
+          const matches = item.status === 'running' && active?.identity.task_id === item.id
+            && active.identity.run_id === item.assignment?.run_id
+          return json(200, matches ? { ...item, preview_steps: active.steps } : item)
         }
       }
       if (req.method === 'POST') {
         if (req.headers.origin !== 'http://' + host) return json(403, { error: '请在本机工作台提交' })
         const body = await input(req)
-        if (url.pathname === '/run') return json(200, await run(body))
+        if (url.pathname === '/run') return json(202, run(body))
         if (url.pathname === '/review') {
           if (!Number.isSafeInteger(body.expected_revision)) throw Error('请重新读取任务版本')
           const result = body.decision === 'changes'
@@ -125,7 +152,10 @@ export function createPreview({ dataDir }) {
       json(400, { error: error?.message || '操作失败' })
     }
   })
-  app.once('close', () => db.close())
+  app.once('close', () => {
+    if (active) void active.finished.then(() => db.close())
+    else db.close()
+  })
   return app
 }
 

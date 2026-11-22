@@ -2,6 +2,8 @@
 const el = id => document.getElementById(id)
 const labels = { queued: '待运行', running: '运行中／上次运行待核对', waiting: '待补充', ready: '待验收',
   blocked: '待处理', failed: '检查失败', interrupted: '已中断', done: '已验收', dropped: '已放弃' }
+const stepLabels = { queued: '待运行', running: '检查中', done: '已完成', failed: '失败',
+  waiting: '等待两项检查', blocked: '未汇总' }
 let selected = null, pending = false
 const msg = text => { el('message').textContent = text }
 const api = async (path, body) => {
@@ -30,11 +32,14 @@ function show(item) {
   el('feedback').value = ''
   if (!item) return
   el('taskTitle').textContent = item.objective
-  el('taskStatus').textContent = labels[item.status] || item.status
+  el('taskStatus').textContent = item.preview_steps ? '正在检查' : labels[item.status] || item.status
+  el('steps').hidden = !item.preview_steps
+  el('steps').replaceChildren()
+  for (const step of item.preview_steps || []) add(el('steps'), 'li', step.label + ' · ' + stepLabels[step.status])
   el('history').replaceChildren()
   for (const run of item.history || []) {
     const li = add(el('history'), 'li', '第 ' + run.attempt + ' 次 · ' + (labels[run.status] || run.status))
-    if (run.summary) add(li, 'p', run.summary)
+    if (run.summary) add(li, 'p', run.summary).className = 'summary'
     if (run.host_end_at) add(li, 'small', '本地文档 worker 结束：' + new Date(run.host_end_at).toLocaleString())
     if (run.review_feedback) add(li, 'p', '补充要求：' + run.review_feedback)
   }
@@ -49,10 +54,21 @@ async function refresh(id) {
     const li = add(el('tasks'), 'li', '')
     const open = add(li, 'button', row.objective + ' · ' + (labels[row.status] || row.status))
     open.type = 'button'
+    open.disabled = pending
     if (row.id === id) open.setAttribute('aria-current', 'true')
-    open.addEventListener('click', () => runAction(() => refresh(row.id)))
+    open.addEventListener('click', () => runAction(() => follow(row.id)))
   }
   if (page.items.length === 0) add(el('tasks'), 'li', '还没有文档任务')
+}
+async function follow(id) {
+  await refresh(id)
+  if (!selected?.preview_steps) return
+  for (let i = 0; i < 60 && selected?.preview_steps; i++) {
+    await new Promise(resolve => setTimeout(resolve, 250))
+    show(await api('/task?id=' + id))
+  }
+  if (!selected?.preview_steps) await refresh(id)
+  else throw Error('检查仍在进行。稍后重新打开本任务可查看最新结果。')
 }
 async function runAction(action) {
   if (pending) return
@@ -76,7 +92,7 @@ el('run').addEventListener('submit', event => {
   event.preventDefault()
   runAction(async () => {
     const result = await api('/run', { task_id: selected?.id, title: el('title').value, document: el('text').value })
-    await refresh(result.item.id)
+    await follow(result.item.id)
   })
 })
 el('review').addEventListener('submit', event => {
