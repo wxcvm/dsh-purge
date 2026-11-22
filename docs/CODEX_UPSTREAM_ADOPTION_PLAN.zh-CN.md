@@ -1,5 +1,18 @@
 # Purge 接手版上游吸收 · Codex 可执行总方案
 
+## 2026-11-22 · 当前执行状态（覆盖下方旧快照的状态，不改历史记录）
+
+**固定双仓版本**：主参考上游 [dsh-purge-safe v2.0.2@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69) 未出现更新；我方已正式发行 [.22](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.22)，Release SHA `4efe83d`。以下新合并代码位于最新主线、**不在 .22 制品**；独立 .23 候选另按 PR/CI/Release 验收，不能把候选当发行。
+
+- **已完成并通过 Windows/Ubuntu API、UI/打包**：[#493](https://github.com/wxcvm/dsh-purge/pull/493) → `d0c8bfc`，仅吸收上游 `redteam_batch(kind=assets)` 的独有人工资产批量录入需求；默认 dry-run、显式 commit、scope 检查、逐条回执，复用现有 `importBundle`。已有 `redteam_ingest` 扫描文件解析不重复引入。
+- **已完成并通过 Windows/Ubuntu API、UI/打包**：[#494](https://github.com/wxcvm/dsh-purge/pull/494) → `fa1bfec`，复用 `#nucleiIndex(force)`，在 `redteam_poc_search(refresh_index:true)` 明确请求时重建离线本地模板索引。修复子目录 YAML 更新不触发根目录 mtime 的缓存陈旧问题；测试已避免借用 Windows 自托管 Runner 预装的个人 Nuclei 目录。
+- **.22 已交付**：[#491](https://github.com/wxcvm/dsh-purge/pull/491) 手动 CISA KEV status/lookup/refresh、[#490](https://github.com/wxcvm/dsh-purge/pull/490) 托管 Ubuntu Release、[#486](https://github.com/wxcvm/dsh-purge/pull/486) 中断更新恢复，以及此前主/备提示词、GPT/Claude/Gemini 预览、HTTP 状态观察等。保留主线 CI / 发布证据，不重复实现。
+- **明确不整包照搬**：上游自动下载模板/KEV 的启动副作用、`redteam_pivot_probe` 对任意多个内网目标进行无 scope 校验的 SOCKS5 测试、`redteam_batch` 的评估/漏洞直接写入、PTC 把审批文字伪装成 auto-granted、提升 workspace 指令优先级的提示词补丁、`slot-state` parked 推定真实宿主空闲。不是“已覆盖”，而是**未采纳 / 需真实场景与权限语义证据**。
+- **仍待真实验收，不应结项为全通过**：#336/#343 用户 Windows Harness rc.5 安装、重启、页面可见；#340/#341 最终 Provider 真实请求；#346 ARTEX 两端身份/交接/回执与断线；#345 原生 Teams 的实际任务运行与 UI。合并、CI、发行和实际宿主分别记录。
+
+**下方旧快照如 .19 / .18 / 原 #344 缺口表仅供当时历史对比，以上述真实 PR/CI/Release 和当期 GitHub 状态为准。后续每项先核对是否已在主线；按价值小步吸收，所有新证据回填 [#347](https://github.com/wxcvm/dsh-purge/issues/347) 和 [#351](https://github.com/wxcvm/dsh-purge/issues/351)，不另开平行计划。**
+
+---
 ## 2026-11-22 · 上游 v2.0.2 / DSH rc.5 增量裁定（最新入口）
 
 **双仓实查快照**：重点上游 [CallMeGuLab/dsh-purge-safe v2.0.2](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.2)、[main@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69)（相对 v2.0.1 @d0a9abd 仅新增一个提交，13 个文件）；我方 [master@70d2956](https://github.com/wxcvm/dsh-purge/commit/70d29566431bac6730755b581c1ec3275f4b2b65)，最新已发布 [v1.1.92-wxcvm.19](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.19)（发布于上游 .2 之前）；该 master 的 [Windows/WSL CI](https://github.com/wxcvm/dsh-purge/actions/runs/45004337249) 成功。**CI 成功不等于真实 rc.5 Desktop / Provider 已验收**，也不意味着本仓已经吸收上游 2.0.2。
