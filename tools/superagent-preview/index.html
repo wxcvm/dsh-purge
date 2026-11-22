@@ -17,6 +17,12 @@
         <h2 id="taskTitle"></h2>
         <p id="taskStatus" aria-live="polite"></p>
         <ol id="steps" aria-label="当前文档检查" hidden></ol>
+        <p id="recoveryNote" hidden></p>
+        <form id="interruption" hidden>
+          <label for="interruptionReason">中断依据（不会自动重跑）</label>
+          <input id="interruptionReason" required maxlength="1000">
+          <div class="actions"><button type="submit">标记本次运行中断</button></div>
+        </form>
         <h3>运行历史</h3>
         <ol id="history"></ol>
         <form id="review" hidden>
