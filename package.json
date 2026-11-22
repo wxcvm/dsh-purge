@@ -26,6 +26,7 @@
     "presets",
     "scripts",
     "skills",
+    "third_party",
     "maintenance",
     "!maintenance/**/dist/**",
     "client.js",
