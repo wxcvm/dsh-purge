@@ -63,6 +63,42 @@ export function createPreview({ dataDir, checkDocument = runCheck }) {
   db.exec(AGENT_WORK_DDL)
   migrateAgentWork(db)
   let active = null
+  const instance = 'preview-v1:' + process.pid + ':' + randomUUID() + ':'
+
+  function recovery(item) {
+    const assignment = item.assignment
+    if (item.status !== 'running' || !assignment) return null
+    if (active?.identity.task_id === item.id && active.identity.run_id === assignment.run_id) {
+      return { state: 'observed', can_mark: false }
+    }
+    const owner = /^preview-v1:([1-9][0-9]*):[0-9a-f-]{36}:([1-9][0-9]*)$/.exec(assignment.session_id)
+    const pid = Number(owner?.[1])
+    const known = Number(owner?.[2]) === item.id && Number.isSafeInteger(pid) && pid <= 2147483647
+    let absent = false
+    if (known) {
+      // Signal zero only checks existence. A present PID may be reused; it is
+      // not evidence that the original work is still running.
+      try { process.kill(pid, 0) } catch (error) { absent = error.code === 'ESRCH' }
+    }
+    if (assignment.host_end_at) {
+      return { state: 'ended-unreported', can_mark: absent || assignment.session_id === instance + item.id }
+    }
+    if (!known) return { state: 'owner-unknown', can_mark: false }
+    return { state: absent ? 'owner-exited' : 'owner-unverified', can_mark: absent }
+  }
+
+  function markInterrupted(body) {
+    const item = getWorkItem(db, body.task_id)
+    if (!item) throw Error('找不到该任务')
+    if (item.revision !== body.expected_revision || item.assignment?.run_id !== body.run_id) {
+      return { recorded: false, reason: '任务版本或运行已变化，请重新读取' }
+    }
+    if (!recovery(item)?.can_mark) return { recorded: false, reason: '尚不能确认本次运行已中断' }
+    // An operator marks interrupted explicitly. Do not forge an exact host end
+    // or launch a replacement, and keep the original assignment in history.
+    return reportWorkItem(db, { task_id: item.id, session_id: item.assignment.session_id,
+      run_id: item.assignment.run_id, host_checked: true, status: 'interrupted', summary: body.reason })
+  }
 
   async function finish(job, text) {
     // The executor is deliberately limited to these two checks. A document
@@ -98,7 +134,7 @@ export function createPreview({ dataDir, checkDocument = runCheck }) {
       ? createWorkItem(db, { task_key: randomUUID(), objective: body.title, role: 'document-review' }).item
       : getWorkItem(db, body.task_id)
     if (!item) throw Error('找不到该任务')
-    const identity = { task_id: item.id, session_id: 'preview-' + item.id, run_id: randomUUID() }
+    const identity = { task_id: item.id, session_id: instance + item.id, run_id: randomUUID() }
     const assigned = assignWorkItem(db, identity)
     if (!assigned.assigned) throw Error('没有登记本次执行')
     const job = { identity, steps: [...checks.map(check => ({ ...check, status: 'queued' })),
@@ -129,15 +165,19 @@ export function createPreview({ dataDir, checkDocument = runCheck }) {
         if (url.pathname === '/task') {
           const item = getWorkItem(db, url.searchParams.get('id'))
           if (!item) return json(404, { error: '找不到该任务' })
-          const matches = item.status === 'running' && active?.identity.task_id === item.id
-            && active.identity.run_id === item.assignment?.run_id
-          return json(200, matches ? { ...item, preview_steps: active.steps } : item)
+          const evidence = recovery(item)
+          return json(200, { ...item, ...(evidence ? { recovery: evidence } : {}),
+            ...(evidence?.state === 'observed' ? { preview_steps: active.steps } : {}) })
         }
       }
       if (req.method === 'POST') {
         if (req.headers.origin !== 'http://' + host) return json(403, { error: '请在本机工作台提交' })
         const body = await input(req)
         if (url.pathname === '/run') return json(202, run(body))
+        if (url.pathname === '/interrupt') {
+          const result = markInterrupted(body)
+          return json(result.recorded ? 200 : 409, result)
+        }
         if (url.pathname === '/review') {
           if (!Number.isSafeInteger(body.expected_revision)) throw Error('请重新读取任务版本')
           const result = body.decision === 'changes'
