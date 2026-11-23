@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "9d59cf3c499aad94";
+		const CLIENT_BUILD_ID = "352246ba3169527e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10852,8 +10852,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
     let intelSourcesWriteQueue = Promise.resolve()
     function LocalAssetSearchTab(props) {
       const eng = props.engagement
-      const [surveyPage, setSurveyPage] = React.useState('platforms')
-      const surveyPages = [['platforms', '平台管理'], ['assets', '本地资产'], ['external', '外部情报与历史'], ['active', '本机测绘']]
+      const [surveyPage, setSurveyPage] = React.useState('overview')
+      const surveyPages = [['overview', '总览'], ['sources', '数据源'], ['query', '开始测绘'], ['assets', '本地资产'], ['external', '外部情报与历史'], ['active', '本机测绘']]
       const surveyCard = (id, attrs, ...children) => surveyPage === id ? h('div', attrs, ...children) : null
       const [draft, setDraft] = React.useState('domain="example.org" && port=443')
       const [query, setQuery] = React.useState('')
@@ -11006,6 +11006,94 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (r?.imported) setRefresh(n => n + 1)
         }, () => { setIntelBusy(false); setIntelResult({ error: '查询失败' }) })
       }
+      const freeSources = [
+        { id: 'local', name: '本地资产库', status: 'SQLite · 离线检索', desc: '当前项目的资产、端口、指纹与证据' },
+        { id: 'internetdb', name: 'InternetDB', status: '免 Key · 单 IP', desc: '公开历史端口线索' },
+        { id: 'ct', name: '证书透明度', status: 'crt.sh · 子域线索', desc: '历史证书名称；需要 *.域名 授权' },
+        { id: 'dns', name: 'DNS 查询', status: 'A / AAAA / CNAME', desc: '系统 DNS 解析器' },
+      ]
+      const [quickSource, setQuickSource] = React.useState('internetdb')
+      const [quickTarget, setQuickTarget] = React.useState('')
+      const [quickConsent, setQuickConsent] = React.useState(false)
+      const [quickBusy, setQuickBusy] = React.useState(false)
+      const [quickResponse, setQuickResponse] = React.useState(null)
+      const [quickError, setQuickError] = React.useState('')
+      const [fofaConnection, setFofaConnection] = React.useState(null)
+      const [fofaSettings, setFofaSettings] = React.useState(false)
+      const [fofaUrl, setFofaUrl] = React.useState('https://fofa.info')
+      const [fofaKey, setFofaKey] = React.useState('')
+      const [fofaClear, setFofaClear] = React.useState(false)
+      const [fofaBusy, setFofaBusy] = React.useState(false)
+      const [fofaFeedback, setFofaFeedback] = React.useState('')
+      const [fofaTest, setFofaTest] = React.useState(null)
+      React.useEffect(() => {
+        let live = true
+        api({ op: 'fofaConnectionGet' }).then(r => {
+          if (!live) return
+          if (r?.ok) { setFofaConnection(r); setFofaUrl(r.baseUrl) }
+          else setFofaFeedback(r?.error || 'FOFA 配置读取失败')
+        }, () => { if (live) setFofaFeedback('FOFA 配置读取失败') })
+        return () => { live = false }
+      }, [props.refreshKey])
+      React.useEffect(() => {
+        setQuickConsent(false); setQuickResponse(null); setQuickError('')
+      }, [eng])
+      const openQuick = id => {
+        setQuickSource(id); setQuickConsent(false); setQuickResponse(null); setQuickError('')
+        setSurveyPage('query')
+      }
+      const runQuick = () => {
+        const target = quickTarget.trim()
+        if (!eng || quickBusy) return
+        if (!target) { setQuickError('请输入已登记目标或本地查询表达式'); return }
+        if (quickSource !== 'local' && !quickConsent) {
+          setQuickError('请先确认本次外部查询'); return
+        }
+        const req = quickSource === 'local'
+          ? { op: 'localAssetSearch', engagement: eng, query: target, limit: 30 }
+          : quickSource === 'fofa'
+            ? { op: 'fofaSearch', engagement: eng, target, confirmExternal: true }
+            : quickSource === 'internetdb'
+              ? { op: 'scopedIntelLookup', engagement: eng, target, sources: ['internetdb'],
+                confirmExternal: true, commit: false }
+              : { op: quickSource === 'ct' ? 'scopedCtLookup' : 'scopedDnsLookup',
+                engagement: eng, target, confirmExternal: true, commit: false }
+        setQuickBusy(true); setQuickError(''); setQuickResponse(null); setQuickConsent(false)
+        api(req).then(r => {
+          setQuickBusy(false)
+          if (!r?.ok) setQuickError(r?.error || '查询未成功')
+          else setQuickResponse({ ...r, quickSource })
+        }, () => { setQuickBusy(false); setQuickError('查询失败') })
+      }
+      const saveFofa = () => {
+        if (fofaBusy) return
+        setFofaBusy(true); setFofaFeedback('正在保存…'); setFofaTest(null)
+        api({ op: 'fofaConnectionSave', baseUrl: fofaUrl.trim(),
+          ...(fofaKey.trim() ? { key: fofaKey.trim() } : {}),
+          ...(fofaClear ? { clearKey: true } : {}) }).then(r => {
+          setFofaBusy(false)
+          if (!r?.ok) { setFofaFeedback(r?.error || '保存失败'); return }
+          setFofaConnection(r); setFofaUrl(r.baseUrl); setFofaKey(''); setFofaClear(false)
+          setFofaFeedback('设置已保存，尚未测试连接')
+        }, () => { setFofaBusy(false); setFofaFeedback('保存失败') })
+      }
+      const testFofa = () => {
+        if (fofaBusy || !fofaConnection?.configured) return
+        setFofaBusy(true); setFofaTest(null)
+        api({ op: 'fofaConnectionTest' }).then(r => {
+          setFofaBusy(false); setFofaTest(r || { ok: false, error: '没有收到回执' })
+        }, () => { setFofaBusy(false); setFofaTest({ ok: false, error: '连接测试失败' }) })
+      }
+      const rows = quickResponse?.quickSource === 'ct' ? quickResponse.names || []
+        : quickResponse?.quickSource === 'dns' ? quickResponse.records || []
+          : quickResponse?.quickSource === 'internetdb' ? quickResponse.ports || []
+            : quickResponse?.items || []
+      const formatRow = item => quickResponse.quickSource === 'ct' ? item.name
+        : quickResponse.quickSource === 'dns' ? item.type + ' · ' + item.value
+          : quickResponse.quickSource === 'internetdb' ? item.port + '/' + item.proto
+            : quickResponse.quickSource === 'fofa' ? [item.host, item.ip, item.port,
+              item.title, item.product, item.observedAt].filter(Boolean).join(' · ')
+              : [item.primary_name, item.ip].filter(Boolean).join(' · ')
       const limit = 30
       React.useEffect(() => {
         setSubConsent(false); setCtConsent(false); setDnsConsent(false); setIntelConsent(false)
@@ -11151,60 +11239,101 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             className: 'rt-btn' + (surveyPage === id ? ' rt-btn-primary' : ''),
             'aria-pressed': surveyPage === id, onClick: () => setSurveyPage(id) }, label))),
         h('div', { className: 'rt-pane rt-survey-pane' },
-          !eng && surveyPage !== 'platforms' ? h('div', { className: 'rt-card' }, '请在顶部选择靶标，再查询或查看该项目的记录。平台管理不需要靶标。') : null,
-          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.75 } },
-            h('h4', null, '网络空间测绘平台 · 总介绍'),
-            h('div', null, '这类平台索引互联网上公开可见的主机、端口、服务、网页指纹和证书，适合与本地资产记录交叉核对。'
-              + ' 各平台收录范围、查询语言、账号要求和额度不同。'),
-            h('div', { style: { marginTop: 5 } },
-              '本地资产支持 SQLite 检索；FOFA 保留原有专项技能。外部情报支持 InternetDB 与 Shodan 单 IP 查询；其余平台提供官网入口。')),
-          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
-            h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
-              h('h4', { style: { margin: 0 } }, '选择常用测绘平台'),
-              h('span', { className: 'rt-tag' }, '已选 ' + chosen.selected.length + ' / ' + sources.length),
-              h('div', { className: 'rt-spacer' }),
-              h('button', { className: 'rt-btn rt-btn-primary', disabled: sourceBusy || !sources.length,
-                onClick: saveSources }, sourceBusy ? '保存中…' : '保存平台选择')),
-            h('div', { style: { fontSize: 11, opacity: 0.8, margin: '5px 0 9px' } },
-              '勾选后自动保存；选择只决定本页展示偏好，不会自动提交外部查询。免费起步优先本地库与 InternetDB；平台 Key 是否配置不代表额度或连接已验证。'),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 } },
-              [['免费起步', ['local', 'shodan']], ['国内优先', ['local', 'fofa', 'zoomeye', 'quake', 'hunter']], ['全球参考', ['local', 'shodan', 'censys', 'netlas']]].map(([label, selected]) =>
-                h('button', { key: label, type: 'button', className: 'rt-btn', disabled: !sources.length,
-                  onClick: () => saveSelection({ selected, preferred: 'local' }) }, label))),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 14px' } },
-              sources.map((source) => h('label', { key: source.id, style: { display: 'flex',
-                  alignItems: 'center', gap: 5, cursor: 'pointer' } },
-                h('input', { type: 'checkbox', checked: chosen.selected.includes(source.id),
-                  onChange: () => toggleSource(source.id) }),
-                source.name))),
-            chosen.selected.length
-              ? h('label', { style: { display: 'block', marginTop: 10 } },
-                  '首选平台 ',
-                  h('select', { className: 'rt-input', value: chosen.preferred,
-                    onChange: (e) => saveSelection({ ...sourceDraft.current, preferred: e.target.value }) },
-                    activeSources.map((x) => h('option', { key: x.id, value: x.id }, x.name))))
-              : h('div', { style: { fontSize: 11, opacity: 0.7, marginTop: 8 } },
-                  '当前没有选中平台；仍可切换到本地资产进行检索。'),
-            savedSources && sources.length ? h('div', { style: { opacity: 0.72, fontSize: 11, marginTop: 7 } },
-              '已保存 ' + savedSources.selected.length + ' 家 · 首选 '
-                + ((sources.find((x) => x.id === savedSources.preferred) || {}).name || '本地资产库'))
-              : null,
-            sourceMsg ? h('div', { className: 'rt-foot', style: { marginTop: 8 } }, sourceMsg) : null),
-          surveyPage === 'platforms' && activeSources.map((source) => h('div', { key: source.id, className: 'rt-card',
-            style: { fontSize: 12, lineHeight: 1.7 } },
-            h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } },
-              h('b', null, source.name),
+          !eng && !['overview','sources'].includes(surveyPage) ? h('div', { className: 'rt-card' }, '请先在顶部选择项目，才能查询项目记录。') : null,
+          surveyCard('overview', { className: 'rt-card' },
+            h('h4', null, '资产测绘'),
+            h('div', { className: 'rt-foot' },
+              '本地资产、InternetDB、证书透明度和 DNS 查询无需商业 API Key。FOFA 需要配置连接。'),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 10 },
+              onClick: () => setSurveyPage('query') }, '开始测绘')),
+          surveyCard('overview', { className: 'rt-card' },
+            h('h4', null, '数据源'),
+            h('div', { style: { display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 9 } },
+              freeSources.map(x => h('div', { className: 'rt-card', key: x.id, style: { margin: 0 } },
+                h('b', null, x.name),
+                h('div', { className: 'rt-foot' }, x.status),
+                h('div', { style: { fontSize: 12, margin: '8px 0' } }, x.desc),
+                h('button', { className: 'rt-btn', onClick: () =>
+                  x.id === 'local' ? setSurveyPage('assets') : openQuick(x.id) }, '查询'))))),
+          surveyCard('overview', { className: 'rt-card' },
+            h('b', null, 'FOFA · ' + (fofaConnection?.configured ? 'Key 已配置（连接未验证）' : 'Key 未配置')),
+            h('div', { className: 'rt-foot' }, '通过 FOFA 官方或兼容 API 查询已登记目标。'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8 },
+              onClick: () => { setSurveyPage('sources'); setFofaSettings(true) } }, 'FOFA 设置')),
+          surveyCard('sources', { className: 'rt-card' },
+            h('h4', null, '无需 Key'),
+            freeSources.map(x => h('div', { key: x.id, style: { display: 'flex', flexWrap: 'wrap',
+              gap: 10, alignItems: 'center', padding: '9px 0',
+              borderBottom: '1px solid var(--dsw-border, #26334c)' } },
+              h('div', { style: { flex: '1 1 220px', fontSize: 12 } },
+                h('b', null, x.name), h('div', { className: 'rt-foot' }, x.status + ' · ' + x.desc)),
+              h('button', { className: 'rt-btn',
+                onClick: () => x.id === 'local' ? setSurveyPage('assets') : openQuick(x.id) }, '查询')))),
+          surveyCard('sources', { className: 'rt-card', style: { fontSize: 12 } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+              h('h4', { style: { margin: 0 } }, 'FOFA'),
               h('span', { className: 'rt-tag' },
-                source.mode === 'local' ? '已接通 · 离线查询'
-                  : source.mode === 'existing-skill' ? '保留专项技能 · 需 Key'
-                    : source.mode === 'scoped-api' ? '单 IP 被动查询 · 已接通' : '官网入口 · API 未接入'),
-              h('span', { style: { opacity: 0.75 } }, source.language)),
-            h('div', null, source.focus),
-            sourceStatus[source.id] ? h('div', { className: 'rt-foot' },
-              sourceStatus[source.id].label + ' · 额度：' + sourceStatus[source.id].quota) : null,
-            h('div', { style: { opacity: 0.85 } }, source.details),
-            source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
-              style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+                fofaConnection?.configured ? 'Key 已配置（待测试）' : 'Key 未配置'),
+              h('div', { className: 'rt-spacer' }),
+              h('button', { className: 'rt-btn', onClick: () => setFofaSettings(v => !v) },
+                fofaSettings ? '收起设置' : '设置连接'),
+              h('button', { className: 'rt-btn rt-btn-primary',
+                disabled: !fofaConnection?.configured, onClick: () => openQuick('fofa') }, '查询')),
+            h('div', { className: 'rt-foot' }, '接口地址：' + (fofaConnection?.baseUrl || 'https://fofa.info')),
+            fofaSettings ? h('div', { style: { display: 'grid', gap: 9, marginTop: 12 } },
+              h('label', null, '接口地址（HTTPS，须兼容 FOFA API）',
+                h('input', { className: 'rt-input', style: { width: '100%' },
+                  value: fofaUrl, onChange: e => setFofaUrl(e.target.value) })),
+              h('label', null, 'FOFA API Key',
+                h('input', { type: 'password', autoComplete: 'new-password', className: 'rt-input',
+                  style: { width: '100%' }, value: fofaKey,
+                  placeholder: fofaConnection?.configured ? '留空保留已保存 Key' : '请输入 Key',
+                  onChange: e => setFofaKey(e.target.value) })),
+              fofaConnection?.configured ? h('label', null,
+                h('input', { type: 'checkbox', checked: fofaClear,
+                  onChange: e => setFofaClear(e.target.checked) }), ' 清除已保存 Key') : null,
+              h('div', { className: 'rt-foot' }, '更换接口地址需要同时提交该服务的 Key。'),
+              h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+                h('button', { className: 'rt-btn rt-btn-primary', disabled: fofaBusy,
+                  onClick: saveFofa }, fofaBusy ? '处理中…' : '保存配置'),
+                h('button', { className: 'rt-btn', disabled: fofaBusy || !fofaConnection?.configured,
+                  onClick: testFofa }, '测试连接')),
+              fofaFeedback ? h('div', { className: 'rt-foot' }, fofaFeedback) : null,
+              fofaTest ? h('div', { className: fofaTest.ok ? 'rt-foot' : 'rt-err' },
+                fofaTest.ok ? '账户接口连接成功 · ' + fofaTest.testedAt : fofaTest.error) : null) : null),
+          surveyCard('query', { className: 'rt-card' },
+            h('h4', null, '开始测绘'),
+            h('div', { className: 'rt-foot' }, '选择来源，填写当前项目已登记的 IP / 域名或本地检索表达式。'),
+            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 } },
+              h('select', { className: 'rt-input', value: quickSource,
+                onChange: e => { setQuickSource(e.target.value); setQuickConsent(false);
+                  setQuickResponse(null); setQuickError('') } },
+                [...freeSources, { id: 'fofa', name: 'FOFA' }].map(x =>
+                  h('option', { key: x.id, value: x.id }, x.name))),
+              h('input', { className: 'rt-input', style: { flex: '1 1 250px' },
+                value: quickTarget,
+                placeholder: quickSource === 'local' ? '例如 domain="example.test"'
+                  : quickSource === 'internetdb' ? '已登记的单个 IP' : '已登记的单个域名或 IP',
+                onChange: e => setQuickTarget(e.target.value) })),
+            quickSource !== 'local' ? h('label', { style: { display: 'block', marginTop: 12 } },
+              h('input', { type: 'checkbox', checked: quickConsent,
+                onChange: e => setQuickConsent(e.target.checked) }),
+              ' 确认目标已获授权，同意向所选外部来源提交本次查询') : null,
+            h('div', { style: { marginTop: 12, display: 'flex', gap: 8 } },
+              h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng || quickBusy,
+                onClick: runQuick }, quickBusy ? '正在查询…' : '查询'),
+              quickSource === 'fofa' ? h('button', { className: 'rt-btn',
+                onClick: () => { setSurveyPage('sources'); setFofaSettings(true) } }, 'FOFA 设置') : null),
+            quickError ? h('div', { className: 'rt-err' }, quickError) : null,
+            quickResponse ? h('div', { style: { marginTop: 12, fontSize: 12 } },
+              h('b', null, '返回记录：' + rows.length + (Number.isInteger(quickResponse.total)
+                ? ' · 平台统计 ' + quickResponse.total : '')),
+              h('div', { className: 'rt-foot' }, quickResponse.note || '仅展示本次查询结果。'),
+              maskAssets ? h('div', { className: 'rt-foot' }, '资产详情已遮蔽') :
+                rows.slice(0, 40).map((row, i) =>
+                  h('div', { key: i, style: { padding: '7px 0', overflowWrap: 'anywhere' } }, formatRow(row))),
+              !rows.length ? h('div', { className: 'rt-foot' }, '没有符合条件的记录') : null) : null),
           surveyCard('external', { className: 'rt-card', style: { fontSize: 12 } },
             h('b', null, '测绘默认选项'),
             h('div', { className: 'rt-foot' },
