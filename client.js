@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "9582650a9ee1c91d";
+		const CLIENT_BUILD_ID = "425e0a4f5d8c50fa";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10789,6 +10789,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onClick: runArtexOverview, style: { marginTop: 8 } }, artexOverviewBusy ? '读取中…' : '检查 ARTEX 隐私总览'),
             artexOverview && artexOverview.ok && artexOverview.summary
               ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  h('b', null, 'ARTEX 任务网络（模式 B）'),
+                  h('div', null, '网络声明：' + (artexOverview.summary.network.mode === 'B'
+                    ? '模式 B · 机场 → VPS1（VPS2 未核验）'
+                    : artexOverview.summary.network.mode === 'off' ? '未配置隔离 Runner' : '未确认模式 B')),
+                  h('div', null, '执行范围：' + (artexOverview.summary.network.scope === 'runner_builtins_intended'
+                    ? '仅内置 Runner 工具（配置意图）' : '未报告受控范围')),
+                  h('div', null, '网络验证：未执行真实出站与断链测试 · 最终出口未验证；模型、MCP、外部浏览器和 Windows 原生任务不在此覆盖范围。'),
                   h('b', null, '模型密钥'),
                   artexOverview.summary.modelKeys.state !== 'complete'
                     ? h('div', null, '数据库不可用，密钥未检查')

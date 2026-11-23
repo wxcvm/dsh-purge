@@ -70,3 +70,47 @@ test('overview is triggered by a button, not automatic posture loading', () => {
     assert.match(source, /onClick: runArtexOverview/)
   }
 })
+
+test('Mode B configured intent is shown as unverified; unknown and malformed values are not trusted', async () => {
+  const make = network => {
+    const value = fixture()
+    if (network !== undefined) value.overview.execution_network = network
+    return value
+  }
+  const read = body => probeLocalArtexOverview({ health, env,
+    fetchFn: async () => ({ status: 200, ok: true, json: async () => body }) })
+  const absent = await read(make(undefined))
+  assert.equal(absent.status, 'complete')
+  assert.equal(absent.summary.network.configuration, 'not_reported')
+  assert.equal(absent.summary.network.verification, 'not_tested')
+
+  const network = { mode: 'B', configuration: 'configured_only', verification: 'not_tested',
+    scope: 'runner_builtins_intended', final_exit: 'not_tested',
+    proxy_url: 'http://private-secret@untrusted.example:7890' }
+  const configured = await read(make(network))
+  assert.equal(configured.status, 'complete')
+  assert.deepEqual(configured.summary.network, {
+    mode: 'B', configuration: 'configured_only', verification: 'not_tested',
+    scope: 'runner_builtins_intended', finalExit: 'not_tested',
+  })
+  assert.doesNotMatch(JSON.stringify(configured), /private-secret|untrusted.example/)
+  for (const bad of [
+    { ...network, verification: 'verified' },
+    { ...network, final_exit: 'vps2' },
+    { ...network, configuration: 'not_configured' },
+    { ...network, scope: 'all_processes' },
+  ]) {
+    const result = await read(make(bad))
+    assert.equal(result.status, 'invalid_response')
+    assert.equal(result.summary, null)
+  }
+})
+test('both Purge clients distinguish saved Mode B configuration from verified network', () => {
+  for (const file of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(src, /ARTEX 任务网络（模式 B）/)
+    assert.match(src, /VPS2 未核验/)
+    assert.match(src, /最终出口未验证/)
+    assert.match(src, /MCP、外部浏览器和 Windows 原生任务不在此覆盖范围/)
+  }
+})
