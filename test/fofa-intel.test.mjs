@@ -89,6 +89,35 @@ test('FOFA single-target search validates scope/consent before requests and filt
   assert.equal(JSON.stringify(result).includes('secret'), false)
   assert.equal((await dispatchAsync(store, { op: 'fofaConnectionGet' })).configured, true)
 })
+test('FOFA paged search keeps actual page and next-page marker within the 20-page cap', async t => {
+  const { root, store } = fixture(t)
+  savePlatformConfig({ env: { FOFA_KEY: 'fixture-key' } }, root)
+  let calls = 0
+  const second = await runFofaSearch(store, {
+    target: ip, confirmExternal: true, page: 2,
+  }, { fetch: async url => {
+    calls++
+    assert.equal(url.searchParams.get('page'), '2')
+    assert.equal(url.searchParams.get('size'), '20')
+    return new Response(JSON.stringify({ error: false, size: 61,
+      results: Array.from({ length: 20 }, () => ['https://host.example.test', ip, 443]) }))
+  } })
+  assert.equal(second.ok, true)
+  assert.equal(second.page, 2)
+  assert.equal(second.hasNext, true)
+  assert.equal(second.items.length, 20)
+  const final = await runFofaSearch(store, {
+    target: ip, confirmExternal: true, page: 4,
+  }, { fetch: async url => {
+    calls++
+    assert.equal(url.searchParams.get('page'), '4')
+    return new Response(JSON.stringify({ error: false, size: 61, results: [] }))
+  } })
+  assert.equal(final.hasNext, false)
+  assert.equal(final.page, 4)
+  assert.equal(calls, 2)
+})
+
 test('wildcard-scoped root domain uses FOFA domain query and discards unrelated hosts', async t => {
   const { root, store } = fixture(t)
   savePlatformConfig({ env: { FOFA_KEY: 'domain-key' } }, root)
@@ -124,6 +153,11 @@ test('UI has no marketing copy in survey headings', async () => {
     assert.match(page, /fofaConnectionSave/)
     assert.match(page, /fofaConnectionTest/)
     assert.match(page, /fofaSearch/)
+    assert.match(page, /const \[quickPage, setQuickPage\]/)
+    assert.match(page, /const quickRevision = React\.useRef\(0\)/)
+    assert.match(page, /page: pageNumber, confirmExternal: true/)
+    assert.match(page, /quickResponse\?\.page === quickPage && !quickResponse\.hasNext/)
+    assert.match(page, /fofaDraftChanged/)
     assert.doesNotMatch(page, /简洁且可用|开箱即用|五项就够|鸟鸟的实施计划/)
   }
 })
