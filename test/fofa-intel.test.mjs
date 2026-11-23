@@ -89,6 +89,22 @@ test('FOFA single-target search validates scope/consent before requests and filt
   assert.equal(JSON.stringify(result).includes('secret'), false)
   assert.equal((await dispatchAsync(store, { op: 'fofaConnectionGet' })).configured, true)
 })
+test('wildcard-scoped root domain uses FOFA domain query and discards unrelated hosts', async t => {
+  const { root, store } = fixture(t)
+  savePlatformConfig({ env: { FOFA_KEY: 'domain-key' } }, root)
+  const result = await runFofaSearch(store, {
+    target: 'example.test', confirmExternal: true,
+  }, { fetch: async url => {
+    assert.equal(Buffer.from(url.searchParams.get('qbase64'), 'base64').toString(),
+      'domain="example.test"')
+    return new Response(JSON.stringify({ error: false, results: [
+      ['https://a.example.test', ip, 443],
+      ['https://outside.test', ip, 443],
+    ] }))
+  } })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.items.map(x => x.host), ['https://a.example.test'])
+})
 test('FOFA domain results keep only exact or authorized subdomain hosts', () => {
   const source = { results: [
     ['https://a.example.test', '192.0.2.1', 443, 'tcp'],
