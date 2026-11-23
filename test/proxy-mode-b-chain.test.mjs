@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { normalizeModeBChain, modeBChainPublic } from '../lib/redteam/proxy-mode-b-chain.js'
 import { buildMihomoConfig } from '../lib/redteam/proxy-mihomo.js'
-import { proxyPoolSave, proxyProfileSave, proxyPoolSnapshot, loadProxyPool, requestWithProxyPool } from '../lib/redteam/proxy-pool.js'
+import { proxyPoolSave, proxyProfileSave, proxyPoolSnapshot, loadProxyPool, requestWithProxyPool, proxyPoolConnect } from '../lib/redteam/proxy-pool.js'
 import { handleProxyOp } from '../lib/redteam/proxy-api.js'
 
 const fixtureNodes = () => [
@@ -103,6 +104,38 @@ test('Mode B profile persists privately, returns no UUIDs, and selects exclusive
   const stopped = await proxyPoolSave(root, { enabled: false })
   assert.equal(stopped.strictEgress, true)
   await assert.rejects(requestWithProxyPool(root, 'http://127.0.0.1:1/', { timeout: 2000 }), /阻止直连/)
+})
+
+test('a failed active Mode B chain never auto-connects to a normal backup proxy', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-modeb-no-fallback-'))
+  let backupHits = 0
+  const backup = createServer((_req, res) => {
+    backupHits += 1
+    res.writeHead(200)
+    res.end('backup-used')
+  })
+  await new Promise((resolve) => backup.listen(0, '127.0.0.1', resolve))
+  t.after(async () => {
+    await new Promise((resolve) => backup.close(resolve))
+    rmSync(root, { force: true, recursive: true })
+  })
+  await proxyProfileSave(root, {
+    name: 'ordinary proxy backup', protocol: 'http',
+    host: '127.0.0.1', port: backup.address().port,
+  })
+  const chain = await proxyProfileSave(root, {
+    kind: 'mihomo-chain', name: 'mode B', nodes: fixtureNodes(),
+  })
+  await proxyPoolSave(root, { enabled: true, autoConnect: false, activeId: chain.savedId })
+  const result = await proxyPoolConnect(root, {
+    testUrl: 'http://example.invalid/probe',
+    prepareEngine: async () => { throw new Error('synthetic upstream failed') },
+    stopEngine: async () => {},
+  })
+  assert.equal(result.ok, false)
+  assert.equal(backupHits, 0, 'a failed chain may not try the ordinary HTTP proxy')
+  assert.equal(proxyPoolSnapshot(root).activeId, chain.savedId)
+  assert.equal(proxyPoolSnapshot(root).strictEgress, true)
 })
 
 test('proxy console has a private, opt-in Mode B editor without changing model or system routes', () => {
