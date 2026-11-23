@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "9582650a9ee1c91d";
+		const CLIENT_BUILD_ID = "425e0a4f5d8c50fa";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
