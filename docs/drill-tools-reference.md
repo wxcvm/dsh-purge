@@ -351,6 +351,23 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 - `reason` — 判断理由：指纹版本命中 Nday、接口未鉴权、口令弱、暴露数据库、WAF 强弱等
 - `assessed_by`
 
+### `redteam_coverage`
+
+【离线逐项检查清单】选择性吸收接手版的 `redteam_asset/asset_next` 与 `redteam_host/hostNextActions` 核心价值：**检查项有明确状态、未完成不能收口、可查看待核队列**。我们仍使用原有 `redteam_asset_test` 表示测试过程与 WAF 状态、`redteam_next_action` 表示任务优先级；本工具不重复替代它们。
+
+- `engagement` — 默认为会话绑定的演练；每个演练在自己的 SQLite 内保存记录
+- `phase` — `external` 外部资产（`surface/web/auth/cve/app`），或 `internal` 主机检查（`files/privesc/web/db/lateral`）
+- `action=status` + `asset_id` — 只读查看五项状态、缺项、人工备注和能否收口；**不会因为已有扫描/测试/得分而自动标记已完成**
+- `action=update` + `asset_id` + `updates` — 一次明确更新 1–5 项，格式 `[{"field":"web","state":"done"}]`；状态为 `untested|partial|done|blocked|not_applicable`，可额外填 `note`（最大 2000 字符）。已关闭的清单再次编辑会重新开放，避免陈旧“已完成”。也支持只更新备注
+- `action=close` + `asset_id` + `status=closed|blocked` — `closed` 要求五项全部为 `done|blocked|not_applicable`，否则返回缺项且不写入；`blocked` 必须填写非空 `reason`，表示被阻塞而不是已完成
+- `action=queue` + 可选 `asset_id`、`limit=1..30` — 只读返回未关闭清单及各项缺口，默认按现有优先级排序；只显示相应内外网资产，不调用扫描器、不创建 Agent 任务。超过 2000 条样本显示 `partial=true`，不可将样本待核数量当成全库总数
+
+本仓 #496 已合并的 `redteam_asset_batch(kind=assess)` 只更新资产优先级与评估理由，**不能将其评估成功自动当作本清单检查完成**；两个功能必须分别记录。
+
+新增的 `asset_checklist` 单表由现有 SQLite DDL 幂等建立，旧资产库加载时无须删除或改写原有 `asset.test_status/test_surface`；两种状态语义不同，绝不自动把旧的 `tested` 等同于五项全部 done。被阻塞的清单也不计 `complete`。
+
+对照来源：[接手版 redteam asset/host coverage](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）。**未移植**自动主机操作、权限推断、目标探测、得分推荐或上游两套覆盖度表，以免和现有 `next_action` / Super Agent 混淆。
+
 ### `redteam_asset_test`
 记录对某个资产的测试情况：本次做了什么测试（`test`，追加式）、还剩什么攻击面（`surface`，覆盖式）、当前测试状态、是否被 WAF 封禁。**每个资产开始测之前先调一次（status=testing），测完/放弃再调一次**——资产测绘页面据此显示「未测试 / 测试中 / 已测试 / 被封禁 / 已放弃 / 无攻击面」。排除结论、登录失败原因、重测理由都写在 `test` 里。
 
