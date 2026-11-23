@@ -90,6 +90,34 @@ api.github.com，都不等于已验证三个中转节点或最终 IP**。
 关于 `dialer-proxy` 和 Reality 作为中转节点的兼容性警告：
 https://wiki.metacubex.one/en/config/proxies/dialer-proxy/ 。
 
+## Purge 模式 B 出口验收（操作者显式执行）
+
+完成模式 B 三跳节点配置后，可以从 **Purge 运行环境相同的主机与
+同一个 `DSH_HOME`** 中主动运行一次出口检查：
+
+```sh
+node scripts/mode-b-verify.mjs --expected-exit-ip "$EXPECTED_VPS2_IP"
+```
+
+其中 `EXPECTED_VPS2_IP` 需要事先填写为你真实的 VPS2 公网 IPv4。
+Windows PowerShell 可用 `$env:EXPECTED_VPS2_IP` 作为参数；
+如果脚本与宿主使用不同 `DSH_HOME`，指定
+`--root "<DSH_HOME>/redteam"`。默认读取当前环境的
+`$DSH_HOME/redteam/proxy-pool.json`，不更改节点或系统代理。
+
+脚本首先要求活动节点是 **已启用的三跳 Mode B** 且
+`strictEgress=true`；否则在**发出任何网络请求之前**拒绝。
+符合要求时，通过现有 `requestWithProxyPool`，以
+`requireProxy: true` 只向 `https://api.ipify.org/` 发送
+一次明确的 HTTPS 请求，将返回的公网 IPv4 与预期 VPS2 地址比较。
+节点关闭、上游断开、出口不匹配或不可验证均返回失败，
+不会在脚本内建立直连后备。成功只报告匹配、不回显实际出口 IP。
+
+**通过 ≠ 已证明中间跳：** 该检查只能证明被 Purge 代理池管理的
+这一次请求使用了与预期相同的出口地址。机场、VPS1、VPS2 逐跳身份、
+DNS/IPv6、模型 API、外部 MCP、Windows TUN、宿主机防泄露策略
+仍需独立观察和断链验收。切勿将结果复制为“全局 IP 防泄露已验证”。
+
 ## 严格出口（可选）
 
 在本地控制台的「池状态」点击「严格出口：开启」，这会把
