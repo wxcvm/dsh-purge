@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -61,4 +61,11 @@ test('per-request requireProxy also blocks direct HTTP without changing saved pr
   await assert.rejects(requestWithProxyPool(root, url, { requireProxy: true }), /严格出口模式/)
   assert.equal(hits(), 0)
   assert.equal(loadProxyPool(root).strictEgress, false)
+})
+
+test('local console exposes strict egress toggles with the correct plugin-only scope', () => {
+  const html = readFileSync(new URL('../maintenance/proxy-console.html', import.meta.url), 'utf8')
+  assert.match(html, /savePool\(\{ strictEgress: true \}\)/)
+  assert.match(html, /savePool\(\{ strictEgress: false \}\)/)
+  assert.match(html, /不保护模型 API、MCP、系统或 ARTEX/)
 })
