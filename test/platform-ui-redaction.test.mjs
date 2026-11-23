@@ -60,6 +60,24 @@ test('proxy previews keep endpoints but not credentials, query, fragment or malf
   assert.match(internal.egress.https_proxy, /fixture-password/)
 })
 
+test('model-visible preflight does not echo platform env, key path, or FOFA fragments', () => {
+  const source = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  assert.equal((source.match(/platform: platformUiProjection\\(plat\\),/g) || []).length, 2)
+  assert.doesNotMatch(source, /platform: plat,/)
+  assert.equal((source.match(/vps_status: vpsState\\.status,/g) || []).length, 2)
+  assert.doesNotMatch(source, /configured\\(' \\+ vpsKey/)
+  assert.doesNotMatch(source, /fofaShown/)
+  const summary = platformUiProjection({
+    ok: true,
+    config: { env: { FOFA_KEY: 'secret-key', REDTEAM_VPS_KEY: 'private-key-path',
+      DSH_PURGE_ARTEX_OVERVIEW_TOKEN: 'secret-token' }, vps: {
+      user: 'root', domain: 'node.example', identityFile: '/keys/private',
+    } },
+  })
+  assert.deepEqual(summary.config.env, {})
+  assert.doesNotMatch(JSON.stringify(summary), /secret-key|secret-token|private-key-path/)
+})
+
 test('native and embedded settings preserve, replace and explicitly clear the write-only key', () => {
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   assert.match(host, /const withProfiles = \(result\) => \(\{ \.\.\.platformUiProjection\(result\)/)
