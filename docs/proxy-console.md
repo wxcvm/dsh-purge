@@ -21,7 +21,7 @@ C:\Users\Kerna\.dsh\plugins\dsh-purge\maintenance\proxy-console.html
 
 | 区块 | 操作 |
 |---|---|
-| 池状态 | 启用/停用池、测试全部节点、全部断开 |
+| 池状态 | 启用/停用池、开启/关闭严格出口、测试全部节点、全部断开 |
 | 节点 | 连接 / 测试 / 删除单个节点 |
 | 添加节点 | 名称、协议（socks5/intro）、主机、端口、账号密码、noProxy |
 | YAML 导入 | 粘贴 mihomo 风格订阅，导入到池；或作为单代理配置解析 |
@@ -40,6 +40,23 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:53380/redteam/api' -Method Post `
   -Headers @{ Origin = 'null' } -ContentType 'application/json' -Body '{"op":"proxyPoolGet"}'
 # → ok=True enabled=False
 ```
+
+## 严格出口（可选）
+
+在本地控制台的「池状态」点击「严格出口：开启」，这会把
+`proxy-pool.json` 中的 `strictEgress` 设为 `true`（默认关闭）。
+即使之后停用代理池、没有活动节点、节点故障或目标命中
+`noProxy`，通过 `requestWithProxyPool` 发起的插件 HTTP(S)
+请求也会失败，而不是直连。手动关闭严格出口后恢复旧的
+`noProxy` 与停池直连行为。
+
+这个策略**不是系统级断网开关**，只覆盖由本插件代理池管理的
+GitHub 查询等显式 HTTP 请求。不覆盖 Harness 模型 API、
+外部 MCP、ARTEX 任务、Windows 原生程序、DNS 或浏览器。
+此外，Purge 自带的 Mihomo 单节点适配器不会装配
+`dialer-proxy` 多跳链；要使用机场 → VPS1 → VPS2 必须
+先建立并独立验收真正的多跳网关，再将其本地代理端点作为
+代理池节点连接。配置入口与本机 SSH 管理路径相互独立。
 
 ## 边界
 
