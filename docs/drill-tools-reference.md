@@ -362,6 +362,13 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 - `action=close` + `asset_id` + `status=closed|blocked` — `closed` 要求五项全部为 `done|blocked|not_applicable`，否则返回缺项且不写入；`blocked` 必须填写非空 `reason`，表示被阻塞而不是已完成
 - `action=queue` + 可选 `asset_id`、`limit=1..30` — 只读返回未关闭清单及各项缺口，默认按现有优先级排序；只显示相应内外网资产，不调用扫描器、不创建 Agent 任务。超过 2000 条样本显示 `partial=true`，不可将样本待核数量当成全库总数
 
+**结构化主机发现（本轮补齐上游 `redteam_host(op=finding)` 的独有能力）：**
+- `phase=internal` + `action=finding` + `asset_id` + `kind` + `title`：记录已观察到的主机元数据。`kind` 支持 `file/credential/privesc/lateral/web/db/config/share`；可填 `detail`（不含明文凭据、令牌、私钥或原始 HTTP 报文）。
+- 可选 `evidence_kind` + `evidence_id` 成对填写：只接受本次演练**同一资产**里已存在的 `http_evidence`（含经 `vuln_id` 关联的资产）、`attack_step`、`access_session` 或 `vuln` 记录。引用无效、对象不存在或归属不一致一律拒绝入库。仅有引用不代表漏洞已证实。
+- `phase=internal` + `action=findings` + `asset_id`：离线只读列出最近的 20 条记录（`limit` 最多 100），报告真实 `total/partial`；`redteam_asset_get` 的资产详情也包含 `host_findings`。
+- 这部分**复用 `observation` 表**（`attr=host_finding`，`raw_ref=证据类型:ID`），不新增第三张数据库表、不额外注册工具，也不外传原始证据正文。发现可记录但无证据时返回 `evidence_linked=false`。
+- 新增发现**不会自动更新五项检查状态、改写 `asset_test`、创建权限会话、确认漏洞或计分**，仍须人工明确核验与操作。与上游自动把检查推进 `partial` 的做法不同，这是有意保留的分离。
+
 本仓 #496 已合并的 `redteam_asset_batch(kind=assess)` 只更新资产优先级与评估理由，**不能将其评估成功自动当作本清单检查完成**；两个功能必须分别记录。
 
 新增的 `asset_checklist` 单表由现有 SQLite DDL 幂等建立，旧资产库加载时无须删除或改写原有 `asset.test_status/test_surface`；两种状态语义不同，绝不自动把旧的 `tested` 等同于五项全部 done。被阻塞的清单也不计 `complete`。

@@ -149,6 +149,46 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).test_status,
     'untested', 'new checklist leaves legacy asset_test status alone')
 
+  const hostEngagement = redteam.openEngagement('linked-host-tool-fixture',
+    ['10.45.0.0/24'], { bindCurrent: false }).id
+  redteam.importBundle(hostEngagement, {
+    scan: { tool: 'fixture', argv: [] },
+    assets: [{ ip: '10.45.0.8', provenance: 'passive', tool: 'fixture', state: 'live' }],
+  })
+  const hostAssetId = redteam.listAssets(hostEngagement, { ip: '10.45.0.8' }).items[0].id
+  const hostEvidenceId = redteam.addHttpEvidence(hostEngagement, {
+    asset_id: hostAssetId, label: 'sanitized host-tool fixture',
+  }).id
+  const recordedHostFinding = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'internal', action: 'finding',
+    asset_id: hostAssetId, kind: 'web', title: 'Manual HTTP review',
+    detail: 'Only a sanitized metadata summary',
+    evidence_kind: 'http_evidence', evidence_id: hostEvidenceId,
+  }, {}))
+  assert.equal(recordedHostFinding.ok, true)
+  assert.equal(recordedHostFinding.finding.evidence_linked, true)
+  const hostFindingList = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'internal', action: 'findings',
+    asset_id: hostAssetId,
+  }, {}))
+  assert.equal(hostFindingList.total, 1)
+  assert.equal(hostFindingList.items[0].title, 'Manual HTTP review')
+  assert.equal(hostFindingList.items[0].evidence_ref, 'http_evidence:' + hostEvidenceId)
+  assert.equal(redteam.coverageChecklist(hostEngagement, hostAssetId, 'internal').status, 'open')
+  assert.deepEqual(redteam.coverageChecklist(hostEngagement, hostAssetId, 'internal').missing,
+    ['files', 'privesc', 'web', 'db', 'lateral'])
+  const wrongHostEvidence = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'internal', action: 'finding',
+    asset_id: hostAssetId, kind: 'web', title: 'Non-existent evidence',
+    evidence_kind: 'http_evidence', evidence_id: 9999999,
+  }, {}))
+  assert.equal(wrongHostEvidence.ok, false)
+  assert.equal(hostFindingList.total, redteam.listHostFindings(hostEngagement, hostAssetId).total)
+  const wrongHostPhase = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'external', action: 'findings', asset_id: hostAssetId,
+  }, {}))
+  assert.equal(wrongHostPhase.ok, false, 'host findings only belong to internal review')
+
   const repeated = JSON.parse(await batchTool.execute({
     engagement: scopedEngagement, items: batchItems, commit: true,
   }, {}))
