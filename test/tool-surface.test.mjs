@@ -117,6 +117,38 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(batchAsset.ip, '192.0.2.10')
   assert.equal(batchAsset.discovered_at, '2026-11-01T00:00:00Z')
   assert.equal(batchAsset.ports[0].port, 443)
+  const coverageTool = registered.get('redteam_coverage')
+  assert.equal(coverageTool.parameters.phase.required, true)
+  const initialCoverage = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'status',
+    asset_id: batchCommit.results[0].asset_id,
+  }, {}))
+  assert.equal(initialCoverage.ok, true)
+  assert.deepEqual(initialCoverage.coverage.missing, ['surface', 'web', 'auth', 'cve', 'app'])
+  assert.equal(redteam.db(scopedEngagement)
+    .prepare('SELECT COUNT(*) AS n FROM asset_checklist').get().n, 0)
+  const coverageUpdated = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'update',
+    asset_id: batchCommit.results[0].asset_id,
+    updates: ['surface', 'web', 'auth', 'cve', 'app']
+      .map(field => ({ field, state: 'done' })),
+    note: 'manual fixture review',
+  }, {}))
+  assert.equal(coverageUpdated.coverage.ready_to_close, true)
+  assert.equal(coverageUpdated.coverage.complete, false)
+  const coverageClosed = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'close',
+    asset_id: batchCommit.results[0].asset_id, status: 'closed',
+  }, {}))
+  assert.equal(coverageClosed.coverage.complete, true)
+  const coverageQueue = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'queue',
+  }, {}))
+  assert.equal(coverageQueue.ok, true)
+  assert.equal(coverageQueue.pending_in_sample, 0)
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).test_status,
+    'untested', 'new checklist leaves legacy asset_test status alone')
+
   const repeated = JSON.parse(await batchTool.execute({
     engagement: scopedEngagement, items: batchItems, commit: true,
   }, {}))
