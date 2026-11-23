@@ -90,6 +90,38 @@ api.github.com，都不等于已验证三个中转节点或最终 IP**。
 关于 `dialer-proxy` 和 Reality 作为中转节点的兼容性警告：
 https://wiki.metacubex.one/en/config/proxies/dialer-proxy/ 。
 
+## 环境适配页面自动识别 FlClash（Windows）
+
+Purge 的「环境适配 → 网络配置」现在直接提供
+**检测 FlClash 本地代理**、模式 B 的 VPS1/VPS2 VLESS + REALITY
+配置与 **验证插件 VPS2 出口** 按钮。无需打开独立控制台，
+也不必使用命令行进行本次出口验证。
+
+自动发现只读取 Windows 用户的
+`%APPDATA%\\com.follow\\clash\\config.yaml`，兼容性候选位置
+`%APPDATA%\\com.follow\\flclash\\config.yaml`。
+只提取顶层 `mixed-port`、`socks-port`、`port`，优先混合端口，
+只对这些**明确配置**的端口发起短暂 `127.0.0.1` TCP
+连接探测；不会扫描其它端口、读取或上传机场订阅、
+导出配置中的代理账号、访问互联网或操作系统 TUN/路由。
+
+- 发现端口且本机监听可连接：显示待确认的 HTTP/SOCKS5
+  端点，**不表示 FlClash 身份或机场实际出口已经验证**。
+  用户必须再次点击「确认入口并保存模式 B」才能写入 Purge。
+- 如果 FlClash 只开启 TUN、监听端口被禁用或内核未运行：
+  显示不可用；**不猜测 7890**，也不以 TUN 自动代替代理端口。
+- 如果本地入口需要代理认证：只标记认证要求，不提取账号或密码，
+  此版本不会自动启用该入口。
+- Windows 上运行的 Purge 才能读取 Windows 的 FlClash 配置；
+  若 Purge 运行在 WSL/Linux/Android 容器里，不会将容器内
+  `127.0.0.1` 错当 Windows 回环地址，需要另外明确配置可达入口。
+
+保存模式 B 使用现有私有 `proxy-pool.json`、活动节点以及
+`strictEgress` 约束。VPS 的 SSH 管理信息与 VLESS+REALITY
+中转凭据是不同连接用途，不能仅凭 VPS SSH 地址推断代理 UUID。
+本页的出口验证要求真实 **三跳**、严格出口开启，并由用户手填
+预期 VPS2 公网 IPv4。命令行脚本保留给高级故障排查，不再是必选步骤。
+
 ## Purge 模式 B 出口验收（操作者显式执行）
 
 完成模式 B 三跳节点配置后，可以从 **Purge 运行环境相同的主机与
