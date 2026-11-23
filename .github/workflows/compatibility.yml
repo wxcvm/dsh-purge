@@ -27,7 +27,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
+    # PR contracts run in disposable hosted runners, including same-repo PRs.
+    # Reserve trusted self-hosted purge-ci machines for master and manual runs.
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
