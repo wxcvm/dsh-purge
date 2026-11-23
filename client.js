@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "342ea0e9194126ab";
+		const CLIENT_BUILD_ID = "e786039c420308ce";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7660,6 +7660,114 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return h('span', { className: 'rt-test rt-test-' + st }, TEST_LABEL[st] || st)
     }
 
+
+    /* 敏感资产情报：只读、按靶标隔离，不读取/展示明文 secret。 */
+    function SensitiveIntelTab(props) {
+      const eng = props.engagement
+      const [category, setCategory] = React.useState('all')
+      const [draft, setDraft] = React.useState('')
+      const [query, setQuery] = React.useState('')
+      const [page, setPage] = React.useState(0)
+      const [refresh, setRefresh] = React.useState(0)
+      const [state, setState] = React.useState({ loading: true, error: '', data: null })
+      const limit = 40
+      React.useEffect(() => {
+        setCategory('all')
+        setDraft('')
+        setQuery('')
+        setPage(0)
+      }, [eng])
+      React.useEffect(() => {
+        let live = true
+        if (!eng) {
+          setState({ loading: false, error: '请先选择靶标', data: null })
+          return undefined
+        }
+        setState((s) => ({ ...s, loading: true, error: '' }))
+        api({ op: 'sensitiveIntel', engagement: eng, category, query, offset: page * limit, limit })
+          .then((r) => {
+            if (!live) return
+            if (!r || !r.ok || r.engagement !== eng) {
+              setState({ loading: false, error: (r && r.error) || '无法读取当前靶标的敏感资产统计', data: null })
+              return
+            }
+            setState({ loading: false, error: '', data: r })
+          }, (e) => {
+            if (live) setState({ loading: false, error: String((e && e.message) || e), data: null })
+          })
+        return () => { live = false }
+      }, [eng, category, query, page, refresh, props.refreshKey])
+      const result = state.data
+      const summary = result?.summary || {}
+      const changeCategory = (id) => { setCategory(id); setPage(0) }
+      const applyQuery = () => { setQuery(draft.trim()); setPage(0) }
+      const stat = (title, value, explanation) => h('div', {
+        className: 'rt-card',
+        style: { margin: 0, flex: '1 1 155px', minWidth: 142 },
+      },
+        h('div', { className: 'rt-foot' }, title),
+        h('div', { style: { fontSize: 25, fontWeight: 700, margin: '5px 0' } }, result ? String(value ?? 0) : '—'),
+        h('div', { className: 'rt-foot', style: { fontSize: 11 } }, explanation))
+      return h('div', { className: 'rt-pane', style: { overflow: 'auto' } },
+        h('div', { className: 'rt-card' },
+          h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 } },
+            h('h3', { style: { margin: 0 } }, '敏感资产情报'),
+            h('div', { className: 'rt-spacer' }),
+            h('button', { type: 'button', className: 'rt-btn', onClick: props.onBack }, '返回资产列表'),
+            h('button', { type: 'button', className: 'rt-btn', onClick: () => setRefresh((n) => n + 1) }, '刷新')),
+          h('p', { className: 'rt-foot' }, '仅查询当前靶标已有凭据记录，默认不传输明文、密钥原值、证据文件路径或原始请求。不是自动扫描或实时泄露监控。')),
+        state.error ? h('div', { className: 'rt-err', role: 'alert' }, state.error) : null,
+        state.loading ? h('div', { className: 'rt-foot', role: 'status' }, '读取统计中…') : null,
+        h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 } },
+          stat('敏感记录', summary.total, '当前靶标凭据表'),
+          stat('高权限标记', summary.highPrivilege, '按权限字段判断，不代表高危漏洞'),
+          stat('待研判', summary.unreviewed, '旧记录尚无独立复核状态'),
+          stat('近 24 小时新增', summary.recent24h, '仅统计有效时间戳'),
+          stat('证据引用', summary.evidenceRefs, '存在引用，不等于已核实'),
+          stat('关联资产', summary.relatedAssets, '非空资产 ID 去重')),
+        h('div', { className: 'rt-card' },
+          h('h4', null, '按凭据类型归类'),
+          h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 8 } },
+            h('button', { type: 'button', className: 'rt-btn' + (category === 'all' ? ' rt-btn-primary' : ''),
+              onClick: () => changeCategory('all') }, '全部 · ' + (summary.total ?? 0)),
+            (result?.categories || []).map((entry) =>
+              h('button', { type: 'button', key: entry.id,
+                className: 'rt-btn' + (category === entry.id ? ' rt-btn-primary' : ''),
+                onClick: () => changeCategory(entry.id),
+                title: entry.highPrivilege + ' 条带高权限标记' },
+                entry.label + ' · ' + entry.total))),
+          h('p', { className: 'rt-foot' }, '严格按保存的 secret_type 分类；模糊或通用密码类型归入“未分类”，不会猜测其用途。')),
+        h('div', { className: 'rt-card' },
+          h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } },
+            h('h4', { style: { margin: '0 8px 0 0' } }, '记录列表'),
+            h('input', { className: 'rt-input', style: { flex: '1 1 190px' }, value: draft,
+              placeholder: '搜索主机 / 账号 / 凭据类型',
+              onChange: (e) => setDraft(e.target.value),
+              onKeyDown: (e) => { if (e.key === 'Enter') applyQuery() } }),
+            h('button', { type: 'button', className: 'rt-btn', onClick: applyQuery }, '搜索')),
+          h('p', { className: 'rt-foot' },
+            result ? ('匹配 ' + result.total + ' 条 · 第 ' + (page + 1) + ' 页') : '尚未取得记录'),
+          result && !result.items.length ? h('div', { className: 'rt-empty' }, '当前筛选下没有记录') : null,
+          (result?.items || []).map((item) =>
+            h('div', { key: item.id, className: 'rt-cred' },
+              h('div', { className: 'rt-cred-head' },
+                h('span', { className: 'rt-cred-host' }, item.host || '未记录主机'),
+                h('span', { className: 'rt-tag' }, item.secret_type || '未知类型'),
+                item.high_privilege ? h('span', { className: 'rt-tag', title: '仅为权限文字标记，未经独立核实' }, '高权限·待核实') : null,
+                item.asset_id != null ? h('button', { type: 'button', className: 'rt-btn',
+                  onClick: () => props.onGotoAsset(item.asset_id) }, '查看资产 #' + item.asset_id) : null),
+              h('div', { className: 'rt-foot' },
+                '账号：' + (item.username || '未记录') + ' · ' +
+                (item.has_secret ? '已存凭据值（隐藏）' : '未存凭据值') + ' · ' +
+                (item.has_evidence_ref ? '有证据引用' : '无证据引用') + ' · ' +
+                (item.found_at || '时间未记录')))),
+          result && result.total > limit ? h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 } },
+            h('button', { type: 'button', className: 'rt-btn', disabled: page === 0,
+              onClick: () => setPage((p) => Math.max(0, p - 1)) }, '上一页'),
+            h('button', { type: 'button', className: 'rt-btn', disabled: (page + 1) * limit >= result.total,
+              onClick: () => setPage((p) => p + 1) }, '下一页')) : null))
+    }
+
     /* ---------------------------------------------------------- 资产测绘 */
     function AssetsTab(props) {
       const eng = props.engagement
@@ -7851,7 +7959,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('button', { className: 'rt-btn' + (view === 'list' ? ' rt-btn-primary' : ''), onClick: () => setView('list') }, '列表'),
         h('button', { className: 'rt-btn' + (view === 'timeline' ? ' rt-btn-primary' : ''), title: '按发现时间看资产（什么时候发现、哪天收了多少）', onClick: () => setView('timeline') }, '发现时间'),
         h('button', { className: 'rt-btn' + (view === 'domain' ? ' rt-btn-primary' : ''), onClick: () => setView('domain') }, '域名'),
-        h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'))
+        h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'),
+        h('button', { className: 'rt-btn' + (view === 'sensitive' ? ' rt-btn-primary' : ''), onClick: () => setView('sensitive') }, '敏感情报'))
 
       /* ── 结论行：一屏看清家底，数字点一下就是筛选 ───────────────────── */
       const tests = (snapshot && snapshot.tests) || {}
@@ -8047,6 +8156,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       else if (view === 'web') pane = webPane
       /* 发现时间视图自带滚动容器，直接放进 rt-main 的 flex 里 */
       else if (view === 'timeline') pane = h(DiscoveryView, { engagement: eng, refreshKey: refreshKey })
+
+      if (view === 'sensitive') return h(SensitiveIntelTab, {
+        engagement: eng, refreshKey,
+        onBack: () => setView('list'),
+        onGotoAsset: (assetId) => { setFocusAssetId(assetId); setView('list') },
+      })
 
       return h('div', { className: 'rt-split' }, side,
         h('div', { className: 'rt-main' },
