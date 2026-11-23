@@ -47,7 +47,12 @@ test('discovery checks only FlClash-configured loopback ports, with no external 
 test('actual read-only TCP probe succeeds on localhost listener without a remote call', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'flclash-listener-'))
   const file = join(dir, 'config.yaml')
-  const server = createServer(socket => socket.end())
+  const server = createServer(socket => {
+    socket.once('data', (greeting) => {
+      assert.deepEqual([...greeting], [0x05, 0x02, 0x00, 0x02])
+      socket.end(Buffer.from([0x05, 0x00]))
+    })
+  })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   t.after(async () => {
     await new Promise(resolve => server.close(resolve))
@@ -58,7 +63,40 @@ test('actual read-only TCP probe succeeds on localhost listener without a remote
   const result = await discoverFlClashProxy({ platform: 'win32', filePaths: [file] })
   assert.equal(result.status, 'loopback_listening')
   assert.equal(result.endpoint.port, port)
+  assert.equal(result.protocolVerified, true)
   assert.equal(result.identityVerified, false)
+})
+
+test('a listening non-proxy service is rejected; HTTP probe stays on loopback', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'flclash-protocol-'))
+  const file = join(dir, 'config.yaml')
+  const wrong = createServer(socket => socket.once('data', () => socket.end('not a SOCKS proxy')))
+  const http = createServer(socket => socket.once('data', request => {
+    // The verification target is loopback-only and never sends credentials.
+    assert.match(request.toString('ascii'), /^CONNECT 127\.0\.0\.1:1 HTTP\/1\.1/)
+    socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n')
+  }))
+  await new Promise(resolve => wrong.listen(0, '127.0.0.1', resolve))
+  await new Promise(resolve => http.listen(0, '127.0.0.1', resolve))
+  t.after(async () => {
+    await new Promise(resolve => wrong.close(resolve))
+    await new Promise(resolve => http.close(resolve))
+    rmSync(dir, { recursive: true, force: true })
+  })
+  const wrongPort = wrong.address().port
+  const httpPort = http.address().port
+  writeFileSync(file, 'mixed-port: ' + wrongPort + '\n')
+  const rejected = await discoverFlClashProxy({ platform: 'win32', filePaths: [file] })
+  assert.equal(rejected.found, false)
+  assert.equal(rejected.status, 'listener_unavailable')
+  writeFileSync(file, 'mixed-port: ' + wrongPort + '\nport: ' + httpPort + '\n')
+  const found = await discoverFlClashProxy({ platform: 'win32', filePaths: [file] })
+  assert.equal(found.found, true)
+  assert.equal(found.endpoint.type, 'http')
+  assert.equal(found.endpoint.port, httpPort)
+  assert.equal(found.protocolVerified, true)
+  assert.equal(found.identityVerified, false)
+  assert.equal(found.upstreamVerified, false)
 })
 
 test('disabled listeners, missing config, auth requirement and WSL are distinct', async (t) => {
