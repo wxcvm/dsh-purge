@@ -23,7 +23,7 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
   test(path + ': survey sections and read-only environment setup actions', () => {
     const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
     const survey = src.slice(src.indexOf('function LocalAssetSearchTab(props)'), src.indexOf('function EnvTab(props)'))
-    for (const id of ['platforms', 'assets', 'external', 'active']) {
+    for (const id of ['overview', 'sources', 'query', 'assets', 'external', 'active']) {
       assert.ok(survey.includes("surveyCard('" + id + "',"))
     }
     assert.match(survey, /surveyPage === 'assets' \? h\(React.Fragment/)
