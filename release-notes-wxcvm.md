@@ -1,3 +1,24 @@
+# 1.1.92-wxcvm.24
+
+## 中文
+
+本版在 .23 基础上整合测绘中心、环境检测、智能体预检和已保存证据的多项改进。此前版本的 Release、ZIP 和校验和均不覆盖。
+
+- **测绘中心**（[#504](https://github.com/wxcvm/dsh-purge/pull/504)）：改用「总览 / 数据源 / 开始测绘」，保留原「本地资产 / 外部情报与历史 / 本机测绘」。主要查询来源为本地 SQLite、无需商业 API Key 的 InternetDB、crt.sh、DNS，以及单独配置的 FOFA。Censys、ZoomEye、Quake、Hunter、Netlas 不再占用主页面，但旧配置和历史来源不删除。subfinder 仍按需使用原有工具；外部请求需明确确认。
+- **FOFA 连接与查询**（#504 与本次发版修订）：支持 FOFA 官方或遵循相同 API 契约的自定义 HTTPS 地址，保留旧 `FOFA_KEY`，新增读取配置状态、保存、账户接口连接测试及项目授权范围内的单 IP/域名历史查询。每页 20 条、最多 20 页，支持翻页和查询结果显示；换接口地址须明确提供新地址的 Key，凭据不会通过普通读取接口回显。账户接口通过不代表有搜索额度；第三方历史线索不作为实时开放端口。
+- **UI 异步状态**：修改地址、Key 但尚未保存时不会误测旧连接；切换数据源、项目或输入目标时忽略旧查询的迟到结果；每次外部翻页需重新确认查询。界面只显示功能、操作与实际状态。
+- **环境中心与 Agent 预检**（[#502](https://github.com/wxcvm/dsh-purge/pull/502)、[#503](https://github.com/wxcvm/dsh-purge/pull/503)）：工具路径与可运行版本验证状态分开；开始任务时优先做一次预检，后续按需要选择性复核，减少重复探测；不把路径存在当实际执行成功。
+- **作战台证据与批处理**（[#496](https://github.com/wxcvm/dsh-purge/pull/496)、[#497](https://github.com/wxcvm/dsh-purge/pull/497)、[#499](https://github.com/wxcvm/dsh-purge/pull/499)、[#500](https://github.com/wxcvm/dsh-purge/pull/500)）：批量评估与逐目标范围校验、资产/主机覆盖清单、结构化主机发现证据关联，以及报告对尚未核实发现的索引；不因采集线索直接确认漏洞。
+- **稳定性与 CI**（[#498](https://github.com/wxcvm/dsh-purge/pull/498)、[#501](https://github.com/wxcvm/dsh-purge/pull/501)）：回归测试使用一次性 Runner，并修正红队预设在较慢的配置热加载中意外被覆盖的问题。
+
+**验收边界**：Windows/Ubuntu 自动化、归档生成与 SHA256SUMS 是发行与回归证据，不等于 Windows Harness Desktop 安装、私有 FOFA 账号/第三方兼容网关或真实目标查询已实测。用户需在 Desktop 中更新、重启并确认实际加载的版本；当前版本不自动改写已有 FOFA Key 或作战项目。
+
+## English
+
+Version .24 includes the five-source survey center and scoped FOFA connection/search (with configurable HTTPS-compatible base URL, explicit Key management, account test, 20-item pages, and re-confirmed external queries), tool-state-aware environment readiness, reduced agent preflight repetition, target coverage and evidence linkage, report indexing of unverified host findings, and a preset hot-reload fix. Legacy provider settings remain intact though unsupported providers are hidden from the main survey UI. Historical passive intelligence is not live verification. Windows/Ubuntu CI, packaged ZIP and checksums do not establish real Desktop/FOFA credentials or production gateway acceptance.
+
+---
+
 # 1.1.92-wxcvm.23
 
 ## 中文
