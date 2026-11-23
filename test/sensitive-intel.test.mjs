@@ -11,7 +11,7 @@ function makeDb() {
 
 function add(db, id, type, privilege = '', timestamp = '2026-11-23T10:00:00Z') {
   db.prepare('INSERT INTO credential VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    id, id, 'https://user:pw@asset.example', 'operator',
+    id, id, 'https://user:pw@asset.example/hidden?token=ANOTHER_PRIVATE_VALUE', 'operator',
     type, privilege, timestamp, 'PRIVATE_SECRET_DO_NOT_RETURN', '/private/evidence/ref'
   );
 }
@@ -44,6 +44,7 @@ test('dashboard computes complete counts, masked projection, filtering and pagin
     assert.ok(!JSON.stringify(all).includes('PRIVATE_SECRET_DO_NOT_RETURN'));
     assert.ok(!JSON.stringify(all).includes('/private/evidence/ref'));
     assert.ok(!JSON.stringify(all).includes('user:pw@'));
+    assert.ok(!JSON.stringify(all).includes('ANOTHER_PRIVATE_VALUE'));
     const onlySsh = readSensitiveIntel(db, { category: 'ssh', query: 'asset', limit: 1 }, now);
     assert.equal(onlySsh.total, 1);
     assert.equal(onlySsh.items[0].id, 1);
