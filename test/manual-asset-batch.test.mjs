@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { planManualAssetBatch } from '../lib/redteam/manual-asset-batch.js'
+import { planManualAssetBatch, planManualAssessmentBatch } from '../lib/redteam/manual-asset-batch.js'
 
 const asset = (ip, extra = {}) => ({
   ip, provenance: 'passive', tool: 'import-fixture', state: 'unknown',
@@ -45,4 +45,42 @@ test('invalid names, duplicate entries, and empty/overlong batches fail closed',
       .map(row => row.reason), ['duplicate_in_batch'])
   assert.throws(() => planManualAssetBatch([]), /1\.\.500/)
   assert.throws(() => planManualAssetBatch(Array.from({ length: 501 }, (_, i) => asset('192.0.2.1'))), /1\.\.500/)
+})
+
+
+test('manual assessment planner resolves existing assets and reports per-item rejections without writes', () => {
+  const assets = [{ id: 7, ip: '192.0.2.20' }, { id: 8, ip: '198.51.100.20' }]
+  let lookups = 0
+  const resolve = item => {
+    lookups += 1
+    return assets.find(asset => item.asset_id != null
+      ? asset.id === item.asset_id : asset.ip === item.ip) || null
+  }
+  const plan = planManualAssessmentBatch([
+    { asset_id: 7, ip: '192.0.2.20', priority: 'high', reason: 'observed service banner' },
+    { asset_id: 8, priority: 'low', reason: 'separate network' },
+    { asset_id: 7, priority: 'medium', reason: 'duplicate assessment' },
+    { asset_id: 999, priority: 'high', reason: 'unknown asset' },
+    { asset_id: 8, ip: '192.0.2.20', priority: 'high', reason: 'identity mismatch' },
+    { asset_id: 7, priority: 'unknown', reason: 'invalid priority' },
+    { asset_id: 7, priority: 'high', reason: '' },
+  ], ['192.0.2.0/24'], { commit: true })
+  assert.equal(plan.accepted.length, 1)
+  assert.equal(plan.accepted[0].asset_id, 7)
+  assert.deepEqual(plan.rejected.map(row => [row.index, row.reason]), [
+    [1, 'outside-scope'], [2, 'duplicate_in_batch'], [3, 'asset_not_found'],
+    [4, 'asset_reference_mismatch'], [5, 'priority_required'], [6, 'reason_required'],
+  ])
+  assert.equal(lookups, 5, 'invalid inputs do not need database lookups')
+})
+
+test('assessment preview of an unscoped engagement is allowed; commit requires confirmation', () => {
+  const item = [{ ip: '203.0.113.2', priority: 'medium', reason: 'manual review' }]
+  const resolve = () => ({ id: 15, ip: '203.0.113.2' })
+  assert.equal(planManualAssessmentBatch(item, resolve, [], { commit: false }).accepted.length, 1)
+  assert.equal(planManualAssessmentBatch(item, resolve, [], { commit: true }).rejected[0].reason,
+    'scope-empty-needs-confirm')
+  assert.equal(planManualAssessmentBatch(item, resolve, [], { commit: true, confirm: true }).accepted.length, 1)
+  assert.throws(() => planManualAssessmentBatch([], resolve), /1\.\.200/)
+  assert.throws(() => planManualAssessmentBatch(Array.from({ length: 201 }, () => item[0]), resolve), /1\.\.200/)
 })
