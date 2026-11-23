@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "fda793668b729ae3";
+		const CLIENT_BUILD_ID = "ce81a8b8da404236";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11748,6 +11748,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setModeBResult({ ok: false, message: '请先检测可用且无需本地认证的 FlClash 代理端口。' })
           return
         }
+        const required = (vps) => vps.server.trim() && vps.port.trim() && vps.uuid.trim()
+          && vps.servername.trim() && vps.publicKey.trim()
+        if (!required(modeBVps1) || (modeBUseVps2 && !required(modeBVps2))) {
+          setModeBResult({ ok: false, message: '请先补齐每台 VPS 的 IP、端口、VLESS UUID、REALITY SNI 与公钥。' })
+          return
+        }
         setModeBBusy('save')
         setModeBResult(null)
         try {
@@ -11761,6 +11767,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             enabled: true, strictEgress: true, autoConnect: false, activeId: saved.savedId,
           } })
           if (!selected?.ok) throw new Error(selected?.error || '激活节点失败')
+          if (modeBUseVps2 && !modeBExitIp.trim()) setModeBExitIp(modeBVps2.server.trim())
+          setModeBVps1(v => ({ ...v, uuid: '', publicKey: '', shortId: '' }))
+          setModeBVps2(v => ({ ...v, uuid: '', publicKey: '', shortId: '' }))
           setModeBResult({ ok: true, message: '模式 B 已保存并设为插件活动节点；严格出口开启，实际链路尚未验证。' })
         } catch (e) {
           setModeBResult({ ok: false, message: String(e?.message || '模式 B 保存失败') })
