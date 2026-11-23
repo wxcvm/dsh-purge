@@ -41,6 +41,55 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:53380/redteam/api' -Method Post `
 # → ok=True enabled=False
 ```
 
+## 模式 B 多跳 · 插件出站（可选）
+
+现有本地代理控制台新增「模式 B · 机场 → VPS1 → VPS2」输入框。
+输入一个按顺序排列的 JSON 节点数组（2 个是机场 → VPS1，
+3 个才是机场 → VPS1 → VPS2），使用原有代理池的
+`proxyProfileSave` / `proxyPoolSave` 保存，不修改 SSH 管理跳板或
+Windows TUN。具体示例：
+
+```json
+[
+  { "type": "socks5", "server": "127.0.0.1", "port": 7890 },
+  { "type": "vless", "server": "192.0.2.10", "port": 443,
+    "uuid": "REPLACE_WITH_VPS1_UUID", "tls": true,
+    "servername": "REPLACE_WITH_REALITY_SNI",
+    "reality-opts": { "public-key": "REPLACE_WITH_PUBLIC_KEY", "short-id": "REPLACE_WITH_SHORT_ID" } },
+  { "type": "vless", "server": "198.51.100.20", "port": 443,
+    "uuid": "REPLACE_WITH_VPS2_UUID", "tls": true,
+    "servername": "REPLACE_WITH_VPS2_SNI",
+    "reality-opts": { "public-key": "REPLACE_WITH_VPS2_KEY", "short-id": "REPLACE_WITH_SHORT_ID" } }
+]
+```
+
+**全部示例地址和密钥均须替换**；上面的 TEST-NET 地址不是真实出口。
+机场节点必须是本机可达的 SOCKS5/HTTP 代理，远端节点使用 IPv4/IPv6
+字面量，避免未验证的远端主机名解析路径。中间和最终节点允许
+VLESS、VMess、Shadowsocks、Trojan TCP 型代理，暂不接受 HY2/UDP
+型中间转发。原有 VPS1 的 HY2/VLESS 服务不被修改，是否能经机场
+正确转发 VPS1 的 VLESS+REALITY 仍须实际检测。
+
+Mihomo 子进程只绑定随机的 `127.0.0.1` 监听地址，
+通过 `dialer-proxy` 强制指定每个节点由前一跳拨号：
+`vps2 → vps1 → airport-entry`，唯一 `MATCH` 路由使用链尾节点，
+不会自动选择 `DIRECT`。解析目标域名的 DNS-over-HTTPS 也显式
+选择最终节点，没有外部 provider、代理组自动切换或本机 TUN。
+保存并选择链式节点时，自动启用已实现的 `strictEgress`；
+链式节点失败，代理池不能自动切换到其他非链式节点。
+
+本机配置和 UUID 等敏感字段写入已有私有 `proxy-pool.json`，
+对 API 和界面仅返回跳数、配置阶段、非敏感的节点元数据；
+状态固定 `verification: not_tested`，**成功启动 Mihomo 或能访问
+api.github.com，都不等于已验证三个中转节点或最终 IP**。
+
+这只是 Purge 插件代理池的显式 HTTP(S) 出口。**Harness 模型 API、
+系统 DNS、外部 MCP、浏览器、ARTEX 的任务流量都不在本功能覆盖范围。**
+进程运行在宿主机上，不具备 ARTEX Docker 的隔离网络。
+对于严格防直连要求，仍需要进程/容器级网络隔离和逐跳断链验收。
+关于 `dialer-proxy` 和 Reality 作为中转节点的兼容性警告：
+https://wiki.metacubex.one/en/config/proxies/dialer-proxy/ 。
+
 ## 严格出口（可选）
 
 在本地控制台的「池状态」点击「严格出口：开启」，这会把
