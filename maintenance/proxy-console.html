@@ -52,10 +52,12 @@ pre#log{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;color:var(-
     <div class="row" style="margin-top:10px">
       <button id="btnEnablePool">启用池</button>
       <button id="btnDisablePool" class="danger">停用池</button>
+      <button id="btnStrictOn">严格出口：开启</button>
+      <button id="btnStrictOff">严格出口：关闭</button>
       <button id="btnPoolTest">测试全部节点</button>
       <button id="btnPoolDisconnect">全部断开</button>
     </div>
-    <p class="hint">池只作用于插件自身的 GitHub 查询与代理测试，不改系统 / 浏览器 / 模型 API 的代理。</p>
+    <p class="hint">严格出口开启时，池停用、节点缺失或命中 noProxy 均阻止插件请求直连；关闭时保留现有行为。仅覆盖明确通过该代理池发送的插件 GitHub 请求，不保护模型 API、MCP、系统或 ARTEX。</p>
   </section>
 
   <section>
@@ -143,6 +145,7 @@ pre#log{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;color:var(-
     const cells = [
       ['启用', pool.enabled ? '<span class="badge on">on</span>' : '<span class="badge off">off</span>'],
       ['自动连接', pool.autoConnect ? 'on' : 'off'],
+      ['严格出口（插件范围）', pool.strictEgress ? '<span class="badge on">on</span>' : '<span class="badge off">off</span>'],
       ['当前节点', pool.activeId || '—'],
       ['节点数', String((pool.profiles || []).length)],
       ['内核', eng.available ? (eng.running ? '运行中' : '已找到') : '未找到'],
@@ -196,6 +199,8 @@ pre#log{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;color:var(-
   }
   $('#btnEnablePool').onclick = () => savePool({ enabled: true });
   $('#btnDisablePool').onclick = () => savePool({ enabled: false });
+  $('#btnStrictOn').onclick = () => savePool({ strictEgress: true });
+  $('#btnStrictOff').onclick = () => savePool({ strictEgress: false });
 
   $('#btnPoolTest').onclick = async () => {
     log('测试全部节点…');
