@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "352246ba3169527e";
+		const CLIENT_BUILD_ID = "a1572e456c9c6023";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11000,7 +11000,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setIntelBusy(true); setIntelResult(null)
         setIntelConsent(false)
         api({ op: 'scopedIntelLookup', engagement: eng, target: intelTarget.trim(),
-          sources: surveyPreferences.includeShodan ? ['internetdb', 'shodan'] : ['internetdb'],
+          sources: ['internetdb'],
           confirmExternal: true, commit: surveyPreferences.saveIntel }).then(r => {
           setIntelBusy(false); setIntelResult(r)
           if (r?.imported) setRefresh(n => n + 1)
@@ -11337,7 +11337,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           surveyCard('external', { className: 'rt-card', style: { fontSize: 12 } },
             h('b', null, '测绘默认选项'),
             h('div', { className: 'rt-foot' },
-              '使用 subfinder、Shodan 与默认保存结果的勾选会自动保存，刷新后回显；'
+              '使用 subfinder 与默认保存结果的勾选会自动保存，刷新后回显；'
               + '向 crt.sh、DNS、第三方工具等外部服务提交目标的授权不会保存，每次操作需明确确认。'),
             h('div', { className: surveyPreferencesMessage.startsWith('保存失败') ? 'rt-err' : 'rt-foot' },
               surveyPreferencesBusy ? '正在保存…' : surveyPreferencesMessage)),
@@ -11463,12 +11463,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           surveyCard('external', { className: 'rt-card' },
             h('h4', null, '外部被动情报 · 单 IP'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
-              'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史线索不会修改实时端口状态；可保存全部观察并离线查询。'),
+              'InternetDB 不需要 API Key。只查询项目已登记范围内的单个 IP，不主动探测目标；历史线索不会修改实时端口状态。'),
             h('input', { className: 'rt-input', value: intelTarget, placeholder: '已登记范围内的 IP',
               onChange: e => { setIntelTarget(e.target.value); setIntelConsent(false); setIntelResult(null) } }),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
-              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.includeShodan, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
-                onChange: e => { updateSurveyPreference('includeShodan', e.target.checked); setIntelConsent(false) } }), ' 加查 Shodan API'),
               h('label', null, h('input', { type: 'checkbox', checked: intelConsent,
                 onChange: e => setIntelConsent(e.target.checked) }), ' 同意将该 IP 提交给所选外部平台'),
               h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.saveIntel, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
@@ -12515,7 +12513,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         sectionCard('network', { className: 'rt-card' },
           h('h4', null, '可选外部测绘资源与 VPS'),
           h('p', { className: 'rt-foot' },
-            'FOFA 只是可选来源之一。其他平台请在「管理 → 环境 → 测绘中心」选择；不填写 API Key 也能使用本机工具。'),
+            'FOFA 连接设置在「环境 → 测绘中心 → 数据源」；这里保留原 Key 编辑入口以兼容旧配置。'),
           h('label', { style: { display: 'block', fontSize: 12, marginBottom: 10 } },
             'FOFA API Key（仅 FOFA，可选）',
             h('input', { className: 'rt-input', type: 'password', autoComplete: 'new-password',
