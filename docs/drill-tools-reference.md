@@ -359,6 +359,8 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 - `action=close` + `asset_id` + `status=closed|blocked` — `closed` 要求五项全部为 `done|blocked|not_applicable`，否则返回缺项且不写入；`blocked` 必须填写非空 `reason`，表示被阻塞而不是已完成
 - `action=queue` + 可选 `asset_id`、`limit=1..30` — 只读返回未关闭清单及各项缺口，默认按现有优先级排序；只显示相应内外网资产，不调用扫描器、不创建 Agent 任务。超过 2000 条样本显示 `partial=true`，不可将样本待核数量当成全库总数
 
+本仓 #496 已合并的 `redteam_asset_batch(kind=assess)` 只更新资产优先级与评估理由，**不能将其评估成功自动当作本清单检查完成**；两个功能必须分别记录。
+
 新增的 `asset_checklist` 单表由现有 SQLite DDL 幂等建立，旧资产库加载时无须删除或改写原有 `asset.test_status/test_surface`；两种状态语义不同，绝不自动把旧的 `tested` 等同于五项全部 done。被阻塞的清单也不计 `complete`。
 
 对照来源：[接手版 redteam asset/host coverage](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）。**未移植**自动主机操作、权限推断、目标探测、得分推荐或上游两套覆盖度表，以免和现有 `next_action` / Super Agent 混淆。
