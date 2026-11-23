@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "ce81a8b8da404236";
+		const CLIENT_BUILD_ID = "342ea0e9194126ab";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11799,7 +11799,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('input', { className: 'rt-input', style: { width: '100%', marginTop: 4 },
                 type: field === 'uuid' ? 'password' : 'text',
                 value: vps[field] || '', autoComplete: 'off',
-                onChange: e => setVps(prev => ({ ...prev, [field]: e.target.value })) })))) )
+                onChange: e => setVps(prev => ({ ...prev, [field]: e.target.value })) }))))
       )
       const modeBNetworkCard = () => h('div', { className: 'rt-card' },
         h('h4', null, '模式 B · FlClash 自动入口 → VPS1 → VPS2'),
