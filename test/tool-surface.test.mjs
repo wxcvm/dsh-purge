@@ -137,6 +137,63 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(unscopedAllowed.written, 1)
   assert.equal(redteam.listAssets(engagement, {}).total, 1)
 
+  // Selective upstream "kind=assess": reuse the existing recorded-asset assessment.
+  const assessInput = [
+    { asset_id: batchCommit.results[0].asset_id, ip: '192.0.2.10',
+      priority: 'high', reason: 'fixture manual review', potential: 'review only' },
+    { ip: '198.51.100.10', priority: 'low', reason: 'not in this engagement' },
+    { asset_id: batchCommit.results[0].asset_id, priority: 'low', reason: 'duplicate' },
+  ]
+  const beforeAssess = redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id)
+  const assessPreview = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, kind: 'assess', items: assessInput,
+  }, {}))
+  assert.equal(assessPreview.dry_run, true)
+  assert.equal(assessPreview.accepted, 1)
+  assert.equal(assessPreview.assessed, 0)
+  assert.deepEqual(assessPreview.rejected.map(row => row.reason),
+    ['asset_not_found', 'duplicate_in_batch'])
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).assessed_at,
+    beforeAssess.assessed_at, 'preview must not write assessment timestamp')
+  const assessWrite = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, kind: 'assess', items: assessInput, commit: true,
+  }, {}))
+  assert.equal(assessWrite.assessed, 1)
+  assert.equal(assessWrite.partial, true)
+  assert.equal(assessWrite.results[0].asset_id, batchCommit.results[0].asset_id)
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).priority, 'high')
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).assess_reason,
+    'fixture manual review')
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 1)
+  const noConfirm = JSON.parse(await batchTool.execute({
+    engagement, kind: 'assess', commit: true,
+    items: [{ ip: '203.0.113.9', priority: 'medium', reason: 'existing asset' }],
+  }, {}))
+  assert.equal(noConfirm.assessed, 0)
+  assert.deepEqual(noConfirm.rejected.map(row => row.reason), ['scope-empty-needs-confirm'])
+  const withConfirm = JSON.parse(await batchTool.execute({
+    engagement, kind: 'assess', commit: true, confirm: true,
+    items: [{ ip: '203.0.113.9', priority: 'medium', reason: 'existing asset' }],
+  }, {}))
+  assert.equal(withConfirm.assessed, 1)
+
+  // Selective upstream per-target scope check, entirely offline/read-only.
+  const scopeTool = registered.get('redteam_scope_review')
+  const targetCheck = JSON.parse(await scopeTool.execute({
+    engagement: scopedEngagement, targets: ['192.0.2.10', '198.51.100.10'],
+  }, {}))
+  assert.equal(targetCheck.mode, 'target-check')
+  assert.deepEqual(targetCheck.items.map(row => row.status), ['in-scope', 'out-of-scope'])
+  assert.equal(targetCheck.items[0].rule, '192.0.2.0/24')
+  const noScope = JSON.parse(await scopeTool.execute({
+    engagement, target: '203.0.113.9',
+  }, {}))
+  assert.equal(noScope.items[0].status, 'unscoped')
+  const inventoryScope = JSON.parse(await scopeTool.execute({
+    engagement: scopedEngagement, allowed: '192.0.2.0/24',
+  }, {}))
+  assert.equal(inventoryScope.total_assets, 1, 'existing inventory-audit mode is preserved')
+
   const cleanupTool = registered.get('redteam_cleanup')
   const marker = join(home, 'cleanup-marker.txt')
   writeFileSync(marker, 'synthetic cleanup ledger fixture')

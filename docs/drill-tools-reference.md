@@ -141,17 +141,20 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 
 ### `redteam_asset_batch`
 
-【手工资产批量登记】选择性吸收上游 `redteam_batch(kind=assets)` 的独有能力；不再需要一次一次调用 `redteam_asset_add`。已经有扫描文件时仍使用现有 `redteam_ingest`，本工具**不读取/扫描目标，不更新漏洞、HTTP 证据或分数**。
+【本机批量资产 / 批量评估】复用上游 `redteam_batch` 的独有 `kind=assets|assess` 用途，但不照搬其直接批量漏洞写入或请求证据副作用。本工具不联网、不扫描、不创建已确认漏洞，也不写分数。
 
 参数：
 - `engagement` — 可选，默认会话绑定的演练
-- `items` — 1–500 条已获取的 IPv4 资产，字段和 `redteam_asset_add` 一致，包括 `ip`、必填 `provenance=active|passive`，以及可选 `tool`、`state`、`primary_name`、`names`、`ports`、`discovered_at`、`first_seen`
-- `commit` — 默认 false，只返回接受数量、最多十条预览和按原始下标标识的 `rejected` 原因；设为 true 才经现有 `store.importBundle` 事务入库
-- `confirm` — 当前演练没有登记允许范围时，正式 `commit=true` 需明确确认；已登记范围的记录按 IP 逐条核对，范围外跳过
+- `kind` — `assets`（默认，兼容已有用法）或 `assess`
+- `items` — `assets`：1–500 条已获取的 IPv4 资产，需 `ip` 与 `provenance=active|passive`，可带 `names`、`ports`、发现时间；`assess`：1–200 条**已有资产**，每条 `asset_id` 或 `ip`、必填 `priority=high|medium|low` 和非空 `reason`，可选 `potential`、`assessed_by`
+- `commit` — 默认 false，仅预览数量、拒绝原因与最多十条示例；`true` 才写入数据库
+- `confirm` — 演练没有登记允许的 scope 时，实际 `commit=true` 还需显式确认；已登记范围内对每条资产 IP 核对，超出范围跳过
 
-成功写入时 `results` 逐条返回原数组 `index`、`ip` 和真实 `asset_id`；同一 IP 重复提交仍使用原资产 ID，发现时间不会被重复写入覆盖。同一批次重复 IP 作为 `duplicate_in_batch` 返回。批量记录不是已验证漏洞或网络探测证据，来源字段必须据实填写。
+`assets` 复用既有 `store.importBundle` 的 SQLite 事务与幂等 upsert，逐条返回 `index/ip/asset_id`，重复提交不会重复建资产或覆盖首次发现时间。同批重复 IP 作为 `duplicate_in_batch` 拒绝。
 
-源码来源：[上游 redteam_batch](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）；本仓只增加必要的人工资产批量入口。直接批量评估与漏洞对象的写入未移植，后续按需求裁定。
+`assess` 先只读解析现有资产并核对身份、scope、字段，再逐条调用已有 `store.assessAsset` 更新优先级与理由；不存在的资产拒绝，不创建新资产。`results` 返回原始下标与资产 ID；**逐项提交可能部分成功，并非整批原子事务**，返回 `assessed/rejected/partial`，不可将被拒绝的条目计作已评估。评估只是人工判断，不是漏洞验证。
+
+源码来源：[接手版上游 redteam_batch](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）。只保留实际有价值的批量已知资产操作，HTTP 请求/响应及确认漏洞仍走已有独立证据接口。
 
 ### `redteam_asset_add`
 把一个资产及其端口/服务/指纹写入资产库（幂等 upsert）。每条发现必须标注 provenance：被动收集填 passive，主动探测填 active，并填写 tool（数据源或工具名）。
@@ -1002,9 +1005,13 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 参数：`engagement`、`limit`（默认 8，最多 20）。
 
 ### `redteam_scope_review`
-离线只读地把库内资产与用户明确列出的允许范围进行匹配，支持 IPv4/IPv6、CIDR、域名与通配子域名。匹配结果不是授权证明；超过查询上限时会报告部分覆盖。
+【离线只读】保留原有库内资产审查，并选择性补齐上游 `redteam_scope_check` 的**指定目标核对**，复用当前 `targetInScope`，不发 DNS/HTTP/扫描请求；登记的 scope 不是实际授权的证明。
 
-参数：`engagement`、`allowed`（必填，逗号或换行分隔）、`limit`（默认 25，最多 100）。
+两种模式：
+- **资产清单审查（旧模式不变）**：传 `allowed`（必填的范围字符串，逗号或换行分隔）和可选 `limit`（默认 25，最多 100），将库内资产与这份显式范围比对，显示样本数和是否仅部分覆盖
+- **指定目标审查（新增）**：传 `target` 一个目标，或 `targets` 1–50 个目标（IP、域名、HTTP(S) URL），依据当前演练元数据登记的 scope 逐条核对，返回 `mode=target-check`、`in-scope`、`out-of-scope`、`unscoped` 或 `name-only`。后者仅域名匹配，`needs_ip_review=true`，不能据此确认解析 IP 属于授权网段
+
+两种模式互斥。未登记 scope 不能悄悄算作允许；本工具既不更新 scope，也不会触发实际目标连接。
 
 ### `redteam_delivery_audit`
 只读检查已记录得分的目标、证据结果与来源关联缺口；文本完整不代表漏洞已可复现，也不会自动加分。
