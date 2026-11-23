@@ -933,6 +933,10 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 ### `redteam_score_report`
 攻击得分链路复现报告：只收录"拿到了分"的成果（没得分的漏洞不进报告），每一项都尽量附上可直接粘贴进 Yakit Repeater 复现的原始请求。需要交付报告时用这个，而不是 redteam_report。
 
+**新增附录 6：未核实主机发现索引。** 若当前演练通过 `redteam_coverage(phase=internal,action=finding)` 登记了主机发现，报告会单独列出最多最近 100 条的记录 ID、资产 IP、发现类别、已有证据记录引用与「未验证/未关联」状态，超出数量明确显示截断。**它们不进入得分正文、不确认漏洞、不改变总分**，只是方便报告使用者回到资产详情核对。为免人工标题/说明或原始证据正文带出敏感数据，附录**不输出**发现自由文本、请求/响应、命令、凭据；`--shareable` 导出模式还会通过已有掩码处理资产 IP。没有主机发现时不新增空附录。
+
+实际落盘的 `scripts/export-engagement-report.mjs` 及工具的 `redteam_score_report(markdown=true)` 共用 `scoreReport` 生成的 Markdown。
+
 参数：
 - `engagement`
 - `limit` — 最多多少项，默认 500
