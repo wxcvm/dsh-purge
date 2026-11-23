@@ -64,7 +64,7 @@ test('manual assessment planner resolves existing assets and reports per-item re
     { asset_id: 8, ip: '192.0.2.20', priority: 'high', reason: 'identity mismatch' },
     { asset_id: 7, priority: 'unknown', reason: 'invalid priority' },
     { asset_id: 7, priority: 'high', reason: '' },
-  ], ['192.0.2.0/24'], { commit: true })
+  ], resolve, ['192.0.2.0/24'], { commit: true })
   assert.equal(plan.accepted.length, 1)
   assert.equal(plan.accepted[0].asset_id, 7)
   assert.deepEqual(plan.rejected.map(row => [row.index, row.reason]), [
