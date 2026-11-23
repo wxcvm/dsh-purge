@@ -11,7 +11,8 @@ test('ordinary guidance keeps simple tasks direct and preserves real capability 
   assert.match(text, /requested output format/);
   assert.match(text, /only when they add necessary information/);
   assert.match(text, /real tool schemas, permissions, and results/);
-  assert.match(text, /At the beginning of each new tool-dependent task/);
+  assert.match(text, /Before starting tool-dependent work/);
+  assert.match(text, /Reuse this baseline for follow-up tasks/);
   assert.match(text, /smallest sufficient change/);
   assert.match(text, /verify with relevant checks/);
   assert.match(text, /unverified claims separately/);
@@ -28,21 +29,23 @@ test('ordinary protocol is assembled exactly once and keeps the existing switch'
   assert.equal(rewritePromptAssembly(original, 'Fixture prompt.', { capabilityProtocol: false }).sections.some(s => s.name === CAPABILITY_SECTION), false);
 });
 
-test('red-team capability protocol checks actual tool readiness for each new task', () => {
+test('red-team capability protocol reuses the initial tool baseline', () => {
   const text = capabilityProtocolText({ redteam: true });
-  assert.match(text, /Read first at every new task/);
+  assert.match(text, /Read first before starting work/);
+  assert.match(text, /only recheck affected capabilities/);
   assert.match(text, /listed, located, version-runnable, and task-tested/);
   assert.match(text, /Only then DIY/);
   assert.equal(capabilityProtocolText({ redteamChild: true }), text);
   assert.equal(capabilityProtocolText({ redteam: true, enabled: false }), '');
 });
 
-test('red-team preset repeats preflight on new tasks, not on every subagent step', () => {
+test('red-team preset preflights before work and only rechecks changed capabilities', () => {
   const preset = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8');
-  assert.match(preset, /每次收到新的执行任务、切换任务类型或更换运行环境时/);
+  assert.match(preset, /开始一次新的演练或独立工作流程时/);
+  assert.match(preset, /新任务只需确认它新增依赖的工具或技能/);
   assert.match(preset, /redteam_preflight/);
   assert.match(preset, /不对全部工具逐项探测/);
-  assert.match(preset, /不要每一步重复完整 preflight/);
+  assert.match(preset, /不在每个子智能体步骤重复预检/);
 });
 
 test('all-case delivery rate exposes missing captures instead of rewarding incomplete coverage', () => {
