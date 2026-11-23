@@ -86,6 +86,22 @@ pre#log{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;color:var(-
   </section>
 
   <section>
+    <h2>模式 B · 机场 → VPS1 → VPS2（仅插件请求）</h2>
+    <p class="hint">按顺序输入 2 或 3 个 Mihomo 节点 JSON 对象，远端 VPS 必须填实际 IP。保存后自动启用插件严格出口、选为唯一活动节点；不会更改系统代理、SSH、模型或 ARTEX 流量。密钥仅存于本机 proxy-pool.json，不回显。</p>
+    <label>节点名称 <input id="modeBName" value="模式 B 多跳" style="min-width:180px"></label>
+    <textarea id="modeBNodes" rows="10" style="width:100%;margin-top:9px"
+      placeholder='[
+  {"type":"socks5","server":"127.0.0.1","port":7890},
+  {"type":"vless","server":"192.0.2.10","port":443,"uuid":"填写 VPS1 UUID","tls":true,"servername":"填写 REALITY SNI","reality-opts":{"public-key":"填写公钥","short-id":"填写 short-id"}},
+  {"type":"vless","server":"198.51.100.20","port":443,"uuid":"填写 VPS2 UUID","tls":true,"servername":"填写 VPS2 SNI","reality-opts":{"public-key":"填写 VPS2 公钥","short-id":"填写 short-id"}}
+]'></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="btnAddModeB" class="primary">保存链路并启用严格出口</button>
+    </div>
+    <p class="hint">VPS2 尚未配置时可只填前两项。配置/端口就绪不代表真实出口已验证；请在测试后核对公网出口与服务器侧连接记录。中间跳协议可能不兼容，严禁因此增加 DIRECT 后备。</p>
+  </section>
+
+  <section>
     <h2>YAML 导入</h2>
     <textarea id="yaml" rows="6" style="width:100%" placeholder="proxies:
   - name: a
@@ -236,6 +252,35 @@ pre#log{margin:0;max-height:260px;overflow:auto;white-space:pre-wrap;color:var(-
       await refresh();
     } catch (e) { log(e.message, 'err'); }
   };
+  $('#btnAddModeB').onclick = async () => {
+    let nodes;
+    try {
+      nodes = JSON.parse($('#modeBNodes').value);
+      if (!Array.isArray(nodes) || nodes.length < 2 || nodes.length > 3) throw new Error('请填写 2 或 3 个节点');
+    } catch {
+      log('模式 B JSON 不是有效的 2/3 节点列表', 'err'); return;
+    }
+    try {
+      const saved = await api('proxyProfileSave', {
+        profile: { kind: 'mihomo-chain', name: $('#modeBName').value.trim() || '模式 B 多跳', nodes },
+      });
+      if (saved.ok === false || !saved.savedId) {
+        log('模式 B 保存失败: ' + (saved.error || '输入无效'), 'err'); return;
+      }
+      // Do not retain raw credentials in the textbox or operation log.
+      $('#modeBNodes').value = '';
+      nodes = null;
+      const set = await api('proxyPoolSave', {
+        settings: { enabled: true, strictEgress: true, autoConnect: false, activeId: saved.savedId },
+      });
+      if (set.ok === false) log('节点已保存但激活失败: ' + (set.error || 'unknown'), 'err');
+      else log('模式 B 已保存为活动节点；严格出口已启用，链路尚未实测', 'ok');
+      await refresh();
+    } catch {
+      log('模式 B 操作失败，请查看节点配置或后端状态', 'err');
+    }
+  };
+
   $('#btnTestDraft').onclick = async () => {
     const p = draft();
     try {
