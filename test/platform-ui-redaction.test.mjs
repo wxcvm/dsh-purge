@@ -62,11 +62,11 @@ test('proxy previews keep endpoints but not credentials, query, fragment or malf
 
 test('model-visible preflight does not echo platform env, key path, or FOFA fragments', () => {
   const source = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
-  assert.equal((source.match(/platform: platformUiProjection\\(plat\\),/g) || []).length, 2)
+  assert.equal(source.split('platform: platformUiProjection(plat),').length - 1, 2)
   assert.doesNotMatch(source, /platform: plat,/)
-  assert.equal((source.match(/vps_status: vpsState\\.status,/g) || []).length, 2)
-  assert.doesNotMatch(source, /configured\\(' \\+ vpsKey/)
-  assert.doesNotMatch(source, /fofaShown/)
+  assert.equal(source.split('vps_status: vpsState.status,').length - 1, 2)
+  assert.equal(source.includes("configured(' + vpsKey"), false)
+  assert.equal(source.includes('fofaShown'), false)
   const summary = platformUiProjection({
     ok: true,
     config: { env: { FOFA_KEY: 'secret-key', REDTEAM_VPS_KEY: 'private-key-path',
