@@ -48,21 +48,22 @@ test('multi-provider preferences persist through existing platform API without l
   assert.equal(readFileSync(join(root, 'config.json'), 'utf8').includes('fixture-key'), true)
 })
 
-test('source and embedded workbench offer real selection controls and identify external API limits', () => {
+test('workbench shows four keyless operations and FOFA without unused provider cards', () => {
   const load = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8')
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = load(path)
-    assert.match(src, /function LocalAssetSearchTab/)
-    assert.match(src, /\['local-search', '测绘中心'\]/)
-    assert.match(src, /source\.mode === 'existing-skill'/)
-    assert.match(src, /source\.mode === 'local'/)
-    assert.match(src, /onClick: saveSources/)
-    assert.match(src, /op: 'intelSourcesSave', selection: next/)
-    assert.match(src, /intelSourcesWriteQueue/)
-    assert.match(src, /保存回执不一致/)
-    assert.match(src, /source\.url, target: '_blank', rel: 'noopener noreferrer'/)
-    assert.match(src, /官网入口 · API 未接入/)
-    assert.match(src, /本地资产组合查询 · 已接通/)
+    const view = src.slice(src.indexOf('function LocalAssetSearchTab(props)'), src.indexOf('function EnvTab(props)'))
+    assert.match(view, /surveyCard\('overview'/)
+    assert.match(view, /surveyCard\('sources'/)
+    assert.match(view, /surveyCard\('query'/)
+    assert.match(view, /fofaConnectionGet/)
+    assert.match(view, /fofaConnectionSave/)
+    assert.match(view, /fofaConnectionTest/)
+    assert.match(view, /fofaSearch/)
+    assert.match(view, /scopedIntelLookup/)
+    assert.match(view, /scopedCtLookup/)
+    assert.match(view, /scopedDnsLookup/)
+    assert.doesNotMatch(view, /选择常用测绘平台|官网入口 · API 未接入|简洁且可用|开箱即用/)
   }
 })
 
