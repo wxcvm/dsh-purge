@@ -141,7 +141,7 @@ Windows PowerShell 可用 `$env:EXPECTED_VPS2_IP` 作为参数；
 脚本首先要求活动节点是 **已启用的三跳 Mode B** 且
 `strictEgress=true`；否则在**发出任何网络请求之前**拒绝。
 符合要求时，通过现有 `requestWithProxyPool`，以
-`requireProxy: true` 只向 `https://api.ipify.org/` 发送
+`requireProxy: true` 只向 `https://api4.ipify.org/` 发送
 一次明确的 HTTPS 请求，将返回的公网 IPv4 与预期 VPS2 地址比较。
 节点关闭、上游断开、出口不匹配或不可验证均返回失败，
 不会在脚本内建立直连后备。成功只报告匹配、不回显实际出口 IP。
