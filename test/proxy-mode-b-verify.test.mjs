@@ -45,7 +45,7 @@ test('one explicitly proxied request validates exit, but never claims intermedia
     request: async (root, url, options) => {
       requests++
       assert.equal(root, '/fixture')
-      assert.equal(url, 'https://api.ipify.org/')
+      assert.equal(url, 'https://api4.ipify.org/')
       assert.equal(options.requireProxy, true)
       assert.equal(options.timeout, 15000)
       return { statusCode: 200, body: '8.8.8.8\n' }
