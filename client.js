@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "230af90b59c343d9";
+		const CLIENT_BUILD_ID = "2e9ddff2b6ede92e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -2225,6 +2225,13 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		function RestartAsk(props) {
+			const [, refreshPortal] = useState(0);
+			useEffect(() => {
+				if (typeof document === "undefined") return;
+				const sync = () => refreshPortal((revision) => revision + 1);
+				document.addEventListener("fullscreenchange", sync);
+				return () => document.removeEventListener("fullscreenchange", sync);
+			}, []);
 			const node = h("div", {
 				className: "dshp-restart-mask",
 				"data-theme": props.theme === "dusk" ? "dusk" : "white",
@@ -2245,7 +2252,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			try {
 				const rd = require("react-dom");
 				if (rd && typeof rd.createPortal === "function" && typeof document !== "undefined" && document.body) {
-					return rd.createPortal(node, document.body);
+					const fullscreen = document.fullscreenElement;
+					const target = fullscreen?.matches?.(".dshp-dock.dshp-workspace") ? fullscreen : document.body;
+					return rd.createPortal(node, target);
 				}
 			} catch { /* host 可能没暴露 react-dom */ }
 			return node;
