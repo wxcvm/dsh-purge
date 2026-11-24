@@ -71,7 +71,7 @@ test('overview is triggered by a button, not automatic posture loading', () => {
   }
 })
 
-test('Mode B configured intent is shown as unverified; unknown and malformed values are not trusted', async () => {
+test('Mode B bridge accepts only explicit executor exit comparison states', async () => {
   const make = network => {
     const value = fixture()
     if (network !== undefined) value.overview.execution_network = network
@@ -84,33 +84,64 @@ test('Mode B configured intent is shown as unverified; unknown and malformed val
   assert.equal(absent.summary.network.configuration, 'not_reported')
   assert.equal(absent.summary.network.verification, 'not_tested')
 
-  const network = { mode: 'B', configuration: 'configured_only', verification: 'not_tested',
+  const legacy = { mode: 'B', configuration: 'configured_only', verification: 'not_tested',
     scope: 'runner_builtins_intended', final_exit: 'not_tested',
     proxy_url: 'http://private-secret@untrusted.example:7890' }
-  const configured = await read(make(network))
+  const configured = await read(make(legacy))
   assert.equal(configured.status, 'complete')
   assert.deepEqual(configured.summary.network, {
     mode: 'B', configuration: 'configured_only', verification: 'not_tested',
     scope: 'runner_builtins_intended', finalExit: 'not_tested',
+    actualEgress: 'not_tested', observedAt: null, failClosed: 'not_tested',
+    verifyBeforeTask: false, coveredProcesses: [],
   })
   assert.doesNotMatch(JSON.stringify(configured), /private-secret|untrusted.example/)
+
+  const verified = {
+    ...legacy,
+    verification: 'exit_ip_match',
+    final_exit: 'matched_expected',
+    actual_egress: 'matches_expected',
+    observed_at: '2026-11-24T05:00:00.123456789Z',
+    fail_closed: 'not_tested',
+    verify_before_task: false,
+    covered_processes: ['linux_docker_tool_executor_proxy_aware'],
+    observed_ip: '203.0.113.99',
+  }
+  const matched = await read(make(verified))
+  assert.equal(matched.status, 'complete')
+  assert.deepEqual(matched.summary.network, {
+    mode: 'B', configuration: 'configured_only', verification: 'exit_ip_match',
+    scope: 'runner_builtins_intended', finalExit: 'matched_expected',
+    actualEgress: 'matches_expected', observedAt: verified.observed_at,
+    failClosed: 'not_tested', verifyBeforeTask: false,
+    coveredProcesses: ['linux_docker_tool_executor_proxy_aware'],
+  })
+  assert.doesNotMatch(JSON.stringify(matched), /203\.0\.113\.99|private-secret|untrusted.example/)
+
   for (const bad of [
-    { ...network, verification: 'verified' },
-    { ...network, final_exit: 'vps2' },
-    { ...network, configuration: 'not_configured' },
-    { ...network, scope: 'all_processes' },
+    { ...verified, verification: 'verified' },
+    { ...verified, final_exit: 'vps2' },
+    { ...verified, configuration: 'not_configured' },
+    { ...verified, scope: 'all_processes' },
+    { ...verified, actual_egress: '203.0.113.99' },
+    { ...verified, verify_before_task: true },
+    { ...verified, observed_at: 'not-a-date' },
+    { ...verified, covered_processes: ['external_mcp'] },
+    { ...verified, actual_egress: 'mismatch' },
   ]) {
     const result = await read(make(bad))
     assert.equal(result.status, 'invalid_response')
     assert.equal(result.summary, null)
   }
 })
-test('both Purge clients distinguish saved Mode B configuration from verified network', () => {
+test('both Purge clients distinguish an exit-IP comparison from hop and process coverage', () => {
   for (const file of ['../lib/redteam/client.js', '../client.js']) {
     const src = readFileSync(new URL(file, import.meta.url), 'utf8')
     assert.match(src, /ARTEX 任务网络（模式 B）/)
-    assert.match(src, /VPS2 未核验/)
-    assert.match(src, /最终出口未验证/)
+    assert.match(src, /预期最终出口 IP 已匹配/)
+    assert.match(src, /逐跳未核验/)
+    assert.match(src, /失败关闭未验证/)
     assert.match(src, /MCP、外部浏览器和 Windows 原生任务不在此覆盖范围/)
   }
 })
