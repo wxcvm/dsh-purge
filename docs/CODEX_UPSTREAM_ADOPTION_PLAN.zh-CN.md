@@ -240,3 +240,11 @@ gh issue view 351 -R wxcvm/dsh-purge
 新版页面保存人工备注时，会同时带上读到的本地回执修订号。响应丢失后重试同一内容不会再写一遍；另一窗口已改过时，页面显示已保存状态和备注，可用它作为新的比对基线，自己的草稿不会丢。已有明确证据版本的回执不会被旧版或缺少版本的报告覆盖。旧数据库自动补修订号，现有回执不迁走，导出的回执格式也不变。
 
 旧 ARTEX SARIF 只给出发现、任务 ID 与证据版本，不携带数据库来源。[ARTEX #188](https://github.com/wxcvm/ARTEX/pull/188) 为新导出添加 `runs[].properties.artexSourceId`。Purge 按来源和记录编号保存、查阅与导出新的人工回执；没有来源的旧报告和旧记录仍可读写，但不自动归属，也不会与新来源混用。标识是报告的声明，不是签名、已配对公司或凭据。跨端配对和身份验收仍以 [#346](https://github.com/wxcvm/dsh-purge/issues/346) 为准。
+
+
+### 2026-11-24 · rc.5 agent-instructions 的剩余前言分支
+
+- 上游 core.js #100 的 REPLACEMENT_AGENT_INSTRUCTIONS_INTRO 由本仓 #2 继续恢复官方 system/developer/direct-user 优先级；不采用上游将其提升为 ACTIVE and MANDATORY 的版本。
+- 新增本仓 #96，选择性处理此前未覆盖的 EMPTY_REPLACEMENT_AGENT_INSTRUCTIONS_INTRO、ADDITIONAL_INSTRUCTIONS_GUIDANCE 与 COMPACT_AGENT_INSTRUCTIONS_INTRO。空基线明确系统提示词仍权威；追加和截断分支说明剩余工作区指令在自身作用域内适用，并明确不得覆盖 system、developer 或 direct user instructions。
+- 不采用上游 Do not treat them as untrusted data 或 approval is auto-granted 等越权/可能误述宿主状态的措辞。PTC #101 继续等待 rc.5 实际参数、宿主审批结果与执行记录对账，不伪报授权通过。
+- 回归覆盖三种 rc.5 常量、部分升级可继续补齐及重复 Apply 幂等；旧宿主缺少这些常量时该补丁为 optional，不制造兼容性失败。
