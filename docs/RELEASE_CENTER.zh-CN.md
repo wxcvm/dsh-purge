@@ -2,6 +2,14 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
+## 当前 Release 对账 · 2026-11-24
+
+- **最新正式版**：[v1.1.92-wxcvm.24](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.24)，2026-11-23 04:41 UTC 发布；轻量标签直接指向 [1932650](https://github.com/wxcvm/dsh-purge/commit/193265068b424ecc4f714533e14e9b4032b25d9e)，与 [Release 工作流 #45113300467](https://github.com/wxcvm/dsh-purge/actions/runs/45113300467) 的成功记录一致。
+- **资产元数据**：ZIP `dsh-purge-1.1.92-wxcvm.24.zip`，4,535,118 字节，GitHub digest `sha256:250bbe89d37de76c8209b5c155dfed49a08cecc4cf4a917b855a332289564cdf`；`SHA256SUMS.txt`，96 字节，digest `sha256:1faa29d8caec847af30ca3cd96ac865ad960d54fce3068d72e6c2d3937523a68`；两项均为 uploaded。本次未独立下载资产并校验清单文本。
+- **同 SHA 主线兼容性**：[工作流 #45113275075](https://github.com/wxcvm/dsh-purge/actions/runs/45113275075) 的 Windows 和 Ubuntu 两项均为 cancelled，不计为通过。发布工作流成功不能代替兼容性或实机验收。
+- **源码与发布分离**：本次核对的 master [b053a55](https://github.com/wxcvm/dsh-purge/commit/b053a5507cca355b2bdf4900f1f37f7da6d59131) 包含之后合并的 #520 敏感配置导出保护；不能将此修复归入已发布 .24。当前仓库为公开。
+- **实机验收**：未在本次核查中执行 Desktop 或 Web 安装、重启、界面验证及回退。下方 .20 及更早记录均为历史快照。
+
 ## 2026-11-22 · Stable .20 正式交付
 
 - **实际发布**：[v1.1.92-wxcvm.20](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.20)，独立轻量标签指向 [`8fa76dda23a59984040c3af61a7134616c51d168`](https://github.com/wxcvm/dsh-purge/commit/8fa76dda23a59984040c3af61a7134616c51d168)，与发布工作流的 `head_sha` 一致；`.19` 等旧标签和资产未覆盖。
