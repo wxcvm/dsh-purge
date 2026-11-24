@@ -55,3 +55,15 @@ test('restart colors and color-scheme follow the portal when the host palette di
     ), 'host dark fallback for restart card and buttons applies only without an explicit theme')
   }
 })
+
+test('restart confirmation keeps actions accessible in short or narrow viewports', () => {
+  const mask = client.match(/\.dshp-restart-mask\{([^}]+)\}/)?.[1]
+  const card = client.match(/\.dshp-restart-card\{([^}]+)\}/)?.[1]
+  assert.match(mask, /box-sizing:border-box/)
+  assert.match(mask, /padding:clamp\(8px,4vmin,24px\)/)
+  assert.match(card, /max-height:100%/)
+  assert.match(card, /min-height:0/)
+  assert.match(card, /overflow:auto/)
+  assert.match(card, /overscroll-behavior:contain/)
+  assert.match(client, /\.dshp-restart-card \.dshp-modal-ops\{flex-wrap:wrap\}/)
+})
