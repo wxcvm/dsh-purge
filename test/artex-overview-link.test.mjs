@@ -119,6 +119,22 @@ test('Mode B bridge accepts only explicit executor exit comparison states', asyn
   })
   assert.doesNotMatch(JSON.stringify(matched), /203\.0\.113\.99|private-secret|untrusted.example/)
 
+  for (const state of [
+    { verification: 'exit_ip_mismatch', final_exit: 'mismatch', actual_egress: 'mismatch' },
+    { verification: 'probe_failed', final_exit: 'unavailable', actual_egress: 'unavailable' },
+  ]) {
+    const result = await read(make({ ...verified, ...state }))
+    assert.equal(result.status, 'complete')
+    assert.equal(result.summary.network.verification, state.verification)
+    assert.equal(result.summary.network.finalExit, state.final_exit)
+    assert.equal(result.summary.network.actualEgress, state.actual_egress)
+  }
+
+  const modeOffWithRuntimeEvidence = await read(make({
+    ...verified, mode: 'off', configuration: 'not_configured', scope: 'none',
+  }))
+  assert.equal(modeOffWithRuntimeEvidence.status, 'invalid_response')
+
   for (const bad of [
     { ...verified, verification: 'verified' },
     { ...verified, final_exit: 'vps2' },
