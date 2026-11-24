@@ -47,7 +47,7 @@ test('dashboard computes complete counts, masked projection, filtering and pagin
     assert.ok(!JSON.stringify(all).includes('/private/evidence/ref'));
     assert.ok(!JSON.stringify(all).includes('user:pw@'));
     assert.ok(!JSON.stringify(all).includes('ANOTHER_PRIVATE_VALUE'));
-    const onlySsh = readSensitiveIntel(db, { category: 'ssh', query: 'asset', limit: 1 }, now);
+    const onlySsh = readSensitiveIntel(db, { category: 'ssh', query: 'operator', limit: 1 }, now);
     assert.equal(onlySsh.total, 1);
     assert.equal(onlySsh.items[0].id, 1);
     const page = readSensitiveIntel(db, { offset: 1, limit: 1 }, now);
@@ -107,7 +107,10 @@ test('metadata filters escape LIKE wildcards and never return secret or full acc
     assert.equal(a.items[0].related_asset_data_proofs, 1);
     assert.equal(readSensitiveIntel(db, { category: 'ssh' }).items[0].related_asset_http_evidence, 0);
     assert.equal(readSensitiveIntel(db, { query: '%', limit: 1 }).total, 0);
-    assert.equal(readSensitiveIntel(db, { query: '_' }).total, 0);
+    assert.equal(readSensitiveIntel(db, { query: 'nope_' }).total, 0);
+    assert.equal(readSensitiveIntel(db, { query: 'ANOTHER_PRIVATE_VALUE' }).total, 0);
+    db.prepare("UPDATE credential SET host = 'plain.example' WHERE id = 2").run();
+    assert.equal(readSensitiveIntel(db, { query: 'plain.example' }).total, 1);
     assert.equal(readSensitiveIntel(db, { query: 'operator' }).total, 2);
     assert.ok(!JSON.stringify(a).includes('PRIVATE_SECRET_DO_NOT_RETURN'));
     assert.ok(!JSON.stringify(a).includes('user:pw@'));
