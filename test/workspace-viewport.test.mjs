@@ -60,3 +60,11 @@ test("host panel access failures return false without hiding the workspace", () 
   assert.equal(make({ layout: { selectPanel(p) { selected = p; } } }, logger)(null), true);
   assert.equal(selected, null);
 });
+
+test("workspace navigation keeps keyboard focus visible and narrow tab rows scrollable", () => {
+  const tabs = css.match(/\.dshp-workspace \.dshp-workspace-tabs\{([^}]+)\}/)?.[1];
+  assert.match(tabs, /min-width:0;max-width:100%;overflow-x:auto/);
+  assert.match(tabs, /overscroll-behavior-inline:contain/);
+  assert.match(css, /\.dshp-workspace \.dshp-workspace-tabs button\{flex:none\}/);
+  assert.match(css, /\.dshp-workspace \.dshp-workspace-nav button:focus-visible\{outline:2px solid #78b6ff;outline-offset:-2px\}/);
+});
