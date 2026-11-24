@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "fb03e3540fef3950";
+		const CLIENT_BUILD_ID = "79f7e2e4bfeefef0";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7710,7 +7710,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         ['pending', '待研判'], ['reviewing', '研判中'], ['confirmed', '人工确认'],
         ['false_positive', '误报'], ['resolved', '已处置'],
       ]
-      const saveReview = (item, status) => {
+      const saveSensitiveReview = (item, status) => {
         if (savingId !== null || !eng) return
         setNotice('')
         setSavingId(item.id)
@@ -7823,7 +7823,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('span', { className: 'rt-foot' }, '人工复核状态（不执行登录验证）'),
                 h('select', { className: 'rt-input', value: item.review_status || 'pending',
                   disabled: savingId !== null,
-                  onChange: (e) => saveReview(item, e.target.value) },
+                  onChange: (e) => saveSensitiveReview(item, e.target.value) },
                   reviewOptions.map(([id, label]) => h('option', { key: id, value: id }, label))),
                 item.reviewed_at ? h('span', { className: 'rt-foot' }, '更新：' + item.reviewed_at) : null))),
           result && result.total > limit ? h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 } },
