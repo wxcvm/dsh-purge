@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "c1deb3babc888166";
+		const CLIENT_BUILD_ID = "230af90b59c343d9";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4098,7 +4098,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			try {
 				if (typeof document !== "undefined") {
 					const root = document.documentElement;
-					if (document.body?.hasAttribute("data-ds-dark-theme") || root?.hasAttribute("data-ds-dark-theme")) return "dusk";
+					const darkMarker = (target) => {
+						if (!target?.hasAttribute("data-ds-dark-theme")) return false;
+						const value = String(target.getAttribute?.("data-ds-dark-theme") ?? "").trim().toLowerCase();
+						return !["false", "0", "off", "no"].includes(value);
+					};
+					if (darkMarker(document.body) || darkMarker(root)) return "dusk";
 					const inline = root?.style?.colorScheme;
 					const style = !inline && root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
 					schemes = (inline || style?.colorScheme || style?.getPropertyValue?.("color-scheme") || "")
