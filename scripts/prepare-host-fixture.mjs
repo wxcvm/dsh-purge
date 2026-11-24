@@ -10,7 +10,7 @@ if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2
   throw new Error('Select one of the explicitly reviewed fixture versions.');
 }
 const root = fileURLToPath(new URL('../', import.meta.url));
-const directory = path.join(root, '.scratch', 'hosts', version === latestHost ? version + '-ptc' : version);
+const directory = path.join(root, '.scratch', 'hosts', version === latestHost ? version + '-child' : version);
 const response = await fetch(`https://registry.npmjs.org/@deepseek-ai%2Fdsh-tools/${encodeURIComponent(version)}`);
 if (!response.ok) throw new Error(`official package metadata HTTP ${response.status}`);
 const metadata = await response.json();
@@ -61,7 +61,7 @@ if (metadata.peerDependencies?.['@deepseek-ai/dsh-sandbox']) {
 }
 // Add only pinned official packages to the current fixture for PTC denial contracts.
 if (version === latestHost) {
-  for (const name of ['@deepseek-ai/dsh-tool-executor-ptc', '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-working-directory']) dependencies[name] = version;
+  for (const name of ['@deepseek-ai/dsh-tool-executor-ptc', '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-working-directory', '@deepseek-ai/dsh-subagent', '@deepseek-ai/dsh-subagent-spawn-in-process', '@deepseek-ai/dsh-session-persistence-jsonl', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-typert-protocol', '@deepseek-ai/dsh-util-time', '@deepseek-ai/dsh-brand']) dependencies[name] = version;
 }
 const manifest = JSON.stringify({
   name: `dsh-purge-host-fixture-${version}`,
