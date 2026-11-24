@@ -12,6 +12,7 @@ import {
   proxyProfileSave,
 } from '../lib/redteam/proxy-pool.js'
 import { handleProxyOp } from '../lib/redteam/proxy-api.js'
+import { isTrustedLocalRequest, authorizeBridgeRequest } from '../lib/redteam/bridge-auth.js'
 
 const fixtureNodes = () => [
   { type: 'socks5', server: '127.0.0.1', port: 7890 },
@@ -102,16 +103,34 @@ test('ARTEX export is unavailable without an active strict chain or a Docker-rea
   assert.throws(() => proxyPoolExportArtexModeBConfig(root), /严格出口模式 B/)
 })
 
-test('Purge exposes ARTEX export only as an explicit local API operation', async (t) => {
+test('credential export requires trusted local server context; remote token alone is insufficient', async (t) => {
   const root = await configuredPool(t, fixtureNodes())
-  const result = await handleProxyOp(root, { op: 'proxyModeBExportArtex' })
+  const op = { op: 'proxyModeBExportArtex' }
+  const host = '127.0.0.1:53380'
+  const local = { socket: { remoteAddress: '127.0.0.1' },
+    headers: { host, origin: 'http://' + host } }
+  const remote = { socket: { remoteAddress: '203.0.113.5' },
+    headers: { host: 'example.test', origin: 'https://example.test', 'x-dsh-purge-token': 'test-token' } }
+  assert.equal(authorizeBridgeRequest(remote, { token: 'test-token' }).ok, true)
+  const forwarded = { ...local, headers: { ...local.headers, 'x-forwarded-for': '203.0.113.5' } }
+  const untrustedOrigin = { ...local, headers: { host, origin: 'null' } }
+  for (const request of [remote, forwarded, untrustedOrigin]) {
+    const denied = await handleProxyOp(root, op, { allowCredentialExport: isTrustedLocalRequest(request) })
+    assert.equal(denied.ok, false)
+    assert.equal(denied.yaml, undefined)
+    assert.doesNotMatch(JSON.stringify(denied), /fixture-vps[12]-uuid|fixture-vps[12]-public-key/)
+  }
+  for (const request of [op, { ...op, allowCredentialExport: true }]) {
+    const denied = await handleProxyOp(root, request)
+    assert.equal(denied.ok, false)
+    assert.equal(denied.yaml, undefined)
+  }
+  const result = await handleProxyOp(root, op, { allowCredentialExport: isTrustedLocalRequest(local) })
   assert.equal(result.ok, true)
   assert.equal(result.filename, 'config.yaml')
   assert.match(result.yaml, /fixture-vps2-uuid/)
-  const unknown = await handleProxyOp(root, { op: 'proxyModeBExportArtex', yaml: 'ignored' })
-  assert.equal(unknown.ok, true)
-  const source = readFileSync(new URL('../lib/redteam/proxy-api.js', import.meta.url), 'utf8')
-  assert.match(source, /proxyModeBExportArtex/)
+  const source = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
+  assert.ok(source.includes('allowCredentialExport: isTrustedLocalRequest(req)'))
 })
 
 test('Purge environment page offers a credential-confirmed ARTEX export in source and bundle', () => {
