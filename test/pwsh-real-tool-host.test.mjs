@@ -15,6 +15,11 @@ test("official rc.5 Windows ToolRuntime executes pwsh with the same-mode empty-j
     : !process.env.DSH_COMPAT_HOST_ROOT && "requires pinned official host fixture",
 }, async t => {
   const fixtureRoot = process.env.DSH_COMPAT_HOST_ROOT;
+  const toolsManifest = JSON.parse(fs.readFileSync(path.join(fixtureRoot, "node_modules", "@deepseek-ai", "dsh-tools", "package.json"), "utf8"));
+  if (toolsManifest.version !== "0.2.2-rc.5") {
+    t.skip("requires the exact official rc.5 fixture; found " + toolsManifest.version);
+    return;
+  }
   const req = createRequire(path.join(fixtureRoot, "package.json"));
   const sandboxFile = path.join(fixtureRoot, "node_modules", "@deepseek-ai", "dsh-sandbox", "lib", "index.js");
   const originalSandbox = fs.readFileSync(sandboxFile, "utf8");
