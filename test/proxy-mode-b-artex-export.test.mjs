@@ -113,3 +113,14 @@ test('Purge exposes ARTEX export only as an explicit local API operation', async
   const source = readFileSync(new URL('../lib/redteam/proxy-api.js', import.meta.url), 'utf8')
   assert.match(source, /proxyModeBExportArtex/)
 })
+
+test('Purge environment page offers a credential-confirmed ARTEX export in source and bundle', () => {
+  for (const file of ['../lib/redteam/client.js', '../client.js']) {
+    const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(source, /proxyModeBExportArtex/)
+    assert.match(source, /window\.confirm/)
+    assert.match(source, /导出 ARTEX Docker 配置（包含凭据）/)
+    assert.match(source, /ARTEX\/network\/mode-b\//)
+    assert.match(source, /绝不可提交仓库/)
+  }
+})
