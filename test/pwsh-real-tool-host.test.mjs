@@ -54,6 +54,7 @@ test("official rc.5 Windows ToolRuntime executes pwsh with the same-mode empty-j
   const ctx = new Context();
   const cwd = process.cwd();
   let approvalCalls = 0;
+  let approvalReason = null;
   let effectiveMode = "danger-full-access";
   class TestPwshExecutor extends PwshLocalExecutor {
     get sandboxMode() { return effectiveMode; }
@@ -73,8 +74,9 @@ test("official rc.5 Windows ToolRuntime executes pwsh with the same-mode empty-j
     }),
   });
   ctx.provide("approval", {
-    async request() {
+    async request(request) {
       approvalCalls += 1;
+      approvalReason = request.reason;
       return "unavailable";
     },
   });
@@ -112,4 +114,31 @@ test("official rc.5 Windows ToolRuntime executes pwsh with the same-mode empty-j
   assert.equal(outcome.value?.stdout?.text?.trim(), marker);
   assert.equal(outcome.value?.stderr?.text?.trim(), "");
   assert.equal(approvalCalls, 0, "a narrower request must not ask for permission escalation");
+
+  // Empty justification is tolerated by the argument normalizer, but a real
+  // read-only → workspace-write widening must still request approval and fail
+  // closed when the approval service reports that no channel is available.
+  effectiveMode = "read-only";
+  const denied = await ctx.tools.execute({
+    calls: [{
+      type: "tool-call",
+      id: ToolCallId("rc5-real-upgrade-empty-justification"),
+      name: "pwsh",
+      arguments: JSON.stringify({
+        description: "This must not execute without an approval channel",
+        command: 'Write-Output "' + marker + '"',
+        timeoutMs: 5_000,
+        sandbox_permissions: "workspace-write",
+        justification: "",
+      }),
+    }],
+    signal: new AbortController().signal,
+    agent: { id: "rc5-pwsh-probe", session: { id: "rc5-pwsh-probe", header: { id: "rc5-pwsh-probe", cwd } } },
+  });
+  assert.equal(denied.results.length, 1);
+  assert.equal(denied.results[0].result.isError, true, "a real widening without an approval channel must fail closed");
+  assert.equal(approvalCalls, 1, "a real widening must ask for approval even with an empty reason");
+  assert.equal(approvalReason, "escalate sandbox to workspace-write: ");
+  assert.equal(JSON.stringify(denied.results[0].result).includes(marker), false,
+    "the denied command must not produce the PowerShell marker");
 });
