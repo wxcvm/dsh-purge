@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "cd090a68df727981";
+		const CLIENT_BUILD_ID = "458c00486d4c1f09";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -17589,9 +17589,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			// gesture persists just the fields the user actually changed.
 			const edit = (patch) => setPreference((previous) => {
 				const base = previous.preferred || defaultDockGeom();
-				const next = clampDockGeom({ ...clampDockGeom(base), ...patch });
+				const current = clampDockGeom(base);
+				const next = clampDockGeom({ ...current, ...patch });
+				const changed = Object.keys(patch).filter((key) => next[key] !== current[key]);
+				if (!changed.length) return previous;
 				const updated = { ...base };
-				for (const key of Object.keys(patch)) updated[key] = next[key];
+				for (const key of changed) updated[key] = next[key];
 				return { preferred: updated, edited: true };
 			});
 			return [visible, edit];
