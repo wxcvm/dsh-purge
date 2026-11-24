@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ALL_PATCHES } from '../lib/patches-definitions.js'
+import { ALL_PATCHES, PATCH_DISPLAY_GROUPS } from '../lib/patches-definitions.js'
 import { applyReplacementsToText } from '../lib/core.js'
 
 const patch = ALL_PATCHES.find(row => row.id === 96)
@@ -13,6 +13,7 @@ const fixture = [
 test('rc.5 empty, additional and compact instruction intros retain scope and priority', () => {
   assert.ok(patch)
   assert.equal(patch.optional, true)
+  assert.ok(PATCH_DISPLAY_GROUPS.disclaimer.includes(96))
   const result = applyReplacementsToText(fixture, patch, '/fixture/dsh-agent-instructions/lib/index.js')
   assert.equal(result.changed, true)
   for (const marker of patch.markers) assert.ok(result.text.includes(marker), marker)
