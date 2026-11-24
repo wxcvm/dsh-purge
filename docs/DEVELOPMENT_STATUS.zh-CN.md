@@ -2,7 +2,13 @@
 
 [返回工作台](../README.md) · [版本中心](RELEASE_CENTER.zh-CN.md) · [PR 列表](https://github.com/wxcvm/dsh-purge/pulls) · [问题追踪](https://github.com/wxcvm/dsh-purge/issues)
 
-## 当前对账 · 2026-11-21
+## 当前对账 · 2026-11-24
+
+- 最新正式版为 [v1.1.92-wxcvm.24](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.24)，标签 `1932650`；Release 工作流通过，同 SHA 主线 Windows/Ubuntu 兼容性工作流取消，未计作通过。资产元数据、验收边界见[版本中心](RELEASE_CENTER.zh-CN.md)。
+- 本次核对的 master 为 [b053a55](https://github.com/wxcvm/dsh-purge/commit/b053a5507cca355b2bdf4900f1f37f7da6d59131)，#520 已合并但不在 .24 标签中。仓库当前公开。
+- 配置持久化和窗口绘制分别继续按 [#361](https://github.com/wxcvm/dsh-purge/issues/361) 和 [#364](https://github.com/wxcvm/dsh-purge/issues/364) 追踪实机验收；CI 资源预算按 [#348](https://github.com/wxcvm/dsh-purge/issues/348) 追踪。
+
+## 历史对账 · 2026-11-21
 
 - 主线 `748192d` 的 [Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44901063903) 通过；[合并 PR #429](https://github.com/wxcvm/dsh-purge/pull/429) 已统一通用/局部提示词工作区，加入模型范围操作和独立 Super Agent 页面，不再重复合并旧 PR。
 - 最新正式版 .18 与最新预览版 .7-beta.11 均已按下载资产、校验清单、标签提交和包内关键文件核对；不把后续主线功能或验收归到该资产。详见[版本中心](RELEASE_CENTER.zh-CN.md)。本次查验时仓库为公开；下方私有迁移属于旧快照。
