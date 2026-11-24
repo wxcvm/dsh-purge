@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "458c00486d4c1f09";
+		const CLIENT_BUILD_ID = "c1deb3babc888166";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -71,12 +71,12 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 					throw new Error(r.status + " non-json: " + text.slice(0, 120));
 				}
 				if (!r.ok) throw Object.assign(new Error((data && (data.error || data.message)) ||
-					(r.status + " " + r.statusText)), { code: data?.code });
+					(r.status + " " + r.statusText)), { code: data?.code, httpStatus: r.status });
 				return data;
 			} catch (e) {
 				if (isAbortError(e)) throw new Error("timeout");
 				const msg = String((e && e.message) || e || "");
-				if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+				if (!e?.httpStatus && /failed to fetch|networkerror|load failed/i.test(msg)) {
 					throw new Error("Cannot reach the API. Make sure dsh is still running, then press Ctrl+F5");
 				}
 				throw e;
@@ -271,6 +271,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"uninstall.done": "已卸载并还原，正在重启…",
 			"uninstall.done.desktop": "已卸载并还原，正在重启桌面应用…",
 			"uninstall.fail": "卸载失败: {error}",
+			"uninstall.unconfirmed": "卸载结果未确认：{error}。请核对宿主实际状态后再决定是否重试。",
 			"btn.checkUpdate": "检测更新",
 			"btn.checkUpdate.busy": "检测中…",
 			"btn.doUpdate": "更新",
@@ -660,6 +661,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"uninstall.done": "Uninstalled and restored. Restarting…",
 			"uninstall.done.desktop": "Uninstalled and restored. Restarting the desktop app…",
 			"uninstall.fail": "Uninstall failed: {error}",
+			"uninstall.unconfirmed": "Uninstall result unconfirmed: {error}. Check the actual host state before retrying.",
 			"btn.checkUpdate": "Check update",
 			"btn.checkUpdate.busy": "Checking…",
 			"btn.doUpdate": "Update",
@@ -2932,24 +2934,38 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				setState((prev) => Object.assign({}, prev || {}, {
 					apply_progress: { active: true, kind: "uninstall", stage: "locate", error: "" },
 				}));
-				apiJson("/dsh-purge/uninstall", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+				const finishWithoutSuccess = (msg, rejected) => {
+					actionTerminal.current = true;
+					setNotice({ kind: "error", text: tr(rejected ? "uninstall.fail" : "uninstall.unconfirmed", { error: msg }) });
+					setState((prev) => {
+						const progress = (prev && prev.apply_progress) || {};
+						return Object.assign({}, prev || {}, {
+							apply_progress: {
+								...progress, active: false, kind: "uninstall",
+								stage: progress.stage && !["idle", "done", "restart"].includes(progress.stage) ? progress.stage : "locate",
+								error: rejected ? msg : "",
+							},
+						});
+					});
+					setUninstallBusy(false);
+				};
+				return apiJson("/dsh-purge/uninstall", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
 					.then((d) => {
-						if (!d || !d.ok) throw new Error((d && d.error) || "uninstall failed");
+						if (!d || typeof d.ok !== "boolean") {
+							finishWithoutSuccess("missing receipt", false);
+							return;
+						}
+						if (!d.ok) {
+							finishWithoutSuccess(String(d.error || "uninstall failed"), true);
+							return;
+						}
 						actionTerminal.current = true;
 						setNotice({ kind: "ok", text: (d && d.note) || hostText(tr, "uninstall.done", d.surface || hostSurfaceOf(state)) });
 						if ((d && d.surface) === "desktop" || (d && d.fullApp) || hostSurfaceOf(state) === "desktop") return;
 						waitHostAfterUninstall(tr);
-					})
-					.catch((e) => {
+					}, (e) => {
 						const msg = String((e && e.message) || e || "");
-						if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-							setNotice({ kind: "ok", text: hostText(tr, "uninstall.done", hostSurfaceOf(state)) });
-							if (hostSurfaceOf(state) === "desktop" || clientGuessSurface() === "desktop") return;
-							waitHostAfterUninstall(tr);
-							return;
-						}
-						setNotice({ kind: "error", text: tr("uninstall.fail", { error: msg }) });
-						setUninstallBusy(false);
+						finishWithoutSuccess(msg, Number.isInteger(e?.httpStatus));
 					});
 			}, [state, waitHostAfterUninstall]);
 
