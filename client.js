@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "b6ae62110c67342f";
+		const CLIENT_BUILD_ID = "dbbeac84b18c70ad";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12013,6 +12013,33 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setModeBResult({ ok: false, message: '网络请求失败，不能证明出口正确。' })
         } finally { setModeBBusy('') }
       }
+      const exportModeBForArtex = async () => {
+        if (modeBBusy) return
+        if (!window.confirm('将从 Purge 本机私有代理池导出 ARTEX Docker 配置。下载文件包含机场入口及 VPS 代理凭据，必须保存在本机私密位置，切勿提交到 Git。继续导出？')) return
+        setModeBBusy('export')
+        setModeBResult(null)
+        try {
+          const result = await api({ op: 'proxyModeBExportArtex' })
+          if (!result?.ok || typeof result.yaml !== 'string' || !result.yaml.trim()) {
+            throw new Error(result?.error || '当前没有可导出的严格模式 B 链路')
+          }
+          const blob = new Blob([result.yaml], { type: 'application/yaml;charset=utf-8' })
+          const objectUrl = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = objectUrl
+          link.download = result.filename || 'config.yaml'
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+          setModeBResult({
+            ok: true,
+            message: '已导出 ARTEX Docker 配置（' + result.hopCount + ' 跳，最终节点 ' + result.finalExit + '）。将文件放入 ARTEX/network/mode-b/ 并命名为 config.yaml。FlClash 入口必须允许 Docker host-gateway 访问；若仅监听 127.0.0.1，ARTEX 无法连接。该文件包含凭据，请勿提交 Git。'
+          })
+        } catch (error) {
+          setModeBResult({ ok: false, message: String(error?.message || 'ARTEX 配置导出失败') })
+        } finally { setModeBBusy('') }
+      }
       const modeBVpsFields = (title, vps, setVps) => h('div', {
         style: { border: '1px solid var(--rt-border,#404550)', borderRadius: 7, padding: 10, marginTop: 8 },
       },
@@ -12060,9 +12087,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onChange: e => setModeBExitIp(e.target.value), autoComplete: 'off' })),
           h('button', { className: 'rt-btn', style: { marginTop: 7 },
             disabled: !!modeBBusy || !modeBExitIp.trim(), onClick: verifyModeBFromPage },
-            modeBBusy === 'verify' ? '正在验证…' : '验证插件 VPS2 出口（无需命令）')),
+            modeBBusy === 'verify' ? '正在验证…' : '验证插件 VPS2 出口（无需命令）'),
+          h('button', { className: 'rt-btn', style: { marginTop: 7 },
+            disabled: !!modeBBusy, onClick: exportModeBForArtex },
+            modeBBusy === 'export' ? '正在生成配置…' : '导出 ARTEX Docker 配置（包含凭据）')),
         modeBResult ? h('p', { className: modeBResult.ok ? 'rt-foot' : 'rt-note' },
           modeBResult.message) : null,
+        h('p', { className: 'rt-foot' },
+          '导出只生成 ARTEX 私有 Mihomo 配置，不启动 ARTEX、不修改 Docker/Windows 网络；ARTEX 的隔离执行器仍需单独启动并完成出口验证。导出文件含凭据，绝不可提交仓库。'),
         h('p', { className: 'rt-foot' },
           '范围提示：不能据此认定 Harness 模型、外部 MCP、Windows TUN 或整机 DNS/IPv6 已受到保护。'))
       const [folderPath, setFolderPath] = React.useState('')

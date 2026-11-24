@@ -123,6 +123,33 @@ Purge 的「环境适配 → 网络配置」现在直接提供
 本页的出口验证要求真实 **三跳**、严格出口开启，并由用户手填
 预期 VPS2 公网 IPv4。命令行脚本保留给高级故障排查，不再是必选步骤。
 
+## 导出给 ARTEX Docker 使用（本机显式下载）
+
+在「环境适配 → 网络配置」保存并启用 Purge 严格模式 B 后，可点击
+**导出 ARTEX Docker 配置（包含凭据）**。导出只读取当前活动的 2/3 跳
+Mode B 节点，生成 ARTEX 的 `network/mode-b/config.yaml` 格式；
+本机 FlClash 的 `127.0.0.1` / `localhost` 入口会改写为
+`host.docker.internal`，VPS1/VPS2 的拨号链、最终 MATCH 路由与
+DNS 最终节点保持一致。不会启动 ARTEX、启动 Purge Mihomo、修改
+Windows 路由、系统代理或 TUN，也不会将凭据上传到外部服务。
+
+下载后将文件放到 ARTEX 仓库的 `network/mode-b/` 目录并命名为
+`config.yaml`。该文件包含机场入口和 VPS 代理凭据，必须留在本机私密
+目录，**不要提交 Git、上传工单或粘贴到聊天中**。
+
+**Docker 入口要求：** ARTEX 的网关容器通过 `host.docker.internal`
+连接本机 FlClash 监听端口。Purge 的本地检测只证明回环端口在本机可连，
+不证明 Docker host-gateway 可达。如果 FlClash 只绑定
+`127.0.0.1`，容器通常无法连接；需要让监听器接受 Docker host-gateway
+流量，并用 Windows 防火墙将来源限制到 Docker 网关/执行网络，不能简单
+向整个局域网开放代理端口。ARTEX 的网关端口不应发布到宿主机。
+
+此配置仅用于 ARTEX Linux Docker tool-executor 中显式使用代理的请求；
+不覆盖模型 API、外部 MCP、浏览器、Windows 原生程序或系统 TUN。
+ARTEX 仍需单独启动 Mode B Compose，并在 ARTEX 隐私页完成一次出口验证。
+无须为此开启 Windows TUN，也无须重新填写机场订阅；但首次下载后需要
+将文件放入 ARTEX 配置目录。
+
 ## Purge 模式 B 出口验收（操作者显式执行）
 
 完成模式 B 三跳节点配置后，可以从 **Purge 运行环境相同的主机与
@@ -141,7 +168,7 @@ Windows PowerShell 可用 `$env:EXPECTED_VPS2_IP` 作为参数；
 脚本首先要求活动节点是 **已启用的三跳 Mode B** 且
 `strictEgress=true`；否则在**发出任何网络请求之前**拒绝。
 符合要求时，通过现有 `requestWithProxyPool`，以
-`requireProxy: true` 只向 `https://api.ipify.org/` 发送
+`requireProxy: true` 只向 `https://api4.ipify.org/` 发送
 一次明确的 HTTPS 请求，将返回的公网 IPv4 与预期 VPS2 地址比较。
 节点关闭、上游断开、出口不匹配或不可验证均返回失败，
 不会在脚本内建立直连后备。成功只报告匹配、不回显实际出口 IP。
