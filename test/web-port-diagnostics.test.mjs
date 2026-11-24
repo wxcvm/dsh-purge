@@ -25,8 +25,11 @@ test('Unix lsof and ss outputs deduplicate the actual listener PIDs', () => {
     'LISTEN 0 128 0.0.0.0:43120 0.0.0.0:* users:(("node",pid=321,fd=7))',
     'LISTEN 0 128 [::]:43120 [::]:* users:(("node",pid=322,fd=8))',
     'LISTEN 0 128 0.0.0.0:431200 0.0.0.0:* users:(("node",pid=323,fd=9))',
+    'LISTEN 0 128 0.0.0.0:43121 0.0.0.0:43120 users:(("node",pid=324,fd=10))',
+    'ESTAB 0 0 127.0.0.1:43120 127.0.0.1:43121 users:(("node",pid=325,fd=11))',
+    'LISTEN\t0\t128\t*:43120\t*:* users:(("node",pid=326,fd=12))',
   ].join('\n')
-  assert.deepEqual(parseSsListeners(ss, 43120), [321, 322])
+  assert.deepEqual(parseSsListeners(ss, 43120), [321, 322, 326])
 })
 
 test('only the real DSH web entry matches; a node process alone is insufficient', () => {
