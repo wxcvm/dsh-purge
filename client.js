@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "a5327df6eeccf351";
+		const CLIENT_BUILD_ID = "fb03e3540fef3950";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7816,6 +7816,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 (item.has_secret ? '已存凭据值（隐藏）' : '未存凭据值') + ' · ' +
                 (item.has_evidence_ref ? '有证据引用' : '无证据引用') + ' · ' +
                 (item.found_at || '时间未记录')),
+              h('div', { className: 'rt-foot', title: '以下是同一资产上保存的证据数量，并非该凭据的登录验证结果' },
+                '同资产 HTTP 证据：' + (item.related_asset_http_evidence || 0) +
+                ' · 同资产数据证明：' + (item.related_asset_data_proofs || 0)),
               h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 } },
                 h('span', { className: 'rt-foot' }, '人工复核状态（不执行登录验证）'),
                 h('select', { className: 'rt-input', value: item.review_status || 'pending',
