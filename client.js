@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "dbbeac84b18c70ad";
+		const CLIENT_BUILD_ID = "cd090a68df727981";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -1138,7 +1138,7 @@ html:not([data-ds-dark-theme]) body:not([data-ds-dark-theme]) .dshp-restart-mask
 .dshp-root em,.dshp-dock em,.rt-flow-action.inferred,.rt-ap-act.inferred{font-style:normal}
 @media (prefers-reduced-motion:reduce){.dshp-btn,.dshp-bar>i,.dshp-flow-node{transition:opacity 300ms var(--dshp-ease)}.dshp-btn:hover:not(:disabled),.dshp-flow-node.is-cur{transform:none}.dshp-skel{animation:none}}
 
-.dshp-dock{position:fixed;top:12px;right:12px;z-index:10050;display:flex;flex-direction:column;width:var(--dshp-dock-w,620px);height:var(--dshp-dock-h,72vh);min-width:380px;min-height:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,var(--dshp-paper,#fffcf7)) 52%,transparent);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 65%,transparent);border-radius:12px;box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent),0 0 0 1px color-mix(in srgb,#fff 6%,transparent);pointer-events:auto;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));overflow:visible}
+.dshp-dock{position:fixed;top:12px;right:12px;z-index:10050;display:flex;flex-direction:column;width:var(--dshp-dock-w,620px);height:var(--dshp-dock-h,72vh);min-width:min(380px,calc(100vw - 16px));min-height:min(240px,calc(100vh - 16px));max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,var(--dshp-paper,#fffcf7)) 52%,transparent);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 65%,transparent);border-radius:12px;box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent),0 0 0 1px color-mix(in srgb,#fff 6%,transparent);pointer-events:auto;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));overflow:visible}
 .dshp-dock[data-open="0"]{display:none}
 .dshp-dock[data-maximized="1"]{left:8px!important;top:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important;max-width:none;max-height:none}
 .dshp-dock[data-maximized="1"] .dshp-dock-resize,.dshp-dock[data-maximized="1"] .dshp-dock-resize-l,.dshp-dock[data-maximized="1"] .dshp-dock-resize-r,.dshp-dock[data-maximized="1"] .dshp-dock-resize-b{display:none}
@@ -17559,10 +17559,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function clampDockGeom(g) {
 			const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
 			const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-			const w = Math.min(Math.max(380, Number(g && g.w) || 620), Math.max(380, vw - 16));
-			const h = Math.min(Math.max(240, Number(g && g.h) || 520), Math.max(240, vh - 16));
+			const w = Math.min(Math.max(380, Number(g && g.w) || 620), Math.max(1, vw - 16));
+			const h = Math.min(Math.max(240, Number(g && g.h) || 520), Math.max(1, vh - 16));
 			const x = Math.min(Math.max(8, Number(g && g.x) || 8), Math.max(8, vw - w - 8));
-			const y = Math.min(Math.max(8, Number(g && g.y) || 8), Math.max(8, vh - Math.min(h, vh - 16) - 8));
+			const y = Math.min(Math.max(8, Number(g && g.y) || 8), Math.max(8, vh - h - 8));
 			return { x: x, y: y, w: w, h: h };
 		}
 		function loadDockGeom() {
