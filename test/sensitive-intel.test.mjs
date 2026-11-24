@@ -7,6 +7,7 @@ function makeDb() {
   const db = new DatabaseSync(':memory:');
   db.exec('CREATE TABLE credential (id INTEGER PRIMARY KEY, asset_id INTEGER, host TEXT, username TEXT, secret_type TEXT, privilege TEXT, found_at TEXT, secret_value TEXT, secret_ref TEXT)');
   db.exec(`CREATE TABLE credential_review (credential_id INTEGER PRIMARY KEY REFERENCES credential(id) ON DELETE CASCADE, status TEXT NOT NULL, updated_at TEXT NOT NULL)`);
+  db.exec('CREATE TABLE http_evidence (id INTEGER PRIMARY KEY, asset_id INTEGER); CREATE TABLE data_proof (id INTEGER PRIMARY KEY, asset_id INTEGER);');
   return db;
 }
 
@@ -96,10 +97,15 @@ test('metadata filters escape LIKE wildcards and never return secret or full acc
   try {
     add(db, 1, 'ssh-password');
     add(db, 2, 'api-token');
+    db.prepare('INSERT INTO http_evidence VALUES (1, 2)').run();
+    db.prepare('INSERT INTO data_proof VALUES (1, 2)').run();
     const a = readSensitiveIntel(db, { category: 'api', limit: 1 });
     assert.equal(a.total, 1);
     assert.equal(a.items[0].id, 2);
     assert.equal(a.items[0].username, 'o***');
+    assert.equal(a.items[0].related_asset_http_evidence, 1);
+    assert.equal(a.items[0].related_asset_data_proofs, 1);
+    assert.equal(readSensitiveIntel(db, { category: 'ssh' }).items[0].related_asset_http_evidence, 0);
     assert.equal(readSensitiveIntel(db, { query: '%', limit: 1 }).total, 0);
     assert.equal(readSensitiveIntel(db, { query: '_' }).total, 0);
     assert.equal(readSensitiveIntel(db, { query: 'operator' }).total, 2);
