@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ALL_PATCHES } from '../lib/patches-definitions.js'
 import { applyReplacementsToText } from '../lib/core.js'
 
@@ -32,4 +34,19 @@ test('a partially patched host can finish the remaining rc.5 intro updates', () 
   assert.equal(result.changed, true)
   for (const marker of patch.markers) assert.ok(result.text.includes(marker), marker)
   assert.equal(applyReplacementsToText(result.text, patch).changed, false)
+})
+
+test('the installed official rc.5 fixture still matches all three selective source patterns', {
+  skip: !process.env.DSH_COMPAT_HOST_ROOT && 'requires the isolated official host fixture',
+}, () => {
+  const file = join(process.env.DSH_COMPAT_HOST_ROOT, 'node_modules', '@deepseek-ai',
+    'dsh-agent-instructions', 'lib', 'index.js')
+  assert.ok(existsSync(file), 'official dsh-agent-instructions package must be installed')
+  const source = readFileSync(file, 'utf8')
+  for (const { pattern } of patch.replacements) {
+    assert.ok(source.includes(pattern), 'rc.5 source pattern changed: ' + pattern.slice(0, 100))
+  }
+  const result = applyReplacementsToText(source, patch, file)
+  for (const marker of patch.markers) assert.ok(result.text.includes(marker), marker)
+  assert.equal(result.changed, true)
 })
