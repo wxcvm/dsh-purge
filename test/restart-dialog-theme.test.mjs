@@ -4,14 +4,21 @@ import { readFileSync } from 'node:fs'
 
 const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
 
-test('restart confirmation carries its resolved theme through the body portal', () => {
+test('restart confirmation carries its resolved theme through the body or owned fullscreen portal', () => {
   const renderSource = client.match(/function RestartAsk\(props\) \{[\s\S]*?(?=\n\s*const UPDATE_STAGE_LABELS)/)?.[0]
   assert.ok(renderSource)
   const body = {}
+  const workspace = { matches: selector => selector === '.dshp-dock.dshp-workspace' }
+  const foreign = { matches: () => false }
+  const doc = new EventTarget()
+  doc.body = body
+  let cleanup, refreshes = 0
+  const useState = () => [0, update => { refreshes = update(refreshes) }]
+  const useEffect = callback => { if (!cleanup) cleanup = callback() }
   const h = (tag, props, ...children) => ({ tag, props, children })
   const require = () => ({ createPortal: (node, target) => ({ node, target }) })
-  const render = new Function('h', 'Btn', 'require', 'document', renderSource + '\nreturn RestartAsk')(
-    h, 'button', require, { body },
+  const render = new Function('h', 'Btn', 'require', 'document', 'useState', 'useEffect', renderSource + '\nreturn RestartAsk')(
+    h, 'button', require, doc, useState, useEffect,
   )
   for (const [theme, expected] of [['dusk', 'dusk'], ['white', 'white'], [undefined, 'white']]) {
     const { node, target } = render({ theme, t: (key) => key })
@@ -20,6 +27,20 @@ test('restart confirmation carries its resolved theme through the body portal', 
     assert.equal(node.props.role, 'dialog')
     assert.equal(node.props['data-theme'], expected)
   }
+  doc.fullscreenElement = workspace
+  doc.dispatchEvent(new Event('fullscreenchange'))
+  assert.equal(refreshes, 1)
+  assert.equal(render({ theme: 'white', t: key => key }).target, workspace)
+  doc.fullscreenElement = foreign
+  doc.dispatchEvent(new Event('fullscreenchange'))
+  assert.equal(render({ t: key => key }).target, body)
+  doc.fullscreenElement = null
+  doc.dispatchEvent(new Event('fullscreenchange'))
+  assert.equal(render({ t: key => key }).target, body)
+  assert.equal(refreshes, 3)
+  cleanup()
+  doc.dispatchEvent(new Event('fullscreenchange'))
+  assert.equal(refreshes, 3)
 })
 
 test('restart colors and color-scheme follow the portal when the host palette disagrees', () => {
