@@ -75,6 +75,8 @@ npm run test:all
 
 运行环境与具体脚本以 [package.json](package.json) 为准；Windows Desktop 和 Web 的配置、运行实例与验收结果应分别核对。
 
+**Harness 0.2.3-alpha.2 运行环境：** 官方因内置 undici 的安全修复提高了 Node.js 要求至 `^24.22.3 || >=26.13.1`，适用于 npm 安装、源码开发及显式使用 Node 的 Python SDK。官方打包的 Desktop 自带 Node.js 24.22.3，无需仅因此升级系统 Node.js。此说明仅描述宿主运行环境；Purge 对 alpha.2 尚未声明支持，不能据此推断兼容或实机验收通过。详见[官方升级指南](https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/upgrade-guide/v0.2.3-alpha.1/node-24-22-3/guide.zh.md)。
+
 ## 04 / 文档中心
 
 | 文档 | 内容 |
