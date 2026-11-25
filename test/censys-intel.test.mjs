@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatchAsync } from '../lib/redteam/store-core.js'
@@ -78,6 +78,10 @@ test('PAT and organization settings are write-only and preserve unrelated platfo
   assert.equal(saved.storageMode, 'encrypted-local')
   assert.equal(saved.protectedAtRest, true)
   assert.equal(censysPatStorageStatus(root).protectedAtRest, true)
+  if (process.platform !== 'win32') {
+    assert.equal(statSync(join(root, 'platform-secrets.json')).mode & 0o777, 0o600)
+    assert.equal(statSync(root).mode & 0o777, 0o700)
+  }
   assert.equal(loadPlatformConfig(root).env.CENSYS_ORG_ID, org)
   assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'legacy-fofa')
   assert.equal(loadPlatformConfig(root).tools.nmap, '/fixture/nmap')
@@ -298,4 +302,29 @@ test('legacy plaintext PAT is migrated to encrypted storage when the vault key i
   const raw = readFileSync(join(root, 'platform-secrets.json'), 'utf8')
   assert.equal(raw.includes('legacy-plaintext-token'), false)
   assert.match(raw, /dshp:vault:v1:/)
+})
+
+test('encrypted PAT cannot be read with a missing or wrong vault key', t => {
+  const { root } = fixture(t)
+  saveCensysPat('private-token', root)
+  const priorKey = process.env.DSH_PURGE_SECRET_KEY
+  try {
+    delete process.env.DSH_PURGE_SECRET_KEY
+    assert.throws(() => censysConnectionGet(root), /DSH_PURGE_SECRET_KEY/)
+    process.env.DSH_PURGE_SECRET_KEY = 'b'.repeat(64)
+    assert.throws(() => censysConnectionGet(root), /Cannot decrypt/)
+  } finally {
+    process.env.DSH_PURGE_SECRET_KEY = priorKey
+  }
+})
+
+test('encrypted local PAT takes precedence over process environment fallback', t => {
+  const { root } = fixture(t)
+  saveCensysPat('saved-token', root)
+  process.env.CENSYS_PAT = 'environment-token'
+  const result = censysConnectionGet(root)
+  assert.equal(result.storageMode, 'encrypted-local')
+  assert.equal(result.protectedAtRest, true)
+  assert.equal(JSON.stringify(result).includes('saved-token'), false)
+  assert.equal(JSON.stringify(result).includes('environment-token'), false)
 })
