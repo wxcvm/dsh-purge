@@ -1,3 +1,23 @@
+# 1.1.92-wxcvm.25-rc.1
+
+## 中文
+
+这是基于 `.24` 之后主线的预览候选，优先交付 Harness rc.5 兼容、安全边界与更新可靠性改进。旧版本标签、Release 和资产保持不变。
+
+- **原生审批、沙箱与 Hook 边界**（[#552](https://github.com/wxcvm/dsh-purge/pull/552)、[#553](https://github.com/wxcvm/dsh-purge/pull/553)、[#554](https://github.com/wxcvm/dsh-purge/pull/554)）：默认关闭 Hook deny 旁路；正常应用不再写入会改变 Harness 原生审批、拒绝、取消、沙箱和文件系统授权结果的历史补丁。启动/应用迁移只对可验证的 Purge 自有改动做精确恢复；备份缺失、内容歧义或恢复未验证时保留现场并报告待核实，不用整文件回滚覆盖其他改动。
+- **迁移与恢复完整性**（[#555](https://github.com/wxcvm/dsh-purge/pull/555)、[#556](https://github.com/wxcvm/dsh-purge/pull/556)、[#558](https://github.com/wxcvm/dsh-purge/pull/558)、[#565](https://github.com/wxcvm/dsh-purge/pull/565)、[#566](https://github.com/wxcvm/dsh-purge/pull/566)）：保留未解决恢复所需的原始备份；跨多个宿主分别核对，不因一个宿主完成而掩盖另一个宿主未检查；冲突历史不猜测恢复结果。
+- **本机接口与敏感数据**（[#557](https://github.com/wxcvm/dsh-purge/pull/557)、[#559](https://github.com/wxcvm/dsh-purge/pull/559)、[#560](https://github.com/wxcvm/dsh-purge/pull/560)、[#561](https://github.com/wxcvm/dsh-purge/pull/561)、[#562](https://github.com/wxcvm/dsh-purge/pull/562)、[#563](https://github.com/wxcvm/dsh-purge/pull/563)、[#564](https://github.com/wxcvm/dsh-purge/pull/564)）：原子更新工作区选择和元数据；拒绝把私有链接目标当作安全存储目录；收紧本机鉴权豁免与浏览器来源匹配；避免密钥对象被意外序列化，并扩展共享报告中的敏感字段遮蔽。
+- **桌面更新与诊断可靠性**（[#567](https://github.com/wxcvm/dsh-purge/pull/567)、[#568](https://github.com/wxcvm/dsh-purge/pull/568)、[#569](https://github.com/wxcvm/dsh-purge/pull/569)、[#570](https://github.com/wxcvm/dsh-purge/pull/570)、[#571](https://github.com/wxcvm/dsh-purge/pull/571)、[#572](https://github.com/wxcvm/dsh-purge/pull/572)、[#573](https://github.com/wxcvm/dsh-purge/pull/573)、[#574](https://github.com/wxcvm/dsh-purge/pull/574)、[#575](https://github.com/wxcvm/dsh-purge/pull/575)）：修正版本比较和稳定构建标签展示；增加磁盘 Renderer build ID 对照；加强归档/诊断边界和恢复快照保护；无效运行时状态不再被当成有效结果；退役旧的更新准备、自动重应用与归档交换入口，保留 Harness 官方更新器和启动文件。
+- **宿主契约与回归覆盖**（[#543](https://github.com/wxcvm/dsh-purge/pull/543)–[#549](https://github.com/wxcvm/dsh-purge/pull/549)、[#576](https://github.com/wxcvm/dsh-purge/pull/576)–[#578](https://github.com/wxcvm/dsh-purge/pull/578)）：补充 rc.5 子智能体权限继承、并行任务和结果回传测试；恢复离线诊断、设置协调及分页边界回归；增加只读 Desktop 版本清单检查。夹具测试不等于真实模型或真实桌面会话验收。
+
+**预览验收边界**：本候选须通过 Windows/Ubuntu 托管 CI、实际 npm 打包与全新临时 `DSH_HOME` 安装检查。真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、用户现场的历史权限迁移与回退，以及 ARTEX 双端联动仍需单独验收（#336/#337/#338/#343/#346/#550）。对无法验证的历史宿主改动不会自动覆盖或宣称已恢复。
+
+## English
+
+Preview candidate based on mainline changes after .24. It focuses on Harness rc.5 compatibility, native permission boundaries, recovery integrity, local API and secret handling, and desktop update reliability. Hook deny bypass is opt-in; normal apply no longer writes the legacy patches that alter native approval, cancellation, sandbox, or filesystem authorization outcomes. Migration restores only verifiable Purge-owned changes and preserves ambiguous or unverified host state. Additional changes improve atomic workspace metadata, local-origin checks, secret masking, renderer build evidence, archive boundaries, and retirement of unsafe legacy updater/reapply paths. Windows/Ubuntu hosted CI and clean packed-install checks are required; live Desktop upgrade/restart, Provider delivery, on-device migration/rollback, and ARTEX pairing remain separate acceptance items.
+
+---
+
 # 1.1.92-wxcvm.24
 
 ## 中文
