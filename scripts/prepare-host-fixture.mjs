@@ -61,7 +61,7 @@ if (metadata.peerDependencies?.['@deepseek-ai/dsh-sandbox']) {
 }
 // Add only pinned official packages to the current fixture for PTC denial contracts.
 if (version === latestHost) {
-  for (const name of ['@deepseek-ai/dsh-tool-executor-ptc', '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-working-directory', '@deepseek-ai/dsh-subagent', '@deepseek-ai/dsh-subagent-spawn-in-process', '@deepseek-ai/dsh-session-persistence-jsonl', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-typert-protocol', '@deepseek-ai/dsh-util-time', '@deepseek-ai/dsh-brand']) dependencies[name] = version;
+  for (const name of ['@deepseek-ai/dsh-tool-executor-ptc', '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-working-directory', '@deepseek-ai/dsh-subagent', '@deepseek-ai/dsh-subagent-spawn-in-process', '@deepseek-ai/dsh-tool-subagent', '@deepseek-ai/dsh-session-persistence-jsonl', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-typert-protocol', '@deepseek-ai/dsh-util-time', '@deepseek-ai/dsh-brand']) dependencies[name] = version;
 }
 // The current isolated persistence test needs published platform binaries.
 // Keep optional packages and install scripts disabled globally; pin just the
