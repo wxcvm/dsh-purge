@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ALL_PATCHES } from "../lib/patches-definitions.js";
-import { applyPatches, backupAll, patchStatus, refreshStaleBaksForUpgrade, restoreNativePermissionForBases } from "../lib/core.js";
+import { applyPatches, backupAll, inspectNativePermissionMigration, patchStatus, refreshStaleBaksForUpgrade, restoreNativePermissionForBases } from "../lib/core.js";
 import {
   NATIVE_PERMISSION_PATCH_IDS,
   hasNativePermissionPatchMarker,
@@ -279,4 +279,25 @@ test("unresolved permission migrations preserve original backups after failure o
   assert.deepEqual(refreshStaleBaksForUpgrade(aiBase, { skipPaths: paths }), []);
   assert.equal(fs.readFileSync(backup, "utf8"), "original recovery evidence\n");
   assert.equal(fs.readFileSync(file, "utf8"), "unverified current file\n");
+});
+
+test("read-only permission migration inventory distinguishes unknown and unresolved hosts", async t => {
+  assert.deepEqual(await inspectNativePermissionMigration([]), {
+    status: "unverified", inspected: 0, unresolved: 0,
+  });
+  const patch = byId(6);
+  const original = patch.patterns[0];
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const clean = await inspectNativePermissionMigration([aiBase]);
+  assert.equal(clean.status, "no-known-residue");
+  assert.ok(clean.inspected > 0);
+  assert.equal(clean.unresolved, 0);
+  const current = applyPatchText(original, patch);
+  fs.writeFileSync(file, current);
+  const before = fs.readFileSync(file);
+  const unresolved = await inspectNativePermissionMigration([aiBase]);
+  assert.equal(unresolved.status, "review");
+  assert.ok(unresolved.unresolved > 0);
+  assert.deepEqual(fs.readFileSync(file), before);
+  assert.equal(fs.existsSync(file + ".dshpurge.bak"), false);
 });
