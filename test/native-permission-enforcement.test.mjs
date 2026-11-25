@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ALL_PATCHES } from "../lib/patches-definitions.js";
-import { applyPatches, patchStatus, restoreNativePermissionForBases } from "../lib/core.js";
+import { applyPatches, backupAll, patchStatus, restoreNativePermissionForBases } from "../lib/core.js";
 import {
   NATIVE_PERMISSION_PATCH_IDS,
   hasNativePermissionPatchMarker,
@@ -203,6 +203,15 @@ test("applyPatches leaves native sandbox deny and confine enforcement unchanged"
   const status = await patchStatus(aiBase, [patch6, patch15]);
   assert.equal(status[6], "off");
   assert.equal(status[15], "off");
+});
+
+test("a missing #15 backup is not replaced with the already-bypassed host file", async t => {
+  const patch15 = byId(15);
+  const { aiBase, file } = makeSandboxHost(t, patch15.replace);
+  const result = await restoreNativePermissionForBases([aiBase]);
+  assert.ok(result.pending.some(row => row.patch_id === 15 && row.reason === "marker_remaining"));
+  await backupAll(aiBase, { skipFiles: [file] });
+  assert.equal(fs.existsSync(`${file}.dshpurge.bak`), false);
 });
 
 test("startup migration restores exact #6/#15 sandbox bypass output from its original backup", async t => {
