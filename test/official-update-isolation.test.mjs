@@ -39,3 +39,34 @@ test('legacy update preparation refuses to modify an installation in every invoc
   const source = readFileSync(script, 'utf8');
   assert.doesNotMatch(source, /node:fs|node:child_process|copyFile|renameSync|unlinkSync|rmSync|spawn\(/);
 });
+
+test('legacy post-update reapply entry point never starts host modification', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const script = fileURLToPath(new URL('../scripts/reapply-after-update.mjs', import.meta.url));
+  for (const args of [[], ['--dry-run']]) {
+    const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 10000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /已停用/);
+    assert.match(result.stderr, /官方安装器/);
+  }
+  const source = readFileSync(script, 'utf8');
+  assert.doesNotMatch(source, /node:fs|node:child_process|applyPatchesAllHosts|resolveOfficialAiBase|scheduleSealedDesktopRestart|import\s*\(/);
+});
+
+test('retired archive swap retains legacy parameters without filesystem or process writes', async t => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const script = fileURLToPath(new URL('../maintenance/Restart-WithRollback.ps1', import.meta.url));
+  const source = readFileSync(script, 'utf8');
+  assert.doesNotMatch(source, /(?:Move|Remove|Copy|Set|New)-Item|(?:Start|Stop)-Process|Set-Content|Out-File/);
+  assert.match(source, /exit 1/);
+  if (process.platform !== 'win32') return t.diagnostic('PowerShell invocation is Windows-only');
+  for (const args of [[], ['-DryRun']]) {
+    const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-File', script, '-InstallRoot', 'unused', ...args], { encoding: 'utf8', timeout: 15000, windowsHide: true });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout + result.stderr, /Legacy desktop archive swap is retired/);
+  }
+});
