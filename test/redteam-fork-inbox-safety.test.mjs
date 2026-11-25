@@ -3,20 +3,15 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseDocument } from 'yaml'
 import { installPreset } from '../lib/redteam/index.js'
 
-function toolRow(rows, id) {
-  for (const row of rows || []) {
-    if (row?.id === id) return row
-    const nested = toolRow(row?.config, id)
-    if (nested) return nested
-  }
-  return null
-}
-
-function readRows(file) {
-  return parseDocument(readFileSync(file, 'utf8')).toJS()
+function toolBlock(text, id) {
+  const marker = '- id: ' + id
+  const start = text.indexOf(marker)
+  if (start < 0) return ''
+  const rest = text.slice(start)
+  const end = rest.slice(marker.length).search(/\n[ \t]*- id: /)
+  return end < 0 ? rest : rest.slice(0, marker.length + end)
 }
 
 test('redteam keeps spawn enabled and disables fork across install and legacy self-heal', () => {
@@ -26,26 +21,26 @@ test('redteam keeps spawn enabled and disables fork across install and legacy se
   try {
     installPreset({ force: true })
     const file = join(home, '.agent-presets', 'redteam', 'agent.cordis.yml')
-    let rows = readRows(file)
-    assert.equal(toolRow(rows, 'tool-subagent')?.disabled, false)
-    assert.equal(toolRow(rows, 'tool-subagent-fork')?.disabled, true)
+    let text = readFileSync(file, 'utf8')
+    assert.match(toolBlock(text, 'tool-subagent'), /disabled: false/)
+    assert.match(toolBlock(text, 'tool-subagent-fork'), /disabled: true/)
 
     // Existing user profiles created by older Purge versions enabled fork.
-    const original = readFileSync(file, 'utf8')
+    const original = text
     const start = original.indexOf('- id: tool-subagent-fork')
-    const next = original.indexOf('\n    - id: ', start + 1)
-    assert.ok(start >= 0 && next > start)
-    const block = original.slice(start, next)
+    const block = toolBlock(original, 'tool-subagent-fork')
+    const end = start + block.length
+    assert.ok(start >= 0 && end > start)
     assert.match(block, /disabled: true/)
     writeFileSync(file, original.slice(0, start)
       + block.replace('disabled: true', 'disabled: false')
-      + original.slice(next), 'utf8')
+      + original.slice(end), 'utf8')
 
     const repaired = installPreset()
     assert.equal(repaired.action, 'repaired')
-    rows = readRows(file)
-    assert.equal(toolRow(rows, 'tool-subagent')?.disabled, false)
-    assert.equal(toolRow(rows, 'tool-subagent-fork')?.disabled, true)
+    text = readFileSync(file, 'utf8')
+    assert.match(toolBlock(text, 'tool-subagent'), /disabled: false/)
+    assert.match(toolBlock(text, 'tool-subagent-fork'), /disabled: true/)
 
     assert.equal(installPreset().action, 'kept', 'the self-heal must be idempotent')
   } finally {
