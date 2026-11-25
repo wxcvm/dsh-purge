@@ -26,7 +26,7 @@ test("the default patch set disables permission and approval bypasses, not compa
 });
 
 test("marked approval, sandbox and filesystem patches reverse only their exact Purge output", () => {
-  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 15, 17, 33, 34, 35, 36, 48, 60, 61, 62, 63]) {
+  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 17, 33, 34, 35, 36, 48, 60, 61, 62, 63]) {
     const patch = byId(id);
     assert.ok(patch, `missing patch #${id}`);
     const replacements = replacementsOf(patch);
@@ -80,18 +80,29 @@ test("patch #7/#8 restore the official workspace-write default while retaining e
   assert.match(policyResult.text, /=== 'danger-full-access' \? 'never' : 'ask'/);
 });
 
-test("patch #6 restores only its own sandbox-local change and preserves sibling patch #15", () => {
+test("patch #15 cannot be reversed without the exact pre-patch backup", () => {
+  const patch = byId(15);
+  const restored = restoreNativePermissionText(patch.replace, patch);
+  assert.equal(restored.changed, false);
+  assert.equal(restored.markerFound, true);
+  assert.equal(restored.remainingMarkers, true);
+});
+
+test("patch #6/#15 restore the original sandbox-local file only after exact sequence match", () => {
   const patch = byId(6);
-  const sibling = {
-    id: 15,
-    patterns: ["native-confine"],
-    replace: "purge-confine",
-  };
+  const sibling = byId(15);
   const relatedPatches = [patch, sibling];
-  const backup = 'const rules = ["deny file-write*"];\nfunction confine() { native-confine }\n';
+  const backup = `${patch.patterns[0]}\n${sibling.patterns[0]}\n`;
   const applyPatch = (text, item) => {
     let output = text;
-    for (const pattern of item.patterns ?? []) output = output.split(pattern).join(item.replace);
+    const replacements = Array.isArray(item.replacements)
+      ? item.replacements
+      : (item.patterns ?? []).map(pattern => ({ pattern, replace: item.replace }));
+    for (const row of replacements) {
+      if (typeof row.pattern === "string" && typeof row.replace === "string") {
+        output = output.split(row.pattern).join(row.replace);
+      }
+    }
     return output;
   };
   const current = relatedPatches.reduce((text, item) => applyPatch(text, item), backup);
@@ -100,10 +111,11 @@ test("patch #6 restores only its own sandbox-local change and preserves sibling 
     backup,
     patch,
     relatedPatches,
+    restorePatchIds: [6, 15],
     applyPatch,
   });
   assert.equal(restored.status, "restored");
-  assert.equal(restored.text, 'const rules = ["deny file-write*"];\nfunction confine() { purge-confine }\n');
+  assert.equal(restored.text, backup);
 });
 
 test("patch #6 refuses to overwrite a host file that changed after its backup", () => {
