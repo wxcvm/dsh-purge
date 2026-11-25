@@ -9,6 +9,7 @@ import {
   saveHookDenySettings,
   selectPatches,
 } from "../lib/hooks-deny.js";
+import { INSERT_BLOCK } from "../lib/profile-insert.js";
 
 function makeHome(t) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-purge-hooks-deny-"));
@@ -35,4 +36,13 @@ test("a persisted choice takes precedence over the plugin config default", (t) =
 
   saveHookDenySettings(home, { hooksDenyBypass: false });
   assert.deepEqual(loadHookDenySettings(home, true), { hooksDenyBypass: false });
+});
+
+test("fresh generated and bundled profiles do not opt into hook bypass", () => {
+  assert.match(INSERT_BLOCK, /hooksDenyBypass: false/);
+  const bundled = fs.readFileSync(new URL("../cordis.patch.yml", import.meta.url), "utf8");
+  const start = bundled.indexOf("- id: dsh-purge");
+  const end = bundled.indexOf("\\n- insert:", start + 1);
+  assert.ok(start >= 0 && end > start);
+  assert.match(bundled.slice(start, end), /hooksDenyBypass:\\s*false/);
 });
