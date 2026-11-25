@@ -91,6 +91,10 @@ test('rc.5 native child inherits explicit full-access mode without inheriting pa
     { provider: 'fixture', model: 'fixture-model' }, { cwd: workspace });
   setSandboxMode(parent.session, 'danger-full-access');
   setApprovalPolicy(parent.session, 'ask');
+  parent.session.append('permission/preset', { preset: 'danger-full-access' });
+  ctx.provide('permissionPresets', {
+    current: session => session === parent.session ? 'danger-full-access' : 'custom',
+  });
   parent.session.append('turn/start', { turn: 1 });
 
   const run = await ctx.subagents.startActivation({
@@ -134,6 +138,9 @@ test('rc.5 native child inherits explicit full-access mode without inheriting pa
     assert.equal(requests, 1, 'one child turn must reach the inert adapter');
     assert.equal(ctx.sandboxPolicy.overrideOf(child.session), 'danger-full-access');
     assert.equal(ctx.approval.overrideOf(child.session), 'never');
+    assert.ok(child.session.snapshotEvents().some(event =>
+      event.type === 'permission/preset' && event.data.preset === 'danger-full-access'),
+    'the actual fully privileged parent preset must be recorded in the child session');
     const policies = child.session.snapshotEvents().filter(e =>
       e.type === 'sandbox/mode' || e.type === 'approval/policy');
     assert.ok(policies.some(e => e.type === 'sandbox/mode' &&
