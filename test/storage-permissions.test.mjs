@@ -59,3 +59,40 @@ test('updating workspace selection atomically replaces a hard-linked pointer wit
   assert.equal(store.activeEngagementId(), id)
   assert.equal(mode(store.currentPath()), 0o600)
 })
+
+test('workspace metadata replacement preserves linked file contents and private mode', { skip: !onUnix }, t => {
+  const { root, store } = fixture(t)
+  const id = store.openEngagement('metadata-fixture').id
+  const meta = store.metaPathOf(id)
+  const original = readFileSync(meta, 'utf8')
+  const other = join(root, 'metadata-original.txt')
+  linkSync(meta, other)
+  store.openEngagement('metadata-fixture')
+  assert.equal(readFileSync(other, 'utf8'), original)
+  assert.notEqual(statSync(meta).ino, statSync(other).ino)
+  assert.equal(mode(meta), 0o600)
+})
+
+test('clearing a stale workspace pointer replaces the record without changing a linked file', { skip: !onUnix }, t => {
+  const { root, store } = fixture(t)
+  const other = join(root, 'stale-original.txt')
+  writeFileSync(other, 'missing-fixture', { mode: 0o644 })
+  linkSync(other, store.currentPath())
+  const result = store.deleteEngagement('missing-fixture')
+  assert.equal(result.not_found, true)
+  assert.equal(readFileSync(other, 'utf8'), 'missing-fixture')
+  assert.equal(readFileSync(store.currentPath(), 'utf8'), '')
+  assert.equal(mode(store.currentPath()), 0o600)
+})
+
+test('archiving a synthetic workspace does not overwrite an unrelated linked selection file', { skip: !onUnix }, t => {
+  const { root, store } = fixture(t)
+  const id = store.openEngagement('archive-fixture').id
+  const other = join(root, 'selection-original.txt')
+  linkSync(store.currentPath(), other)
+  const result = store.deleteEngagement(id)
+  assert.equal(result.archived, true)
+  assert.equal(readFileSync(other, 'utf8'), id)
+  assert.equal(readFileSync(store.currentPath(), 'utf8'), '')
+  assert.equal(mode(store.currentPath()), 0o600)
+})
