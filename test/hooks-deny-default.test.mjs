@@ -3,19 +3,28 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { INSERT_BLOCK } from "../lib/profile-insert.js";
 import {
   HOOK_DENY_PATCH_IDS,
   loadHookDenySettings,
   saveHookDenySettings,
   selectPatches,
 } from "../lib/hooks-deny.js";
-import { INSERT_BLOCK } from "../lib/profile-insert.js";
 
 function makeHome(t) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-purge-hooks-deny-"));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   return home;
 }
+
+test("generated profile templates do not enable hook bypass", () => {
+  const cordis = fs.readFileSync(new URL("../cordis.patch.yml", import.meta.url), "utf8");
+  for (const template of [cordis, INSERT_BLOCK]) {
+    assert.match(template, /hooksDenyBypass: false/);
+    assert.match(template, /hooksDenyBypassOptIn: false/);
+    assert.doesNotMatch(template, /hooksDenyBypass: true/);
+  }
+});
 
 test("new installs preserve native hook deny and ask decisions by default", (t) => {
   const settings = loadHookDenySettings(makeHome(t));
@@ -25,24 +34,34 @@ test("new installs preserve native hook deny and ask decisions by default", (t) 
   assert.deepEqual(selectPatches(patches, settings), [{ id: 999 }]);
 });
 
-test("an explicit plugin config can opt into hook bypass", (t) => {
-  assert.deepEqual(loadHookDenySettings(makeHome(t), true), { hooksDenyBypass: true });
+test("legacy generated config cannot silently re-enable hook bypass", (t) => {
+  assert.deepEqual(
+    loadHookDenySettings(makeHome(t), { hooksDenyBypass: true }),
+    { hooksDenyBypass: false },
+  );
 });
 
-test("a persisted choice takes precedence over the plugin config default", (t) => {
+test("hook bypass requires a separate explicit config opt-in", (t) => {
+  assert.deepEqual(
+    loadHookDenySettings(makeHome(t), {
+      hooksDenyBypass: true,
+      hooksDenyBypassOptIn: true,
+    }),
+    { hooksDenyBypass: true },
+  );
+});
+
+test("a persisted choice takes precedence over the plugin config", (t) => {
   const home = makeHome(t);
   saveHookDenySettings(home, { hooksDenyBypass: true });
-  assert.deepEqual(loadHookDenySettings(home, false), { hooksDenyBypass: true });
+  assert.deepEqual(loadHookDenySettings(home, {
+    hooksDenyBypass: false,
+    hooksDenyBypassOptIn: false,
+  }), { hooksDenyBypass: true });
 
   saveHookDenySettings(home, { hooksDenyBypass: false });
-  assert.deepEqual(loadHookDenySettings(home, true), { hooksDenyBypass: false });
-});
-
-test("fresh generated and bundled profiles do not opt into hook bypass", () => {
-  assert.match(INSERT_BLOCK, /hooksDenyBypass: false/);
-  const bundled = fs.readFileSync(new URL("../cordis.patch.yml", import.meta.url), "utf8");
-  const start = bundled.indexOf("- id: dsh-purge");
-  const end = bundled.indexOf("\n- insert:", start + 1);
-  assert.ok(start >= 0 && end > start);
-  assert.match(bundled.slice(start, end), /hooksDenyBypass:\s*false/);
+  assert.deepEqual(loadHookDenySettings(home, {
+    hooksDenyBypass: true,
+    hooksDenyBypassOptIn: true,
+  }), { hooksDenyBypass: false });
 });
