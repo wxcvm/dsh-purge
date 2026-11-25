@@ -24,15 +24,34 @@ test("new installs preserve native hook deny and ask decisions by default", (t) 
   assert.deepEqual(selectPatches(patches, settings), [{ id: 999 }]);
 });
 
-test("an explicit plugin config can opt into hook bypass", (t) => {
-  assert.deepEqual(loadHookDenySettings(makeHome(t), true), { hooksDenyBypass: true });
+test("legacy generated config cannot silently re-enable hook bypass", (t) => {
+  assert.deepEqual(
+    loadHookDenySettings(makeHome(t), { hooksDenyBypass: true }),
+    { hooksDenyBypass: false },
+  );
 });
 
-test("a persisted choice takes precedence over the plugin config default", (t) => {
+test("hook bypass requires a separate explicit config opt-in", (t) => {
+  assert.deepEqual(
+    loadHookDenySettings(makeHome(t), {
+      hooksDenyBypass: true,
+      hooksDenyBypassOptIn: true,
+    }),
+    { hooksDenyBypass: true },
+  );
+});
+
+test("a persisted choice takes precedence over the plugin config", (t) => {
   const home = makeHome(t);
   saveHookDenySettings(home, { hooksDenyBypass: true });
-  assert.deepEqual(loadHookDenySettings(home, false), { hooksDenyBypass: true });
+  assert.deepEqual(loadHookDenySettings(home, {
+    hooksDenyBypass: false,
+    hooksDenyBypassOptIn: false,
+  }), { hooksDenyBypass: true });
 
   saveHookDenySettings(home, { hooksDenyBypass: false });
-  assert.deepEqual(loadHookDenySettings(home, true), { hooksDenyBypass: false });
+  assert.deepEqual(loadHookDenySettings(home, {
+    hooksDenyBypass: true,
+    hooksDenyBypassOptIn: true,
+  }), { hooksDenyBypass: false });
 });
