@@ -2,6 +2,16 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
+## 新预览候选准备中 · 2026-11-25
+
+- **版本**：`1.1.92-wxcvm.26-rc.1`，候选分支 `release-candidate/v1.1.92-wxcvm.26-rc.1`，基于当前主线 [08ee8cb](https://github.com/wxcvm/dsh-purge/commit/08ee8cb572ef231684ca3ed704fd29557e64df22)。
+- **为何使用新版本号**：`.25-rc.1` 的 Git 标签仍保留，但其 Release 与资产已在清理过程中删除；不复用旧标签、不覆盖历史资产。
+- **本次变更**：仅同步 package/lockfile 版本与安装标签地址，新增发行说明和版本中心记录；不改运行时功能。
+- **候选门禁**：Windows/Ubuntu Hosted Local Compatibility、Hosted UI Integration Smoke、Hosted Packed Install Smoke（实际 npm pack + 全新临时 `DSH_HOME`）。以本 PR 精确 HEAD 的实际 CI 结果为准。
+- **发行规则**：候选 PR 合并后，从当时最新 master 创建同名 `release/vv1.1.92-wxcvm.26-rc.1` 分支；发行工作流要求 release 分支 HEAD 与 master 完全一致。禁止从旧分支发布。
+- **实机边界**：Harness 原位升级/重启加载、Provider 实际投递、旧安装权限迁移/回退和设置持久化仍需真实 Windows Desktop 验收；不把 CI 夹具当实机结果。
+- **当前状态**：尚未创建标签、Release 或下载资产。
+
 ## 预览候选状态更正 · 2026-11-25
 
 - **源码候选**：`1.1.92-wxcvm.25-rc.1`，PR [#579](https://github.com/wxcvm/dsh-purge/pull/579) 已合并至 [02b5dda](https://github.com/wxcvm/dsh-purge/commit/02b5ddaa4615be856b495d12e677a41bee1860bf)。
