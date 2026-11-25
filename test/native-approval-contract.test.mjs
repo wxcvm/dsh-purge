@@ -38,27 +38,36 @@ test('rc.5 native approval preserves denial and audit outcomes', {
   assert.equal(await request(), 'unavailable');
 
   let calls = 0;
+  let outcome = 'rejected';
   ctx.on('approval/request', async () => {
     calls++;
-    return 'rejected';
+    return outcome;
   });
   assert.equal(await request(), 'rejected');
   assert.equal(calls, 1);
 
+  outcome = 'cancelled';
+  assert.equal(await request(), 'cancelled');
+  assert.equal(calls, 2);
+
+  outcome = 'allowed-once';
+  assert.equal(await request(), 'allowed-once');
+  assert.equal(calls, 3, 'an explicit one-time grant is returned without changing policy');
+
   setApprovalPolicy(session, 'never');
   assert.equal(await request(), 'rejected');
-  assert.equal(calls, 1, 'never must not dispatch an approval question');
+  assert.equal(calls, 3, 'never must not dispatch an approval question');
 
   const audit = session.snapshotEvents().filter(event =>
     event.type === 'approval/asked' || event.type === 'approval/decided');
-  assert.equal(audit.length, 6);
+  assert.equal(audit.length, 10);
   for (let i = 0; i < audit.length; i += 2) {
     assert.equal(audit[i].type, 'approval/asked');
     assert.equal(audit[i + 1].type, 'approval/decided');
     assert.equal(audit[i].data.id, audit[i + 1].data.id);
   }
   assert.deepEqual(audit.filter(event => event.type === 'approval/decided').map(event => event.data.outcome),
-    ['unavailable', 'rejected', 'rejected']);
+    ['unavailable', 'rejected', 'cancelled', 'allowed-once', 'rejected']);
 
   // Model the documented non-interactive delegated session without spawning a
   // subagent. Its own approval policy must remain independent of the parent.
@@ -72,7 +81,7 @@ test('rc.5 native approval preserves denial and audit outcomes', {
     request(),
     ctx.approval.request({ agent: child, toolName: 'inert-child-operation' }),
   ]);
-  assert.deepEqual(decisions, ['rejected', 'rejected']);
+  assert.deepEqual(decisions, ['allowed-once', 'rejected']);
   assert.equal(calls, before + 1, 'only the interactive parent may dispatch a question');
   assert.equal(ctx.approval.effectivePolicy(session), 'ask');
   assert.equal(ctx.approval.effectivePolicy(childSession), 'never');
@@ -81,11 +90,11 @@ test('rc.5 native approval preserves denial and audit outcomes', {
     event.type === 'approval/asked' || event.type === 'approval/decided');
   const parentAudit = session.snapshotEvents().filter(event =>
     event.type === 'approval/asked' || event.type === 'approval/decided');
-  assert.equal(parentAudit.length, 8);
+  assert.equal(parentAudit.length, 12);
   assert.deepEqual(childAudit.map(event => event.type), ['approval/asked', 'approval/decided']);
   assert.equal(childAudit[0].data.id, childAudit[1].data.id);
   assert.equal(childAudit[1].data.outcome, 'rejected');
-  assert.notEqual(childAudit[0].data.id, parentAudit[6].data.id);
-  assert.equal(parentAudit[6].data.id, parentAudit[7].data.id);
+  assert.notEqual(childAudit[0].data.id, parentAudit[10].data.id);
+  assert.equal(parentAudit[10].data.id, parentAudit[11].data.id);
   assert.ok(!parentAudit.some(event => event.data.id === childAudit[0].data.id));
 });
