@@ -71,7 +71,7 @@ test('PAT and organization settings are write-only and preserve unrelated platfo
   assert.equal(saved.organizationConfigured, true)
   assert.equal(saved.organizationId, org)
   assert.equal(JSON.stringify(saved).includes('private-censys-token'), false)
-  assert.equal(loadPlatformConfig(root).env.CENSYS_PAT, undefined)
+  assert.equal(loadPlatformConfig(root).env.CENSYS_PAT, '')
   const secretFile = readFileSync(join(root, 'platform-secrets.json'), 'utf8')
   assert.match(secretFile, /dshp:vault:v1:/)
   assert.equal(secretFile.includes('private-censys-token'), false)
@@ -106,7 +106,8 @@ test('connection test calls only the zero-credit account endpoint', async t => {
 
 test('organization connection test uses the optional organization credit endpoint', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token', CENSYS_ORG_ID: org } }, root)
+  saveCensysPat('private-token', root)
+  savePlatformConfig({ env: { CENSYS_ORG_ID: org } }, root)
   const result = await censysConnectionTest(root, { fetch: async (url, options) => {
     assert.equal(url.pathname, '/v3/accounts/organizations/' + org + '/credits')
     assert.equal(options.headers.Authorization, 'Bearer private-token')
@@ -118,7 +119,7 @@ test('organization connection test uses the optional organization credit endpoin
 
 test('connection test distinguishes auth, role, and network failures without echoing secrets', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   const unauthorized = await censysConnectionTest(root, { fetch: async () => new Response('{}', { status: 401 }) })
   assert.equal(unauthorized.error, 'Censys PAT 无效，请检查或重新生成 Personal Access Token')
   const forbidden = await censysConnectionTest(root, { fetch: async () => new Response('{}', { status: 403 }) })
@@ -130,7 +131,8 @@ test('connection test distinguishes auth, role, and network failures without ech
 
 test('host lookup uses v3 single-IP endpoint, bearer auth and bounded fields', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token', CENSYS_ORG_ID: org } }, root)
+  saveCensysPat('private-token', root)
+  savePlatformConfig({ env: { CENSYS_ORG_ID: org } }, root)
   const result = await censysHostLookup(root, ip, { fetch: async (url, options) => {
     assert.equal(url.pathname, '/v3/global/asset/host/' + ip)
     assert.equal(url.searchParams.get('organization_id'), org)
@@ -148,7 +150,7 @@ test('host lookup uses v3 single-IP endpoint, bearer auth and bounded fields', a
 
 test('host lookup maps missing hosts separately from invalid credentials', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   const missing = await censysHostLookup(root, ip, { fetch: async () => new Response('{}', { status: 404 }) })
   assert.equal(missing.error, 'Censys 未找到该 IP 的主机记录')
   const invalid = await censysHostLookup(root, ip, { fetch: async () => new Response('{}', { status: 401 }) })
@@ -168,7 +170,7 @@ test('Censys normalization is passive, deduplicates ports and retains timestamps
 
 test('scope and one-time external consent are checked before any Censys request', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   const store = { root, listEngagements: () => [{ id: 'lab', scope: [ip] }], activeEngagementId: () => 'lab' }
   let calls = 0
   const fetch = async () => { calls++; return new Response(JSON.stringify(hostPayload), { status: 200 }) }
@@ -179,7 +181,7 @@ test('scope and one-time external consent are checked before any Censys request'
 
 test('scoped Censys lookup returns only passive observations and never rewrites live ports', async t => {
   const { root, onCleanup } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   const store = new RedteamStore(root)
   onCleanup(() => store.close())
   const { id } = store.openEngagement('lab', [ip])
@@ -200,7 +202,7 @@ test('scoped Censys lookup returns only passive observations and never rewrites 
 
 test('scope changes during the request prevent result delivery and import', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   let scope = [ip]
   const store = { root, listEngagements: () => [{ id: 'lab', scope }], activeEngagementId: () => 'lab' }
   const result = await runScopedIntelLookup(store, { target: ip, confirmExternal: true, sources: ['censys'], commit: true }, {
@@ -216,7 +218,7 @@ test('scope changes during the request prevent result delivery and import', asyn
 
 test('direct host helper rejects non-IP targets before network access', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   let calls = 0
   const result = await censysHostLookup(root, 'example.test', { fetch: async () => { calls++; return new Response('{}') } })
   assert.equal(result.ok, false)
@@ -226,7 +228,7 @@ test('direct host helper rejects non-IP targets before network access', async t 
 
 test('host lookup uses the bounded text fallback when a response has no stream reader', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   const result = await censysHostLookup(root, ip, { fetch: async () => ({
     ok: true, body: null, text: async () => JSON.stringify(hostPayload),
   }) })
