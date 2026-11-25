@@ -118,6 +118,38 @@ test("patch #6/#15 restore the original sandbox-local file only after exact sequ
   assert.equal(restored.text, backup);
 });
 
+test("patch #15 can be restored when #6 never matched the installed source", () => {
+  const patch = byId(6);
+  const sibling = byId(15);
+  const relatedPatches = [patch, sibling];
+  const backup = `${patch.patterns[0]}\n${sibling.patterns[0]}\n`;
+  const applyPatch = (text, item) => {
+    let output = text;
+    const replacements = Array.isArray(item.replacements)
+      ? item.replacements
+      : (item.patterns ?? []).map(pattern => ({ pattern, replace: item.replace }));
+    for (const row of replacements) {
+      if (typeof row.pattern === "string" && typeof row.replace === "string") {
+        output = output.split(row.pattern).join(row.replace);
+      }
+    }
+    return output;
+  };
+  const current = applyPatch(backup, sibling);
+  const restored = restoreNativePermissionFromBackup({
+    current,
+    backup,
+    patch,
+    relatedPatches,
+    restorePatchIds: [6, 15],
+    applyPatch,
+  });
+  assert.equal(restored.status, "restored");
+  assert.equal(restored.matchedPatchIds.length, 1);
+  assert.deepEqual(restored.matchedPatchIds, [15]);
+  assert.equal(restored.text, backup);
+});
+
 test("patch #6 refuses to overwrite a host file that changed after its backup", () => {
   const patch = byId(6);
   const backup = 'const rules = ["deny file-write*"];\n';
