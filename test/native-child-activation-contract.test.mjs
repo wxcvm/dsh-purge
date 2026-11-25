@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 // Exercise the official in-process spawn backend and managed child session.
 // No Purge patches, external provider, subprocess, or user workspace.
-test('rc.5 native child activation preserves restrictive delegation policy', {
+test('rc.5 native child inherits explicit full-access mode without inheriting parent approval dispatch', {
   skip: !process.env.DSH_COMPAT_HOST_ROOT && 'requires pinned official host fixture',
   timeout: 30000,
 }, async t => {
@@ -72,10 +72,14 @@ test('rc.5 native child activation preserves restrictive delegation policy', {
   await ctx.plugin(AgentLoop, { agents: [] });
 
   let requests = 0;
+  const childStreamEntered = Promise.withResolvers();
+  const releaseChildStream = Promise.withResolvers();
   class InertAdapter extends LlmAdapter {
     async resolveModel(provider, model) { return { provider, id: model, name: model }; }
     async *stream() {
       requests++;
+      childStreamEntered.resolve();
+      await releaseChildStream.promise;
       yield { type: 'block-start', index: 0, blockType: 'text' };
       yield { type: 'block-end', index: 0, block: { type: 'text', text: 'fixture child complete' } };
       yield { type: 'usage', usage: { inputTokens: 3, outputTokens: 2 } };
@@ -85,8 +89,9 @@ test('rc.5 native child activation preserves restrictive delegation policy', {
   ctx.llm.registerAdapter(['fixture'], new InertAdapter());
   const parent = await ctx.agentLoop.create(SessionId('native-child-parent'),
     { provider: 'fixture', model: 'fixture-model' }, { cwd: workspace });
-  setSandboxMode(parent.session, 'read-only');
+  setSandboxMode(parent.session, 'danger-full-access');
   setApprovalPolicy(parent.session, 'ask');
+  parent.session.append('turn/start', { turn: 1 });
 
   const run = await ctx.subagents.startActivation({
     provider: 'spawn', label: 'Native child permission contract',
@@ -97,20 +102,50 @@ test('rc.5 native child activation preserves restrictive delegation policy', {
     const child = ctx.agents.get(run.childId);
     assert.ok(child, 'the backend must create an actual managed child');
     assert.notEqual(child.session.id, parent.session.id);
+    await childStreamEntered.promise;
+    // The child is now inside its real Agent Loop turn. Ask against both live
+    // sessions before releasing the adapter, so the audit stays turn-enclosed.
+    const askedSessions = [];
+    ctx.on('approval/request', async request => {
+      askedSessions.push(request.agent.session.id);
+      return 'rejected';
+    });
+    const decisions = await Promise.all([
+      ctx.approval.request({ agent: parent, toolName: 'inert-parent-operation' }),
+      ctx.approval.request({ agent: child, toolName: 'inert-child-operation' }),
+    ]);
+    assert.deepEqual(decisions, ['rejected', 'rejected']);
+    assert.deepEqual(askedSessions, [parent.session.id],
+      'the child never policy must reject before dispatching an approval question');
+    assert.equal(ctx.approval.effectivePolicy(parent.session), 'ask');
+    assert.equal(ctx.approval.effectivePolicy(child.session), 'never');
+    const audit = session => session.snapshotEvents().filter(event =>
+      event.type === 'approval/asked' || event.type === 'approval/decided');
+    assert.deepEqual(audit(parent.session).map(event => event.type),
+      ['approval/asked', 'approval/decided']);
+    assert.deepEqual(audit(child.session).map(event => event.type),
+      ['approval/asked', 'approval/decided']);
+    assert.deepEqual(audit(child.session).filter(event => event.type === 'approval/decided')
+      .map(event => event.data.outcome), ['rejected']);
+
+    releaseChildStream.resolve();
     const result = await run.result;
     assert.equal(result.stopReason, 'completed');
     assert.equal(requests, 1, 'one child turn must reach the inert adapter');
-    assert.equal(ctx.sandboxPolicy.overrideOf(child.session), 'read-only');
+    assert.equal(ctx.sandboxPolicy.overrideOf(child.session), 'danger-full-access');
     assert.equal(ctx.approval.overrideOf(child.session), 'never');
     const policies = child.session.snapshotEvents().filter(e =>
       e.type === 'sandbox/mode' || e.type === 'approval/policy');
     assert.ok(policies.some(e => e.type === 'sandbox/mode' &&
-      e.data.mode === 'read-only' && e.data.source === 'delegation'));
+      e.data.mode === 'danger-full-access' && e.data.source === 'delegation'));
     assert.ok(policies.some(e => e.type === 'approval/policy' &&
       e.data.policy === 'never' && e.data.source === 'delegation'));
     assert.equal(ctx.approval.effectivePolicy(parent.session), 'ask');
-    assert.equal(ctx.sandboxPolicy.resolve({ session: parent.session }).mode, 'read-only');
+    assert.equal(ctx.sandboxPolicy.resolve({ session: parent.session }).mode, 'danger-full-access');
+
   } finally {
+    releaseChildStream.resolve();
+    parent.session.append('turn/end', { turn: 1 });
     await run.dispose();
   }
 });
