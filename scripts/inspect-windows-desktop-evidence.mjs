@@ -233,6 +233,30 @@ function processEvidence() {
   return { observed: null, reason: 'process-query-unavailable', loadedPluginVerified: false };
 }
 
+// Official 0.2.3-alpha.2 runtime requirement; disk metadata only.
+// https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/upgrade-guide/v0.2.3-alpha.1/node-24-22-3/guide.zh.md
+function alpha2NodeEvidence(resources, desktopVersion) {
+  const result = {
+    nodeVersionOnDisk: null,
+    alpha2NodeRequirement: desktopVersion === '0.2.3-alpha.2' ? '^24.22.3 || >=26.13.1' : null,
+    alpha2NodeRequirementMet: null,
+  };
+  const runtime = path.join(resources, 'runtime');
+  const manifest = ordinaryDirectory(runtime) ? safeJson(path.join(runtime, 'versions.json')) : null;
+  const match = typeof manifest?.node === 'string' && manifest.node.length <= 64
+    ? /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(manifest.node) : null;
+  if (!match) return result;
+  const [major, minor, patch] = match.slice(1).map(Number);
+  if (![major, minor, patch].every(Number.isSafeInteger)) return result;
+  result.nodeVersionOnDisk = [major, minor, patch].join('.');
+  if (result.alpha2NodeRequirement !== null) {
+    result.alpha2NodeRequirementMet =
+      (major === 24 && (minor > 22 || (minor === 22 && patch >= 3))) ||
+      (major === 26 && (minor > 13 || (minor === 13 && patch >= 1))) || major > 26;
+  }
+  return result;
+}
+
 export function inspectReadOnlyDesktopEvidence({
   home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh'),
   root = repository, exe,
@@ -251,6 +275,7 @@ export function inspectReadOnlyDesktopEvidence({
     desktop: {
       executableFound: false, manifestValid: false, version: null, layout: 'unknown',
       unpackedManifestValid: null, unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
+      nodeVersionOnDisk: null, alpha2NodeRequirement: null, alpha2NodeRequirementMet: null,
     },
     process: probeProcesses ? processEvidence() : { observed: null, reason: 'not-requested', loadedPluginVerified: false },
     profiles: PROFILES.map(p => profileEvidence(home, p, root, { inspectHomeLinkedPlugin })),
@@ -293,6 +318,7 @@ export function inspectReadOnlyDesktopEvidence({
   const missing = RUNTIME_FILES.filter(rel => !regularFile(path.join(resources, 'runtime', rel)));
   evidence.desktop.missingRuntimeFiles = missing;
   evidence.desktop.runtimeFilesComplete = missing.length === 0;
+  Object.assign(evidence.desktop, alpha2NodeEvidence(resources, evidence.desktop.version));
   return evidence;
 }
 

@@ -481,3 +481,46 @@ test('redirected app directory is reported without reading external manifest', t
   assert.equal(result.desktop.version, null);
   assert.ok(!JSON.stringify(result).includes('private-marker'));
 });
+
+test('official alpha.2 Node floor is checked against disk metadata without executing Node', t => {
+  const f = workspace(t);
+  const appManifest = path.join(f.resources, 'app', 'package.json');
+  fs.writeFileSync(appManifest, JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.3-alpha.2' }));
+  const runtime = path.join(f.resources, 'runtime');
+  fs.mkdirSync(runtime);
+  const metadata = path.join(runtime, 'versions.json');
+  const inspect = () => inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(inspect().desktop.alpha2NodeRequirementMet, null);
+  for (const [node, expected] of [
+    ['24.22.2', false], ['24.22.3', true], ['24.23.0', true],
+    ['25.99.99', false], ['26.13.0', false], ['v26.13.1', true], ['27.0.0', true],
+    ['24.22.3-rc.1', null], ['invalid', null], [null, null],
+  ]) {
+    fs.writeFileSync(metadata, JSON.stringify({ node }));
+    const result = inspect();
+    assert.equal(result.desktop.alpha2NodeRequirement, '^24.22.3 || >=26.13.1');
+    assert.equal(result.desktop.alpha2NodeRequirementMet, expected, String(node));
+    assert.equal(result.runtimeLoadVerified, false);
+    assert.equal(result.desktop.runtimeFilesComplete, false);
+  }
+  fs.writeFileSync(appManifest, JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.2-rc.5' }));
+  fs.writeFileSync(metadata, JSON.stringify({ node: '24.9.0' }));
+  const older = inspect();
+  assert.equal(older.desktop.nodeVersionOnDisk, '24.9.0');
+  assert.equal(older.desktop.alpha2NodeRequirement, null);
+  assert.equal(older.desktop.alpha2NodeRequirementMet, null);
+});
+
+test('linked runtime manifest is not read for alpha.2 Node evidence', t => {
+  const f = workspace(t);
+  fs.writeFileSync(path.join(f.resources, 'app', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.3-alpha.2' }));
+  const runtime = path.join(f.resources, 'runtime');
+  fs.mkdirSync(runtime);
+  const outside = path.join(f.base, 'external-runtime');
+  fs.writeFileSync(outside, JSON.stringify({ node: '26.99.99' }));
+  try { fs.symlinkSync(outside, path.join(runtime, 'versions.json'), 'file'); }
+  catch (error) { t.skip('host cannot create file links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.nodeVersionOnDisk, null);
+  assert.equal(result.desktop.alpha2NodeRequirementMet, null);
+});
