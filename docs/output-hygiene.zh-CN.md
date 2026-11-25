@@ -61,11 +61,47 @@ node scripts/output-hygiene-probe.mjs <文件> --apply --out clean.md
 和 `scripts/scrub-session-refusals.mjs` 同一套约定。Node 23 以下没有 `zlib.zstdDecompressSync`，
 探针会提示先解压成 `.jsonl`。
 
+## 接线：为什么落在"请求侧"
+
+宿主没有"assistant 消息写盘前可写"的钩子，可写面只有三类：
+
+| 层 | 钩子 | 能做什么 |
+|---|---|---|
+| 流 | `agent/assistant-stream` | 只能掐断（stream-guard 用它），改写会撕裂客户端已渲染的 token |
+| **请求侧** | `agent/pre-step` / `agent/request` | 可改即将发给模型的 messages —— **本次接线就在这里** |
+| 磁盘 | `scripts/scrub-session-refusals.mjs` | 连带界面与历史文件一起改 |
+
+真正有害的不是"磁盘上多留一份"，而是这段自述**被下一轮当上下文读回来**。所以和
+`history-scrub` 走同一条路：首次落库照旧，下一轮读历史时读不到。
+
+```bash
+node scripts/apply-hygiene-wiring.mjs          # --check：报告锚点与接线状态
+node scripts/apply-hygiene-wiring.mjs --write  # 就地接线（插入行带 [hygiene-wiring] 标记）
+```
+
+脚本改两处，都是插入、可重复运行、锚点缺失就报错而不是猜位置：
+
+1. `lib/index.js`：`import { installOutputHygiene }` + 安装调用 + 释放调用
+2. `lib/runtime-observations.js`：`import { observeResponseText }` + 每行写入 `row.responseHygiene`
+
+> 为什么用脚本接线：这两个文件常年带着未提交的本地改动，接线不该把那些改动卷进提交。
+> 锚点对当前工作树和 `HEAD` 两套布局都做了回退（`stream-watch` 或 `obedience` 安装块）。
+
+运行时行为（`lib/output-hygiene-runtime.js`）：
+
+- `scrubPlanningMessages(messages)`：只改 assistant 的**文本块**，保留 reasoning；
+  带 tool 块的消息整条跳过；最近 `keepTail`（默认 1）条不动；单轮上限 `maxScrub`（默认 8）；
+  剥过一次的文本不会二次命中，所以 pre-step 与 request 都跑也幂等。
+- 命中才写 `$DSH_HOME/dsh-purge/hygiene.log`，只有 `{at, session, where, touched, strippedChars}`。
+- `observeResponseText(text)` → `hygieneSummary`，进 `row.responseHygiene`，同样不含原文。
+
+**改完要重启 dsh 才生效**（插件代码在进程启动时加载）。
+
 ## 现状与边界
 
-- 本层目前是**诊断**：`lib/output-hygiene.js` 是纯函数，不改宿主、不接运行时钩子。
-  接到产出路径（在 assistant 消息落库前剥离，或把 `hygieneSummary` 写进
-  `runtime-observations`）是下一步，需要单独评估对历史一致性的影响。
+- 只接了三层里的**请求侧 + 观测**：首次落库的文本仍在会话文件里（要连磁盘一起改，
+  走 `scrub-session-refusals.mjs` 那条路，未纳入本次改动）。
+- `reasoning` 通道只观测不剥离：思考块不可改写，`detectPlanningLeak` 只负责认出来。
 - `hygieneSummary` 只输出聚合与类别码，不含任何原文片段——可以直接进日志与报告。
 - 词表按"对执行没有任何帮助、纯属立场表态"取舍：技术注释（"改壳之后要回归扫描一次"）
   不在表内，那是真信息。
