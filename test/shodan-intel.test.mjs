@@ -47,6 +47,7 @@ test('Shodan API key is write-only and preserves unrelated platform settings', t
   assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'legacy-fofa')
   assert.equal(loadPlatformConfig(root).tools.nmap, '/fixture/nmap')
   assert.throws(() => shodanConnectionSave(root, { key: 'new-key', clearKey: true }), /不能同时/)
+  assert.throws(() => shodanConnectionSave(root, { key: 'bad\\nkey' }), /格式无效/)
   assert.equal(shodanConnectionSave(root, { clearKey: true }).configured, false)
 })
 
