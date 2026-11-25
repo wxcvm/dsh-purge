@@ -41,6 +41,14 @@ function digest(file) {
   try { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
   catch { return null; }
 }
+// A fixed generated identifier can be compared with the UI status page.
+// It describes disk contents only, not the running renderer.
+function diskRendererBuildId(file) {
+  try {
+    if (!regularFile(file)) return null;
+    return fs.readFileSync(file, 'utf8').match(/const CLIENT_BUILD_ID = "([0-9a-f]{16})";/)?.[1] || null;
+  } catch { return null; }
+}
 function inside(root, target) {
   if (!root || !target) return false;
   const relative = path.relative(root, target);
@@ -128,6 +136,7 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
     profile: name, installation: 'absent', version: null,
     profileBundleRegistered: null, cordisInsertPresent: null,
     linkTargetScope: null, sourceBytesEqual: null, sourceFileComparison: {},
+    rendererBuildIdOnDisk: null,
   };
   const manifest = safeJson(path.join(dir, 'package.json'));
   const bundles = manifest?.dsh?.profile?.bundles;
@@ -176,6 +185,8 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
   if (!['present-pnpm-link', 'present-operator-home-link'].includes(output.installation))
     output.installation = 'present';
   output.version = version(pkg.version);
+  const client = path.join(installed, 'client.js');
+  if (confinedFile(client, installedRoot)) output.rendererBuildIdOnDisk = diskRendererBuildId(client);
   for (const rel of CHECK_FILES) {
     const source = path.join(root, rel);
     const target = path.join(installed, rel);
@@ -214,6 +225,7 @@ export function inspectReadOnlyDesktopEvidence({
     writes: false, remoteRequests: false, runtimeLoadVerified: false,
     warning: 'Runner disk/process evidence cannot prove the running Desktop loaded this plugin, performed a restart, or delivered a Provider request.',
     candidate: { version: version(candidate?.version),
+      rendererBuildIdOnDisk: diskRendererBuildId(path.join(root, 'client.js')),
       commit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') ? process.env.GITHUB_SHA : null },
     desktop: {
       executableFound: false, manifestValid: false, version: null, layout: 'unknown',

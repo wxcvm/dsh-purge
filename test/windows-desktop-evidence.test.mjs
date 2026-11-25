@@ -374,3 +374,29 @@ test('operator opt-in never reads a linked manifest or nested code escaping its 
   assert.ok(!JSON.stringify(result).includes('SECRET_NOT_READ'));
   assert.ok(!JSON.stringify(result).includes(outside));
 });
+
+test('reports fixed renderer build IDs without treating disk identity as loaded UI', t => {
+  const f = workspace(t);
+  const { installed } = plugin(f);
+  const marker = id => 'const CLIENT_BUILD_ID = "' + id + '";\n';
+  const candidate = '0123456789abcdef';
+  const previous = 'fedcba9876543210';
+  fs.writeFileSync(path.join(f.root, 'client.js'), marker(candidate));
+  fs.writeFileSync(path.join(installed, 'client.js'), marker(previous) + 'private fixture text');
+  const inspect = () => inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  const stale = inspect();
+  assert.equal(stale.candidate.rendererBuildIdOnDisk, candidate);
+  assert.equal(stale.profiles[0].rendererBuildIdOnDisk, previous);
+  assert.equal(stale.profiles[0].sourceFileComparison['client.js'], 'different');
+  assert.equal(stale.runtimeLoadVerified, false);
+  assert.equal(stale.profiles[1].rendererBuildIdOnDisk, null);
+  assert.ok(!JSON.stringify(stale).includes('private fixture text'));
+  fs.writeFileSync(path.join(installed, 'client.js'), marker(candidate));
+  const matching = inspect();
+  assert.equal(matching.profiles[0].rendererBuildIdOnDisk, candidate);
+  assert.equal(matching.runtimeLoadVerified, false);
+  fs.writeFileSync(path.join(installed, 'client.js'), marker('invalid-marker'));
+  assert.equal(inspect().profiles[0].rendererBuildIdOnDisk, null);
+  fs.rmSync(path.join(installed, 'client.js'));
+  assert.equal(inspect().profiles[0].rendererBuildIdOnDisk, null);
+});
