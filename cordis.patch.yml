@@ -52,6 +52,7 @@
     continueText: "继续"
     capabilityProtocol: true
     hooksDenyBypass: false
+    hooksDenyBypassOptIn: false
 
 - insert:
     # 演练台：预设 + 技能落地（本插件 lib/redteam）
