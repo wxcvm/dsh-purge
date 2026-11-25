@@ -2,15 +2,16 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
-## 新预览候选准备中 · 2026-11-25
+## 预览候选已发布 · 2026-11-25
 
-- **版本**：`1.1.92-wxcvm.26-rc.1`，候选分支 `release-candidate/v1.1.92-wxcvm.26-rc.1`，基于当前主线 [08ee8cb](https://github.com/wxcvm/dsh-purge/commit/08ee8cb572ef231684ca3ed704fd29557e64df22)。
-- **为何使用新版本号**：`.25-rc.1` 的 Git 标签仍保留，但其 Release 与资产已在清理过程中删除；不复用旧标签、不覆盖历史资产。
-- **本次变更**：仅同步 package/lockfile 版本与安装标签地址，新增发行说明和版本中心记录；不改运行时功能。
-- **候选门禁**：Windows/Ubuntu Hosted Local Compatibility、Hosted UI Integration Smoke、Hosted Packed Install Smoke（实际 npm pack + 全新临时 `DSH_HOME`）。以本 PR 精确 HEAD 的实际 CI 结果为准。
-- **发行规则**：候选 PR 合并后，从当时最新 master 创建同名 `release/vv1.1.92-wxcvm.26-rc.1` 分支；发行工作流要求 release 分支 HEAD 与 master 完全一致。禁止从旧分支发布。
-- **实机边界**：Harness 原位升级/重启加载、Provider 实际投递、旧安装权限迁移/回退和设置持久化仍需真实 Windows Desktop 验收；不把 CI 夹具当实机结果。
-- **当前状态**：尚未创建标签、Release 或下载资产。
+- **版本**：[v1.1.92-wxcvm.26-rc.1](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.26-rc.1)，GitHub Pre-release 已发布；PR [#582](https://github.com/wxcvm/dsh-purge/pull/582) 合并提交 [75adae0](https://github.com/wxcvm/dsh-purge/commit/75adae0ff166962549754e382addcb14a1a0d57a)，轻量标签指向同一提交。
+- **实际资产**：ZIP `dsh-purge-1.1.92-wxcvm.26-rc.1.zip`，4,645,975 字节，GitHub asset digest `sha256:f50e83d34fae1b510c0a98a6de91d622f2a6ac38daec0fc9484efa5af8466a9e`；`SHA256SUMS.txt` 101 字节，GitHub asset digest `sha256:273fd63f97dcdef8a2cfd325ed65bc6be1a2c50002fe629339c9c6565b6bc172`。两项状态均为 uploaded；本次未独立下载 ZIP 并二次核对清单文本。
+- **候选 CI**：PR 精确 HEAD `93ba651e` 的 [Local Compatibility #45605673045](https://github.com/wxcvm/dsh-purge/actions/runs/45605673045) 与 [Hosted Packed Install #45605673164](https://github.com/wxcvm/dsh-purge/actions/runs/45605673164) 均 Windows/Ubuntu 双绿，包含真实 npm pack 与全新临时 `DSH_HOME` 安装。
+- **UI 变更 CI**：PR [#581](https://github.com/wxcvm/dsh-purge/pull/581) 精确 HEAD `d39835a` 的 [Hosted UI #45603955570](https://github.com/wxcvm/dsh-purge/actions/runs/45603955570) 与 [Compatibility #45603955553](https://github.com/wxcvm/dsh-purge/actions/runs/45603955553) 均通过。
+- **主线 push CI**：[#45606197244](https://github.com/wxcvm/dsh-purge/actions/runs/45606197244) 在记录时仍在执行（Ubuntu 已启动、Windows 排队），不计为通过。
+- **历史版本清理**：本次用户执行的清理已移除旧 GitHub Release 与下载资产；旧 tag/源码仍保留。此前 `.25-rc.1` 标签保留但没有 Release；此前 Stable `.24` 的历史发布记录也不代表当前仍可下载。当前可下载候选为本节 `.26-rc.1`。
+- **更新渠道**：这是 Pre-release，当前 Stable 更新器不会自动推送 RC；试用请从上方 Release 页面直接下载 ZIP，并按随附校验文件核对。
+- **实机边界**：真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、旧安装历史权限迁移/回退和跨页设置持久化仍需单独验收（#336/#337/#550/#361/#364）。自动化夹具不替代实机证据。
 
 ## 预览候选状态更正 · 2026-11-25
 
