@@ -116,6 +116,8 @@ test('host lookup rejects non-IP targets before network access and maps missing 
   assert.equal(calls, 0)
   const missing = await shodanHostLookup(root, ip, { fetch: async () => new Response('{}', { status: 404 }) })
   assert.equal(missing.error, 'Shodan 没有该 IP 的主机记录')
+  const denied = await shodanHostLookup(root, ip, { fetch: async () => new Response('{}', { status: 403 }) })
+  assert.match(denied.error, /Shodan Membership/)
 })
 
 test('scoped Shodan lookup returns minified passive ports and leaves live state untouched', async t => {
@@ -172,6 +174,8 @@ test('Shodan setup and source controls exist in source and generated desktop cli
     assert.match(view, /shodanConnectionSave/)
     assert.match(view, /shodanConnectionTest/)
     assert.match(view, /Shodan 官方 REST API/)
+    assert.match(view, /Shodan Membership/)
+    assert.match(view, /InternetDB 免 Key/)
     assert.match(view, /shodanKey/)
     assert.match(view, /sources: \['shodan'\]/)
   }
