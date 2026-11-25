@@ -335,3 +335,31 @@ test("backup recovery never introduces a previously absent unrelated change", ()
   assert.equal(result.text, backup);
   assert.deepEqual(result.matchedPatchIds, [6]);
 });
+
+test("backup recovery refuses matching histories with different recovered contents", () => {
+  const restore = { id: 6, from: "original", to: "changed" };
+  const unrelated = { id: 9000, from: "original", to: "changed" };
+  const backup = "original\n";
+  const current = "changed\n";
+  const applyPatch = (text, item) => text.replace(item.from, item.to);
+  for (const relatedPatches of [[restore, unrelated], [unrelated, restore]]) {
+    const result = restoreNativePermissionFromBackup({
+      current, backup, patch: restore, relatedPatches,
+      restorePatchIds: [6], applyPatch,
+    });
+    assert.equal(result.status, "ambiguous");
+    assert.equal(result.text, current);
+  }
+});
+
+test("backup recovery accepts matching histories with identical recovered contents", () => {
+  const restore = { id: 6, from: "original", to: "changed" };
+  const noop = { id: 9000, from: "absent", to: "unused" };
+  const result = restoreNativePermissionFromBackup({
+    current: "changed\n", backup: "original\n", patch: restore,
+    relatedPatches: [restore, noop], restorePatchIds: [6],
+    applyPatch: (text, item) => text.replace(item.from, item.to),
+  });
+  assert.equal(result.status, "restored");
+  assert.equal(result.text, "original\n");
+});
