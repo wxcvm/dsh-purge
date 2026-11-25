@@ -39,7 +39,9 @@ test('browser settings and save receipts never echo stored environment credentia
   assert.equal(assigned.config.toolkitDir, dir)
   assert.deepEqual(loadPlatformConfig(root).env, original)
 
-  assert.throws(() => dispatch(store, { op: 'platformConfigSave', config: { env: { CENSYS_PAT: 'synthetic-plain-pat' } } }), /专用加密连接设置/)
+  const rejectedPat = dispatch(store, { op: 'platformConfigSave', config: { env: { CENSYS_PAT: 'synthetic-plain-pat' } } })
+  assert.equal(rejectedPat.ok, false)
+  assert.match(rejectedPat.error, /专用加密连接设置/)
   verify(dispatch(store, { op: 'platformConfigSave', config: { env: { FOFA_KEY: 'synthetic-new-key' } } }), true)
   assert.deepEqual(loadPlatformConfig(root).env, { ...original, FOFA_KEY: 'synthetic-new-key' })
   verify(dispatch(store, { op: 'platformConfigSave', config: { env: { FOFA_KEY: '' } } }), false)
