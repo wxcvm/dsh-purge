@@ -141,10 +141,11 @@ test('host lookup maps missing hosts separately from invalid credentials', async
 test('Censys normalization is passive, deduplicates ports and retains timestamps', () => {
   const result = normalizeIntelHost('censys', hostPayload, ip)
   assert.equal(result.provenance, 'passive')
-  assert.deepEqual(result.ports.map(p => [p.port, p.proto]), [[443, 'tcp'], [53, 'udp']])
-  assert.equal(result.ports[0].product, 'nginx')
-  assert.equal(result.ports[0].version, '1.27')
-  assert.equal(result.ports[0].observed_at, '2026-11-24T00:00:00Z')
+  assert.deepEqual(result.ports.map(p => [p.port, p.proto]), [[53, 'udp'], [443, 'tcp']])
+  const https = result.ports.find(p => p.port === 443)
+  assert.equal(https.product, 'nginx')
+  assert.equal(https.version, '1.27')
+  assert.equal(https.observed_at, '2026-11-24T00:00:00Z')
   assert.deepEqual(result.hostnames, ['lab.example.test'])
 })
 
