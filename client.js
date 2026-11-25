@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "1182fe96b751a386";
+		const CLIENT_BUILD_ID = "958f31a44478da28";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11452,6 +11452,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           if (!r?.ok) { setShodanFeedback(r?.error || '保存失败'); return }
           setShodanConnection(r); setShodanBaseUrl(r.baseUrl); setShodanKey(''); setShodanClearKey(false)
           setShodanFeedback('设置已保存，尚未测试连接')
+          api({ op: 'intelSourcesGet' }).then(status => {
+            if (status?.ok) setSourceStatus(status.sourceStatus || {})
+          }, () => {})
         }, () => { setShodanBusy(false); setShodanFeedback('保存失败') })
       }
       const testShodan = () => {
@@ -11791,7 +11794,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('input', { className: 'rt-input', style: { flex: '1 1 250px' },
                 value: quickTarget,
                 placeholder: quickSource === 'local' ? '例如 domain="example.test"'
-                  : ['internetdb', 'censys'].includes(quickSource) ? '已登记范围内的单个 IP' : '已登记的单个域名或 IP',
+                  : ['internetdb', 'shodan', 'censys'].includes(quickSource) ? '已登记范围内的单个 IP' : '已登记的单个域名或 IP',
                 onChange: e => { resetQuick(); setQuickTarget(e.target.value) } })),
             quickSource === 'censys' ? h('div', { className: 'rt-foot', style: { marginTop: 8 } },
               'Censys Platform API v3 单 IP 查询会消耗 1 credit；测试连接不消耗查询额度。') : null,
