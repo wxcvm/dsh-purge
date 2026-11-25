@@ -205,6 +205,21 @@ test("applyPatches leaves native sandbox deny and confine enforcement unchanged"
   assert.equal(status[15], "off");
 });
 
+test("ambiguous #6 host drift leaves both current file and original backup untouched", async t => {
+  const patch6 = byId(6);
+  const patch15 = byId(15);
+  const original = `${patch6.patterns[0]}\n`;
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const current = applyPatchText(original, patch6) + "// unrelated host edit\n";
+  fs.writeFileSync(file, current);
+  fs.writeFileSync(`${file}.dshpurge.bak`, original);
+
+  const report = await applyPatches(aiBase, [patch6, patch15]);
+  assert.equal(fs.readFileSync(file, "utf8"), current);
+  assert.equal(fs.readFileSync(`${file}.dshpurge.bak`, "utf8"), original);
+  assert.equal(report.find(row => row.patch_id === 6)?.status, "pending");
+});
+
 test("a missing #15 backup is not replaced with the already-bypassed host file", async t => {
   const patch15 = byId(15);
   const { aiBase, file } = makeSandboxHost(t, patch15.replace);
