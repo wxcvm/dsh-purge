@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatchAsync } from '../lib/redteam/store-core.js'
@@ -288,7 +288,7 @@ test('PAT persistence fails closed without a vault key and environment PAT is ne
 
 test('legacy plaintext PAT is migrated to encrypted storage when the vault key is available', t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'legacy-plaintext-token' } }, root)
+  writeFileSync(join(root, 'config.json'), JSON.stringify({ env: { CENSYS_PAT: 'legacy-plaintext-token' } }))
   const migrated = censysConnectionSave(root, { organizationId: org })
   assert.equal(migrated.storageMode, 'encrypted-local')
   assert.equal(migrated.protectedAtRest, true)
