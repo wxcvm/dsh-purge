@@ -42,7 +42,7 @@ test("fresh generated and bundled profiles do not opt into hook bypass", () => {
   assert.match(INSERT_BLOCK, /hooksDenyBypass: false/);
   const bundled = fs.readFileSync(new URL("../cordis.patch.yml", import.meta.url), "utf8");
   const start = bundled.indexOf("- id: dsh-purge");
-  const end = bundled.indexOf("\\n- insert:", start + 1);
+  const end = bundled.indexOf("\n- insert:", start + 1);
   assert.ok(start >= 0 && end > start);
-  assert.match(bundled.slice(start, end), /hooksDenyBypass:\\s*false/);
+  assert.match(bundled.slice(start, end), /hooksDenyBypass:\s*false/);
 });
