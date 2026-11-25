@@ -250,6 +250,8 @@ test('Censys setup and query controls exist in source and generated desktop clie
     assert.match(view, /Censys Platform API v3/)
     assert.match(view, /AES-256-GCM/)
     assert.match(view, /DSH_PURGE_SECRET_KEY/)
+    assert.match(view, /encrypted-local-locked/)
+    assert.match(view, /credentialError/)
     assert.match(view, /每次查询消耗 1 credit/)
     assert.match(view, /censysPat/)
     assert.match(view, /sources: \['censys'\]/)
@@ -304,15 +306,26 @@ test('legacy plaintext PAT is migrated to encrypted storage when the vault key i
   assert.match(raw, /dshp:vault:v1:/)
 })
 
-test('encrypted PAT cannot be read with a missing or wrong vault key', t => {
+test('locked encrypted PAT remains clearable without returning secret material', t => {
   const { root } = fixture(t)
   saveCensysPat('private-token', root)
   const priorKey = process.env.DSH_PURGE_SECRET_KEY
   try {
     delete process.env.DSH_PURGE_SECRET_KEY
-    assert.throws(() => censysConnectionGet(root), /DSH_PURGE_SECRET_KEY/)
+    const missing = censysConnectionGet(root)
+    assert.equal(missing.configured, true)
+    assert.equal(missing.storageMode, 'encrypted-local-locked')
+    assert.match(missing.credentialError, /DSH_PURGE_SECRET_KEY/)
+    assert.equal(JSON.stringify(missing).includes('private-token'), false)
     process.env.DSH_PURGE_SECRET_KEY = 'b'.repeat(64)
-    assert.throws(() => censysConnectionGet(root), /Cannot decrypt/)
+    const wrong = censysConnectionGet(root)
+    assert.equal(wrong.configured, true)
+    assert.equal(wrong.storageMode, 'encrypted-local-locked')
+    assert.match(wrong.credentialError, /Cannot decrypt/)
+    assert.equal(JSON.stringify(wrong).includes('private-token'), false)
+    const cleared = censysConnectionSave(root, { clearToken: true })
+    assert.equal(cleared.configured, false)
+    assert.equal(censysPatStorageStatus(root).configured, false)
   } finally {
     if (priorKey === undefined) delete process.env.DSH_PURGE_SECRET_KEY
     else process.env.DSH_PURGE_SECRET_KEY = priorKey
