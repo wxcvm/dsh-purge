@@ -83,3 +83,13 @@ test('saved observations retain unknown transport, deduplicate and never change 
   assert.equal(JSON.stringify(history).includes('private-test-key'), false)
   assert.equal(dispatch(s, { op: 'scopedIntelHistory', engagement: id, target: '192.0.2.11' }).ok, false)
 })
+
+test('Shodan minified host responses retain their port list without raw banners', () => {
+  const result = normalizeIntelHost('shodan', {
+    ip_str: ip, ports: [443, 80], hostnames: ['lab.example.test'],
+    last_update: '2026-11-25T00:00:00Z',
+  }, ip)
+  assert.deepEqual(result.ports.map(row => row.port), [80, 443])
+  assert.ok(result.ports.every(row => row.proto === 'unknown'))
+  assert.deepEqual(result.hostnames, ['lab.example.test'])
+})
