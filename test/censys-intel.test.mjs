@@ -14,8 +14,18 @@ import { normalizeIntelHost, runScopedIntelLookup } from '../lib/redteam/scoped-
 const ip = '192.0.2.10'
 const org = '12345678-1234-4234-8234-123456789abc'
 function fixture(t) {
+  const priorPat = process.env.CENSYS_PAT
+  const priorOrg = process.env.CENSYS_ORG_ID
+  delete process.env.CENSYS_PAT
+  delete process.env.CENSYS_ORG_ID
   const root = mkdtempSync(join(tmpdir(), 'purge-censys-'))
-  t.after(() => rmSync(root, { recursive: true, force: true }))
+  t.after(() => {
+    rmSync(root, { recursive: true, force: true })
+    if (priorPat === undefined) delete process.env.CENSYS_PAT
+    else process.env.CENSYS_PAT = priorPat
+    if (priorOrg === undefined) delete process.env.CENSYS_ORG_ID
+    else process.env.CENSYS_ORG_ID = priorOrg
+  })
   return { root }
 }
 const hostPayload = {
@@ -216,5 +226,28 @@ test('Censys setup and query controls exist in source and generated desktop clie
     assert.match(view, /每次查询消耗 1 credit/)
     assert.match(view, /censysPat/)
     assert.match(view, /sources: \['censys'\]/)
+  }
+})
+
+test('dispatch exposes write-only Censys settings through the host bridge', async t => {
+  const { root } = fixture(t)
+  const saved = await dispatchAsync({ root }, { op: 'censysConnectionSave', token: 'private-token', organizationId: org })
+  assert.equal(saved.ok, true)
+  assert.equal(saved.configured, true)
+  const loaded = await dispatchAsync({ root }, { op: 'censysConnectionGet' })
+  assert.equal(loaded.ok, true)
+  assert.equal(loaded.organizationId, org)
+  assert.equal(JSON.stringify([saved, loaded]).includes('private-token'), false)
+})
+
+test('passive API provider selector displays Censys status and explicit credit disclosure', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    const view = src.slice(src.indexOf('function LocalAssetSearchTab(props)'), src.indexOf('function EnvTab(props)'))
+    assert.match(view, /单 IP 被动 API 来源/)
+    assert.match(view, /sources\.filter\(x => \['shodan', 'censys'\]\.includes\(x\.id\)\)/)
+    assert.match(view, /sourceStatus\[x\.id\]/)
+    assert.match(view, /当前选择：/)
+    assert.match(view, /每次查询消耗 1 credit/)
   }
 })
