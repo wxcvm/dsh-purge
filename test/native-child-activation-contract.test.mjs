@@ -50,6 +50,12 @@ test('rc.5 native child activation preserves restrictive delegation policy', {
   ctx.provide('workingDirectory', {
     defaultDirectory: workspace, get,
     ensure: async (agent, signal) => { signal?.throwIfAborted(); return get(agent.session); },
+    // This fixture never permits selecting a directory outside its temporary workspace.
+    set: async (_agent, directory, signal) => {
+      signal?.throwIfAborted();
+      assert.equal(path.resolve(directory), path.resolve(workspace));
+      return workspace;
+    },
   });
   await ctx.plugin(LlmRuntime);
   await ctx.plugin(SessionStore);
