@@ -301,3 +301,22 @@ test("read-only permission migration inventory distinguishes unknown and unresol
   assert.deepEqual(fs.readFileSync(file), before);
   assert.equal(fs.existsSync(file + ".dshpurge.bak"), false);
 });
+
+test("permission inventory never treats an uninspected host as clean because another host was inspected", async t => {
+  const patch = byId(6);
+  const original = patch.patterns[0];
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "purge-uninspected-host-"));
+  t.after(() => fs.rmSync(empty, { recursive: true, force: true }));
+  for (const bases of [[aiBase, empty], [empty, aiBase]]) {
+    const result = await inspectNativePermissionMigration(bases);
+    assert.equal(result.status, "unverified");
+    assert.ok(result.inspected > 0);
+    assert.equal(result.unresolved, 0);
+  }
+  fs.writeFileSync(file, applyPatchText(original, patch));
+  const result = await inspectNativePermissionMigration([empty, aiBase]);
+  assert.equal(result.status, "review");
+  assert.ok(result.unresolved > 0);
+  assert.deepEqual(fs.readdirSync(empty), []);
+});
