@@ -314,7 +314,8 @@ test('encrypted PAT cannot be read with a missing or wrong vault key', t => {
     process.env.DSH_PURGE_SECRET_KEY = 'b'.repeat(64)
     assert.throws(() => censysConnectionGet(root), /Cannot decrypt/)
   } finally {
-    process.env.DSH_PURGE_SECRET_KEY = priorKey
+    if (priorKey === undefined) delete process.env.DSH_PURGE_SECRET_KEY
+    else process.env.DSH_PURGE_SECRET_KEY = priorKey
   }
 })
 
