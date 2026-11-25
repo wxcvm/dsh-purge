@@ -37,33 +37,20 @@ jobs:
             Where-Object { $_.DisplayName -eq 'DeepSeek Harness' })
           $versions = @($apps | ForEach-Object {
             $v = [string]$_.DisplayVersion
-            if ($v -match '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?        with:
-          node-version: '24'
-      - name: Verify Node.js and npm
-        shell: pwsh
-        run: |
-          node --version
-          npm --version
-) { $v } else { 'unknown' }
+            if ($v -match '^\d+\.\d+\.\d+') { $v } else { 'unknown' }
           } | Sort-Object -Unique)
           if ($versions.Count -eq 0) {
             Write-Host 'Desktop registration: not found in accessible uninstall registry'
           } else {
             Write-Host ('Desktop registered version(s): ' + ($versions -join ', '))
           }
+
           $processes = @(Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue)
           Write-Host ('Matching Desktop process count: ' + $processes.Count)
           $runningVersions = @($processes | ForEach-Object {
             try {
               $v = [string]$_.FileVersionInfo.ProductVersion
-              if ($v -match '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?        with:
-          node-version: '24'
-      - name: Verify Node.js and npm
-        shell: pwsh
-        run: |
-          node --version
-          npm --version
-) { $v } else { 'unknown' }
+              if ($v -match '^\d+\.\d+\.\d+') { $v } else { 'unknown' }
             } catch { 'unknown' }
           } | Sort-Object -Unique)
           if ($runningVersions.Count -gt 0) {
