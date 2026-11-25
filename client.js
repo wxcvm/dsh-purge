@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "f06973de98df36bb";
+		const CLIENT_BUILD_ID = "2ed8ea789e270ea2";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11642,7 +11642,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           surveyCard('sources', { className: 'rt-card', style: { fontSize: 12 } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
               h('h4', { style: { margin: 0 } }, 'Censys Platform API v3'),
-              h('span', { className: 'rt-tag' }, censysConnection?.configured ? 'PAT 已配置（待测试）' : 'PAT 未配置'),
+              h('span', { className: 'rt-tag' }, censysTest?.ok ? '连接已验证' : censysConnection?.configured ? 'PAT 已配置（待测试）' : 'PAT 未配置'),
               h('div', { className: 'rt-spacer' }),
               h('button', { className: 'rt-btn', onClick: () => setCensysSettings(v => !v) },
                 censysSettings ? '收起设置' : '设置连接'),
