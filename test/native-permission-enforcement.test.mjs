@@ -26,7 +26,7 @@ test("the default patch set disables permission and approval bypasses, not compa
 });
 
 test("marked approval, sandbox and filesystem patches reverse only their exact Purge output", () => {
-  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 17, 33, 34, 35, 36, 48, 60, 61, 62, 63]) {
+  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 17, 33, 34, 35, 36, 37, 48, 60, 61, 62, 63]) {
     const patch = byId(id);
     assert.ok(patch, `missing patch #${id}`);
     const replacements = replacementsOf(patch);
