@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatchAsync } from '../lib/redteam/store-core.js'
@@ -289,7 +289,7 @@ test('PAT persistence fails closed without a vault key and environment PAT is ne
   assert.equal(result.storageMode, 'environment')
   assert.equal(result.protectedAtRest, false)
   assert.equal(JSON.stringify(result).includes('environment-only-token'), false)
-  assert.equal(readFileSync(join(root, 'platform-secrets.json'), 'utf8').includes('environment-only-token'), false)
+  assert.equal(existsSync(join(root, 'platform-secrets.json')), false)
 })
 
 test('legacy plaintext PAT is migrated to encrypted storage when the vault key is available', t => {
