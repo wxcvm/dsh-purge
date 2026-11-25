@@ -213,14 +213,21 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
     .every(s => s === 'identical');
   return output;
 }
+// An empty or malformed PowerShell result is unavailable, not zero processes.
+export function parseDesktopProcessCount(result) {
+  const raw = String(result?.stdout ?? '').trim();
+  if (result?.status !== 0 || result?.error || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : null;
+}
 function processEvidence() {
-  if (process.platform !== 'win32') return { observed: null, reason: 'not-windows' };
+  if (process.platform !== 'win32') return { observed: null, reason: 'not-windows', loadedPluginVerified: false };
   const expr = "(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(DeepSeek[ -]Harness|Dsh[ -]Next)$' } | Measure-Object).Count";
   try {
     const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', expr],
       { encoding: 'utf8', timeout: 8000, windowsHide: true });
-    const n = Number(String(result.stdout || '').trim());
-    if (result.status === 0 && Number.isSafeInteger(n) && n >= 0)
+    const n = parseDesktopProcessCount(result);
+    if (n !== null)
       return { observed: n > 0, processCount: n, loadedPluginVerified: false };
   } catch {}
   return { observed: null, reason: 'process-query-unavailable', loadedPluginVerified: false };
