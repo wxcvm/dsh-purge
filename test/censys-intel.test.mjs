@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatchAsync } from '../lib/redteam/store-core.js'
 import { savePlatformConfig, loadPlatformConfig } from '../lib/redteam/platform-config.js'
+import { saveCensysPat, censysPatStorageStatus } from '../lib/redteam/platform-secret-store.js'
 import {
   CENSYS_API_BASE_URL, CENSYS_HOST_ACCEPT, censysConnectionGet, censysConnectionSave,
   censysConnectionTest, censysHostLookup, normalizeCensysOrganizationId,
@@ -16,8 +17,10 @@ const org = '12345678-1234-4234-8234-123456789abc'
 function fixture(t) {
   const priorPat = process.env.CENSYS_PAT
   const priorOrg = process.env.CENSYS_ORG_ID
+  const priorKey = process.env.DSH_PURGE_SECRET_KEY
   delete process.env.CENSYS_PAT
   delete process.env.CENSYS_ORG_ID
+  process.env.DSH_PURGE_SECRET_KEY = 'a'.repeat(64)
   const root = mkdtempSync(join(tmpdir(), 'purge-censys-'))
   const cleanups = []
   t.after(() => {
@@ -29,6 +32,8 @@ function fixture(t) {
       else process.env.CENSYS_PAT = priorPat
       if (priorOrg === undefined) delete process.env.CENSYS_ORG_ID
       else process.env.CENSYS_ORG_ID = priorOrg
+      if (priorKey === undefined) delete process.env.DSH_PURGE_SECRET_KEY
+      else process.env.DSH_PURGE_SECRET_KEY = priorKey
     }
   })
   return { root, onCleanup: cleanup => cleanups.push(cleanup) }
@@ -66,18 +71,25 @@ test('PAT and organization settings are write-only and preserve unrelated platfo
   assert.equal(saved.organizationConfigured, true)
   assert.equal(saved.organizationId, org)
   assert.equal(JSON.stringify(saved).includes('private-censys-token'), false)
-  assert.equal(loadPlatformConfig(root).env.CENSYS_PAT, 'private-censys-token')
+  assert.equal(loadPlatformConfig(root).env.CENSYS_PAT, undefined)
+  const secretFile = readFileSync(join(root, 'platform-secrets.json'), 'utf8')
+  assert.match(secretFile, /dshp:vault:v1:/)
+  assert.equal(secretFile.includes('private-censys-token'), false)
+  assert.equal(saved.storageMode, 'encrypted-local')
+  assert.equal(saved.protectedAtRest, true)
+  assert.equal(censysPatStorageStatus(root).protectedAtRest, true)
   assert.equal(loadPlatformConfig(root).env.CENSYS_ORG_ID, org)
   assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'legacy-fofa')
   assert.equal(loadPlatformConfig(root).tools.nmap, '/fixture/nmap')
   assert.throws(() => censysConnectionSave(root, { token: 'new-token', clearToken: true }), /不能同时/)
   assert.equal(censysConnectionSave(root, { clearToken: true }).configured, false)
+  assert.equal(censysPatStorageStatus(root).configured, false)
   assert.equal(censysConnectionSave(root, { clearOrganizationId: true }).organizationConfigured, false)
 })
 
 test('connection test calls only the zero-credit account endpoint', async t => {
   const { root } = fixture(t)
-  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  saveCensysPat('private-token', root)
   const result = await censysConnectionTest(root, { fetch: async (url, options) => {
     assert.equal(url.origin, CENSYS_API_BASE_URL)
     assert.equal(url.pathname, '/v3/accounts/users/credits')
@@ -230,6 +242,8 @@ test('Censys setup and query controls exist in source and generated desktop clie
     assert.match(view, /censysConnectionSave/)
     assert.match(view, /censysConnectionTest/)
     assert.match(view, /Censys Platform API v3/)
+    assert.match(view, /AES-256-GCM/)
+    assert.match(view, /DSH_PURGE_SECRET_KEY/)
     assert.match(view, /每次查询消耗 1 credit/)
     assert.match(view, /censysPat/)
     assert.match(view, /sources: \['censys'\]/)
@@ -257,4 +271,29 @@ test('passive API provider selector displays Censys status and explicit credit d
     assert.match(view, /当前选择：/)
     assert.match(view, /每次查询消耗 1 credit/)
   }
+})
+
+test('PAT persistence fails closed without a vault key and environment PAT is never written', t => {
+  const { root } = fixture(t)
+  delete process.env.DSH_PURGE_SECRET_KEY
+  assert.throws(() => censysConnectionSave(root, { token: 'private-token' }), /DSH_PURGE_SECRET_KEY/)
+  process.env.CENSYS_PAT = 'environment-only-token'
+  const result = censysConnectionSave(root, { organizationId: org })
+  assert.equal(result.configured, true)
+  assert.equal(result.storageMode, 'environment')
+  assert.equal(result.protectedAtRest, false)
+  assert.equal(JSON.stringify(result).includes('environment-only-token'), false)
+  assert.equal(readFileSync(join(root, 'platform-secrets.json'), 'utf8').includes('environment-only-token'), false)
+})
+
+test('legacy plaintext PAT is migrated to encrypted storage when the vault key is available', t => {
+  const { root } = fixture(t)
+  savePlatformConfig({ env: { CENSYS_PAT: 'legacy-plaintext-token' } }, root)
+  const migrated = censysConnectionSave(root, { organizationId: org })
+  assert.equal(migrated.storageMode, 'encrypted-local')
+  assert.equal(migrated.protectedAtRest, true)
+  assert.equal(loadPlatformConfig(root).env.CENSYS_PAT, '')
+  const raw = readFileSync(join(root, 'platform-secrets.json'), 'utf8')
+  assert.equal(raw.includes('legacy-plaintext-token'), false)
+  assert.match(raw, /dshp:vault:v1:/)
 })
