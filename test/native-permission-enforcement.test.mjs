@@ -320,3 +320,18 @@ test("permission inventory never treats an uninspected host as clean because ano
   assert.ok(result.unresolved > 0);
   assert.deepEqual(fs.readdirSync(empty), []);
 });
+
+test("backup recovery never introduces a previously absent unrelated change", () => {
+  const restore = { id: 6, from: "original-a", to: "changed-a" };
+  const unrelated = { id: 9000, from: "original-b", to: "changed-b" };
+  const backup = "original-a\noriginal-b\n";
+  const applyPatch = (text, item) => text.replace(item.from, item.to);
+  const current = applyPatch(backup, restore);
+  const result = restoreNativePermissionFromBackup({
+    current, backup, patch: restore, relatedPatches: [restore, unrelated],
+    restorePatchIds: [6], applyPatch,
+  });
+  assert.equal(result.status, "restored");
+  assert.equal(result.text, backup);
+  assert.deepEqual(result.matchedPatchIds, [6]);
+});
