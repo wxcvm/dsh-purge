@@ -73,3 +73,39 @@ test('malformed ASAR manifest positions and sizes are rejected explicitly', t =>
     assert.throws(() => readDesktopManifest(f.resources), { code: 'ASAR_INVALID' });
   }
 });
+
+test('invalid source version metadata refuses recovery before writing any runtime file', async t => {
+  const f = fixture(t);
+  for (const value of ['{broken', '{}', 'null', '{"node":true,"pnpm":"11"}',
+    '{"node":"24","pnpm":" "}', '{"node":"24"}']) {
+    fs.writeFileSync(path.join(f.payload, 'versions.json'), value);
+    await assert.rejects(restoreRuntimePayload(f), { code: 'INVALID_PAYLOAD' });
+    assert.equal(fs.existsSync(path.join(f.resources, 'runtime')), false);
+    assert.equal(fs.existsSync(f.journalRoot), false);
+  }
+});
+
+test('existing empty runtime files are reported without overwriting or partially restoring', async t => {
+  const f = fixture(t);
+  const empty = path.join(f.resources, 'runtime', RUNTIME_FILES[1]);
+  fs.mkdirSync(path.dirname(empty), { recursive: true });
+  fs.writeFileSync(empty, '');
+  await assert.rejects(restoreRuntimePayload(f), { code: 'INVALID_DESTINATION' });
+  assert.equal(fs.readFileSync(empty, 'utf8'), '');
+  assert.equal(fs.existsSync(path.join(f.resources, 'runtime', 'versions.json')), false);
+  assert.equal(fs.existsSync(f.journalRoot), false);
+});
+
+test('invalid installed version metadata remains an unhealthy state', async t => {
+  const f = fixture(t);
+  await restoreRuntimePayload(f);
+  const manifest = path.join(f.resources, 'runtime', 'versions.json');
+  for (const value of ['{"node":{},"pnpm":true}', '{"node":" ","pnpm":"11"}', 'null']) {
+    fs.writeFileSync(manifest, value);
+    const result = inspectDesktopRuntime(f);
+    assert.equal(result.ok, false);
+    assert.ok(result.issues.some(issue => issue.code === 'RUNTIME_VERSION_INVALID'));
+    await assert.rejects(restoreRuntimePayload(f), { code: 'INVALID_DESTINATION' });
+    assert.equal(fs.readFileSync(manifest, 'utf8'), value);
+  }
+});

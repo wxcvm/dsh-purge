@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inspectReadOnlyDesktopEvidence } from '../scripts/inspect-windows-desktop-evidence.mjs';
+import { inspectReadOnlyDesktopEvidence, parseDesktopProcessCount } from '../scripts/inspect-windows-desktop-evidence.mjs';
 
 const sampleFiles = [
   'lib/index.js', 'lib/prompt-profiles.js', 'lib/response-context.js',
@@ -428,4 +428,14 @@ test('diagnostics do not inspect profiles or node_modules redirected outside the
     }
     assert.ok(!JSON.stringify(result).includes('private-marker'));
   }
+});
+
+test('process count distinguishes an explicit zero from missing or malformed output', () => {
+  assert.equal(parseDesktopProcessCount({ status: 0, stdout: '0\r\n' }), 0);
+  assert.equal(parseDesktopProcessCount({ status: 0, stdout: ' 3\n' }), 3);
+  for (const stdout of ['', ' ', '-1', '1.5', '1e2', '0x10', '9007199254740992', 'warning\n0']) {
+    assert.equal(parseDesktopProcessCount({ status: 0, stdout }), null);
+  }
+  assert.equal(parseDesktopProcessCount({ status: 1, stdout: '0' }), null);
+  assert.equal(parseDesktopProcessCount({ status: 0, stdout: '0', error: new Error('timeout') }), null);
 });
