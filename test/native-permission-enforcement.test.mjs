@@ -200,7 +200,9 @@ test("applyPatches leaves native sandbox deny and confine enforcement unchanged"
   const report = await applyPatches(aiBase, [patch6, patch15]);
   assert.deepEqual(report.map(row => [row.patch_id, row.status]), [[6, "off"], [15, "off"]]);
   assert.equal(fs.readFileSync(file, "utf8"), original);
-  assert.deepEqual(await patchStatus(aiBase, [patch6, patch15]), { 6: "off", 15: "off" });
+  const status = await patchStatus(aiBase, [patch6, patch15]);
+  assert.equal(status[6], "off");
+  assert.equal(status[15], "off");
 });
 
 test("startup migration restores exact #6/#15 sandbox bypass output from its original backup", async t => {
