@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { dispatch } from '../lib/redteam/store-core.js'
@@ -11,9 +11,12 @@ test('browser settings and save receipts never echo stored environment credentia
   t.after(() => rmSync(root, { recursive: true, force: true }))
   const dir = join(root, 'fixtures')
   mkdirSync(dir)
-  const seed = { FOFA_KEY: 'synthetic-old-key', CENSYS_PAT: 'synthetic-censys-key', DSH_PURGE_ARTEX_OVERVIEW_TOKEN: 'synthetic-overview-key',
+  const seed = { FOFA_KEY: 'synthetic-old-key', DSH_PURGE_ARTEX_OVERVIEW_TOKEN: 'synthetic-overview-key',
     CUSTOM_OPTION: 'user-owned-option' }
   savePlatformConfig({ env: seed, notes: 'original setting' }, root)
+  const rawConfig = JSON.parse(readFileSync(join(root, 'config.json'), 'utf8'))
+  rawConfig.env.CENSYS_PAT = 'synthetic-censys-key'
+  writeFileSync(join(root, 'config.json'), JSON.stringify(rawConfig))
   const original = loadPlatformConfig(root).env
   for (const [key, value] of Object.entries(seed)) assert.equal(original[key], value)
   const store = { root }
