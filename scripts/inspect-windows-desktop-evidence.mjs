@@ -235,14 +235,44 @@ function processEvidence() {
 
 // Official 0.2.3-alpha.2 runtime requirement; disk metadata only.
 // https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/upgrade-guide/v0.2.3-alpha.1/node-24-22-3/guide.zh.md
+// Classify fixed runtime paths without traversing redirected directories.
+function runtimeFileState(resources, rel) {
+  const parts = ['runtime', ...rel.split('/')];
+  let current = resources;
+  for (let i = 0; i < parts.length; i++) {
+    current = path.join(current, parts[i]);
+    try {
+      const st = fs.lstatSync(current);
+      if (st.isSymbolicLink()) return 'unverified';
+      if (i < parts.length - 1) {
+        if (!st.isDirectory()) return 'missing';
+      } else {
+        return st.isFile() && st.size > 0 ? 'present' : 'missing';
+      }
+    } catch (error) {
+      return error?.code === 'ENOENT' || error?.code === 'ENOTDIR'
+        ? 'missing' : 'unverified';
+    }
+  }
+  return 'unverified';
+}
+
 function alpha2NodeEvidence(resources, desktopVersion) {
   const result = {
     nodeVersionOnDisk: null,
+    runtimeManifestValid: null,
     alpha2NodeRequirement: desktopVersion === '0.2.3-alpha.2' ? '^24.22.3 || >=26.13.1' : null,
     alpha2NodeRequirementMet: null,
   };
   const runtime = path.join(resources, 'runtime');
-  const manifest = ordinaryDirectory(runtime) ? safeJson(path.join(runtime, 'versions.json')) : null;
+  const manifestState = runtimeFileState(resources, 'versions.json');
+  const manifest = manifestState === 'present' ? safeJson(path.join(runtime, 'versions.json')) : null;
+  if (manifestState === 'present') {
+    result.runtimeManifestValid = Boolean(manifest &&
+      ['node', 'pnpm'].every(key => typeof manifest[key] === 'string' && manifest[key].trim().length > 0));
+  } else if (manifestState === 'missing') {
+    result.runtimeManifestValid = false;
+  }
   const match = typeof manifest?.node === 'string' && manifest.node.length <= 64
     ? /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(manifest.node) : null;
   if (!match) return result;
@@ -275,7 +305,8 @@ export function inspectReadOnlyDesktopEvidence({
     desktop: {
       executableFound: false, manifestValid: false, version: null, layout: 'unknown',
       unpackedManifestValid: null, unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
-      nodeVersionOnDisk: null, alpha2NodeRequirement: null, alpha2NodeRequirementMet: null,
+      nodeVersionOnDisk: null, runtimeManifestValid: null, alpha2NodeRequirement: null, alpha2NodeRequirementMet: null,
+      unverifiedRuntimeFiles: [],
     },
     process: probeProcesses ? processEvidence() : { observed: null, reason: 'not-requested', loadedPluginVerified: false },
     profiles: PROFILES.map(p => profileEvidence(home, p, root, { inspectHomeLinkedPlugin })),
@@ -315,9 +346,11 @@ export function inspectReadOnlyDesktopEvidence({
   evidence.desktop.version = version(pkg.version);
   evidence.desktop.unpackedVersionMismatch = evidence.desktop.unpackedManifestValid
     ? unpacked.version !== pkg.version : null;
-  const missing = RUNTIME_FILES.filter(rel => !regularFile(path.join(resources, 'runtime', rel)));
-  evidence.desktop.missingRuntimeFiles = missing;
-  evidence.desktop.runtimeFilesComplete = missing.length === 0;
+  const runtimeStates = RUNTIME_FILES.map(rel => [rel, runtimeFileState(resources, rel)]);
+  evidence.desktop.missingRuntimeFiles = runtimeStates.filter(([, state]) => state === 'missing').map(([rel]) => rel);
+  evidence.desktop.unverifiedRuntimeFiles = runtimeStates.filter(([, state]) => state === 'unverified').map(([rel]) => rel);
+  evidence.desktop.runtimeFilesComplete = evidence.desktop.missingRuntimeFiles.length > 0 ? false
+    : evidence.desktop.unverifiedRuntimeFiles.length > 0 ? null : true;
   Object.assign(evidence.desktop, alpha2NodeEvidence(resources, evidence.desktop.version));
   return evidence;
 }

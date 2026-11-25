@@ -2,14 +2,13 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
-## 预览候选已发布 · 2026-11-25
+## 预览候选状态更正 · 2026-11-25
 
-- **预览版**：[v1.1.92-wxcvm.25-rc.1](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.25-rc.1)，已于 `2026-11-25 10:42:38 UTC` 发布为 GitHub Pre-release；PR [#579](https://github.com/wxcvm/dsh-purge/pull/579) 已合并，标签指向主线提交 [02b5dda](https://github.com/wxcvm/dsh-purge/commit/02b5ddaa4615be856b495d12e677a41bee1860bf)。
-- **实际资产**：ZIP `dsh-purge-1.1.92-wxcvm.25-rc.1.zip`，4,642,024 字节，GitHub digest `sha256:475d3b8f96fa20f894c6b3323eae1cf281c71ae517205a278aa6d4a9ef8d8e3b`；`SHA256SUMS.txt`，101 字节，GitHub digest `sha256:35fd2370c7f668d7dae01422c6b7e3dbf77306aeb773a2d1fc2756ea75637d5f`；两项均为 uploaded。这里记录的是 GitHub 资产摘要与发布工作流结果，本轮未独立下载 ZIP 并对清单文本做二次校验。
-- **候选 CI**：PR 精确 HEAD `ec25b7b` 的 [Local Compatibility #45596734798](https://github.com/wxcvm/dsh-purge/actions/runs/45596734798) Windows/Ubuntu 双绿；[Hosted Packed Install #45596734598](https://github.com/wxcvm/dsh-purge/actions/runs/45596734598) Windows/Ubuntu 双绿，实际 npm pack 与全新临时 `DSH_HOME` 安装通过；[Release #45597543792](https://github.com/wxcvm/dsh-purge/actions/runs/45597543792) 成功。
-- **主线 push CI**：[Local Compatibility #45597309768](https://github.com/wxcvm/dsh-purge/actions/runs/45597309768) 在本次记录时仍排队，不计为成功。候选 PR 的 Hosted Windows/Ubuntu 测试已独立通过。
-- **更新渠道**：该版本为 Pre-release，当前内置更新器会隐藏旧 RC/预发布标签，不会作为 Stable 自动推送；试用请从上方 Release 页面直接下载 ZIP，按随附 `SHA256SUMS.txt` 校验。
-- **实机边界**：真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、用户现场历史权限迁移/回退及 ARTEX 双端联动仍待单独验收（#336/#337/#338/#343/#346/#550）。自动化夹具不替代这些实机证据。
+- **源码候选**：`1.1.92-wxcvm.25-rc.1`，PR [#579](https://github.com/wxcvm/dsh-purge/pull/579) 已合并至 [02b5dda](https://github.com/wxcvm/dsh-purge/commit/02b5ddaa4615be856b495d12e677a41bee1860bf)。
+- **候选 CI**：精确 PR HEAD `ec25b7b` 的 [Local Compatibility #45596734798](https://github.com/wxcvm/dsh-purge/actions/runs/45596734798) 和 [Hosted Packed Install #45596734598](https://github.com/wxcvm/dsh-purge/actions/runs/45596734598) 双平台通过。夹具结果不等于实机验证。
+- **交付未确认**：[Release #45597543792](https://github.com/wxcvm/dsh-purge/actions/runs/45597543792) 最新记录为 failure；Release API 返回 404。撤回此前关于已发布、资产已上传和可下载的断言，不将其列为可用版本。
+- **主线 CI**：[Local Compatibility #45597309768](https://github.com/wxcvm/dsh-purge/actions/runs/45597309768) 已取消，不计为通过。
+- **实机边界**：真实 Windows Harness 官方升级、重启及迁移状态仍需独立验收；只读磁盘信息不证明运行时加载。
 
 ## 当前 Release 对账 · 2026-11-25
 

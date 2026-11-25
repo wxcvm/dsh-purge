@@ -524,3 +524,53 @@ test('linked runtime manifest is not read for alpha.2 Node evidence', t => {
   assert.equal(result.desktop.nodeVersionOnDisk, null);
   assert.equal(result.desktop.alpha2NodeRequirementMet, null);
 });
+
+test('redirected runtime directory is unverified rather than complete', t => {
+  const f = workspace(t);
+  const outside = path.join(f.base, 'external-runtime');
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'versions.json'), JSON.stringify({ node: '24.22.3', pnpm: '11.28.5' }));
+  try { fs.symlinkSync(outside, path.join(f.resources, 'runtime'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create directory links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.runtimeFilesComplete, null);
+  assert.equal(result.desktop.nodeVersionOnDisk, null);
+  assert.equal(result.desktop.runtimeManifestValid, null);
+  assert.equal(result.desktop.missingRuntimeFiles.length, 0);
+  assert.ok(result.desktop.unverifiedRuntimeFiles.includes('versions.json'));
+  assert.ok(!JSON.stringify(result).includes(outside));
+});
+
+test('nested runtime junction is never counted as present', t => {
+  const f = workspace(t);
+  const runtime = path.join(f.resources, 'runtime');
+  const outside = path.join(f.base, 'external-bin');
+  fs.mkdirSync(runtime);
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'node.cmd'), 'private marker');
+  try { fs.symlinkSync(outside, path.join(runtime, 'bin'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create directory links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.runtimeFilesComplete, false);
+  assert.ok(result.desktop.unverifiedRuntimeFiles.includes('bin/node.cmd'));
+  assert.ok(!result.desktop.missingRuntimeFiles.includes('bin/node.cmd'));
+});
+
+test('runtime metadata validity is distinct from presence and Node floor', t => {
+  const f = workspace(t);
+  fs.writeFileSync(path.join(f.resources, 'app', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.3-alpha.2' }));
+  const runtime = path.join(f.resources, 'runtime');
+  fs.mkdirSync(runtime);
+  const manifest = path.join(runtime, 'versions.json');
+  const inspect = () => inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe }).desktop;
+  assert.equal(inspect().runtimeManifestValid, false);
+  fs.writeFileSync(manifest, '{bad json');
+  assert.equal(inspect().runtimeManifestValid, false);
+  assert.equal(inspect().alpha2NodeRequirementMet, null);
+  fs.writeFileSync(manifest, JSON.stringify({ node: '24.22.3' }));
+  assert.equal(inspect().runtimeManifestValid, false);
+  assert.equal(inspect().alpha2NodeRequirementMet, true);
+  fs.writeFileSync(manifest, JSON.stringify({ node: '24.22.3', pnpm: '11.28.5' }));
+  assert.equal(inspect().runtimeManifestValid, true);
+  assert.equal(inspect().runtimeFilesComplete, false);
+});
