@@ -1,3 +1,25 @@
+# 1.1.92-wxcvm.26-rc.1
+
+## 中文
+
+这是基于当前 master `08ee8cb572ef231684ca3ed704fd29557e64df22` 的新预览候选。此前 `.25-rc.1` 的 Release 与资产已被清理；旧标签保留但不可下载。本候选使用新版本号与新标签，不覆盖任何历史版本。
+
+- **Harness 原生安全边界**（[#552](https://github.com/wxcvm/dsh-purge/pull/552)、[#553](https://github.com/wxcvm/dsh-purge/pull/553)、[#554](https://github.com/wxcvm/dsh-purge/pull/554)）：新安装默认保留 Hook deny/ask；正常 Apply 路径跳过会改变原生审批、沙箱、文件系统围栏、Auto Review、外部网页不可信内容和子智能体权限范围的历史补丁。显式选择官方 `danger-full-access` 仍按 Harness 原生语义处理，不把它等同于自动批准。兼容性补丁与权限绕过分开管理。
+- **旧安装迁移保护**（[#555](https://github.com/wxcvm/dsh-purge/pull/555)、[#556](https://github.com/wxcvm/dsh-purge/pull/556)、[#558](https://github.com/wxcvm/dsh-purge/pull/558)、[#565](https://github.com/wxcvm/dsh-purge/pull/565)、[#566](https://github.com/wxcvm/dsh-purge/pull/566)）：仅对可验证的 Purge 自有修改做精确恢复；缺少备份、恢复失败、跨宿主未检查或历史结果歧义时保留现场并报告待核实，不进行整文件回滚。
+- **更新与桌面维护**（[#567](https://github.com/wxcvm/dsh-purge/pull/567)、[#568](https://github.com/wxcvm/dsh-purge/pull/568)、[#573](https://github.com/wxcvm/dsh-purge/pull/573)、[#574](https://github.com/wxcvm/dsh-purge/pull/574)、[#575](https://github.com/wxcvm/dsh-purge/pull/575)）：修正版本比较和稳定构建标签选择；保留 Harness 官方更新器与启动文件；退役旧的自动重应用、归档交换和更新准备入口。
+- **诊断证据**（[#569](https://github.com/wxcvm/dsh-purge/pull/569)、[#570](https://github.com/wxcvm/dsh-purge/pull/570)、[#581](https://github.com/wxcvm/dsh-purge/pull/581)）：增加磁盘 Renderer build ID 对照；限制 ASAR 与诊断路径边界；只读区分损坏/重定向 Desktop 布局，并报告 Harness alpha.2 Node 运行时要求。磁盘信息不代表插件已在当前进程加载。
+- **rc.5 与回归覆盖**（[#543](https://github.com/wxcvm/dsh-purge/pull/543)–[#549](https://github.com/wxcvm/dsh-purge/pull/549)、[#576](https://github.com/wxcvm/dsh-purge/pull/576)–[#578](https://github.com/wxcvm/dsh-purge/pull/578)）：覆盖子智能体权限继承、并行任务与结果回传、离线诊断、设置协调和分页边界。
+
+**发布前必须通过**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成、真实 npm pack 与全新临时 `DSH_HOME` 安装。主线 push CI 当前仍需以本候选精确 SHA 的结果重新确认。
+
+**仍需真实 Windows Harness Desktop 验收**：官方升级/重启后实际加载、Provider 请求投递、旧安装的权限迁移状态与回退，以及用户原有配置刷新/重启后的保留。相关追踪：[#336](https://github.com/wxcvm/dsh-purge/issues/336)、[#337](https://github.com/wxcvm/dsh-purge/issues/337)、[#550](https://github.com/wxcvm/dsh-purge/issues/550)、[#361](https://github.com/wxcvm/dsh-purge/issues/361)、[#364](https://github.com/wxcvm/dsh-purge/issues/364)。CI 夹具不替代实机证据；在这些项目确认前，本版本只作为可回退预览候选，不宣称正式版已验收。
+
+## English
+
+Preview candidate based on current master. The previous .25-rc.1 GitHub Release and assets were cleaned up; its historical tag remains, but this candidate uses a new version and tag. It preserves native Harness approval, deny, sandbox, filesystem, Auto Review, untrusted-web-content and child-agent permission boundaries by excluding legacy behavior-changing patches from normal apply. Exact, marker-guarded migration retains ambiguous or unverified host state. It also includes updater isolation, version-selection fixes, read-only Desktop layout/runtime evidence, and rc.5 compatibility regressions. Windows/Ubuntu CI, hosted UI and clean packed-install checks are required. Live Desktop upgrade/restart, Provider delivery, existing-install migration/rollback and settings persistence remain separate acceptance items.
+
+---
+
 # 1.1.92-wxcvm.25-rc.1
 
 ## 中文
