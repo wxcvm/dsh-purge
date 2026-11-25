@@ -250,7 +250,7 @@ export function inspectReadOnlyDesktopEvidence({
       commit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') ? process.env.GITHUB_SHA : null },
     desktop: {
       executableFound: false, manifestValid: false, version: null, layout: 'unknown',
-      unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
+      unpackedManifestValid: null, unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
     },
     process: probeProcesses ? processEvidence() : { observed: null, reason: 'not-requested', loadedPluginVerified: false },
     profiles: PROFILES.map(p => profileEvidence(home, p, root, { inspectHomeLinkedPlugin })),
@@ -262,17 +262,34 @@ export function inspectReadOnlyDesktopEvidence({
   if (!selected || !regularFile(selected)) return evidence;
   evidence.desktop.executableFound = true;
   const resources = path.join(path.dirname(selected), 'resources');
+  // A damaged or redirected app directory is still a competing disk entry.
+  // Report its presence without following links or treating it as a clean install.
+  if (!ordinaryDirectory(resources)) return evidence;
+  const archive = path.join(resources, 'app.asar');
+  const app = path.join(resources, 'app');
+  const entryPresent = file => {
+    try { fs.lstatSync(file); return true; }
+    catch (error) { return error?.code === 'ENOENT' ? false : null; }
+  };
+  const sealed = entryPresent(archive);
+  const unpackedPresent = entryPresent(app);
+  evidence.desktop.layout = sealed === null || unpackedPresent === null ? 'unknown'
+    : sealed ? (unpackedPresent ? 'sealed-and-unpacked' : 'sealed')
+    : unpackedPresent ? 'unpacked' : 'unknown';
+  const unpacked = ordinaryDirectory(app) ? safeJson(path.join(app, 'package.json')) : null;
+  evidence.desktop.unpackedManifestValid = unpackedPresent === true
+    ? unpacked?.name === '@deepseek-ai/dsh-desktop' && Boolean(version(unpacked.version))
+    : null;
+  // Never open an invalid archive entry, or fall back through an untrusted app directory.
+  if (sealed === null || unpackedPresent === null || (sealed && !regularFile(archive))
+      || (!sealed && !evidence.desktop.unpackedManifestValid)) return evidence;
   let pkg;
-  try { pkg = readDesktopManifest(resources); } catch { return evidence; }
+  try { pkg = sealed ? readDesktopManifest(resources) : unpacked; } catch { return evidence; }
   if (pkg?.name !== '@deepseek-ai/dsh-desktop' || !version(pkg.version)) return evidence;
   evidence.desktop.manifestValid = true;
   evidence.desktop.version = version(pkg.version);
-  const sealed = regularFile(path.join(resources, 'app.asar'));
-  const unpacked = safeJson(path.join(resources, 'app', 'package.json'));
-  evidence.desktop.layout = sealed ? (unpacked ? 'sealed-and-unpacked' : 'sealed')
-    : unpacked ? 'unpacked' : 'unknown';
-  evidence.desktop.unpackedVersionMismatch = unpacked?.name === pkg.name
-    && Boolean(version(unpacked.version)) ? unpacked.version !== pkg.version : null;
+  evidence.desktop.unpackedVersionMismatch = evidence.desktop.unpackedManifestValid
+    ? unpacked.version !== pkg.version : null;
   const missing = RUNTIME_FILES.filter(rel => !regularFile(path.join(resources, 'runtime', rel)));
   evidence.desktop.missingRuntimeFiles = missing;
   evidence.desktop.runtimeFilesComplete = missing.length === 0;
