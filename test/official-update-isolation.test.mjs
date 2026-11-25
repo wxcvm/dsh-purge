@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { patchAppliesHere } from '../lib/core.js';
 import { ALL_PATCHES } from '../lib/patches-definitions.js';
 
@@ -63,10 +65,23 @@ test('retired archive swap retains legacy parameters without filesystem or proce
   assert.doesNotMatch(source, /(?:Move|Remove|Copy|Set|New)-Item|(?:Start|Stop)-Process|Set-Content|Out-File/);
   assert.match(source, /exit 1/);
   if (process.platform !== 'win32') return t.diagnostic('PowerShell invocation is Windows-only');
+  const root = mkdtempSync(path.join(tmpdir(), 'retired-desktop-swap-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const resources = path.join(root, 'resources');
+  mkdirSync(resources);
+  const originals = { 'app.asar': 'original archive', 'app.asar.bak': 'existing backup' };
+  for (const [name, content] of Object.entries(originals)) writeFileSync(path.join(resources, name), content);
   for (const args of [[], ['-DryRun']]) {
-    const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-File', script, '-InstallRoot', 'unused', ...args], { encoding: 'utf8', timeout: 15000, windowsHide: true });
+    // Hosted Windows PowerShell startup previously exceeded 15s under parallel CI.
+    // Allow 30s without weakening exit status or no-mutation assertions.
+    const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-File', script, '-InstallRoot', root, ...args], { encoding: 'utf8', timeout: 30000, windowsHide: true });
     assert.ifError(result.error);
     assert.equal(result.status, 1);
     assert.match(result.stdout + result.stderr, /Legacy desktop archive swap is retired/);
+    assert.deepEqual(readdirSync(root), ['resources']);
+    assert.deepEqual(readdirSync(resources).sort(), Object.keys(originals).sort());
+    for (const [name, content] of Object.entries(originals)) {
+      assert.equal(readFileSync(path.join(resources, name), 'utf8'), content);
+    }
   }
 });
