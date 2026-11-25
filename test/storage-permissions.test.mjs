@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, statSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, statSync, rmSync, existsSync, readFileSync, linkSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
@@ -45,4 +45,17 @@ test('current workspace data and SQLite contents remain usable', (t) => {
   assert.equal(store.activeEngagementId(), id)
   assert.ok(store.stats(id))
   store.archiveDir()
+})
+
+test('updating workspace selection atomically replaces a hard-linked pointer without changing its other file', { skip: !onUnix }, (t) => {
+  const { root, store } = fixture(t)
+  const id = store.openEngagement('atomic-selection').id
+  const unrelated = join(root, 'unrelated.txt')
+  writeFileSync(unrelated, 'preserve original contents', { mode: 0o644 })
+  unlinkSync(store.currentPath())
+  linkSync(unrelated, store.currentPath())
+  assert.equal(store.setActiveEngagement(id), true)
+  assert.equal(readFileSync(unrelated, 'utf8'), 'preserve original contents')
+  assert.equal(store.activeEngagementId(), id)
+  assert.equal(mode(store.currentPath()), 0o600)
 })
