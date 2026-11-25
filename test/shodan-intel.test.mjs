@@ -168,3 +168,15 @@ test('Shodan setup and source controls exist in source and generated desktop cli
     assert.match(view, /sources: \['shodan'\]/)
   }
 })
+
+test('api-info missing counters stay unknown instead of being reported as zero', async t => {
+  const { root } = fixture(t)
+  savePlatformConfig({ env: { SHODAN_API_KEY: 'private-shodan-key' } }, root)
+  const result = await shodanConnectionTest(root, { fetch: async () => new Response(JSON.stringify({
+    plan: 'basic', query_credits: null, scan_credits: undefined, monitored_ips: '',
+  }), { status: 200 }) })
+  assert.equal(result.ok, true)
+  assert.equal(result.queryCredits, null)
+  assert.equal(result.scanCredits, null)
+  assert.equal(result.monitoredIps, null)
+})
