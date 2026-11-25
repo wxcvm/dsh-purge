@@ -143,9 +143,6 @@ test('rc.5 native child inherits explicit full-access mode without inheriting pa
     assert.equal(ctx.approval.effectivePolicy(parent.session), 'ask');
     assert.equal(ctx.sandboxPolicy.resolve({ session: parent.session }).mode, 'danger-full-access');
 
-    // Exercise approval with the actual managed child session, not a synthetic
-    // session. The parent remains interactive while the delegated child is
-    // pinned to never; only the parent may reach the answerer.
   } finally {
     releaseChildStream.resolve();
     parent.session.append('turn/end', { turn: 1 });
