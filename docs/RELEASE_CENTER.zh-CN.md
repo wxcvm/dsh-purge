@@ -6,7 +6,7 @@
 
 - **候选版本**：`1.1.92-wxcvm.25-rc.1`，基于主线 `405fe3d60300e5bea3b5c43bf00263ac6d253f76`；候选分支 `release-candidate/v1.1.92-wxcvm.25-rc.1`。
 - **当前状态**：仅准备版本元数据与发行说明，尚未创建标签、Release 或下载资产；不会覆盖 .24 或更早版本。
-- **候选门禁**：PR 必须通过 Windows/Ubuntu Hosted Local Compatibility、UI Integration Smoke、实际 npm pack 与全新临时 `DSH_HOME` 安装检查。主线当前 push run [#45581945071](https://github.com/wxcvm/dsh-purge/actions/runs/45581945071) 的 Ubuntu job 已成功，Windows 自托管 job 仍排队；候选 PR 的托管双平台结果将单独核对。
+- **候选门禁**：PR 必须通过 Windows/Ubuntu Hosted Local Compatibility，以及 Windows/Ubuntu Hosted Packed Install Smoke（真实 npm pack 与全新临时 `DSH_HOME` 安装）。本 PR 只改版本元数据和文档，不改 UI/client 代码，因此 UI Integration Smoke 不触发、也不是本次变更的独立门禁。主线当前 push run [#45581945071](https://github.com/wxcvm/dsh-purge/actions/runs/45581945071) 的 Ubuntu job 已成功，Windows 自托管 job 仍排队；候选 PR 的托管双平台结果将单独核对。
 - **实机边界**：Windows Harness Desktop 原位升级、重启后实际加载、真实 Provider 投递、历史权限迁移/回退和 ARTEX 双端联动仍未由 CI 代替验收（#336/#337/#338/#343/#346/#550）。
 
 ## 当前 Release 对账 · 2026-11-25
