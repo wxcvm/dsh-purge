@@ -138,11 +138,25 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
     linkTargetScope: null, sourceBytesEqual: null, sourceFileComparison: {},
     rendererBuildIdOnDisk: null,
   };
+  const homeReal = realDirectory(home);
+  const profileReal = realDirectory(dir);
+  if (!profileReal) return output;
+  if (!homeReal || !inside(homeReal, profileReal)) {
+    output.installation = 'linked-uninspected';
+    output.linkTargetScope = 'profile-directory-untrusted';
+    return output;
+  }
   const manifest = safeJson(path.join(dir, 'package.json'));
   const bundles = manifest?.dsh?.profile?.bundles;
   if (Array.isArray(bundles)) output.profileBundleRegistered = bundles.includes('dsh-purge');
   // Presence only: do not print, parse or upload the user's cordis.patch.yml.
   output.cordisInsertPresent = regularFile(path.join(dir, 'cordis.patch.yml'));
+  const modulesReal = realDirectory(path.join(dir, 'node_modules'));
+  if (modulesReal && !inside(profileReal, modulesReal)) {
+    output.installation = 'linked-uninspected';
+    output.linkTargetScope = 'profile-modules-untrusted';
+    return output;
+  }
   let installedRoot = '';
   try {
     const stat = fs.lstatSync(installed);
