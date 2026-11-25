@@ -24,3 +24,18 @@ test('startup settle does not automatically mutate or restart official hosts', (
   assert.match(body, /skip:boot-no-host-write/);
   assert.doesNotMatch(body, /reapplyInstalled|applyPatchesAllHosts|autoUpdateIfNeeded|scheduleRestart|clearStaleExtractedApps|rememberUnpackedArchive|patchAllShims|markPatchesApplied/);
 });
+
+test('legacy update preparation refuses to modify an installation in every invocation mode', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const script = fileURLToPath(new URL('../scripts/prepare-official-update.mjs', import.meta.url));
+  for (const args of [[], ['--dry-run'], ['--exe', 'ignored.exe']]) {
+    const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 10000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /已停用/);
+    assert.match(result.stderr, /官方安装器/);
+  }
+  const source = readFileSync(script, 'utf8');
+  assert.doesNotMatch(source, /node:fs|node:child_process|copyFile|renameSync|unlinkSync|rmSync|spawn\(/);
+});
