@@ -11,7 +11,7 @@ test('browser settings and save receipts never echo stored environment credentia
   t.after(() => rmSync(root, { recursive: true, force: true }))
   const dir = join(root, 'fixtures')
   mkdirSync(dir)
-  const seed = { FOFA_KEY: 'synthetic-old-key', DSH_PURGE_ARTEX_OVERVIEW_TOKEN: 'synthetic-overview-key',
+  const seed = { FOFA_KEY: 'synthetic-old-key', CENSYS_PAT: 'synthetic-censys-key', DSH_PURGE_ARTEX_OVERVIEW_TOKEN: 'synthetic-overview-key',
     CUSTOM_OPTION: 'user-owned-option' }
   savePlatformConfig({ env: seed, notes: 'original setting' }, root)
   const original = loadPlatformConfig(root).env
@@ -22,7 +22,7 @@ test('browser settings and save receipts never echo stored environment credentia
     assert.equal(result.ok, true)
     assert.deepEqual(result.config.env, {})
     assert.equal(result.config.fofaKeyConfigured, configured)
-    assert.doesNotMatch(JSON.stringify(result), /synthetic-(?:old|overview|new)-key|user-owned-option/)
+    assert.doesNotMatch(JSON.stringify(result), /synthetic-(?:old|overview|new|censys)-key|user-owned-option/)
   }
 
   verify(dispatch(store, { op: 'platformConfigGet' }), true)
@@ -36,6 +36,7 @@ test('browser settings and save receipts never echo stored environment credentia
   assert.equal(assigned.config.toolkitDir, dir)
   assert.deepEqual(loadPlatformConfig(root).env, original)
 
+  assert.throws(() => dispatch(store, { op: 'platformConfigSave', config: { env: { CENSYS_PAT: 'synthetic-plain-pat' } } }), /专用加密连接设置/)
   verify(dispatch(store, { op: 'platformConfigSave', config: { env: { FOFA_KEY: 'synthetic-new-key' } } }), true)
   assert.deepEqual(loadPlatformConfig(root).env, { ...original, FOFA_KEY: 'synthetic-new-key' })
   verify(dispatch(store, { op: 'platformConfigSave', config: { env: { FOFA_KEY: '' } } }), false)
