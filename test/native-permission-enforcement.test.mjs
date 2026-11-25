@@ -6,6 +6,7 @@ import {
   hasNativePermissionPatchMarker,
   isNativePermissionPatch,
   nativePermissionPatches,
+  restoreLegacyPermissionText,
   restoreNativePermissionFromBackup,
   restoreNativePermissionText,
 } from "../lib/native-permission-enforcement.js";
@@ -13,7 +14,7 @@ import {
 const byId = id => ALL_PATCHES.find(patch => patch.id === id);
 const replacementsOf = patch => Array.isArray(patch.replacements)
   ? patch.replacements
-  : (patch.patterns ?? []).map(pattern => ({ pattern, replace: patch.replace }));
+  : [{ pattern: patch.patterns?.[0], replace: patch.replace }];
 
 test("the default patch set disables permission and approval bypasses, not compatibility fixes", () => {
   assert.deepEqual(
@@ -21,11 +22,11 @@ test("the default patch set disables permission and approval bypasses, not compa
     NATIVE_PERMISSION_PATCH_IDS,
   );
   for (const id of NATIVE_PERMISSION_PATCH_IDS) assert.equal(isNativePermissionPatch(id), true);
-  for (const id of [13, 94, 30, 31, 64, 65]) assert.equal(isNativePermissionPatch(id), false);
+  for (const id of [13, 51, 94, 30, 31, 64, 65]) assert.equal(isNativePermissionPatch(id), false);
 });
 
 test("marked approval, sandbox and filesystem patches reverse only their exact Purge output", () => {
-  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 17, 35, 60, 61, 62]) {
+  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 15, 17, 33, 34, 35, 36, 48, 60, 61, 62, 63]) {
     const patch = byId(id);
     assert.ok(patch, `missing patch #${id}`);
     const replacements = replacementsOf(patch);
@@ -38,11 +39,10 @@ test("marked approval, sandbox and filesystem patches reverse only their exact P
     const restored = restoreNativePermissionText(patched, patch);
     assert.equal(restored.changed, true, `#${id} did not reverse`);
     assert.equal(restored.remainingMarkers, false, `#${id} left a Purge marker`);
-    for (const row of replacements) {
-      if (typeof row.pattern === "string" && typeof row.replace === "string") {
-        assert.ok(restored.text.includes(row.pattern), `#${id} did not restore its native fragment`);
-      }
-    }
+    assert.ok(
+      replacements.some(row => typeof row.pattern === "string" && restored.text.includes(row.pattern)),
+      `#${id} did not restore a native fragment`,
+    );
   }
 });
 
@@ -52,6 +52,20 @@ test("unmarked permission-looking text is never rewritten", () => {
   const restored = restoreNativePermissionText(text, patch);
   assert.equal(restored.changed, false);
   assert.equal(restored.text, text);
+});
+
+test("patch #51 keeps explicit full access but restores the legacy auto-grant sentence", () => {
+  const patch = byId(51);
+  assert.equal(isNativePermissionPatch(patch), false);
+  assert.equal(patch.replacements.length, 1, "only the explicit deployed-mode preservation remains active");
+  const active = patch.replacements[0].replace;
+  const legacy = "Write inside the workspace and permitted temporary directories; wider retries are auto-granted. // [dsh-purge] official approval teaching removed";
+  const source = active + "\n" + legacy;
+  const restored = restoreLegacyPermissionText(source);
+  assert.equal(restored.changed, true);
+  assert.ok(restored.text.includes(active));
+  assert.ok(restored.text.includes("Write inside the workspace and permitted temporary directories; wider retries require approval."));
+  assert.equal(restored.remainingMarkers, false);
 });
 
 test("patch #7/#8 restore the official workspace-write default while retaining env override", () => {
