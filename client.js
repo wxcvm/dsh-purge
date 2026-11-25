@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "d257bbb8b966514d";
+		const CLIENT_BUILD_ID = "f1d948416bf9478e";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11744,7 +11744,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn rt-btn-primary', disabled: !shodanConnection?.configured,
                 onClick: () => openQuick('shodan') }, '单 IP 查询')),
             h('div', { className: 'rt-foot' },
-              'Shodan 官方 REST API · api-info 账户状态测试；主机查询使用 minify=true，不返回原始 Banner。API Key 按官方规范放在 HTTPS 查询参数中，请避免不可信或会记录完整 URL 的代理出口。'),
+              'Shodan 官方 REST API · Host API 查询需要 Shodan Membership；免费账户可用 InternetDB 免 Key。主机查询使用 minify=true，不返回原始 Banner或发起扫描。API Key 按官方规范放在 HTTPS 查询参数中，请避免不可信或会记录完整 URL 的代理出口。'),
             shodanSettings ? h('div', { style: { display: 'grid', gap: 9, marginTop: 12 } },
               h('label', null, 'Shodan API Key',
                 h('input', { type: 'password', autoComplete: 'new-password', className: 'rt-input',
