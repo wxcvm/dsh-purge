@@ -47,7 +47,8 @@
     "baseline:refusal": "node scripts/refusal-baseline.mjs",
     "metrics:refusal": "node scripts/refusal-metrics.mjs",
     "hygiene:probe": "node scripts/output-hygiene-probe.mjs",
-    "hygiene:wire": "node scripts/apply-hygiene-wiring.mjs"
+    "hygiene:wire": "node scripts/apply-hygiene-wiring.mjs",
+    "hygiene:scrub": "node scripts/scrub-session-hygiene.mjs"
   },
   "license": "Apache-2.0",
   "keywords": [

@@ -97,11 +97,44 @@ node scripts/apply-hygiene-wiring.mjs --write  # 就地接线（插入行带 [hy
 
 **改完要重启 dsh 才生效**（插件代码在进程启动时加载）。
 
+## 磁盘层（会话文件改写）
+
+请求侧只解决"下一轮读不到"，磁盘上那份还在。要连回看、导出、重建上下文一起干净，
+用 `scripts/scrub-session-hygiene.mjs`（`npm run hygiene:scrub`）：
+
+```bash
+node scripts/scrub-session-hygiene.mjs <session.v4.jsonl.zstd>            # dry-run
+node scripts/scrub-session-hygiene.mjs <session.v4.jsonl.zstd> --write    # 先 .bak 再写
+node scripts/scrub-session-hygiene.mjs --all --json                       # 全库盘点
+node scripts/scrub-session-hygiene.mjs --all --reasoning                  # 连思考块一起
+```
+
+`lib/session-hygiene.js` 的规矩：
+
+- **只重编被改动的帧**，其余帧按原始字节拷回。不把多帧会话压成单帧（`scrub-session-refusals.mjs`
+  是全量重压的单帧写法，那条路仍保留给它自己的用途）。
+- 只动 `assistant/message`：文本块走 `stripPreamble`，思考块在 `--reasoning` 下整段换成
+  `REASONING_MARKER`（思考不可"摘前缀"，它整段就是自述）。带 tool 块、多文本块一律跳过。
+- 备份：`<文件>.hygiene-<时间戳>.bak`；60 秒内被改过的文件视为宿主正在写，需 `--force` 才动。
+
+### 实测（145 个会话文件 / 84.6 MB）
+
+| 通道 | 命中 | 说明 |
+|---|---|---|
+| 文本块 | **0 条会话** | 正文侧本来就干净，这一层是防御性的 |
+| 思考块 | **11 条会话 / 14 块 / 40,049 字** | 全部是靠 `--reasoning` 才看得见的框架自述 |
+
+最重的三处：单块 9,615 字的规划自述、一个会话里 4 块共 10,659 字、5,887 字一块。
+这组数字就是"泄漏在思考通道"的实证——只剥正文会得到 0 命中，等于没做。
+
 ## 现状与边界
 
-- 只接了三层里的**请求侧 + 观测**：首次落库的文本仍在会话文件里（要连磁盘一起改，
-  走 `scrub-session-refusals.mjs` 那条路，未纳入本次改动）。
-- `reasoning` 通道只观测不剥离：思考块不可改写，`detectPlanningLeak` 只负责认出来。
+- 三层现已齐：请求侧改写（自动、幂等）、观测投影（自动）、磁盘改写（**手动 CLI**）。
+  磁盘层故意不做自动触发：它直接改会话文件，必须在 DSH 空闲/退出时手动跑。
+- `reasoning` 通道在磁盘层默认不动，`--reasoning` 显式开启；删掉的思考用中性标记占位，
+  不删除消息本身（保持 user/assistant 交替与帧结构）。
 - `hygieneSummary` 只输出聚合与类别码，不含任何原文片段——可以直接进日志与报告。
 - 词表按"对执行没有任何帮助、纯属立场表态"取舍：技术注释（"改壳之后要回归扫描一次"）
   不在表内，那是真信息。
+- 顺带修好 `scripts/scrub-session-refusals.mjs`：它 import 的 `lib/history-scrub.js`
+  已从工作树移除，脚本此前直接崩在加载阶段；作废标记改为本地常量（值与历史版本一致）。
