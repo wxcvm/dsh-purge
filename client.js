@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "88af202e1b4673c0";
+		const CLIENT_BUILD_ID = "bcdba65a9d1b8d47";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11305,6 +11305,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [censysTest, setCensysTest] = React.useState(null)
       const censysDraftChanged = !!censysPat.trim() || censysClearPat || censysClearOrg ||
         censysOrgId.trim() !== (censysConnection?.organizationId || '')
+      const [shodanConnection, setShodanConnection] = React.useState(null)
+      const [shodanSettings, setShodanSettings] = React.useState(false)
+      const [shodanKey, setShodanKey] = React.useState('')
+      const [shodanClear, setShodanClear] = React.useState(false)
+      const [shodanBusy, setShodanBusy] = React.useState(false)
+      const [shodanFeedback, setShodanFeedback] = React.useState('')
+      const [shodanTest, setShodanTest] = React.useState(null)
+      const shodanDraftChanged = !!shodanKey.trim() || shodanClear
       React.useEffect(() => {
         let live = true
         api({ op: 'fofaConnectionGet' }).then(r => {
@@ -11323,6 +11331,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             setCensysOrgId(r.organizationId || '')
           } else setCensysFeedback(r?.error || 'Censys 配置读取失败')
         }, () => { if (live) setCensysFeedback('Censys 配置读取失败') })
+        return () => { live = false }
+      }, [props.refreshKey])
+      React.useEffect(() => {
+        let live = true
+        api({ op: 'shodanConnectionGet' }).then(r => {
+          if (!live) return
+          if (r?.ok) setShodanConnection(r)
+          else setShodanFeedback(r?.error || 'Shodan 配置读取失败')
+        }, () => { if (live) setShodanFeedback('Shodan 配置读取失败') })
         return () => { live = false }
       }, [props.refreshKey])
       React.useEffect(() => {
@@ -11362,7 +11379,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               : quickSource === 'censys'
                 ? { op: 'scopedIntelLookup', engagement: eng, target, sources: ['censys'],
                   confirmExternal: true, commit: false }
-                : { op: quickSource === 'ct' ? 'scopedCtLookup' : 'scopedDnsLookup',
+                : quickSource === 'shodan'
+                  ? { op: 'scopedIntelLookup', engagement: eng, target, sources: ['shodan'],
+                    confirmExternal: true, commit: false }
+                  : { op: quickSource === 'ct' ? 'scopedCtLookup' : 'scopedDnsLookup',
                 engagement: eng, target, confirmExternal: true, commit: false }
         const revision = ++quickRevision.current
         setQuickBusy(true); setQuickError(''); setQuickResponse(null); setQuickConsent(false)
@@ -11420,13 +11440,32 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setCensysBusy(false); setCensysTest(r || { ok: false, error: '没有收到回执' })
         }, () => { setCensysBusy(false); setCensysTest({ ok: false, error: '连接测试失败' }) })
       }
+      const saveShodan = () => {
+        if (shodanBusy || !shodanDraftChanged) return
+        setShodanBusy(true); setShodanFeedback('正在保存…'); setShodanTest(null)
+        api({ op: 'shodanConnectionSave',
+          ...(shodanKey.trim() ? { key: shodanKey.trim() } : {}),
+          ...(shodanClear ? { clearKey: true } : {}) }).then(r => {
+          setShodanBusy(false)
+          if (!r?.ok) { setShodanFeedback(r?.error || '保存失败'); return }
+          setShodanConnection(r); setShodanKey(''); setShodanClear(false)
+          setShodanFeedback('设置已保存，尚未测试连接')
+        }, () => { setShodanBusy(false); setShodanFeedback('保存失败') })
+      }
+      const testShodan = () => {
+        if (shodanBusy || !shodanConnection?.configured || shodanDraftChanged) return
+        setShodanBusy(true); setShodanTest(null)
+        api({ op: 'shodanConnectionTest' }).then(r => {
+          setShodanBusy(false); setShodanTest(r || { ok: false, error: '没有收到回执' })
+        }, () => { setShodanBusy(false); setShodanTest({ ok: false, error: '连接测试失败' }) })
+      }
       const rows = quickResponse?.quickSource === 'ct' ? quickResponse.names || []
         : quickResponse?.quickSource === 'dns' ? quickResponse.records || []
-          : ['internetdb', 'censys'].includes(quickResponse?.quickSource) ? quickResponse.ports || []
+          : ['internetdb', 'censys', 'shodan'].includes(quickResponse?.quickSource) ? quickResponse.ports || []
             : quickResponse?.items || []
       const formatRow = item => quickResponse.quickSource === 'ct' ? item.name
         : quickResponse.quickSource === 'dns' ? item.type + ' · ' + item.value
-          : ['internetdb', 'censys'].includes(quickResponse.quickSource) ? item.port + '/' + item.proto
+          : ['internetdb', 'censys', 'shodan'].includes(quickResponse.quickSource) ? item.port + (item.proto && item.proto !== 'unknown' ? '/' + item.proto : '')
             : quickResponse.quickSource === 'fofa' ? [item.host, item.ip, item.port,
               item.title, item.product, item.observedAt].filter(Boolean).join(' · ')
               : [item.primary_name, item.ip].filter(Boolean).join(' · ')
@@ -11695,13 +11734,46 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               censysFeedback ? h('div', { className: 'rt-foot' }, censysFeedback) : null,
               censysTest ? h('div', { className: censysTest.ok ? 'rt-foot' : 'rt-err' },
                 censysTest.ok ? '账户额度接口连接成功 · ' + censysTest.testedAt + ' · 不消耗查询额度' : censysTest.error) : null) : null),
+          surveyCard('sources', { className: 'rt-card', style: { fontSize: 12 } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+              h('h4', { style: { margin: 0 } }, 'Shodan REST API'),
+              h('span', { className: 'rt-tag' }, shodanTest?.ok ? '连接已验证' : shodanConnection?.configured ? 'Key 已配置（待测试）' : 'Key 未配置'),
+              h('div', { className: 'rt-spacer' }),
+              h('button', { className: 'rt-btn', onClick: () => setShodanSettings(v => !v) },
+                shodanSettings ? '收起设置' : '设置连接'),
+              h('button', { className: 'rt-btn rt-btn-primary', disabled: !shodanConnection?.configured,
+                onClick: () => openQuick('shodan') }, '单 IP 查询')),
+            h('div', { className: 'rt-foot' },
+              '官方 API · api-info 账户状态测试；主机查询使用 minify=true，不返回原始 Banner。API Key 按 Shodan 官方规范放在 HTTPS 查询参数中，请避免不可信或会记录完整 URL 的代理出口。'),
+            shodanSettings ? h('div', { style: { display: 'grid', gap: 9, marginTop: 12 } },
+              h('label', null, 'Shodan API Key',
+                h('input', { type: 'password', autoComplete: 'new-password', className: 'rt-input',
+                  style: { width: '100%' }, disabled: shodanBusy, value: shodanKey,
+                  placeholder: shodanConnection?.configured ? '留空保留已保存 Key' : '请输入 API Key',
+                  onChange: e => { setShodanKey(e.target.value); setShodanClear(false); setShodanTest(null); setShodanFeedback('') } })),
+              shodanConnection?.configured ? h('label', null,
+                h('input', { type: 'checkbox', checked: shodanClear, disabled: shodanBusy,
+                  onChange: e => { setShodanClear(e.target.checked); setShodanTest(null) } }), ' 清除已保存 API Key') : null,
+              h('div', { className: 'rt-foot' },
+                'Key 只保存在本机平台配置中，不回显到界面或日志。测试只访问 /api-info，不执行主机查询或扫描。'),
+              h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+                h('button', { className: 'rt-btn rt-btn-primary', disabled: shodanBusy || !shodanDraftChanged,
+                  onClick: saveShodan }, shodanBusy ? '处理中…' : '保存配置'),
+                h('button', { className: 'rt-btn', disabled: shodanBusy || !shodanConnection?.configured || shodanDraftChanged,
+                  onClick: testShodan }, '测试连接')),
+              shodanFeedback ? h('div', { className: 'rt-foot' }, shodanFeedback) : null,
+              shodanTest ? h('div', { className: shodanTest.ok ? 'rt-foot' : 'rt-err' },
+                shodanTest.ok ? '账户接口连接成功 · ' + shodanTest.plan
+                  + ' · Query credits: ' + (shodanTest.queryCredits ?? '未知')
+                  + ' · Scan credits: ' + (shodanTest.scanCredits ?? '未知')
+                  + ' · ' + shodanTest.testedAt : shodanTest.error) : null) : null),
           surveyCard('query', { className: 'rt-card' },
             h('h4', null, '开始测绘'),
             h('div', { className: 'rt-foot' }, '选择来源，填写当前项目已登记的 IP / 域名或本地检索表达式。'),
             h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 } },
               h('select', { className: 'rt-input', value: quickSource,
                 onChange: e => { resetQuick(); setQuickSource(e.target.value) } },
-                [...freeSources, { id: 'fofa', name: 'FOFA' }, { id: 'censys', name: 'Censys' }].map(x =>
+                [...freeSources, { id: 'fofa', name: 'FOFA' }, { id: 'shodan', name: 'Shodan REST' }, { id: 'censys', name: 'Censys' }].map(x =>
                   h('option', { key: x.id, value: x.id }, x.name))),
               h('input', { className: 'rt-input', style: { flex: '1 1 250px' },
                 value: quickTarget,
@@ -11710,6 +11782,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 onChange: e => { resetQuick(); setQuickTarget(e.target.value) } })),
             quickSource === 'censys' ? h('div', { className: 'rt-foot', style: { marginTop: 8 } },
               'Censys Platform API v3 单 IP 查询会消耗 1 credit；测试连接不消耗查询额度。') : null,
+            quickSource === 'shodan' ? h('div', { className: 'rt-foot', style: { marginTop: 8 } },
+              'Shodan 只执行单 IP minified host lookup，不执行搜索或主动扫描；套餐与额度以 api-info 返回为准。') : null,
             quickSource !== 'local' ? h('label', { style: { display: 'block', marginTop: 12 } },
               h('input', { type: 'checkbox', checked: quickConsent,
                 onChange: e => setQuickConsent(e.target.checked) }),
