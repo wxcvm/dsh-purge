@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { INSERT_BLOCK } from "../lib/profile-insert.js";
 import {
   HOOK_DENY_PATCH_IDS,
   loadHookDenySettings,
@@ -15,6 +16,15 @@ function makeHome(t) {
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   return home;
 }
+
+test("generated profile templates do not enable hook bypass", () => {
+  const cordis = fs.readFileSync(new URL("../cordis.patch.yml", import.meta.url), "utf8");
+  for (const template of [cordis, INSERT_BLOCK]) {
+    assert.match(template, /hooksDenyBypass: false/);
+    assert.match(template, /hooksDenyBypassOptIn: false/);
+    assert.doesNotMatch(template, /hooksDenyBypass: true/);
+  }
+});
 
 test("new installs preserve native hook deny and ask decisions by default", (t) => {
   const settings = loadHookDenySettings(makeHome(t));
