@@ -19,14 +19,19 @@ function fixture(t) {
   delete process.env.CENSYS_PAT
   delete process.env.CENSYS_ORG_ID
   const root = mkdtempSync(join(tmpdir(), 'purge-censys-'))
+  const cleanups = []
   t.after(() => {
-    rmSync(root, { recursive: true, force: true })
-    if (priorPat === undefined) delete process.env.CENSYS_PAT
-    else process.env.CENSYS_PAT = priorPat
-    if (priorOrg === undefined) delete process.env.CENSYS_ORG_ID
-    else process.env.CENSYS_ORG_ID = priorOrg
+    try {
+      for (const cleanup of cleanups.reverse()) cleanup()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+      if (priorPat === undefined) delete process.env.CENSYS_PAT
+      else process.env.CENSYS_PAT = priorPat
+      if (priorOrg === undefined) delete process.env.CENSYS_ORG_ID
+      else process.env.CENSYS_ORG_ID = priorOrg
+    }
   })
-  return { root }
+  return { root, onCleanup: cleanup => cleanups.push(cleanup) }
 }
 const hostPayload = {
   result: { resource: {
@@ -161,9 +166,10 @@ test('scope and one-time external consent are checked before any Censys request'
 })
 
 test('scoped Censys lookup returns only passive observations and never rewrites live ports', async t => {
-  const { root } = fixture(t)
+  const { root, onCleanup } = fixture(t)
   savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
   const store = new RedteamStore(root)
+  onCleanup(() => store.close())
   const { id } = store.openEngagement('lab', [ip])
   const result = await runScopedIntelLookup(store, { engagement: id, target: ip, confirmExternal: true, sources: ['censys'] }, {
     fetch: async (url, options) => {
