@@ -4,12 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ALL_PATCHES } from "../lib/patches-definitions.js";
-import { applyPatches, backupAll, patchStatus, restoreNativePermissionForBases } from "../lib/core.js";
+import { applyPatches, backupAll, patchStatus, refreshStaleBaksForUpgrade, restoreNativePermissionForBases } from "../lib/core.js";
 import {
   NATIVE_PERMISSION_PATCH_IDS,
   hasNativePermissionPatchMarker,
   isNativePermissionPatch,
   nativePermissionPatches,
+  unresolvedPermissionBackupPaths,
   restoreLegacyPermissionText,
   restoreNativePermissionFromBackup,
   restoreNativePermissionText,
@@ -260,4 +261,22 @@ test("patch #6 is idempotent after an exact restoration", () => {
   });
   assert.equal(result.status, "already-restored");
   assert.equal(result.text, backup);
+});
+
+test("unresolved permission migrations preserve original backups after failure or ambiguity", async t => {
+  const { aiBase, file } = makeSandboxHost(t, "original recovery evidence\n");
+  const backup = file + ".dshpurge.bak";
+  fs.writeFileSync(backup, "original recovery evidence\n");
+  fs.writeFileSync(file, "unverified current file\n");
+  const other = path.join(aiBase, "another-file");
+  const paths = unresolvedPermissionBackupPaths({
+    pending: [{ patch_id: 16, path: other }],
+    failed: [{ patch_id: 6, path: file }, { patch_id: 15, path: file }],
+  });
+  assert.deepEqual(paths, [other, file]);
+  assert.deepEqual(unresolvedPermissionBackupPaths({ pending: [], failed: [] }), []);
+  await backupAll(aiBase, { skipFiles: paths });
+  assert.deepEqual(refreshStaleBaksForUpgrade(aiBase, { skipPaths: paths }), []);
+  assert.equal(fs.readFileSync(backup, "utf8"), "original recovery evidence\n");
+  assert.equal(fs.readFileSync(file, "utf8"), "unverified current file\n");
 });
