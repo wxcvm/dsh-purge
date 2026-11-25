@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { INTEL_SOURCES, normalizeIntelSources } from '../lib/redteam/intel-sources.js'
+import { INTEL_SOURCES, normalizeIntelSources, describeIntelSourceStatus } from '../lib/redteam/intel-sources.js'
 import { loadPlatformConfig, savePlatformConfig, platformSummary,
   DEFAULT_INTEL_SURVEY_PREFERENCES, normalizeIntelSurveyPreferences } from '../lib/redteam/platform-config.js'
 import { dispatch } from '../lib/redteam/store-core.js'
@@ -169,4 +169,12 @@ test('survey UI persists defaults but never stores per-operation external confir
     assert.doesNotMatch(survey, /preferences: \{[^}]*Consent/)
     assert.match(src, /保存环境配置/)
   }
+})
+
+test('Shodan source status reflects saved credentials without exposing the key', () => {
+  const status = describeIntelSourceStatus({ env: { SHODAN_API_KEY: 'private-shodan-key' } }, {})
+  assert.match(status.shodan.label, /Shodan REST Key 已配置/)
+  assert.equal(JSON.stringify(status).includes('private-shodan-key'), false)
+  const missing = describeIntelSourceStatus({ env: {} }, {})
+  assert.match(missing.shodan.label, /Shodan REST Key 未配置/)
 })
