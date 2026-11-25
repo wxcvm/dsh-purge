@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { ALL_PATCHES } from "../lib/patches-definitions.js";
+import { applyPatches, patchStatus, restoreNativePermissionForBases } from "../lib/core.js";
 import {
   NATIVE_PERMISSION_PATCH_IDS,
   hasNativePermissionPatchMarker,
@@ -164,6 +168,56 @@ test("patch #6 refuses to overwrite a host file that changed after its backup", 
   });
   assert.equal(result.status, "ambiguous");
   assert.equal(result.text, current);
+});
+
+function makeSandboxHost(t, original) {
+  const aiBase = fs.mkdtempSync(path.join(os.tmpdir(), "purge-native-permission-host-"));
+  const file = path.join(aiBase, "dsh-sandbox-local", "lib", "index.js");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, original);
+  t.after(() => fs.rmSync(aiBase, { recursive: true, force: true }));
+  return { aiBase, file };
+}
+
+function applyPatchText(text, patch) {
+  let output = text;
+  const replacements = Array.isArray(patch.replacements)
+    ? patch.replacements
+    : (patch.patterns ?? []).map(pattern => ({ pattern, replace: patch.replace }));
+  for (const row of replacements) {
+    if (typeof row.pattern === "string" && typeof row.replace === "string") {
+      output = output.split(row.pattern).join(row.replace);
+    }
+  }
+  return output;
+}
+
+test("applyPatches leaves native sandbox deny and confine enforcement unchanged", async t => {
+  const patch6 = byId(6);
+  const patch15 = byId(15);
+  const original = `${patch6.patterns[0]}\n${patch15.patterns[0]}\n`;
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const report = await applyPatches(aiBase, [patch6, patch15]);
+  assert.deepEqual(report.map(row => [row.patch_id, row.status]), [[6, "off"], [15, "off"]]);
+  assert.equal(fs.readFileSync(file, "utf8"), original);
+  assert.deepEqual(await patchStatus(aiBase, [patch6, patch15]), { 6: "off", 15: "off" });
+});
+
+test("startup migration restores exact #6/#15 sandbox bypass output from its original backup", async t => {
+  const patch6 = byId(6);
+  const patch15 = byId(15);
+  const original = `${patch6.patterns[0]}\n${patch15.patterns[0]}\n`;
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const current = applyPatchText(applyPatchText(original, patch6), patch15);
+  fs.writeFileSync(file, current);
+  fs.writeFileSync(`${file}.dshpurge.bak`, original);
+
+  const result = await restoreNativePermissionForBases([aiBase]);
+  assert.equal(fs.readFileSync(file, "utf8"), original);
+  assert.equal(result.pending.length, 0);
+  assert.equal(result.failed.length, 0);
+  assert.ok(result.changed.some(row => row.patch_id === 6 && row.path === file));
+  assert.deepEqual(await patchStatus(aiBase, [patch6, patch15]), { 6: "off", 15: "off" });
 });
 
 test("patch #6 is idempotent after an exact restoration", () => {
