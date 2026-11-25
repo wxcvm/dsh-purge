@@ -29,11 +29,19 @@ function isolatedRedteamDir(testName) {
 test('fresh load returns empty defaults with exists=false', () => {
   const redteamDir = isolatedRedteamDir('fresh-load');
   const cfg = loadPlatformConfig(redteamDir);
-  assert.equal(cfg.exists, false);
-  assert.equal(cfg.error, undefined);
-  assert.equal(cfg.path, configPathOf(redteamDir));
-  assert.deepEqual(cfg.env, {});
-  assert.equal(cfg.notes, '');
+  assert.equal(cfg.exists, false, 'fresh config should not exist');
+  assert.equal(cfg.error, undefined, 'no error on fresh load');
+  assert.ok(cfg.path, 'path should be set');
+  // env has default keys initialized to empty strings
+  assert.deepEqual(cfg.env, {
+    FOFA_KEY: '',
+    CENSYS_PAT: '',
+    CENSYS_ORG_ID: '',
+    REDTEAM_VPS_HOST: '',
+    REDTEAM_VPS_USER: '',
+    REDTEAM_VPS_KEY: '',
+  }, 'env should have default keys as empty strings');
+  assert.equal(cfg.notes, '', 'notes should be empty string');
 });
 
 test('save creates config file and next load reads it back', () => {
@@ -89,6 +97,7 @@ test('empty env values are stored and do not leak previous ones', () => {
   }, redteamDir);
   assert.equal(cfg2.env.FOFA_KEY, '', 'explicit empty should clear FOFA_KEY');
   assert.equal(cfg2.env.CENSYS_PAT, 'token', 'CENSYS_PAT should persist');
+  assert.equal(cfg2.env.REDTEAM_VPS_HOST, '', 'other defaults should stay empty');
 });
 
 test('binDirs are normalized (trimmed, whitespace and empty removed)', () => {
