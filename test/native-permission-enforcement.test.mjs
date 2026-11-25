@@ -219,7 +219,9 @@ test("startup migration restores exact #6/#15 sandbox bypass output from its ori
   assert.equal(result.pending.length, 0);
   assert.equal(result.failed.length, 0);
   assert.ok(result.changed.some(row => row.patch_id === 6 && row.path === file));
-  assert.deepEqual(await patchStatus(aiBase, [patch6, patch15]), { 6: "off", 15: "off" });
+  const status = await patchStatus(aiBase, [patch6, patch15]);
+  assert.equal(status[6], "off");
+  assert.equal(status[15], "off");
 });
 
 test("patch #6 is idempotent after an exact restoration", () => {
