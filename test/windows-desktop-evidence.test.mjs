@@ -400,3 +400,32 @@ test('reports fixed renderer build IDs without treating disk identity as loaded 
   fs.rmSync(path.join(installed, 'client.js'));
   assert.equal(inspect().profiles[0].rendererBuildIdOnDisk, null);
 });
+
+test('diagnostics do not inspect profiles or node_modules redirected outside their scope', t => {
+  const f = workspace(t);
+  const outside = path.join(f.base, 'external-profile');
+  const externalModules = path.join(outside, 'node_modules');
+  const externalPlugin = path.join(externalModules, 'dsh-purge');
+  fs.mkdirSync(externalPlugin, { recursive: true });
+  fs.writeFileSync(path.join(externalPlugin, 'package.json'), JSON.stringify({ name: 'dsh-purge', version: 'private-marker' }));
+  fs.writeFileSync(path.join(outside, 'package.json'), JSON.stringify({ dsh: { profile: { bundles: ['dsh-purge'] } } }));
+  const profiles = path.join(f.home, 'profiles');
+  fs.mkdirSync(path.join(profiles, 'web'), { recursive: true });
+  try {
+    fs.symlinkSync(outside, path.join(profiles, 'desktop'), process.platform === 'win32' ? 'junction' : 'dir');
+    fs.symlinkSync(externalModules, path.join(profiles, 'web', 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) { t.skip('host cannot create directory links: ' + error.code); return; }
+  for (const inspectHomeLinkedPlugin of [false, true]) {
+    const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '', inspectHomeLinkedPlugin });
+    assert.equal(result.profiles[0].linkTargetScope, 'profile-directory-untrusted');
+    assert.equal(result.profiles[0].profileBundleRegistered, null);
+    assert.equal(result.profiles[1].linkTargetScope, 'profile-modules-untrusted');
+    for (const p of result.profiles.slice(0, 2)) {
+      assert.equal(p.installation, 'linked-uninspected');
+      assert.equal(p.version, null);
+      assert.equal(p.rendererBuildIdOnDisk, null);
+      assert.equal(p.sourceBytesEqual, null);
+    }
+    assert.ok(!JSON.stringify(result).includes('private-marker'));
+  }
+});

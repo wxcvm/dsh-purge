@@ -54,3 +54,22 @@ test('full cached archive extraction recovers missing runtime without executing 
  const result=await repairDesktopRuntime({...f,cache,sevenZip});assert.equal(result.ok,true);assert.equal(result.changed,RUNTIME_FILES.length);assert.equal(result.after.ok,true);
  const again=await repairDesktopRuntime({...f,cache,sevenZip});assert.equal(again.changed,0);
 });
+
+test('malformed ASAR manifest positions and sizes are rejected explicitly', t => {
+  const f = fixture(t);
+  const file = path.join(f.resources, 'app.asar');
+  for (const entry of [
+    { size: -1, offset: '0' },
+    { size: 0, offset: '0' },
+    { size: 1, offset: '9007199254740993' },
+    { size: 5, offset: '1000' },
+  ]) {
+    const header = Buffer.from(JSON.stringify({ files: { 'package.json': entry } }));
+    const pre = Buffer.alloc(16);
+    pre.writeUInt32LE(4, 0);
+    pre.writeUInt32LE(8 + header.length, 4);
+    pre.writeUInt32LE(header.length, 12);
+    fs.writeFileSync(file, Buffer.concat([pre, header, Buffer.from('{}')]));
+    assert.throws(() => readDesktopManifest(f.resources), { code: 'ASAR_INVALID' });
+  }
+});
