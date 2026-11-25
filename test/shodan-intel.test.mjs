@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatchAsync } from '../lib/redteam/store-core.js'
@@ -47,8 +47,16 @@ test('Shodan API key is write-only and preserves unrelated platform settings', t
   assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'legacy-fofa')
   assert.equal(loadPlatformConfig(root).tools.nmap, '/fixture/nmap')
   assert.throws(() => shodanConnectionSave(root, { key: 'new-key', clearKey: true }), /不能同时/)
-  assert.throws(() => shodanConnectionSave(root, { key: 'bad\\nkey' }), /格式无效/)
+  assert.throws(() => shodanConnectionSave(root, { key: 'bad\nkey' }), /格式无效/)
   assert.equal(shodanConnectionSave(root, { clearKey: true }).configured, false)
+})
+
+test('invalid existing config is preserved instead of being overwritten by Shodan settings', t => {
+  const { root } = fixture(t)
+  const file = join(root, 'config.json')
+  writeFileSync(file, '{ broken')
+  assert.throws(() => shodanConnectionSave(root, { key: 'private-key' }))
+  assert.equal(readFileSync(file, 'utf8'), '{ broken')
 })
 
 test('api-info connection test validates the account and returns only safe plan counters', async t => {
