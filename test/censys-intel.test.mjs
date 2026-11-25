@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatchAsync } from '../lib/redteam/store-core.js'
@@ -183,4 +183,38 @@ test('scope changes during the request prevent result delivery and import', asyn
   assert.equal(result.ok, false)
   assert.match(result.error, /授权范围发生变化/)
   assert.deepEqual(result.results, [])
+})
+
+test('direct host helper rejects non-IP targets before network access', async t => {
+  const { root } = fixture(t)
+  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  let calls = 0
+  const result = await censysHostLookup(root, 'example.test', { fetch: async () => { calls++; return new Response('{}') } })
+  assert.equal(result.ok, false)
+  assert.equal(result.error, 'Censys 仅支持单个 IP 查询')
+  assert.equal(calls, 0)
+})
+
+test('host lookup uses the bounded text fallback when a response has no stream reader', async t => {
+  const { root } = fixture(t)
+  savePlatformConfig({ env: { CENSYS_PAT: 'private-token' } }, root)
+  const result = await censysHostLookup(root, ip, { fetch: async () => ({
+    ok: true, body: null, text: async () => JSON.stringify(hostPayload),
+  }) })
+  assert.equal(result.ok, true)
+  assert.equal(result.payload.result.resource.ip, ip)
+})
+
+test('Censys setup and query controls exist in source and generated desktop client', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+    const view = src.slice(src.indexOf('function LocalAssetSearchTab(props)'), src.indexOf('function EnvTab(props)'))
+    assert.match(view, /censysConnectionGet/)
+    assert.match(view, /censysConnectionSave/)
+    assert.match(view, /censysConnectionTest/)
+    assert.match(view, /Censys Platform API v3/)
+    assert.match(view, /每次查询消耗 1 credit/)
+    assert.match(view, /censysPat/)
+    assert.match(view, /sources: \['censys'\]/)
+  }
 })
