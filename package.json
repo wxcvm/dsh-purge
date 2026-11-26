@@ -86,8 +86,8 @@
     },
     "install": {
       "preferred": "tarball",
-      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.27",
-      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.27",
+      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.28",
+      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.28",
       "git": "https://github.com/wxcvm/dsh-purge.git"
     }
   },
