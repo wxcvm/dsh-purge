@@ -63,6 +63,32 @@ test('queries cannot turn into raw SQL and unsupported fields return useful erro
   assert.match(compileLocalAssetQuery('title=x OR port=80 AND domain=demo').where, / OR /)
 })
 
+test('offline query rejects malformed quotes rather than silently truncating values', (t) => {
+  const q = fixture(t)
+  for (const bad of ['title="Demo', "title='Demo", 'title=Demo"Login', 'title="Demo Login"x']) {
+    assert.throws(() => compileLocalAssetQuery(bad), /查询语法错误/, bad)
+  }
+  assert.deepEqual(q('title="Demo Login"'), [1])
+  assert.deepEqual(q("title='Demo Login'"), [1])
+  assert.deepEqual(q('title=Demo'), [1])
+  assert.deepEqual(compileLocalAssetQuery('url=https://example.test/?a=b').args,
+    ['%https://example.test/?a=b%'])
+})
+
+test('offline query enforces input limits and preserves boolean precedence', (t) => {
+  const q = fixture(t)
+  assert.deepEqual(q('title=Demo OR title=Developer AND scope=external'), [1])
+  assert.deepEqual(q('(title=Demo OR title=Developer) AND scope=internal'), [3])
+  assert.deepEqual(q('title=Demo AND (scope=external OR scope=internal)'), [1])
+  assert.throws(() => compileLocalAssetQuery('title="Demo\0Login"'), /NUL/)
+  assert.throws(() => compileLocalAssetQuery('title=' + 'a'.repeat(1200)), /1200/)
+  assert.throws(() => compileLocalAssetQuery('('.repeat(9) + 'title=Demo' + ')'.repeat(9)), /嵌套过深/)
+  assert.throws(() => compileLocalAssetQuery(Array(25).fill('title=x').join(' OR ')), /24/)
+  const clauses = Array(24).fill('title=x').join(' OR ')
+  assert.equal(compileLocalAssetQuery(clauses).clauses, 24)
+  assert.throws(() => compileLocalAssetQuery('('.repeat(7) + clauses + ')'.repeat(7)), /查询条件过多/)
+})
+
 test('offline search is available through the workbench API without any scanning', async (t) => {
   const { RedteamStore, dispatch } = await import('../lib/redteam/store-core.js')
   const db = new DatabaseSync(':memory:')
@@ -94,6 +120,10 @@ test('offline search is available through the workbench API without any scanning
   assert.equal(result.engagement, 'lab')
   assert.equal(result.total, 1)
   assert.deepEqual(result.items.map((r) => r.id), [1])
+  for (const query of ['', '   ', 'title="bad']) {
+    const invalid = dispatch(store, { op: 'localAssetSearch', engagement: 'lab', query })
+    assert.equal(invalid.ok, false)
+  }
   const bad = dispatch(store, { op: 'localAssetSearch', engagement: 'lab', query: 'body="x"' })
   assert.equal(bad.ok, false)
   assert.match(bad.error, /本地库不含网页正文/)

@@ -1,0 +1,52 @@
+name: Hosted Packed Install Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'scripts/smoke-packed-install.mjs'
+      - 'scripts/check-packlist.mjs'
+      - '.github/workflows/compatibility.yml'
+      - '.github/workflows/packed-install-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-packed-install-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-packed-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install declared plugin dependencies
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false
+      - name: Check published npm packlist
+        run: node scripts/check-packlist.mjs
+      - name: Prepare isolated official rc.5 host fixture
+        env:
+          NODE_USE_ENV_PROXY: '1'
+        shell: pwsh
+        run: |
+          $fixture = node scripts/prepare-host-fixture.mjs 0.2.2-rc.5
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
+      - name: Install fixture dependencies
+        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify official host fixture pins
+        run: node .github/scripts/check-host-fixture.mjs 0.2.2-rc.5
+      - name: Validate real tgz in fresh disposable DSH_HOME
+        run: node scripts/smoke-packed-install.mjs
