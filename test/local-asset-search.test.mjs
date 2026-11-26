@@ -63,6 +63,18 @@ test('queries cannot turn into raw SQL and unsupported fields return useful erro
   assert.match(compileLocalAssetQuery('title=x OR port=80 AND domain=demo').where, / OR /)
 })
 
+test('offline query rejects malformed quotes rather than silently truncating values', (t) => {
+  const q = fixture(t)
+  for (const bad of ['title="Demo', "title='Demo", 'title=Demo"Login', 'title="Demo Login"x']) {
+    assert.throws(() => compileLocalAssetQuery(bad), /查询语法错误/, bad)
+  }
+  assert.deepEqual(q('title="Demo Login"'), [1])
+  assert.deepEqual(q("title='Demo Login'"), [1])
+  assert.deepEqual(q('title=Demo'), [1])
+  assert.deepEqual(compileLocalAssetQuery('url=https://example.test/?a=b').args,
+    ['%https://example.test/?a=b%'])
+})
+
 test('offline search is available through the workbench API without any scanning', async (t) => {
   const { RedteamStore, dispatch } = await import('../lib/redteam/store-core.js')
   const db = new DatabaseSync(':memory:')
