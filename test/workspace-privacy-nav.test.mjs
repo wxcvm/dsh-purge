@@ -19,9 +19,9 @@ test('workspace refreshes saved status without applying stale updates', () => {
   assert.ok(workspace.includes('live && current === revision'))
 })
 
-test('privacy navigation opens existing low-impact tab and does not change configuration', () => {
+test('privacy navigation opens the Environment privacy section through the legacy tab alias', () => {
   assert.ok(workspace.includes('className: "dshp-workspace-privacy"'))
-  assert.ok(workspace.includes('"aria-label": "打开智能隐私中心。"'))
+  assert.ok(workspace.includes('"aria-label": "打开本机隐私设置。"'))
   assert.ok(workspace.includes('setUI({ open: true, tab: "low-impact", focus: null })'))
   assert.ok(!workspace.includes('api({ op: "savePlatformConfig"'))
 })

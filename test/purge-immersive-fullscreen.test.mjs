@@ -9,14 +9,14 @@ test('native Purge workspace can enter and leave real immersive fullscreen from 
   assert.match(client, /const workspaceRef = useRef\(null\)/)
   assert.match(client, /document\.addEventListener\("fullscreenchange", onChange\)/)
   assert.match(client, /document\.removeEventListener\("fullscreenchange", onChange\)/)
-  assert.match(client, /document\.fullscreenElement === workspaceRef\.current/)
-  assert.match(client, /el\.requestFullscreen\(\)/)
+  assert.match(client, /document\.fullscreenElement === element/)
+  assert.match(client, /element\.requestFullscreen\(\)/)
   assert.match(client, /document\.exitFullscreen\(\)/)
   assert.match(client, /onClick: toggleImmersive/)
   assert.match(client, /immersive \? "退出系统全屏" : "系统全屏"/)
   assert.match(client, /ref: workspaceRef/)
   assert.match(client, /宿主不允许全屏/)
-  assert.doesNotMatch(client, /useEffect\(\(\) => \{\s*el\.requestFullscreen\(\)/)
+  assert.doesNotMatch(client, /use(?:Layout)?Effect\(\(\) => \{\s*element\.requestFullscreen\(\)/)
 })
 
 test('Purge fills the Harness viewport by default without a fullscreen click', () => {

@@ -7,6 +7,7 @@ import { communitySkillsDir } from '../lib/redteam/skill-catalog.js'
 import {
   communitySkillStatus, startCommunitySkillPack, installCommunitySkillPack, removeCommunitySkillPack,
 } from '../lib/redteam/community-skills-manager.js'
+import { aboutSecurityStatus } from '../lib/redteam/aboutsecurity-manager.js'
 import { handleCommunitySkillOp } from '../lib/redteam/ui.js'
 
 function fixture(t) {
@@ -26,6 +27,14 @@ test('status is read-only; unknown pack does not start any checkout', async t =>
   assert.equal(status.ok, true)
   assert.equal(status.busy, false)
   assert.deepEqual(status.packs.map(p => p.id), ['hack-skills', 'yak-skills'])
+  const hack = status.packs.find(p => p.id === 'hack-skills')
+  assert.equal(hack.license, 'MIT')
+  assert.equal(hack.licenseStatus, 'upstream-declared')
+  assert.equal(hack.revision, null)
+  const about = aboutSecurityStatus({ home })
+  assert.equal(about.source, 'wgpsec/AboutSecurity')
+  assert.equal(about.licenseStatus, 'not-declared')
+  assert.equal(about.revision, null)
   assert.equal(existsSync(communitySkillsDir(home)), false)
   const result = await installCommunitySkillPack({ home, pack: '../../outside' })
   assert.equal(result.ok, false)
@@ -40,11 +49,15 @@ test('explicit checkout installs, becomes readable, and cannot silently overwrit
     if (argv[0] === 'clone') {
       mkdirSync(join(argv.at(-1), '.git'), { recursive: true })
       putSkill(argv.at(-1))
+      writeFileSync(join(argv.at(-1), 'LICENSE'), 'MIT License\n')
     }
   }
   const result = await installCommunitySkillPack({ home, pack: 'yak-skills', runGit })
   assert.equal(result.ok, true)
-  assert.equal(result.packs.find(p => p.id === 'yak-skills').skills, 1)
+  const installed = result.packs.find(p => p.id === 'yak-skills')
+  assert.equal(installed.skills, 1)
+  assert.equal(installed.license, 'MIT')
+  assert.equal(installed.licenseStatus, 'identified')
   assert.equal(calls[0][0], 'clone')
   assert.ok(calls[0].includes('https://github.com/yaklang/yak-skills.git'))
   assert.equal(calls[1][2], 'sparse-checkout')
