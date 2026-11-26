@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { deletePromptProfile, getSessionPromptLock, getSessionPromptOverrides, setSessionPromptPause, latestPromptTask, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
+import { deletePromptProfile, getSessionPromptLock, getSessionPromptOverrides, setSessionPromptPause, latestPromptTask, listEditablePromptProfiles, listPromptProfiles, routePrompt, routePromptForSession, savePromptProfile, setSessionPromptLock } from "../lib/prompt-profiles.js";
 import { isLoopbackRequest } from "../lib/web.js";
 
 function withHome(fn) {
@@ -131,6 +131,23 @@ test("private prompt storage API accepts only local loopback peers", () => {
   assert.equal(isLoopbackRequest(null), false);
 });
 
+test("prompt write endpoints require trusted local origin before parsing request bodies", () => {
+  const source = fs.readFileSync(new URL("../lib/index.js", import.meta.url), "utf8");
+  for (const marker of [
+    'path: "/dsh-purge/prompt-routing-settings"',
+    'path: "/dsh-purge/prompt-profiles"',
+  ]) {
+    const start = source.indexOf(marker);
+    assert.ok(start >= 0, marker);
+    const end = source.indexOf('      }, "dsh-purge:', start);
+    assert.ok(end > start, marker);
+    const handler = source.slice(start, end);
+    const guard = handler.indexOf("isTrustedLocalRequest(request)");
+    const body = handler.indexOf("readJsonBody(request)");
+    assert.ok(guard >= 0 && body > guard, marker + " must guard before parsing a write body");
+  }
+});
+
 test("global/local prompts remain independent; model + provider allowlist and per-rule blacklist", () => withHome((home) => {
   savePromptProfile(home, { id: "global", enabled: true, body: "GLOBAL_TEXT" });
   savePromptProfile(home, { id: "glmroute", enabled: true, scope: "local", priority: 60,
@@ -238,4 +255,79 @@ test("keyword-free local rule can use explicit preset switches without modifying
   assert.equal(routePrompt({ home, preset: "my-mode", text: "" }).id, null);
   savePromptProfile(home, { id: "custom_a", enabled: false });
   assert.equal(routePrompt({ home, preset: "ptc" }).id, null);
+}));
+
+test("ordinary profile save/delete do not overwrite a newer stored revision", () => withHome(home => {
+  const profile = id => listEditablePromptProfiles(home).find(row => row.id === id);
+  assert.equal(profile("redteam").revision, undefined);
+  const first = profile("coding").revision;
+  assert.match(first, /^[a-f0-9]{64}$/);
+  savePromptProfile(home, { id: "coding", body: "Window A saved" }, first);
+  const next = profile("coding");
+  assert.notEqual(next.revision, first);
+  assert.throws(() => savePromptProfile(home, { id: "coding", body: "Window B stale" }, first),
+    { code: "prompt_profile_conflict" });
+  assert.equal(profile("coding").body, "Window A saved");
+  assert.equal(profile("coding").revision, next.revision);
+  savePromptProfile(home, { id: "personal-note", body: "New draft" }, null);
+  const created = profile("personal-note");
+  assert.throws(() => savePromptProfile(home, { id: "personal-note", body: "Collision" }, null),
+    { code: "prompt_profile_conflict" });
+  savePromptProfile(home, { id: "personal-note", body: "Updated" }, created.revision);
+  assert.throws(() => deletePromptProfile(home, "personal-note", created.revision),
+    { code: "prompt_profile_conflict" });
+  assert.equal(profile("personal-note").body, "Updated");
+  deletePromptProfile(home, "personal-note", profile("personal-note").revision);
+  assert.equal(profile("personal-note"), undefined);
+}));
+
+test("invalid manifest is preserved before any ordinary editor can rewrite it", () => withHome(home => {
+  savePromptProfile(home, { id: "personal-note", body: "Keep the original body" });
+  const manifest = path.join(home, "dsh-purge", "prompt-profiles.json");
+  const body = path.join(home, "dsh-purge", "prompt-profiles", "personal-note.md");
+  for (const text of ['{"profiles":', '{"profiles":{"bad":"shape"}}']) {
+    fs.writeFileSync(manifest, text, "utf8");
+    assert.throws(() => listEditablePromptProfiles(home), /原文件已保留/);
+    assert.throws(() => savePromptProfile(home, { id: "personal-note", body: "Do not write" }), /原文件已保留/);
+    assert.throws(() => deletePromptProfile(home, "personal-note"), /原文件已保留/);
+    assert.equal(fs.readFileSync(manifest, "utf8"), text);
+    assert.equal(fs.readFileSync(body, "utf8"), "Keep the original body");
+  }
+}));
+
+test("failed ordinary manifest publication restores the prior markdown and removes an unpublished draft", t => withHome(home => {
+  savePromptProfile(home, { id: "personal-note", body: "Visible saved text" });
+  const root = path.join(home, "dsh-purge");
+  const manifest = path.join(root, "prompt-profiles.json");
+  const body = path.join(root, "prompt-profiles", "personal-note.md");
+  const draft = path.join(root, "prompt-profiles", "unpublished.md");
+  const oldManifest = fs.readFileSync(manifest);
+  const rename = fs.renameSync;
+  let attempts = 0;
+  t.mock.method(fs, "renameSync", (src, dst) => {
+    if (dst === manifest) {
+      attempts++;
+      throw Object.assign(new Error("simulated manifest EBUSY"), { code: "EBUSY" });
+    }
+    return rename(src, dst);
+  });
+  assert.throws(() => savePromptProfile(home, { id: "personal-note", body: "Failed new text" }), /simulated manifest EBUSY/);
+  assert.throws(() => savePromptProfile(home, { id: "unpublished", body: "Failed create" }), /simulated manifest EBUSY/);
+  assert.equal(attempts, 2);
+  assert.deepEqual(fs.readFileSync(manifest), oldManifest);
+  assert.equal(fs.readFileSync(body, "utf8"), "Visible saved text");
+  assert.equal(fs.existsSync(draft), false);
+  assert.deepEqual(fs.readdirSync(path.dirname(body)), ["personal-note.md"]);
+}));
+
+test("ordinary profile save and delete preserve extension fields in the stored manifest", () => withHome(home => {
+  savePromptProfile(home, { id: "personal-note", body: "Some text" });
+  const manifest = path.join(home, "dsh-purge", "prompt-profiles.json");
+  const initial = JSON.parse(fs.readFileSync(manifest, "utf8"));
+  initial.extension = { kept: true };
+  fs.writeFileSync(manifest, JSON.stringify(initial));
+  savePromptProfile(home, { id: "personal-note", name: "Renamed" });
+  assert.deepEqual(JSON.parse(fs.readFileSync(manifest, "utf8")).extension, { kept: true });
+  deletePromptProfile(home, "personal-note");
+  assert.deepEqual(JSON.parse(fs.readFileSync(manifest, "utf8")).extension, { kept: true });
 }));

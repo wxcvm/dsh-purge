@@ -1,0 +1,44 @@
+name: Hosted UI Integration Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'client.js'
+      - 'lib/index.js'
+      - 'lib/redteam/client.js'
+      - 'lib/workspace/**'
+      - 'test/**'
+      - 'scripts/build-client.mjs'
+      - '.github/workflows/ui-integration-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-ui-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui-and-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install plugin dependencies without lifecycle scripts
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false
+      - name: Check generated client and syntax
+        run: |
+          node scripts/build-client.mjs --check
+          node scripts/check-syntax.mjs
+      - name: Test unit and public API contracts
+        run: npm test
+      - name: Check npm package contents
+        run: node scripts/check-packlist.mjs
