@@ -277,9 +277,9 @@ test('update receipt persists across restart and detects changed disk or boot co
         fs.writeFileSync(path.join(root, file), file + suffix)
       }
     }
-    const load = (pid = 123, startedAt = 1000) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
+    const load = (pid = 123, startedAt = 1000, filesystem = fs) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
       source.slice(start, end).replace(/^export /gm, '') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
-      fs, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
+      filesystem, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
       (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) }, { pid }, { timeOrigin: startedAt })
     setFiles('old')
     const old = load()
@@ -294,7 +294,9 @@ test('update receipt persists across restart and detects changed disk or boot co
     assert.equal(load(123, 2000).updateReceiptStatus().processRestarted, true)
     assert.equal(load(124, 1000).updateReceiptStatus().processRestarted, true)
     setFiles('new')
-    const after = old.updateFingerprint()
+    // A receipt recorded before this patch only stored the version and hashes.
+    const { version, hashes } = old.updateFingerprint()
+    const after = { version, hashes }
     old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after, originProcess })
     let status = old.updateReceiptStatus()
     assert.equal(status.diskMatch, true)
@@ -314,7 +316,19 @@ test('update receipt persists across restart and detects changed disk or boot co
     fs.unlinkSync(path.join(root, 'lib', 'index.js'))
     assert.equal(restarted.updateReceiptStatus().diskMatch, false)
     fs.writeFileSync(path.join(root, 'client.js'), 'client.jsnew')
-    assert.equal(restarted.updateReceiptStatus().diskMatch, null)
+    status = restarted.updateReceiptStatus()
+    assert.equal(status.diskMatch, false)
+    assert.equal(status.verification, 'disk_mismatch')
+    assert.deepEqual(status.disk.missingFiles, ['lib/index.js'])
+    fs.writeFileSync(path.join(root, 'lib', 'index.js'), 'lib/index.jsnew')
+    const readDenied = { ...fs, readFileSync(file, ...args) {
+      if (file === path.join(root, 'lib', 'index.js')) throw Object.assign(new Error('denied'), { code: 'EACCES' })
+      return fs.readFileSync(file, ...args)
+    } }
+    status = load(124, 2000, readDenied).updateReceiptStatus()
+    assert.equal(status.diskMatch, null)
+    assert.equal(status.verification, 'unknown')
+    assert.deepEqual(status.disk.missingFiles, [])
     restarted.saveUpdateReceipt({ root, phase: 'failed', error: 'reapply failed', before, after })
     assert.equal(load().updateReceiptStatus().phase, 'failed')
     assert.equal(load().updateReceiptStatus().error, 'reapply failed')
@@ -375,11 +389,12 @@ test('remote target check uses immutable commit and reports per-file differences
   let receipt = { targetSha: sha }
   let unavailable = ''
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
+  let missingFiles = []
   const seen = []
   let token = ''
   const verify = new Function('readCurrentUpdateReceipt', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
-    () => receipt, () => ({ hashes: local }), files,
+    () => receipt, () => ({ hashes: local, missingFiles }), files,
     async (url, timeout, headers) => {
       seen.push({ url, headers })
       const parsed = new URL(url)
@@ -404,6 +419,15 @@ test('remote target check uses immutable commit and reports per-file differences
   assert.equal((await verify()).status, 'mismatch')
   local['client.js'] = createHash('sha256').update('client.js').digest('hex')
   assert.equal((await verify()).status, 'unknown')
+  local['client.js'] = ''
+  assert.equal((await verify()).status, 'unknown', 'an unreadable local file does not prove a mismatch')
+  missingFiles = ['client.js']
+  const missing = await verify()
+  assert.equal(missing.status, 'mismatch', 'a missing required file outweighs another unknown file')
+  assert.deepEqual(missing.files.find((item) => item.file === 'client.js'),
+    { file: 'client.js', status: 'mismatch', reason: 'local_missing' })
+  unavailable = 'client.js'
+  assert.equal((await verify()).status, 'unknown', 'no remote bytes cannot establish a remote mismatch')
   receipt = { targetSha: 'master' }
   assert.equal((await verify()).files.length, 0)
   assert.match(source, /receipt.failedPhase = receipt.phase/)

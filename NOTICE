@@ -3,6 +3,11 @@ Copyright 2026 YuJunZhiXue
 
 Source: https://github.com/YuJunZhiXue/dsh-purge
 
+WXCVM-maintained derivative: https://github.com/wxcvm/dsh-purge
+Copyright 2026 WXCVM (WXCVM-authored modifications and additions only).
+Other contributors retain their respective copyrights.
+Original and upstream copyright and attribution notices remain in effect.
+
 This product is licensed under the Apache License, Version 2.0.
 Derivative works must retain this NOTICE and attribution.
 
@@ -11,6 +16,8 @@ Copyright 2026 CallMeGuLab
 Source project: dsh-purge-safe (CallMeGuLab)
 https://github.com/CallMeGuLab/dsh-purge-safe
 Maintained by CallMeGuLab.
+The upstream LICENSE appendix also identifies HunYiSage (2026);
+this attribution is preserved without asserting ownership of unrelated code.
 
 The sealed prompt resource at lib/upstream-safe/asset-table.js is incorporated from
 CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25); the optional persona-prefix adapter
@@ -29,3 +36,15 @@ Source: CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25)
 Reference files: lib/redteam/tools.js, store-core.js, schema.js
 Adapted implementation: lib/redteam/agent-attention.js and existing Purge store/tools
 License: Apache-2.0; retain upstream attribution.
+
+
+## Upstream skill library
+
+The files listed in skills/redteam/source-manifest.json are adapted from
+CallMeGuLab/dsh-purge-safe at revision
+d0a9abda6e2eb020dde85b48b5727b45d26582a7 (release v2.0.1).
+Those upstream-derived skill materials remain under Apache License 2.0.
+The original upstream LICENSE and NOTICE are preserved in
+third_party/CallMeGuLab-dsh-purge-safe/; the per-file source mapping and
+adaptation status are recorded in the source manifest. Skills not listed in
+that manifest are not claimed as derivatives of this upstream source.
