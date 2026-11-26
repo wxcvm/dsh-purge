@@ -81,22 +81,22 @@ $TK/naabu/naabu -host 1.2.3.4 -p - -rate 1000 -silent
 
 | 场景 | 用哪个 |
 | --- | --- |
-| 单位名/域名 → 互联网资产线索（确认归属） | **`passive-recon` + 本技能**（默认无需 FOFA_KEY） |
+| 单位名/域名 → 互联网资产线索（确认归属） | **`passive-recon` + 本技能**（默认无需 Key）；可选补充 Shodan 单 IP / Censys 单 IP 查询 |
 | 域名 → 子域 → 存活 → 指纹 | **本技能**（流水线，标准化） |
-| 不接触目标（纯被动） | `passive-recon`（crt.sh/dig/whois） |
+| 不接触目标（纯被动） | `passive-recon`（crt.sh/dig/whois/免 Key 测绘） |
+| 单 IP 互联网资产查询 | `passive-recon` 中的 Shodan/Censys（无需密钥积分消耗） |
 | 内网大网段测绘 | `gogo-intranet`（**不要用本技能打内网**） |
-| SP​A/JS 渲染页面、接口清单 | `browser-automation` / `kimi-webbridge` |
+| SPA/JS 渲染页面、接口清单 | `browser-automation` / `kimi-webbridge` |
 | 存活主机端口/服务版本 | `active-scan`（nmap/masscan） |
 
-**推荐顺序（默认无 FOFA）**：先核对现有资产与授权范围 → `passive-recon`（证书透明 / DNS / whois）→ 本技能的 `subfinder → dnsx` → 对已授权目标按需使用 `naabu / httpx` → `active-scan` 细化服务信息。`fofa-recon` 只作为已配置 API Key 时的补充来源，不能阻塞整个流程；没有 Key 不需要向用户索取。
+**推荐顺序（默认无商业 API Key）**：先核对现有资产与授权范围 → `passive-recon`（证书透明/DNS/whois/Shodan 单 IP/Censys 单 IP）→ 本技能的 `subfinder → dnsx` → 对已授权目标按需使用 `naabu / httpx` → `active-scan` 细化服务信息。`fofa-recon` 只作为已配置 API Key 时的补充来源，不能阻塞整个流程；没有 Key 不需要向用户索取。
 
 ## 纪律
 
 1. **只测授权范围内目标**：naabu 全端口、ksubdomain 爆破都属于**主动**行为，确认在范围内再做。
 2. **限速**：`naabu -rate 1000` 起步；`subfinder` 用被动源不加 `-all` 时更安静（配额消耗也少）。
 3. **泛解析**：`dnsx` 会过滤；如果结果里出现大量同 IP 的随机子域，说明目标有泛解析，改用 `-wd` 或换爆破字典。
-4. **API key（可选增强）**：`subfinder` 配置 `~/.config/subfinder/provider-config.yaml` 可接
-   Shodan/Censys/VirusTotal 等源（**需要用户提供 key**，见技能 `redteam-setup`）；没 key 也能用免费源。
+4. **API key（可选增强）**：`subfinder` 配置 `~/.config/subfinder/provider-config.yaml` 可接 Shodan/Censys/VirusTotal 等源（**需要用户提供 key**，见技能 `redteam-setup`）；若已配置 `FOFA_KEY` 环境变量，`fofa-recon` 技能可作为补充数据源（详见技能 `fofa-recon`）；没有 key 也能用免费源。
 
 ## 输出与落库（强制）
 
