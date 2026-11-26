@@ -1,60 +1,51 @@
 ---
 name: api-attack
-description: API 专项：GraphQL introspection 与批量查询、gRPC 反射、OpenAPI/Swagger 泄露、BOLA/越权、限速绕过
-whenToUse: 目标是前后端分离或移动端 API，或只有 JSON 端点没有页面
-role: exploit
+description: API 安全评估：OpenAPI/GraphQL/gRPC、对象级授权、租户隔离、认证边界和数据最小暴露
+whenToUse: 目标是前后端分离、移动端 API、GraphQL/gRPC 服务或只有 JSON 端点的业务系统时
+role: vuln-scan
+category: 验证
+tags: [api, openapi, graphql, grpc, authorization, privacy]
 enabled: true
 ---
 
-# API 攻击
+# API 安全评估
 
-## 先找文档
+仅在明确授权的目标和测试账号上进行。优先使用预发环境、合成用户和合成数据；禁止批量导出生产数据或通过伪造来源头规避限速。
 
-~~~bash
-for p in /swagger-ui.html /swagger/index.html /v2/api-docs /v3/api-docs /openapi.json /api-docs /doc.html; do
-  code=$(curl -s -o /dev/null -w '%{http_code}' "http://TARGET$p"); [ "$code" = 200 ] && echo "HIT $p"
-done
-~~~
+## 1. 发现接口
 
-拿到 OpenAPI：paths 全导出 -> 逐条测未授权（去 token）-> 再测越权（换 B 用户 token）。
+- 检查已授权站点公开的 OpenAPI/Swagger 文档、GraphQL schema、gRPC reflection 和前端请求路径。
+- 记录路径、方法、认证要求、对象类型和租户边界；不要下载与测试无关的文档或数据。
+- 版本号、路径和错误信息只能作为线索，不能单独证明漏洞。
 
-## GraphQL
+## 2. 认证与对象级授权
 
-~~~bash
-curl -s -X POST http://TARGET/graphql -H 'content-type: application/json' \
-  -d '{"query":"{__schema{types{name fields{name}}}}"}' | head -c 800
-# 批量别名打限速
-{"query":"{a:user(id:1){name} b:user(id:2){name} c:user(id:3){name}}"}
-~~~
+- 使用两个专门创建的测试账号 A/B，分别拥有各自的合成对象。
+- 验证 A 是否只能读取/修改 A 的测试对象，B 是否只能读取/修改 B 的测试对象。
+- 对未登录、过期会话、低权限角色和不同租户做最小对照。
+- 优先用只读请求；如必须测试写操作，只能在隔离环境中使用可回滚的合成对象。
+- 不尝试真实用户 ID，不猜测他人对象 ID，不对生产账号做登录尝试。
 
-## gRPC
+## 3. GraphQL / gRPC
 
-~~~bash
-grpcurl -plaintext TARGET:PORT list
-grpcurl -plaintext TARGET:PORT describe Service
-grpcurl -plaintext -d '{"id":1}' TARGET:PORT Service/Method
-~~~
+- 检查 introspection/reflection 是否符合产品设计和部署策略。
+- 验证字段级授权、深度/复杂度限制、批量别名限制和错误响应是否泄露内部实现细节。
+- 使用小型、只读、合成查询；不要利用批量查询绕过配额或读取其他租户数据。
 
-## BOLA / IDOR（API 最常见）
+## 4. 数据暴露与隐私
 
-~~~
-1. A 的 token 请求 /api/v1/orders/{B的id}
-2. A 的 token 请求 /api/v1/users/{A}/transfer?to={B}
-3. 去掉 token 再试（网关只校验路径白名单时成立）
-4. 改方法：GET->PUT/DELETE 绕过权限
-5. 降版本：/v1/ 无校验、/v2/ 有 -> 用 v1 打
-~~~
+- 先确认返回数据是否属于测试账号和合成对象。
+- 只记录字段名称、访问控制结果、响应条数和必要的脱敏样本；真实姓名、电话、身份证、令牌和业务内容不得复制到报告。
+- 对生产环境只验证访问控制是否生效，不扩大分页、不遍历 ID、不下载导出文件。
+- “接口返回 200”或“存在导出入口”不等于数据泄露；必须有可复核的授权边界差异。
 
-## 限速与配额
+## 5. 限速与错误处理
 
-~~~
-阈值：10/30/60 次每分钟，看 429 出现在第几次
-绕过：X-Forwarded-For 轮换、X-Real-IP、换 token、换 UA
-并发只对幂等接口（查询/登录），别对写接口并发
-~~~
+- 记录服务端公开的配额、429 响应和限速策略；不轮换 IP、X-Forwarded-For、User-Agent 或 Token 来规避限制。
+- 遇到 429、账号锁定、WAF 阻断或服务异常立即降载/停止，并按用户约定处理。
 
-## 判据
+## 6. 证据与交付
 
-- 越权：拿到**另一个用户的数据**（不是空数组、不是 403）
-- GraphQL：introspection 全量返回 = 信息泄露；跨用户读 = BOLA
-- 落库 category=unauthorized 或 auth-bypass，evidence 贴两份请求（A 的 token / B 的结果）
+- 用 `redteam_scope_review` 确认目标范围，用 `redteam_asset_test` 追加测试账号类型、请求方法、对象归属和结果。
+- 用 `redteam_vuln_add` 记录缺陷，默认 candidate；只有合成账号之间的授权差异可重复验证时才确认。
+- 需要保存 HTTP 报文时使用 `redteam_http_evidence_add`，删除或遮蔽 Token、Cookie、个人信息和无关响应字段。
