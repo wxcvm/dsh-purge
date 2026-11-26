@@ -100,3 +100,16 @@ test("profile verification reads current source and installed version independen
   assert.deepEqual(await inspectPrivateProfileResolution(opts.dir, cache.archivePath, version), { sourceMatch: false, versionMatch: true });
   assert.equal(result.ok, true);
 });
+
+test("a live migration lock is not reclaimed after the stale timeout", async t => {
+  const opts = await fixture(t);
+  const lock = path.join(opts.dir, ".dsh-purge-private-migration.lock");
+  const body = JSON.stringify({ pid: process.pid, at: Date.now() - 11 * 60 * 1000 }) + "\n";
+  await fs.writeFile(lock, body);
+  let calls = 0;
+  await assert.rejects(migratePrivateProfile({ ...opts, run: async () => { calls++; } }), /迁移锁被占用/);
+  assert.equal(calls, 0);
+  assert.equal(await fs.readFile(lock, "utf8"), body);
+  assert.equal(await fs.readFile(path.join(opts.dir, "package.json"), "utf8"), old);
+  assert.equal(await fs.readFile(path.join(opts.dir, "pnpm-lock.yaml"), "utf8"), oldLock);
+});
