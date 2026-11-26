@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { authorizeBridgeRequest, isLocalBridgePeer, bridgePrivacyPosture } from '../lib/redteam/bridge-auth.js'
+import { authorizeBridgeRequest, isLocalBridgePeer, isTrustedLocalRequest, bridgePrivacyPosture } from '../lib/redteam/bridge-auth.js'
 
 function req(remoteAddress, host, token) {
   return {
@@ -21,12 +21,37 @@ test('local desktop API works without remote credentials', () => {
   }
 })
 
+test('local write requests require a same-origin browser request or the private Desktop cookie', () => {
+  const host = '127.0.0.1:53380'
+  const base = { socket: { remoteAddress: '127.0.0.1' } }
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'http://127.0.0.1:53380' } }), true)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, cookie: 'dsh-desktop-session=private-test-cookie' } }), true)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'null', 'content-type': 'text/plain' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'https://malicious.example' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'app://dsh' } }), true)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host, origin: 'app://unrelated' } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: {
+    host, origin: 'app://unrelated', cookie: 'dsh-desktop-session=private-test-cookie',
+  } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: { host } }), false)
+  assert.equal(isTrustedLocalRequest({ ...base, headers: {
+    host, cookie: 'dsh-desktop-session=private-test-cookie', 'x-forwarded-for': '203.0.113.5',
+  } }), false)
+})
+
 test('non-local API is closed by default, including localhost reverse proxies', () => {
   for (const request of [
     req('203.0.113.5', 'example.test'),
     req('203.0.113.5', '127.0.0.1:53380'),
     req('127.0.0.1', 'example.test'),
     { ...req('127.0.0.1', '127.0.0.1:53380'), headers: { host: '127.0.0.1:53380', 'x-forwarded-for': '203.0.113.5' } },
+    { ...req('127.0.0.1', '127.0.0.1:53380'), headers: { host: '127.0.0.1:53380', forwarded: 'for=203.0.113.5' } },
+    ...['x-real-ip', 'x-forwarded-host', 'x-forwarded-proto', 'x-forwarded-port',
+      'x-client-ip', 'cf-connecting-ip', 'true-client-ip', 'via',
+      'x-original-host', 'x-original-forwarded-for'].map(name => ({
+        ...req('127.0.0.1', '127.0.0.1:53380'),
+        headers: { host: '127.0.0.1:53380', [name]: '203.0.113.5' },
+      })),
   ]) {
     assert.equal(isLocalBridgePeer(request), false)
     assert.deepEqual(authorizeBridgeRequest(request, { token: '' }), {
@@ -140,4 +165,18 @@ test('real HTTP server exposes wildcard bind even when the request uses 127.0.0.
   assert.equal(snapshot.boundAddress, '0.0.0.0')
   assert.equal(snapshot.listenerScope, 'all_interfaces')
   assert.equal(snapshot.publicReachability, 'not_tested')
+})
+
+test('forwarding metadata cannot receive the local exemption when its value is empty or malformed', () => {
+  const options = { token: '', requireLocalToken: false }
+  for (const name of ['forwarded', 'x-forwarded-for', 'via', 'x-real-ip']) {
+    for (const value of ['', ' ', []]) {
+      const request = req('127.0.0.1', 'localhost:53380')
+      request.headers[name] = value
+      assert.equal(isLocalBridgePeer(request), false)
+      assert.equal(authorizeBridgeRequest(request, options).ok, false)
+    }
+  }
+  const direct = req('127.0.0.1', 'localhost:53380')
+  assert.equal(authorizeBridgeRequest(direct, options).ok, true)
 })
