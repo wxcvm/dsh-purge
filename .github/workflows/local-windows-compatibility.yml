@@ -12,6 +12,8 @@ concurrency:
 
 jobs:
   windows-compatibility:
+    env:
+      DSH_COMPAT_TOOLS_MODULE: ''
     runs-on: [self-hosted, Windows, X64, purge-ci]
     timeout-minutes: 30
     steps:
@@ -23,13 +25,17 @@ jobs:
           node-version: '24'
       - name: Prepare latest official fixture, without host or model execution
         shell: pwsh
+        env:
+          NODE_USE_ENV_PROXY: '1'
         run: |
           $fixture = node scripts/prepare-host-fixture.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
       - name: Install isolated fixture with all lifecycle scripts disabled
         shell: pwsh
-        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+        run: npm install --prefix "$env:DSH_COMPAT_HOST_ROOT" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify installed rc.5 packages and peers
+        run: node .github/scripts/check-host-fixture.mjs 0.2.2-rc.5
       - name: Check generated bundle and syntax
         shell: pwsh
         run: |

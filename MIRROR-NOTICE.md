@@ -1,5 +1,7 @@
 # 镜像说明 / Mirror Notice
 
+> 历史说明：以下原文记录历史镜像创建时的来源、署名和当时的文件状态，不描述当前维护分支是否仍与该历史快照一致；现行文件及其来源见本分支的 LICENSE、NOTICE 和各自的来源声明。
+
 本仓库是 **[YuJunZhiXue/dsh-purge](https://github.com/YuJunZhiXue/dsh-purge)** 的**全量镜像（mirror）**，
 由 [@mmparko](https://github.com/mmparko) 在上游宣布删库前完整备份，用于存档与分发。
 
