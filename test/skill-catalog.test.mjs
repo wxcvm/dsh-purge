@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -148,4 +148,64 @@ test('optional community installer help runs without network or a checkout', () 
   assert.equal(result.status, 0, result.stderr)
   assert.match(result.stdout, /--source hack-skills\|yak-skills\|all/)
   assert.match(result.stdout, /--update/)
+})
+
+
+test('bundled skills expose the pinned upstream revision and license', () => {
+  const skill = listLocalSkills().find((item) => item.name === 'active-scan')
+  assert.ok(skill)
+  assert.equal(skill.sourceMeta.repository, 'CallMeGuLab/dsh-purge-safe')
+  assert.equal(skill.sourceMeta.revision, 'd0a9abda6e2eb020dde85b48b5727b45d26582a7')
+  assert.equal(skill.sourceMeta.version, 'v2.0.1')
+  assert.equal(skill.sourceMeta.license, 'Apache-2.0')
+  assert.equal(skill.sourceMeta.adoption, 'adapted')
+  assert.match(skill.sourceMeta.upstreamBlobSha, /^[a-f0-9]{40}$/)
+})
+
+
+test('2026-11-22 upstream absorption batch is discoverable and provenance-mapped', () => {
+  const expected = [
+    'ai-agent-attack', 'asset-correlation', 'asset-deep-scan', 'mobile-code-recon',
+    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain', 'host-post-exploit', 'netspy-recon',
+    'api-attack', 'cloud-container',
+  ]
+  const rows = listLocalSkills()
+  for (const name of expected) {
+    const item = rows.find(row => row.key === 'redteam:' + name)
+    assert.ok(item, name + ' must be present in the bundled skill catalog')
+    assert.ok(item.description.trim().length > 0, name + ' must have a searchable description')
+    assert.equal(item.sourceMeta.repository, 'CallMeGuLab/dsh-purge-safe', name)
+    assert.equal(item.sourceMeta.revision, 'd0a9abda6e2eb020dde85b48b5727b45d26582a7', name)
+    assert.equal(item.sourceMeta.version, 'v2.0.1', name)
+    assert.equal(item.sourceMeta.license, 'Apache-2.0', name)
+    assert.equal(item.sourceMeta.adoption, 'adapted', name)
+    assert.match(item.sourceMeta.upstreamBlobSha, /^[a-f0-9]{40}$/, name)
+  }
+  assert.equal(rows.find(row => row.name === 'api-attack').sourceMeta.upstreamPath,
+    'skills/redteam/api-data-exfil.md')
+  assert.equal(rows.find(row => row.name === 'cloud-container').sourceMeta.upstreamPath,
+    'skills/redteam/cloud-k8s.md')
+  assert.equal(rows.find(row => row.name === 'host-post-exploit').sourceMeta.upstreamPath,
+    'skills/redteam/host-post-exploit.md')
+  assert.equal(rows.find(row => row.name === 'netspy-recon').sourceMeta.upstreamPath,
+    'skills/redteam/netspy-recon.md')
+})
+
+test('newly absorbed skills reference only registered Purge tools', () => {
+  const toolSource = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  const registered = new Set([...toolSource.matchAll(/name:\s*['"]((?:redteam)_[a-z0-9_]+)['"]/g)].map(match => match[1]))
+  const names = [
+    'ai-agent-attack', 'asset-correlation', 'asset-deep-scan', 'mobile-code-recon',
+    'network-device', 'oob-verify', 'opsec-hygiene', 'supply-chain', 'host-post-exploit', 'netspy-recon',
+    'api-attack', 'cloud-container',
+  ]
+  for (const name of names) {
+    const skill = readLocalSkill('redteam:' + name)
+    assert.ok(skill && skill.content, name + ' body must be readable')
+    for (const match of skill.content.matchAll(/\x60(redteam_[a-z0-9_]+)(?:\([^`\n]*\))?\x60/g)) {
+      assert.ok(registered.has(match[1]), name + ' references unregistered tool ' + match[1])
+    }
+    assert.doesNotMatch(skill.content, /\x60redteam_pivot_probe\x60/,
+      name + ' must not claim unsupported upstream-only tools')
+  }
 })

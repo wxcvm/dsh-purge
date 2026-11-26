@@ -51,3 +51,22 @@ test('embedded environment keeps one scrolling pane and disables all nested blur
   assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main \.rt-card\{[\s\S]*?background:#18283d!important;/)
   assert.match(css, /\.rt-dock\.rt-embedded \.rt-env-main \.rt-input,[\s\S]*?background:#122238!important;/)
 })
+
+test('native workspace disables backdrop sampling in both scrolling views, not in floating docks or dialogs', () => {
+  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const paint = client.match(/const PURGE_WORKSPACE_PAINT_CSS = `([^`]+)`;/)?.[1]
+  assert.ok(paint, 'the native workspace paint rules must be present')
+  assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS \+ PURGE_WORKSPACE_PAINT_CSS/)
+  const rule = paint.match(/\*\/\s*([^{}]+)\{([^{}]+)\}/)
+  assert.ok(rule, 'the paint rule needs a selector and declarations')
+  const [, selector, declarations] = rule
+  assert.match(selector, /^\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:fullscreen,/)
+  assert.match(selector, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:is\(\[data-default-full="1"\], :fullscreen\)/)
+  assert.match(selector, /:is\(\.dshp-clean-content, \.rt-embedded > \.rt-body\)/)
+  assert.match(selector, /:where\(:not\(/)
+  for (const dialog of ['.dshp-modal-bg', '.rt-modal', '.rt-shot-zoom', '[role="dialog"]']) {
+    assert.ok(selector.includes(`${dialog}, ${dialog} *`), `${dialog} and its controls keep their backdrop styling`)
+  }
+  assert.match(declarations, /\bbackdrop-filter:none!important;\s+-webkit-backdrop-filter:none!important;/)
+  assert.doesNotMatch(declarations, /\b(?:background|color|overflow|pointer-events)\s*:/)
+})
