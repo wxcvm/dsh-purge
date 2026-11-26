@@ -1,3 +1,27 @@
+# 1.1.92-wxcvm.28
+
+## 中文
+
+候选版本，合并两个数据源功能扩展。相比 `.27` 新增 Shodan API 配置与 Censys PAT 加密存储。
+
+- **Shodan API 单 IP 查询**（[#586](https://github.com/wxcvm/dsh-purge/pull/586)）：作战台支持配置 Shodan REST API Key 和单个主机被动查询；InternetDB 保持免 Key 可用。
+- **Censys PAT 加密存储**（[#587](https://github.com/wxcvm/dsh-purge/pull/587)）：移出通用配置，改用 AES-256-GCM 加密独立存储；需设置 `DSH_PURGE_SECRET_KEY`（64 位十六进制）；保持环境变量回退和旧明文数据迁移支持。
+- **数据源查询状态**（两个 PR）：整合 UI 显示、连接测试、凭据安全包装和原有 InternetDB/FOFA/其他网页入口。
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；本地 Nuclei/KEV 管理、批处理与知识源整合为后续工作。
+
+**下一步**：P1-E #344 知识库去重与数据源整合，P1-A #343 Agent 待办 UI，P0 #336/#340/#341 真实 Windows Desktop 验收。
+
+## English
+
+Preview candidate, merging two data-source features. Compared to `.27`, adds Shodan API configuration and Censys PAT encrypted storage.
+
+- **Shodan API single-IP query** (#586): Settings support for Shodan REST API Key and passive host lookup in the survey center; InternetDB remains free and key-free.
+- **Censys PAT encrypted storage** (#587): Moved from general config, now using AES-256-GCM encryption in separate storage; requires `DSH_PURGE_SECRET_KEY` (64 hex chars); retains environment-variable fallback and legacy plaintext migration.
+- **Data-source query status** (both PRs): Integrated UI display, connection tests, credential safety and existing InternetDB/FOFA/website-only entries.
+
+---
+
 # 1.1.92-wxcvm.27
 
 ## 中文
