@@ -89,6 +89,183 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(noTarget.ok, true)
   assert.equal(noTarget.engagement, engagement, 'unbound tool calls use the selected active engagement')
 
+  const batchTool = registered.get('redteam_asset_batch')
+  const scopedEngagement = redteam.openEngagement('manual-batch-scope',
+    ['192.0.2.0/24'], { bindCurrent: false }).id
+  const batchItems = [
+    { ip: '192.0.2.10', provenance: 'passive', tool: 'manual-catalog',
+      discovered_at: '2026-11-01T00:00:00Z',
+      names: [{ name: 'host.example.test', kind: 'hostname' }],
+      ports: [{ port: 443, proto: 'tcp', service: 'https', title: 'Example' }] },
+    { ip: '198.51.100.10', provenance: 'active', tool: 'manual-catalog' },
+  ]
+  const batchPreview = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, items: batchItems,
+  }, {}))
+  assert.equal(batchPreview.dry_run, true)
+  assert.equal(batchPreview.accepted, 1)
+  assert.deepEqual(batchPreview.rejected.map(item => item.reason), ['outside-scope'])
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 0)
+  const batchCommit = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, items: batchItems, commit: true,
+  }, {}))
+  assert.equal(batchCommit.ok, true)
+  assert.equal(batchCommit.written, 1)
+  assert.ok(Number.isInteger(batchCommit.results[0].asset_id))
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 1)
+  const batchAsset = redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id)
+  assert.equal(batchAsset.ip, '192.0.2.10')
+  assert.equal(batchAsset.discovered_at, '2026-11-01T00:00:00Z')
+  assert.equal(batchAsset.ports[0].port, 443)
+  const coverageTool = registered.get('redteam_coverage')
+  assert.equal(coverageTool.parameters.phase.required, true)
+  const initialCoverage = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'status',
+    asset_id: batchCommit.results[0].asset_id,
+  }, {}))
+  assert.equal(initialCoverage.ok, true)
+  assert.deepEqual(initialCoverage.coverage.missing, ['surface', 'web', 'auth', 'cve', 'app'])
+  assert.equal(redteam.db(scopedEngagement)
+    .prepare('SELECT COUNT(*) AS n FROM asset_checklist').get().n, 0)
+  const coverageUpdated = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'update',
+    asset_id: batchCommit.results[0].asset_id,
+    updates: ['surface', 'web', 'auth', 'cve', 'app']
+      .map(field => ({ field, state: 'done' })),
+    note: 'manual fixture review',
+  }, {}))
+  assert.equal(coverageUpdated.coverage.ready_to_close, true)
+  assert.equal(coverageUpdated.coverage.complete, false)
+  const coverageClosed = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'close',
+    asset_id: batchCommit.results[0].asset_id, status: 'closed',
+  }, {}))
+  assert.equal(coverageClosed.coverage.complete, true)
+  const coverageQueue = JSON.parse(await coverageTool.execute({
+    engagement: scopedEngagement, phase: 'external', action: 'queue',
+  }, {}))
+  assert.equal(coverageQueue.ok, true)
+  assert.equal(coverageQueue.pending_in_sample, 0)
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).test_status,
+    'untested', 'new checklist leaves legacy asset_test status alone')
+
+  const hostEngagement = redteam.openEngagement('linked-host-tool-fixture',
+    ['10.45.0.0/24'], { bindCurrent: false }).id
+  redteam.importBundle(hostEngagement, {
+    scan: { tool: 'fixture', argv: [] },
+    assets: [{ ip: '10.45.0.8', provenance: 'passive', tool: 'fixture', state: 'live' }],
+  })
+  const hostAssetId = redteam.listAssets(hostEngagement, { ip: '10.45.0.8' }).items[0].id
+  const hostEvidenceId = redteam.addHttpEvidence(hostEngagement, {
+    asset_id: hostAssetId, label: 'sanitized host-tool fixture',
+  }).id
+  const recordedHostFinding = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'internal', action: 'finding',
+    asset_id: hostAssetId, kind: 'web', title: 'Manual HTTP review',
+    detail: 'Only a sanitized metadata summary',
+    evidence_kind: 'http_evidence', evidence_id: hostEvidenceId,
+  }, {}))
+  assert.equal(recordedHostFinding.ok, true)
+  assert.equal(recordedHostFinding.finding.evidence_linked, true)
+  const hostFindingList = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'internal', action: 'findings',
+    asset_id: hostAssetId,
+  }, {}))
+  assert.equal(hostFindingList.total, 1)
+  assert.equal(hostFindingList.items[0].title, 'Manual HTTP review')
+  assert.equal(hostFindingList.items[0].evidence_ref, 'http_evidence:' + hostEvidenceId)
+  assert.equal(redteam.coverageChecklist(hostEngagement, hostAssetId, 'internal').status, 'open')
+  assert.deepEqual(redteam.coverageChecklist(hostEngagement, hostAssetId, 'internal').missing,
+    ['files', 'privesc', 'web', 'db', 'lateral'])
+  const wrongHostEvidence = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'internal', action: 'finding',
+    asset_id: hostAssetId, kind: 'web', title: 'Non-existent evidence',
+    evidence_kind: 'http_evidence', evidence_id: 9999999,
+  }, {}))
+  assert.equal(wrongHostEvidence.ok, false)
+  assert.equal(hostFindingList.total, redteam.listHostFindings(hostEngagement, hostAssetId).total)
+  const wrongHostPhase = JSON.parse(await coverageTool.execute({
+    engagement: hostEngagement, phase: 'external', action: 'findings', asset_id: hostAssetId,
+  }, {}))
+  assert.equal(wrongHostPhase.ok, false, 'host findings only belong to internal review')
+
+  const repeated = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, items: batchItems, commit: true,
+  }, {}))
+  assert.equal(repeated.written, 1)
+  assert.equal(repeated.results[0].asset_id, batchCommit.results[0].asset_id)
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 1, 'upsert reuses existing asset')
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).discovered_at,
+    '2026-11-01T00:00:00Z', 'existing discovery time survives a repeat import')
+  const unscopedDenied = JSON.parse(await batchTool.execute({
+    engagement, items: [{ ip: '203.0.113.9', provenance: 'passive' }], commit: true,
+  }, {}))
+  assert.equal(unscopedDenied.written, 0)
+  assert.equal(redteam.listAssets(engagement, {}).total, 0)
+  const unscopedAllowed = JSON.parse(await batchTool.execute({
+    engagement, items: [{ ip: '203.0.113.9', provenance: 'passive' }],
+    commit: true, confirm: true,
+  }, {}))
+  assert.equal(unscopedAllowed.written, 1)
+  assert.equal(redteam.listAssets(engagement, {}).total, 1)
+
+  // Selective upstream "kind=assess": reuse the existing recorded-asset assessment.
+  const assessInput = [
+    { asset_id: batchCommit.results[0].asset_id, ip: '192.0.2.10',
+      priority: 'high', reason: 'fixture manual review', potential: 'review only' },
+    { ip: '198.51.100.10', priority: 'low', reason: 'not in this engagement' },
+    { asset_id: batchCommit.results[0].asset_id, priority: 'low', reason: 'duplicate' },
+  ]
+  const beforeAssess = redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id)
+  const assessPreview = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, kind: 'assess', items: assessInput,
+  }, {}))
+  assert.equal(assessPreview.dry_run, true)
+  assert.equal(assessPreview.accepted, 1)
+  assert.equal(assessPreview.assessed, 0)
+  assert.deepEqual(assessPreview.rejected.map(row => row.reason),
+    ['asset_not_found', 'duplicate_in_batch'])
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).assessed_at,
+    beforeAssess.assessed_at, 'preview must not write assessment timestamp')
+  const assessWrite = JSON.parse(await batchTool.execute({
+    engagement: scopedEngagement, kind: 'assess', items: assessInput, commit: true,
+  }, {}))
+  assert.equal(assessWrite.assessed, 1)
+  assert.equal(assessWrite.partial, true)
+  assert.equal(assessWrite.results[0].asset_id, batchCommit.results[0].asset_id)
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).priority, 'high')
+  assert.equal(redteam.getAsset(scopedEngagement, batchCommit.results[0].asset_id).assess_reason,
+    'fixture manual review')
+  assert.equal(redteam.listAssets(scopedEngagement, {}).total, 1)
+  const noConfirm = JSON.parse(await batchTool.execute({
+    engagement, kind: 'assess', commit: true,
+    items: [{ ip: '203.0.113.9', priority: 'medium', reason: 'existing asset' }],
+  }, {}))
+  assert.equal(noConfirm.assessed, 0)
+  assert.deepEqual(noConfirm.rejected.map(row => row.reason), ['scope-empty-needs-confirm'])
+  const withConfirm = JSON.parse(await batchTool.execute({
+    engagement, kind: 'assess', commit: true, confirm: true,
+    items: [{ ip: '203.0.113.9', priority: 'medium', reason: 'existing asset' }],
+  }, {}))
+  assert.equal(withConfirm.assessed, 1)
+
+  // Selective upstream per-target scope check, entirely offline/read-only.
+  const scopeTool = registered.get('redteam_scope_review')
+  const targetCheck = JSON.parse(await scopeTool.execute({
+    engagement: scopedEngagement, targets: ['192.0.2.10', '198.51.100.10'],
+  }, {}))
+  assert.equal(targetCheck.mode, 'target-check')
+  assert.deepEqual(targetCheck.items.map(row => row.status), ['in-scope', 'out-of-scope'])
+  assert.equal(targetCheck.items[0].rule, '192.0.2.0/24')
+  const noScope = JSON.parse(await scopeTool.execute({
+    engagement, target: '203.0.113.9',
+  }, {}))
+  assert.equal(noScope.items[0].status, 'unscoped')
+  const inventoryScope = JSON.parse(await scopeTool.execute({
+    engagement: scopedEngagement, allowed: '192.0.2.0/24',
+  }, {}))
+  assert.equal(inventoryScope.total_assets, 1, 'existing inventory-audit mode is preserved')
+
   const cleanupTool = registered.get('redteam_cleanup')
   const marker = join(home, 'cleanup-marker.txt')
   writeFileSync(marker, 'synthetic cleanup ledger fixture')

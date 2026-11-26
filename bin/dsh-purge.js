@@ -67,10 +67,10 @@ async function main() {
     const index = args.indexOf(mode);
     const rawPort = args[index + 1] || process.env.PORT || "3080";
     const status = inspectWebPort(rawPort, dshHomeDir());
-    console.log("Web port: " + status.port + (status.occupied ? " (occupied)" : " (no listener found)"));
+    console.log("Web port: " + status.port + (status.occupied === null ? " (unknown)" : status.occupied ? " (occupied)" : " (no listener found)"));
     if (status.recorded_pid) {
       console.log("Previous plugin-spawned PID: " + status.recorded_pid
-        + (status.recorded_on_port ? " (still associated with this port)" : " (not listening on this port)"));
+        + (status.recorded_on_port ? " (still associated with this port)" : " (not observed on this port)"));
     }
     for (const item of status.listeners) {
       console.log("  PID " + item.pid + " — " + item.kind);

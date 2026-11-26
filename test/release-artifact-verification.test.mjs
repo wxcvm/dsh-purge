@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { verifyReleaseArtifact } from "../scripts/verify-release-artifact.mjs";
+import { readZipMembers } from "../lib/zip-extract.js";
 
 const tag = "v1.0.0";
 const prefix = "dsh-purge-1.0.0";
@@ -71,4 +72,47 @@ test("generating new valid checksums does not hide a changed tagged payload", t 
   const later = f.nextCommit();
   f.build(later);
   assert.throws(() => verifyReleaseArtifact(f.options), /differs from the tagged source: client\.js/);
+});
+
+test("read-only ZIP member verification rejects inconsistent local headers", t => {
+  const f = fixture(t);
+  f.build(tag);
+  const original = readFileSync(f.options.archive);
+  const name = prefix + "/client.js";
+  const offset = original.indexOf(Buffer.from(name)) - 30;
+  assert.ok(offset >= 0);
+  assert.equal(original.readUInt32LE(offset), 0x04034b50);
+  assert.equal(readZipMembers(original, [name]).get(name).toString(), "fixture: client.js\n");
+  const wrongName = Buffer.from(original);
+  wrongName[offset + 30] ^= 1;
+  assert.throws(() => readZipMembers(wrongName, [name]), /ZIP local header mismatch/);
+  const wrongMethod = Buffer.from(original);
+  wrongMethod.writeUInt16LE(original.readUInt16LE(offset + 8) === 0 ? 8 : 0, offset + 8);
+  assert.throws(() => readZipMembers(wrongMethod, [name]), /ZIP local header mismatch/);
+});
+
+test("read-only ZIP verification rejects invalid central directory boundaries", t => {
+  const f = fixture(t);
+  f.build(tag);
+  const original = readFileSync(f.options.archive);
+  const name = prefix + "/client.js";
+  let eocd = -1;
+  for (let i = original.length - 22; i >= 0; i--) {
+    if (original.readUInt32LE(i) === 0x06054b50 && i + 22 + original.readUInt16LE(i + 20) === original.length) {
+      eocd = i; break;
+    }
+  }
+  assert.ok(eocd >= 0);
+  assert.equal(readZipMembers(original, [name]).get(name).toString(), "fixture: client.js\n");
+  for (const mutate of [
+    b => b.writeUInt16LE(1, eocd + 4),
+    b => b.writeUInt16LE(0, eocd + 8),
+    b => b.writeUInt32LE(1, eocd + 12),
+    b => b.writeUInt32LE(0xffffffff, eocd + 16),
+    b => b.writeUInt16LE(0xffff, eocd + 20),
+  ]) {
+    const invalid = Buffer.from(original);
+    mutate(invalid);
+    assert.throws(() => readZipMembers(invalid, [name]), /zip/i);
+  }
 });
