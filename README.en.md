@@ -77,7 +77,7 @@ For local maintenance, learning and research on owned or explicitly authorized s
 - Upstream reference: [CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe).
 - Branch maintainer: [WXCVM](https://github.com/wxcvm).
 
-Distributed under [Apache License 2.0](LICENSE). Retain [NOTICE](NOTICE), original attribution and third-party licenses. The original author requests that original builds not be resold and derivatives credit their sources.
+Distributed under [Apache License 2.0](LICENSE). Original and upstream code retain their respective copyrights; WXCVM retains copyright in its own authored modifications and additions, and other contributors retain their respective copyrights. Redistribution must comply with the license and preserve applicable [NOTICE](NOTICE), attribution and third-party licenses. The original author's request not to resell original builds does not modify the rights granted by Apache-2.0.
 
 ---
 
