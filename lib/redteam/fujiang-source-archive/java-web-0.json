@@ -1,0 +1,407 @@
+[
+  {
+    "id": "fujiang:java-web:cve-2017-12615-tomcat-put",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2017-12615-tomcat-put.md",
+    "metadata": {
+      "title": "Tomcat PUT 任意文件写入（JSP 落地）",
+      "cve": "CVE-2017-12615",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Apache Tomcat（Windows 部署 + readonly=false）",
+      "versions": "7.0.0 - 7.0.79",
+      "ports": "8080, 8009",
+      "keywords": "tomcat, put, jsp, readonly, windows, 12615",
+      "verified": "false",
+      "sources": "NVD / Tomcat 公告 / 公开分析"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 7.0.81+；`readonly` 保持 `true`；禁止 PUT；Tomcat 以低权用户运行。",
+    "reference_notes": "- NVD CVE-2017-12615；Tomcat 7.0.81 安全公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2017-12615-tomcat-put.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2019-17558-solr-velocity",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2019-17558-solr-velocity.md",
+    "metadata": {
+      "title": "Apache Solr Velocity 模板注入 RCE",
+      "cve": "CVE-2019-17558",
+      "severity": "high",
+      "source_cvss": "8.0",
+      "product": "Apache Solr",
+      "versions": "5.0.0 - 8.3.1",
+      "ports": "8983",
+      "keywords": "solr, velocity, params.resource.loader, template, cve-2019-17558",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 8.4.0+；关闭 `params.resource.loader.enabled`；`/solr/admin` 加认证并限制来源。",
+    "reference_notes": "- NVD CVE-2019-17558；Apache Solr 8.4.0 安全公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2019-17558-solr-velocity.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2019-2725-weblogic-async",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2019-2725-weblogic-async.md",
+    "metadata": {
+      "title": "WebLogic wls9_async_response 未授权 RCE（2019 在野）",
+      "cve": "CVE-2019-2725",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Oracle WebLogic Server",
+      "versions": "10.3.6.0、12.1.3.0（2019-04 CPU 前）",
+      "ports": "7001, 7002",
+      "keywords": "weblogic, 2725, wls9_async, xmldecoder, 未授权",
+      "verified": "false",
+      "sources": "NVD / Oracle CPU Apr 2019 / 公开 PoC"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2019-04 CPU；删除 `wls9_async_response`、`wls-wsat` 组件；WAF 拦 `asyncResponseService`。",
+    "reference_notes": "- NVD CVE-2019-2725；Oracle CPU Apr 2019。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2019-2725-weblogic-async.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2020-14882-weblogic-console",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2020-14882-weblogic-console.md",
+    "metadata": {
+      "title": "WebLogic 控制台未授权 RCE（console.portal 路径穿越）",
+      "cve": "CVE-2020-14882",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Oracle WebLogic Server",
+      "versions": "10.3.6.0、12.1.3.0、12.2.1.3.0、12.2.1.4.0、14.1.1.0.0（2020-10 CPU 前）",
+      "ports": "7001, 7002",
+      "keywords": "weblogic, console, path traversal, shellsession, mvel",
+      "verified": "false",
+      "sources": "NVD / Oracle CPU Oct 2020 / 公开分析"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2020-10 CPU（含 14882/14883）；控制台只对管理网开放；删 `console` 应用或反代只放行 `/console/login`。",
+    "reference_notes": "- NVD CVE-2020-14882；Oracle CPU Oct 2020。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2020-14882-weblogic-console.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2020-1938-tomcat-ajp-ghostcat",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2020-1938-tomcat-ajp-ghostcat.md",
+    "metadata": {
+      "title": "Tomcat AJP 文件读取 / 包含（Ghostcat）",
+      "cve": "CVE-2020-1938",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Apache Tomcat",
+      "versions": "6.x、7.x < 7.0.100、8.5.x < 8.5.51、9.x < 9.0.31",
+      "ports": "8009, 8080",
+      "keywords": "tomcat, ajp, ghostcat, web.xml, 文件包含",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 7.0.100 / 8.5.51 / 9.0.31+；AJP 只绑 127.0.0.1，并设置 `secret`（`requiredSecret`）。\n- 不需要 AJP 时直接注释掉 `<Connector protocol=\"AJP/1.3\">`。",
+    "reference_notes": "- NVD CVE-2020-1938；Tomcat 官方公告；ajpShooter 项目。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2020-1938-tomcat-ajp-ghostcat.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2021-25646-druid-rce",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2021-25646-druid-rce.md",
+    "metadata": {
+      "title": "Apache Druid 未授权 RCE（CVE-2021-25646）",
+      "cve": "CVE-2021-25646",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Apache Druid 0.20.0 及更早（含 0.19.x）",
+      "versions": "<= 0.20.0",
+      "ports": "8888, 8082",
+      "keywords": "druid, apache, 2021-25646, 未授权, rce, 时序库",
+      "verified": "false",
+      "sources": "公开资料整理（Apache 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 0.20.1+；控制面只对内网；禁 JS filter。",
+    "reference_notes": "- Apache Druid CVE-2021-25646。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2021-25646-druid-rce.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2021-26084-confluence-ognl-preauth",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2021-26084-confluence-ognl-preauth.md",
+    "metadata": {
+      "title": "Confluence 未授权 OGNL 注入（pre-auth，ENCODED_TOKEN）",
+      "cve": "CVE-2021-26084",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Atlassian Confluence Server / Data Center",
+      "versions": "6.1.0 - 6.13.23、7.4.0 - 7.4.10、7.11.0 - 7.11.5、7.12.0 - 7.12.4",
+      "ports": "8090, 8443",
+      "keywords": "confluence, ognl, pre-auth, queryString, doenterpagevariables",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 6.13.23 / 7.4.11 / 7.11.6 / 7.12.5 / 7.13.0+。\n- 临时：反代只放行已知路径（`/pages/` 的 `doenterpagevariables` 直接 deny）；WAF 拦 `\\u0027%2b%7b`。",
+    "reference_notes": "- NVD CVE-2021-26084；Atlassian 公告 2021-08-25。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2021-26084-confluence-ognl-preauth.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2022-22947-gateway-spel",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2022-22947-gateway-spel.md",
+    "metadata": {
+      "title": "Spring Cloud Gateway Actuator SpEL 注入 RCE（CVE-2022-22947）",
+      "cve": "CVE-2022-22947",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Spring Cloud Gateway（Actuator 暴露且可写）",
+      "versions": "3.1.0 / 3.0.0 - 3.0.6 / 2.2.x - 2.2.9 及更早",
+      "ports": "8080, 8443, 443",
+      "keywords": "spring, gateway, actuator, spel, 2022-22947, rce",
+      "verified": "false",
+      "sources": "公开资料整理（Spring 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 3.1.1 / 3.0.7 / 2.2.10；Actuator 只开 health，管理端口隔离。",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2022-22947-gateway-spel.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2022-22963-spring-cloud-function",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2022-22963-spring-cloud-function.md",
+    "metadata": {
+      "title": "Spring Cloud Function SpEL 注入 RCE（CVE-2022-22963）",
+      "cve": "CVE-2022-22963",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Spring Cloud Function 3.2.0 - 3.2.2 / 3.1.6",
+      "versions": "3.1.0-3.1.6、3.2.0-3.2.2",
+      "ports": "8080, 443",
+      "keywords": "spring, cloud, function, 2022-22963, spel, rce",
+      "verified": "false",
+      "sources": "公开资料整理（Spring 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 3.1.7 / 3.2.3；禁路由表达式头；网关拦 `spring.cloud.function.routing-expression`。",
+    "reference_notes": "- Spring CVE-2022-22963。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2022-22963-spring-cloud-function.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2022-26134-confluence-ognl",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2022-26134-confluence-ognl.md",
+    "metadata": {
+      "title": "Confluence 未授权 OGNL 注入（Confluence OGNL RCE）",
+      "cve": "CVE-2022-26134",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Atlassian Confluence Server / Data Center",
+      "versions": "1.3.0 - 7.4.17、7.13.0 - 7.13.7、7.14.0 - 7.14.3、7.15.0 - 7.15.2、7.16.0 - 7.16.4、7.17.0 - 7.17.4、7.18.0 - 7.18.1",
+      "ports": "8090, 8443",
+      "keywords": "confluence, ognl, cve-2022-26134, atlassian, rce",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 7.4.17 / 7.13.7 / 7.14.3 / 7.15.2 / 7.16.4 / 7.17.4 / 7.18.1 及以上。\n- 无法升级：WAF 拦 URI 中的 `${`、`%24%7B`；前置反代只放行已知路径。",
+    "reference_notes": "- NVD CVE-2022-26134；Atlassian 安全公告 2022-06-02。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2022-26134-confluence-ognl.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2023-22515-confluence-admin",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2023-22515-confluence-admin.md",
+    "metadata": {
+      "title": "Confluence 未授权管理员接管（setup 流程未关）",
+      "cve": "CVE-2023-22515",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Atlassian Confluence Data Center / Server",
+      "versions": "8.0.0 - 8.5.1（8.5.2 修复）",
+      "ports": "8090, 8443",
+      "keywords": "confluence, 22515, setupadministrator, 未授权, 管理员",
+      "verified": "false",
+      "sources": "NVD / Atlassian 公告 / 公开分析"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 8.5.2+；反代 deny `/setup/*`、`/server-info.action`；只允许内网访问管理面。",
+    "reference_notes": "- NVD CVE-2023-22515；Atlassian 公告 2023-10-04。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2023-22515-confluence-admin.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2023-22518-confluence-setup-restore",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2023-22518-confluence-setup-restore.md",
+    "metadata": {
+      "title": "Confluence 未授权恢复导致管理员接管",
+      "cve": "CVE-2023-22518",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "Atlassian Confluence Data Center / Server",
+      "versions": "7.19.x < 7.19.16、8.0-8.5.3 及更早未修版本",
+      "ports": "8090, 8443",
+      "keywords": "confluence, setup-restore, 未授权, 管理员接管",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 7.19.16 / 8.5.4 及以上。\n- 临时：反代 deny `/json/setup-restore*`、`/setup/*`；只允许内网访问管理面。",
+    "reference_notes": "- NVD CVE-2023-22518；Atlassian 公告 2023-10-31。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2023-22518-confluence-setup-restore.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2023-22527-confluence-ssti",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2023-22527-confluence-ssti.md",
+    "metadata": {
+      "title": "Confluence 模板注入 RCE（text-inline.vm）",
+      "cve": "CVE-2023-22527",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Atlassian Confluence Data Center / Server",
+      "versions": "8.0.x、8.1.x、8.2.x、8.3.x、8.4.x、8.5.0-8.5.3（8.5.4+ 修复）",
+      "ports": "8090, 8443",
+      "keywords": "confluence, ssti, velocity, text-inline, cve-2023-22527",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 `8.5.4+`（或对应维护分支的最新补丁）。\n- 临时：反代层禁止外部访问 `/template/`；WAF 拦 `text-inline.vm` 的 POST。",
+    "reference_notes": "- NVD CVE-2023-22527；Atlassian 公告 2024-01。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2023-22527-confluence-ssti.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2023-27350-papercut-setup-bypass",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2023-27350-papercut-setup-bypass.md",
+    "metadata": {
+      "title": "PaperCut NG/MF 认证绕过 → RCE（CVE-2023-27350）",
+      "cve": "CVE-2023-27350",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "PaperCut NG / PaperCut MF",
+      "versions": "8.0.0 - 20.1.6、21.0.0 - 21.2.10、22.0.0 - 22.0.8（22.0.9+ 修复）",
+      "ports": "9191, 9192",
+      "keywords": "papercut, 2023-27350, auth bypass, setup, 打印",
+      "verified": "false",
+      "sources": "公开资料整理（CISA KEV + 在野利用报告）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 22.0.9 / 21.2.11 / 20.1.7；9191/9192 只对内网；审计陌生管理员。",
+    "reference_notes": "- CISA KEV；PaperCut PO-2023-001。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2023-27350-papercut-setup-bypass.md"
+  },
+  {
+    "id": "fujiang:java-web:cve-2023-42793-teamcity-auth-bypass",
+    "category": "java-web",
+    "source_ref": "plugin/knowledge/java-web/cve-2023-42793-teamcity-auth-bypass.md",
+    "metadata": {
+      "title": "TeamCity 认证绕过 → 管理员令牌 → RCE",
+      "cve": "CVE-2023-42793",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "JetBrains TeamCity",
+      "versions": "2017.1 - 2023.05.3（2023.05.4 修复）",
+      "ports": "8111",
+      "keywords": "teamcity, auth-bypass, token, cve-2023-42793",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 `2023.05.4` 及以上。\n- 临时：只在内网放行 `/app/rest/`，外部禁用 REST。",
+    "reference_notes": "- NVD CVE-2023-42793；JetBrains 公告 2023-09。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-web/cve-2023-42793-teamcity-auth-bypass.md"
+  }
+]

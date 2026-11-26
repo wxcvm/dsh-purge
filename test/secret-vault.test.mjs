@@ -102,3 +102,19 @@ test('no key preserves existing plaintext behavior', (t) => {
   assert.equal(store.sessionSummary(id).webshells[0].pass_key, 'plain-shell')
   assert.throws(() => store.encryptExistingSecrets(id), /Set DSH_PURGE_SECRET_KEY/)
 })
+
+test('operator key is not exposed as an enumerable property or serialized object', () => {
+  const vault = new SecretVault(KEY)
+  assert.equal(vault.enabled, true)
+  assert.equal(Object.hasOwn(vault, 'key'), false)
+  assert.deepEqual(Object.keys(vault), [])
+  assert.equal(JSON.stringify(vault), '{}')
+  assert.deepEqual({ ...vault }, {})
+})
+
+test('operator key must have exactly 64 hexadecimal characters without trailing line breaks', () => {
+  for (const value of [KEY + '\n', KEY + '\r\n', KEY + ' ', ' ' + KEY]) {
+    assert.throws(() => new SecretVault(value), /64 hexadecimal/)
+  }
+  assert.equal(new SecretVault(KEY.toUpperCase()).enabled, true)
+})

@@ -1,18 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="260" viewBox="0 0 960 260" role="img" aria-labelledby="title desc">
+  <title id="title">PURGE — DeepSeek Harness Extension</title>
+  <desc id="desc">A dark graphite banner for the dsh-purge project.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1a1a2e"/>
-      <stop offset="55%" stop-color="#16213e"/>
-      <stop offset="100%" stop-color="#0f3460"/>
+      <stop offset="0" stop-color="#101826"/>
+      <stop offset="1" stop-color="#080d16"/>
     </linearGradient>
     <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#2f81f7"/>
-      <stop offset="100%" stop-color="#a78bfa"/>
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
     </linearGradient>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" fill="none" stroke="#94a3b8" stroke-opacity=".08"/>
+    </pattern>
   </defs>
-  <rect width="720" height="180" fill="url(#bg)"/>
-  <rect x="0" y="176" width="720" height="4" fill="url(#accent)"/>
-  <text x="360" y="92" font-family="'Segoe UI', system-ui, sans-serif" font-size="40" font-weight="700" fill="#ffffff" text-anchor="middle">dsh-purge-safety</text>
-  <text x="360" y="132" font-family="'Segoe UI', system-ui, sans-serif" font-size="19" fill="#9fb3d8" text-anchor="middle">DeepSeek Harness 规则设定</text>
-  <text x="360" y="160" font-family="'Segoe UI', system-ui, sans-serif" font-size="14" fill="#64748b" text-anchor="middle">25 patches · rule sets · session override</text>
+  <rect width="960" height="260" rx="18" fill="url(#bg)"/>
+  <rect width="960" height="260" rx="18" fill="url(#grid)"/>
+  <rect x="22" y="22" width="916" height="216" rx="12" fill="none" stroke="#334155"/>
+  <rect x="48" y="50" width="66" height="66" rx="15" fill="#131e31" stroke="#496681"/>
+  <path d="M65 100V66h22l12 12-12 12H75v10" fill="none" stroke="url(#accent)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  <text x="139" y="70" fill="#8da3bd" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="600" letter-spacing="3">WXCVM / DSH EXTENSION</text>
+  <text x="136" y="139" fill="#f1f5f9" font-family="Segoe UI, Arial, sans-serif" font-size="69" font-weight="800" letter-spacing="9">PURGE</text>
+  <rect x="139" y="157" width="360" height="3" rx="1.5" fill="url(#accent)"/>
+  <text x="139" y="190" fill="#b4c6dc" font-family="Segoe UI, Arial, sans-serif" font-size="17" letter-spacing="3">DEEPSEEK HARNESS EXTENSION</text>
+  <path d="M745 55h130v150H745M762 82h96v96h-96z" fill="none" stroke="#3b526d" stroke-width="1.5"/>
+  <path d="M810 102l26 14v28l-26 14-26-14v-28z" fill="#172a40" stroke="#60a5fa" stroke-width="2"/>
+  <path d="M800 130l7 7 14-15" fill="none" stroke="#a5b4fc" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="810" y="220" text-anchor="middle" fill="#93a9c4" font-family="Segoe UI, Arial, sans-serif" font-size="10" letter-spacing="2">WXCVM EDITION</text>
 </svg>

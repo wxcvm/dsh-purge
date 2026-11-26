@@ -1,0 +1,83 @@
+[
+  {
+    "id": "fujiang:triage:fingerprint-workflow",
+    "category": "triage",
+    "source_ref": "plugin/knowledge/triage/fingerprint-workflow.md",
+    "metadata": {
+      "title": "指纹到漏洞的匹配流程",
+      "cve": "无",
+      "severity": "info",
+      "source_cvss": "0",
+      "product": "方法论",
+      "versions": "",
+      "ports": "任意",
+      "keywords": "fingerprint, recon, mapping, version",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": false,
+      "preconditions": false,
+      "remediation": false,
+      "references": false
+    },
+    "remediation_source": "",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-triage/fingerprint-workflow.md"
+  },
+  {
+    "id": "fujiang:triage:report-template",
+    "category": "triage",
+    "source_ref": "plugin/knowledge/triage/report-template.md",
+    "metadata": {
+      "title": "漏洞报告模板",
+      "cve": "无",
+      "severity": "info",
+      "source_cvss": "0",
+      "product": "方法论",
+      "versions": "",
+      "ports": "任意",
+      "keywords": "report, template, cvss, remediation",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": false,
+      "preconditions": false,
+      "remediation": false,
+      "references": false
+    },
+    "remediation_source": "",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-triage/report-template.md"
+  },
+  {
+    "id": "fujiang:triage:safe-verification",
+    "category": "triage",
+    "source_ref": "plugin/knowledge/triage/safe-verification.md",
+    "metadata": {
+      "title": "PoC 安全验证与取证规范",
+      "cve": "无",
+      "severity": "info",
+      "source_cvss": "0",
+      "product": "方法论",
+      "versions": "",
+      "ports": "任意",
+      "keywords": "verification, evidence, safety, cleanup",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": false,
+      "preconditions": false,
+      "remediation": false,
+      "references": false
+    },
+    "remediation_source": "",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-triage/safe-verification.md"
+  }
+]

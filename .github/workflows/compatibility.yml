@@ -1,7 +1,13 @@
-name: Maintenance compatibility
+name: Local Compatibility (Windows + WSL)
 
 on:
   workflow_dispatch:
+    inputs:
+      inspect_home_plugin_link:
+        description: 'Explicit opt-in: inspect installed dsh-purge link inside DSH_HOME (read-only, sanitized)'
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
   pull_request:
@@ -9,53 +15,147 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   api-contracts:
+    env:
+      DSH_COMPAT_TOOLS_MODULE: '' # Always load the compiler from the selected fixture.
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        host: [0.2.1-rc.2, 0.2.1-rc.3, 0.2.1-rc.4, 0.2.1-rc.5, 0.2.2-rc.1]
-    runs-on: ${{ matrix.os }}
+    # PR contracts run in disposable hosted runners, including same-repo PRs.
+    # Reserve trusted self-hosted purge-ci machines for master and manual runs.
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Prepare explicit official fixture, without host or model execution
-        run: node scripts/prepare-host-fixture.mjs ${{ matrix.host }}
-      - name: Install isolated fixture with all lifecycle scripts disabled
-        run: npm install --prefix .scratch/hosts/${{ matrix.host }} --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
-      - name: Check generated bundle and syntax
+      - name: Install declared plugin dependencies once
+        id: root-install
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional --package-lock=false
+      - name: Verify npm package file contract
+        run: node scripts/check-packlist.mjs
+      - name: Prepare latest official fixture, without host or model execution
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
-          node scripts/build-client.mjs --check
-          node scripts/check-syntax.mjs
-      # Build the optional GUI only once in the existing Windows matrix, not five times.
-      - name: Compile optional Windows injection switch from source
-        if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
+          fixture="$(node scripts/prepare-host-fixture.mjs)"
+          printf 'DSH_COMPAT_HOST_ROOT=%s\n' "$fixture" >> "$GITHUB_ENV"
+      - name: Prepare latest official fixture, without host or model execution
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          # Node 24 fetch bypasses env HTTP(S) proxies unless explicitly enabled.
+          NODE_USE_ENV_PROXY: '1'
+        run: |
+          $fixture = node scripts/prepare-host-fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
+      - name: Install isolated fixture dependencies
+        # A self-hosted runner can retain packuments from before the rc was published.
+        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify installed rc.5 packages and peers
+        run: node .github/scripts/check-host-fixture.mjs 0.2.2-rc.5
+      - name: Exercise rc.5 PowerShell ToolRuntime escalation parameters
+        if: runner.os == 'Windows'
+        run: node --test test/pwsh-real-tool-host.test.mjs
+      - name: Smoke-test actual npm tarball in disposable DSH_HOME
+        run: node scripts/smoke-packed-install.mjs
+      - name: Prepare and install the independent rc.3 regression fixture
+        env:
+          NODE_USE_ENV_PROXY: '1'
+        run: >-
+          node scripts/prepare-host-fixture.mjs 0.2.2-rc.3 &&
+          npm install --prefix "${{ github.workspace }}/.scratch/hosts/0.2.2-rc.3" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify rc.3 pins and run the original host contracts
+        env:
+          DSH_COMPAT_HOST_ROOT: ${{ github.workspace }}/.scratch/hosts/0.2.2-rc.3
+        run: >-
+          node .github/scripts/check-host-fixture.mjs 0.2.2-rc.3 &&
+          node --test test/host-compat.test.mjs test/native-redteam-team-host.test.mjs
+          test/prompt-host-boundary.test.mjs test/prompt-real-request-boundary.test.mjs
+          test/pwsh-real-tool-host.test.mjs test/request-error-hook-host.test.mjs
+          test/runtime-observations-host.test.mjs
+      - name: Check generated bundle
+        run: node scripts/build-client.mjs --check
+      - name: Check syntax
+        run: node scripts/check-syntax.mjs
+      - name: Compile optional Windows injection switch
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./maintenance/inject-switch/Build.ps1
       - name: Attach optional Windows switch executable
-        if: runner.os == 'Windows' && matrix.host == '0.2.1-rc.5'
+        id: windows-switch-artifact
+        if: runner.os == 'Windows'
+        # The native build above remains release-gating. Artifact storage may
+        # transiently fail (e.g. ECONNRESET) independently of the compiled exe.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: dsh-inject-switch-windows
           path: maintenance/inject-switch/dist/dsh-inject-switch.exe
+          if-no-files-found: error
           retention-days: 14
+      - name: Report optional Windows artifact delivery failure
+        if: ${{ always() && runner.os == 'Windows' && steps.windows-switch-artifact.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          Write-Host '::warning title=Windows switch artifact not delivered::The switch compiled, but optional artifact upload failed. Check the upload job before using the binary.'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Optional Windows switch binary artifact upload failed; build and API test results remain separate. Re-run the failed upload/job before relying on downloadable artifacts.' -Encoding utf8
       - name: Smoke-test Desktop updater and simulated rollback
-        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/test-desktop-updater.ps1
       - name: Exercise Windows pnpm junction rollback
-        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/test-desktop-updater-junction.ps1
       - name: Smoke-test optional Windows NTFS ACL protector
-        if: runner.os == 'Windows' && matrix.host == '0.2.2-rc.1'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/test-private-acl.ps1
-      - name: Run unit and actual public API contract tests
-        shell: bash
+      - name: Run unit and public API contract tests
+        env:
+          PURGE_CI_TEST_CONCURRENCY: ${{ vars.PURGE_CI_TEST_CONCURRENCY }}
+          PURGE_CI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          PURGE_VERIFY_GIT_ARCHIVE: '1'
         run: |
-          export DSH_COMPAT_HOST_ROOT="$GITHUB_WORKSPACE/.scratch/hosts/${{ matrix.host }}"
-          node --test test/*.test.* maintenance/*.test.mjs maintenance/desktop-tools/*.test.mjs
+          node -e "const available=require('node:os').availableParallelism(); const fallback=process.env.PURGE_CI_RUNNER_ENVIRONMENT==='self-hosted'?Math.min(4,available):available; const n=Number(process.env.PURGE_CI_TEST_CONCURRENCY || fallback); if(!Number.isSafeInteger(n)||n<1) throw Error('Invalid test concurrency'); const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-concurrency='+n,'test/*.test.*','maintenance/*.test.mjs','maintenance/desktop-tools/*.test.mjs'],{stdio:'inherit'}); process.exitCode=r.status ?? 1"
+      - name: Read-only Windows Desktop evidence (not a release gate)
+        if: ${{ github.ref == 'refs/heads/master' && runner.os == 'Windows' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        shell: pwsh
+        env:
+          DSH_HOME_LINK_OPT_IN: ${{ github.event_name == 'workflow_dispatch' && inputs.inspect_home_plugin_link && '1' || '0' }}
+        run: |
+          if ($env:DSH_HOME_LINK_OPT_IN -eq '1') {
+            node scripts/inspect-windows-desktop-evidence.mjs --inspect-home-plugin-link
+          } else {
+            node scripts/inspect-windows-desktop-evidence.mjs
+          }
+      - name: Run pending specifications
+        id: specs
+        if: ${{ !cancelled() && runner.os == 'Windows' && steps.root-install.outcome == 'success' }}
+        continue-on-error: true
+        shell: pwsh
+        run: node --test "test-pending/*.mjs"
+      - name: Report pending status prominently
+        if: ${{ always() && !cancelled() && runner.os == 'Windows' }}
+        shell: pwsh
+        env:
+          PENDING_OUTCOME: ${{ steps.specs.outcome }}
+        run: |
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Pending specifications (not release-gating)' -Encoding utf8
+          if ($env:PENDING_OUTCOME -eq 'failure') {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Pending specifications currently fail. Inspect the preceding test step before claiming full coverage.' -Encoding utf8
+            Write-Host '::warning title=Pending specs failing::Known pending tests are visible and not part of the green release gate.'
+          } else {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Result: $env:PENDING_OUTCOME" -Encoding utf8
+          }

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "fujiang:web-cms:sqli-union-error",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/sqli-union-error.md",
+    "metadata": {
+      "title": "SQL 注入（报错 / UNION / 堆叠）通用打法",
+      "cve": "无（实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "任何带 SQL 查询的接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "sqli, sql注入, union, 报错, 堆叠, sqlmap",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 全量参数化查询；ORM 禁拼接；数据库账号最小权限。",
+    "reference_notes": "- OWASP SQL 注入；CWE-89。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/sqli-union-error.md"
+  },
+  {
+    "id": "fujiang:web-cms:ssti-rce",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/ssti-rce.md",
+    "metadata": {
+      "title": "SSTI 模板注入 → RCE（Jinja2 / Twig / Freemarker）",
+      "cve": "无（实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "模板引擎（Python/Java/PHP 服务端渲染）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "ssti, 模板注入, jinja2, twig, freemarker, rce",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 用户输入只作变量传入；禁模板字符串拼接；沙箱化引擎。",
+    "reference_notes": "- OWASP SSTI；CWE-1336。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/ssti-rce.md"
+  },
+  {
+    "id": "fujiang:web-cms:thinkphp5-rce",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/thinkphp5-rce.md",
+    "metadata": {
+      "title": "ThinkPHP 5.x 方法注入 / 路由 RCE",
+      "cve": "CVE-2018-20062（同族 CVE-2019-9082 等）",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "ThinkPHP 5.0.x / 5.1.x",
+      "versions": "5.0.5 - 5.0.23、5.1.0 - 5.1.30（未打补丁）",
+      "ports": "80, 443",
+      "keywords": "thinkphp, invokefunction, _method, __construct, filter, rce",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 5.0.24 / 5.1.31 及以上（或换 6.x）；关闭 `app_debug`。\n- 临时：WAF 拦 `invokefunction`、`_method=__construct`、`filter[]=`。",
+    "reference_notes": "- NVD CVE-2018-20062；ThinkPHP 安全公告；同族 CVE-2019-9082。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/thinkphp5-rce.md"
+  },
+  {
+    "id": "fujiang:web-cms:xxe-file-read",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/xxe-file-read.md",
+    "metadata": {
+      "title": "XXE 外部实体注入（读文件 / SSRF / OOB 外带）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.2",
+      "product": "任何解析 XML 的接口（SOAP、上传 DOCX/SVG、SAML）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "xxe, xml, 外部实体, 文件读取, oob, saml",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 解析器禁 DTD 与外部实体（`disallow-doctype-decl=true`）；\n- 上传的 DOCX/SVG 用安全解析库，限大小。",
+    "reference_notes": "- OWASP XXE 防护速查；CWE-611。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/xxe-file-read.md"
+  }
+]
