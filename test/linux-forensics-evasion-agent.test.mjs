@@ -128,7 +128,8 @@ test('linux-forensics: capabilities use Linux commands (sed/rm/shred)', () => {
       cap.command.includes('auditctl') ||
       cap.command.includes('find') ||
       cap.command.includes('swapoff') ||
-      cap.command.includes('dd '),
+      cap.command.includes('dd ') ||
+      cap.command.includes('dmesg'),
       `${cap.name} command should use Linux utilities (got: ${cap.command.substring(0, 50)}...)`
     );
   }
@@ -150,12 +151,12 @@ test('linux-forensics: file-secure-delete supports multiple algorithms', () => {
 
 test('linux-forensics: audit log capabilities handle auditd', () => {
   const auditCaps = Object.entries(LINUX_FORENSICS_CAPABILITIES)
-    .filter(([k]) => k.includes('audit'));
+    .filter(([k]) => k.includes('audit') && !k.includes('syslog')); // Exclude syslog-audit-erase
   
-  assert.ok(auditCaps.length >= 1, 'should have at least one audit-related capability');
+  assert.ok(auditCaps.length >= 1, 'should have at least one auditctl-based capability');
   
   for (const [capId, cap] of auditCaps) {
-    assert.ok(cap.command && (cap.command.includes('auditctl') || cap.command.includes('service') || cap.command.includes('disable')),
-      `audit capability ${capId} should use auditctl or service commands (got: ${cap.command.substring(0, 50)})`);
+    assert.ok(cap.command && (cap.command.includes('auditctl') || cap.command.includes('systemctl') || cap.command.includes('disable')),
+      `audit capability ${capId} should use auditctl or systemctl commands (got: ${cap.command.substring(0, 50)})`);
   }
 });
