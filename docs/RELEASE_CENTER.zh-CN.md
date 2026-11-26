@@ -2,6 +2,33 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
+## 预览候选已发布 · 2026-11-25
+
+- **版本**：[v1.1.92-wxcvm.26-rc.1](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.26-rc.1)，GitHub Pre-release 已发布；PR [#582](https://github.com/wxcvm/dsh-purge/pull/582) 合并提交 [75adae0](https://github.com/wxcvm/dsh-purge/commit/75adae0ff166962549754e382addcb14a1a0d57a)，轻量标签指向同一提交。
+- **实际资产**：ZIP `dsh-purge-1.1.92-wxcvm.26-rc.1.zip`，4,645,975 字节，GitHub asset digest `sha256:f50e83d34fae1b510c0a98a6de91d622f2a6ac38daec0fc9484efa5af8466a9e`；`SHA256SUMS.txt` 101 字节，GitHub asset digest `sha256:273fd63f97dcdef8a2cfd325ed65bc6be1a2c50002fe629339c9c6565b6bc172`。两项状态均为 uploaded；本次未独立下载 ZIP 并二次核对清单文本。
+- **候选 CI**：PR 精确 HEAD `93ba651e` 的 [Local Compatibility #45605673045](https://github.com/wxcvm/dsh-purge/actions/runs/45605673045) 与 [Hosted Packed Install #45605673164](https://github.com/wxcvm/dsh-purge/actions/runs/45605673164) 均 Windows/Ubuntu 双绿，包含真实 npm pack 与全新临时 `DSH_HOME` 安装。
+- **UI 变更 CI**：PR [#581](https://github.com/wxcvm/dsh-purge/pull/581) 精确 HEAD `d39835a` 的 [Hosted UI #45603955570](https://github.com/wxcvm/dsh-purge/actions/runs/45603955570) 与 [Compatibility #45603955553](https://github.com/wxcvm/dsh-purge/actions/runs/45603955553) 均通过。
+- **主线 push CI**：[#45606197244](https://github.com/wxcvm/dsh-purge/actions/runs/45606197244) 在记录时仍在执行（Ubuntu 已启动、Windows 排队），不计为通过。
+- **历史版本清理**：本次用户执行的清理已移除旧 GitHub Release 与下载资产；旧 tag/源码仍保留。此前 `.25-rc.1` 标签保留但没有 Release；此前 Stable `.24` 的历史发布记录也不代表当前仍可下载。当前可下载候选为本节 `.26-rc.1`。
+- **更新渠道**：这是 Pre-release，当前 Stable 更新器不会自动推送 RC；试用请从上方 Release 页面直接下载 ZIP，并按随附校验文件核对。
+- **实机边界**：真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、旧安装历史权限迁移/回退和跨页设置持久化仍需单独验收（#336/#337/#550/#361/#364）。自动化夹具不替代实机证据。
+
+## 预览候选状态更正 · 2026-11-25
+
+- **源码候选**：`1.1.92-wxcvm.25-rc.1`，PR [#579](https://github.com/wxcvm/dsh-purge/pull/579) 已合并至 [02b5dda](https://github.com/wxcvm/dsh-purge/commit/02b5ddaa4615be856b495d12e677a41bee1860bf)。
+- **候选 CI**：精确 PR HEAD `ec25b7b` 的 [Local Compatibility #45596734798](https://github.com/wxcvm/dsh-purge/actions/runs/45596734798) 和 [Hosted Packed Install #45596734598](https://github.com/wxcvm/dsh-purge/actions/runs/45596734598) 双平台通过。夹具结果不等于实机验证。
+- **交付未确认**：[Release #45597543792](https://github.com/wxcvm/dsh-purge/actions/runs/45597543792) 最新记录为 failure；Release API 返回 404。撤回此前关于已发布、资产已上传和可下载的断言，不将其列为可用版本。
+- **主线 CI**：[Local Compatibility #45597309768](https://github.com/wxcvm/dsh-purge/actions/runs/45597309768) 已取消，不计为通过。
+- **实机边界**：真实 Windows Harness 官方升级、重启及迁移状态仍需独立验收；只读磁盘信息不证明运行时加载。
+
+## 当前 Release 对账 · 2026-11-25
+
+- **最新正式版**：[v1.1.92-wxcvm.24](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.24)，2026-11-23 04:41 UTC 发布；轻量标签直接指向 [1932650](https://github.com/wxcvm/dsh-purge/commit/193265068b424ecc4f714533e14e9b4032b25d9e)，与 [Release 工作流 #45113300467](https://github.com/wxcvm/dsh-purge/actions/runs/45113300467) 的成功记录一致。
+- **资产元数据**：ZIP `dsh-purge-1.1.92-wxcvm.24.zip`，4,535,118 字节，GitHub digest `sha256:250bbe89d37de76c8209b5c155dfed49a08cecc4cf4a917b855a332289564cdf`；`SHA256SUMS.txt`，96 字节，digest `sha256:1faa29d8caec847af30ca3cd96ac865ad960d54fce3068d72e6c2d3937523a68`；两项均为 uploaded。本次未独立下载资产并校验清单文本。
+- **同 SHA 主线兼容性**：[工作流 #45113275075](https://github.com/wxcvm/dsh-purge/actions/runs/45113275075) 的 Windows 和 Ubuntu 两项均为 cancelled，不计为通过。发布工作流成功不能代替兼容性或实机验收。
+- **源码与发布分离**：本次核对的 master [b053a55](https://github.com/wxcvm/dsh-purge/commit/b053a5507cca355b2bdf4900f1f37f7da6d59131) 包含之后合并的 #520 敏感配置导出保护；不能将此修复归入已发布 .24。当前仓库为公开。
+- **实机验收**：未在本次核查中执行 Desktop 或 Web 安装、重启、界面验证及回退。下方 .20 及更早记录均为历史快照。
+
 ## 2026-11-22 · Stable .20 正式交付
 
 - **实际发布**：[v1.1.92-wxcvm.20](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.20)，独立轻量标签指向 [`8fa76dda23a59984040c3af61a7134616c51d168`](https://github.com/wxcvm/dsh-purge/commit/8fa76dda23a59984040c3af61a7134616c51d168)，与发布工作流的 `head_sha` 一致；`.19` 等旧标签和资产未覆盖。

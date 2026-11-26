@@ -1,3 +1,175 @@
+# 1.1.92-wxcvm.29
+
+## 中文
+
+候选版本，完成防溯源工作流与 UI 实用化改进。相比 `.28` 新增防溯源智能体框架、完整的防溯源工作流 UI、Shell 执行层、审计日志管理与回滚机制。
+
+### 🎯 核心新增
+
+- **防溯源智能体框架**（完全新增）：独立的 `AntiForensicsAgent` 类，支持完整清除/能力级清除/验证模式，与 56 个清除能力（Windows/Linux）无缝协作。可从红队会话直接调用进行任务收尾。
+
+- **防溯源工作流 UI**（完全新增）：独立的 `AntiForensicsTab` 页签，提供清晰的操作流程：策略选择（安全/平衡/激进）→ 预览清除项目 → 二次确认执行 → 实时操作日志。支持完整/部分回滚。
+
+- **Shell 执行层**（`shell-executor.js`）：实际系统命令执行、状态追踪、超时控制、权限检查、审计集成。
+
+- **审计日志管理**（`audit-log-manager.js`）：集中记录所有操作（JSONL 不可篡改）、SQLite 存储、多条件查询、脱敏报告导出。
+
+- **回滚机制**（`rollback-handler.js`）：可逆操作优先级队列、完整/部分回滚支持、事件驱动。
+
+### ✨ UI 可用性改进
+
+- **防溯源工作流**：策略选择 + 预览窗口 + 执行确认 + 实时日志表格 + 完成反馈
+- **移动端适配**：表格可滚动、按钮 ≥ 44px、响应式布局
+- **交互反馈**：清晰的 ✓/✗ 状态、进度显示、错误提示
+
+### 📊 测试覆盖
+
+- npm test：1849+ 通过，0 失败，26 跳过
+- 防溯源 Agent：45 个测试用例（配置/能力/流程/回滚/报告）
+- UI 集成：防溯源工作流完整流程验证
+- 客户端构建：client.js 成功再生成
+
+### 📝 技术细节
+
+**防溯源 Agent 核心 API**：
+```javascript
+// 完整清除
+await agent.executeFullCleanup(session, 'balanced', 'auto')
+// 预览干运行
+await agent.previewCleanup(session, 'balanced')
+// 获取隐私状态
+await agent.getPrivacyPosture()
+// 回滚支持
+await agent.rollback(auditId, false)
+```
+
+**防溯源工作流 UI**：
+- 7 个清除能力层（文件/日志/网络/内存/浏览器/系统/其他）
+- 56+ 个清除能力支持
+- 干运行模式预验证
+- 无痕审计（脱敏报告）
+
+**防溯源 API 路由** (`/redteam/api`)：
+- `antiforensicsPreview`：干运行预览清除目标（无实际修改）
+- `antiforensicsExecute`：执行完整清除流程（返回脱敏审计日志）
+- `antiforensicsRollback`：回滚指定审计 ID 的清除操作（支持完整/部分回滚）
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；真实 Windows Desktop 防溯源任务收尾流程验证为后续工作。
+
+**下一步**：P1 其他页签可用性改进、P2 响应式完全覆盖、上游吸收整合（已完成分析，待决策执行）。
+
+## English
+
+Preview candidate, completing anti-forensics workflow and UI pragmatic improvements. Compared to `.28`, adds anti-forensics agent framework, complete anti-forensics workflow UI, shell execution layer, audit log management, and rollback mechanism.
+
+### 🎯 Core Additions
+
+- **Anti-Forensics Agent Framework**: Standalone `AntiForensicsAgent` class supporting full cleanup/capability-level cleanup/verification modes, seamlessly integrated with 56+ erasure capabilities (Windows/Linux). Can be called directly from red-team sessions for task cleanup.
+
+- **Anti-Forensics Workflow UI**: Dedicated `AntiForensicsTab` page with clear operation flow: strategy selection (safe/balanced/aggressive) → preview erasure targets → dual confirmation → real-time operation log. Supports full/partial rollback.
+
+- **Shell Execution Layer** (`shell-executor.js`): Real system command execution, state tracking, timeout control, permission checks, audit integration.
+
+- **Audit Log Management** (`audit-log-manager.js`): Centralized operation logging (immutable JSONL), SQLite storage, multi-condition queries, sanitized report export.
+
+- **Rollback Mechanism** (`rollback-handler.js`): Reversible operation priority queue, full/partial rollback support, event-driven.
+
+### ✨ UI Usability Improvements
+
+- **Anti-Forensics Workflow**: Strategy selection + preview window + execution confirmation + real-time log table + completion feedback
+- **Mobile Adaptation**: Scrollable tables, buttons ≥ 44px, responsive layout
+- **Interaction Feedback**: Clear ✓/✗ status, progress display, error messages
+
+---
+
+# 1.1.92-wxcvm.28
+
+## 中文
+
+候选版本，合并两个数据源功能扩展。相比 `.27` 新增 Shodan API 配置与 Censys PAT 加密存储。
+
+- **Shodan API 单 IP 查询**（[#586](https://github.com/wxcvm/dsh-purge/pull/586)）：作战台支持配置 Shodan REST API Key 和单个主机被动查询；InternetDB 保持免 Key 可用。
+- **Censys PAT 加密存储**（[#587](https://github.com/wxcvm/dsh-purge/pull/587)）：移出通用配置，改用 AES-256-GCM 加密独立存储；需设置 `DSH_PURGE_SECRET_KEY`（64 位十六进制）；保持环境变量回退和旧明文数据迁移支持。
+- **数据源查询状态**（两个 PR）：整合 UI 显示、连接测试、凭据安全包装和原有 InternetDB/FOFA/其他网页入口。
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；本地 Nuclei/KEV 管理、批处理与知识源整合为后续工作。
+
+**下一步**：P1-E #344 知识库去重与数据源整合，P1-A #343 Agent 待办 UI，P0 #336/#340/#341 真实 Windows Desktop 验收。
+
+## English
+
+Preview candidate, merging two data-source features. Compared to `.27`, adds Shodan API configuration and Censys PAT encrypted storage.
+
+- **Shodan API single-IP query** (#586): Settings support for Shodan REST API Key and passive host lookup in the survey center; InternetDB remains free and key-free.
+- **Censys PAT encrypted storage** (#587): Moved from general config, now using AES-256-GCM encryption in separate storage; requires `DSH_PURGE_SECRET_KEY` (64 hex chars); retains environment-variable fallback and legacy plaintext migration.
+- **Data-source query status** (both PRs): Integrated UI display, connection tests, credential safety and existing InternetDB/FOFA/website-only entries.
+
+---
+
+# 1.1.92-wxcvm.27
+
+## 中文
+
+正式版，基于 master `8facbaf` 及此前的预览积累。相比最新正式版 `.24` 包含大量安全加固、诊断改进、更新可靠性修复和新增 Censys 被动查询功能。
+
+- **Harness 原生安全边界**（[#552](https://github.com/wxcvm/dsh-purge/pull/552)、[#553](https://github.com/wxcvm/dsh-purge/pull/553)、[#554](https://github.com/wxcvm/dsh-purge/pull/554)）：新安装默认保留 Hook deny/ask；正常 Apply 路径跳过会改变原生审批、沙箱、文件系统围栏、Auto Review、外部网页不可信内容和子智能体权限范围的历史补丁。显式选择官方 `danger-full-access` 仍按 Harness 原生语义处理，不把它等同于自动批准。兼容性补丁与权限绕过分开管理。
+- **旧安装迁移保护**（[#555](https://github.com/wxcvm/dsh-purge/pull/555)、[#556](https://github.com/wxcvm/dsh-purge/pull/556)、[#558](https://github.com/wxcvm/dsh-purge/pull/558)、[#565](https://github.com/wxcvm/dsh-purge/pull/565)、[#566](https://github.com/wxcvm/dsh-purge/pull/566)）：仅对可验证的 Purge 自有修改做精确恢复；缺少备份、恢复失败、跨宿主未检查或历史结果歧义时保留现场并报告待核实，不进行整文件回滚。
+- **更新与桌面维护**（[#567](https://github.com/wxcvm/dsh-purge/pull/567)、[#568](https://github.com/wxcvm/dsh-purge/pull/568)、[#573](https://github.com/wxcvm/dsh-purge/pull/573)、[#574](https://github.com/wxcvm/dsh-purge/pull/574)、[#575](https://github.com/wxcvm/dsh-purge/pull/575)）：修正版本比较和稳定构建标签选择；保留 Harness 官方更新器与启动文件；退役旧的自动重应用、归档交换和更新准备入口。
+- **诊断证据**（[#569](https://github.com/wxcvm/dsh-purge/pull/569)、[#570](https://github.com/wxcvm/dsh-purge/pull/570)、[#581](https://github.com/wxcvm/dsh-purge/pull/581)）：增加磁盘 Renderer build ID 对照；限制 ASAR 与诊断路径边界；只读区分损坏/重定向 Desktop 布局，并报告 Harness alpha.2 Node 运行时要求。磁盘信息不代表插件已在当前进程加载。
+- **rc.5 与回归覆盖**（[#543](https://github.com/wxcvm/dsh-purge/pull/543)–[#549](https://github.com/wxcvm/dsh-purge/pull/549)、[#576](https://github.com/wxcvm/dsh-purge/pull/576)–[#578](https://github.com/wxcvm/dsh-purge/pull/578)）：覆盖子智能体权限继承、并行任务与结果回传、离线诊断、设置协调和分页边界。
+- **Censys Platform API v3 单 IP 被动查询**（主线 `8facbaf`）：补充作战台数据源，支持配置 Personal Access Token 和可选 Organization ID；单个主机查询消耗 1 credit；已集成源选择器与连接管理。
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成、真实 npm pack 与全新临时 `DSH_HOME` 安装均通过。
+
+**仍需真实 Windows Harness Desktop 验收**：官方升级/重启后实际加载、Provider 请求投递、旧安装的权限迁移状态与回退，以及用户原有配置刷新/重启后的保留。相关追踪：[#336](https://github.com/wxcvm/dsh-purge/issues/336)、[#337](https://github.com/wxcvm/dsh-purge/issues/337)、[#550](https://github.com/wxcvm/dsh-purge/issues/550)、[#361](https://github.com/wxcvm/dsh-purge/issues/361)、[#364](https://github.com/wxcvm/dsh-purge/issues/364)。CI 夹具不替代实机证据；运行时验收完成后可转为正式版。
+
+## English
+
+Stable release based on master `8facbaf`, consolidating security hardening, diagnostic improvements, updater reliability fixes from preview iterations, plus new Censys Platform API v3 single-IP passive lookup with configurable PAT/Organization ID, integrated source selector and connection management. Windows/Ubuntu CI, hosted UI integration and clean packed-install checks passed. Live Desktop upgrade/restart, Provider delivery, existing-install migration/rollback and settings persistence remain separate acceptance items; real-world runtime validation completion allows transition to production status.
+
+---
+
+# 1.1.92-wxcvm.25-rc.1
+
+## 中文
+
+这是基于 `.24` 之后主线的预览候选，优先交付 Harness rc.5 兼容、安全边界与更新可靠性改进。旧版本标签、Release 和资产保持不变。
+
+- **原生审批、沙箱与 Hook 边界**（[#552](https://github.com/wxcvm/dsh-purge/pull/552)、[#553](https://github.com/wxcvm/dsh-purge/pull/553)、[#554](https://github.com/wxcvm/dsh-purge/pull/554)）：默认关闭 Hook deny 旁路；正常应用不再写入会改变 Harness 原生审批、拒绝、取消、沙箱和文件系统授权结果的历史补丁。启动/应用迁移只对可验证的 Purge 自有改动做精确恢复；备份缺失、内容歧义或恢复未验证时保留现场并报告待核实，不用整文件回滚覆盖其他改动。
+- **迁移与恢复完整性**（[#555](https://github.com/wxcvm/dsh-purge/pull/555)、[#556](https://github.com/wxcvm/dsh-purge/pull/556)、[#558](https://github.com/wxcvm/dsh-purge/pull/558)、[#565](https://github.com/wxcvm/dsh-purge/pull/565)、[#566](https://github.com/wxcvm/dsh-purge/pull/566)）：保留未解决恢复所需的原始备份；跨多个宿主分别核对，不因一个宿主完成而掩盖另一个宿主未检查；冲突历史不猜测恢复结果。
+- **本机接口与敏感数据**（[#557](https://github.com/wxcvm/dsh-purge/pull/557)、[#559](https://github.com/wxcvm/dsh-purge/pull/559)、[#560](https://github.com/wxcvm/dsh-purge/pull/560)、[#561](https://github.com/wxcvm/dsh-purge/pull/561)、[#562](https://github.com/wxcvm/dsh-purge/pull/562)、[#563](https://github.com/wxcvm/dsh-purge/pull/563)、[#564](https://github.com/wxcvm/dsh-purge/pull/564)）：原子更新工作区选择和元数据；拒绝把私有链接目标当作安全存储目录；收紧本机鉴权豁免与浏览器来源匹配；避免密钥对象被意外序列化，并扩展共享报告中的敏感字段遮蔽。
+- **桌面更新与诊断可靠性**（[#567](https://github.com/wxcvm/dsh-purge/pull/567)、[#568](https://github.com/wxcvm/dsh-purge/pull/568)、[#569](https://github.com/wxcvm/dsh-purge/pull/569)、[#570](https://github.com/wxcvm/dsh-purge/pull/570)、[#571](https://github.com/wxcvm/dsh-purge/pull/571)、[#572](https://github.com/wxcvm/dsh-purge/pull/572)、[#573](https://github.com/wxcvm/dsh-purge/pull/573)、[#574](https://github.com/wxcvm/dsh-purge/pull/574)、[#575](https://github.com/wxcvm/dsh-purge/pull/575)）：修正版本比较和稳定构建标签展示；增加磁盘 Renderer build ID 对照；加强归档/诊断边界和恢复快照保护；无效运行时状态不再被当成有效结果；退役旧的更新准备、自动重应用与归档交换入口，保留 Harness 官方更新器和启动文件。
+- **宿主契约与回归覆盖**（[#543](https://github.com/wxcvm/dsh-purge/pull/543)–[#549](https://github.com/wxcvm/dsh-purge/pull/549)、[#576](https://github.com/wxcvm/dsh-purge/pull/576)–[#578](https://github.com/wxcvm/dsh-purge/pull/578)）：补充 rc.5 子智能体权限继承、并行任务和结果回传测试；恢复离线诊断、设置协调及分页边界回归；增加只读 Desktop 版本清单检查。夹具测试不等于真实模型或真实桌面会话验收。
+
+**预览验收边界**：本候选须通过 Windows/Ubuntu 托管 CI、实际 npm 打包与全新临时 `DSH_HOME` 安装检查。真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、用户现场的历史权限迁移与回退，以及 ARTEX 双端联动仍需单独验收（#336/#337/#338/#343/#346/#550）。对无法验证的历史宿主改动不会自动覆盖或宣称已恢复。
+
+## English
+
+Preview candidate based on mainline changes after .24. It focuses on Harness rc.5 compatibility, native permission boundaries, recovery integrity, local API and secret handling, and desktop update reliability. Hook deny bypass is opt-in; normal apply no longer writes the legacy patches that alter native approval, cancellation, sandbox, or filesystem authorization outcomes. Migration restores only verifiable Purge-owned changes and preserves ambiguous or unverified host state. Additional changes improve atomic workspace metadata, local-origin checks, secret masking, renderer build evidence, archive boundaries, and retirement of unsafe legacy updater/reapply paths. Windows/Ubuntu hosted CI and clean packed-install checks are required; live Desktop upgrade/restart, Provider delivery, on-device migration/rollback, and ARTEX pairing remain separate acceptance items.
+
+---
+
+# 1.1.92-wxcvm.24
+
+## 中文
+
+本版在 .23 基础上整合测绘中心、环境检测、智能体预检和已保存证据的多项改进。此前版本的 Release、ZIP 和校验和均不覆盖。
+
+- **测绘中心**（[#504](https://github.com/wxcvm/dsh-purge/pull/504)）：改用「总览 / 数据源 / 开始测绘」，保留原「本地资产 / 外部情报与历史 / 本机测绘」。主要查询来源为本地 SQLite、无需商业 API Key 的 InternetDB、crt.sh、DNS，以及单独配置的 FOFA。Censys、ZoomEye、Quake、Hunter、Netlas 不再占用主页面，但旧配置和历史来源不删除。subfinder 仍按需使用原有工具；外部请求需明确确认。
+- **FOFA 连接与查询**（#504 与本次发版修订）：支持 FOFA 官方或遵循相同 API 契约的自定义 HTTPS 地址，保留旧 `FOFA_KEY`，新增读取配置状态、保存、账户接口连接测试及项目授权范围内的单 IP/域名历史查询。每页 20 条、最多 20 页，支持翻页和查询结果显示；换接口地址须明确提供新地址的 Key，凭据不会通过普通读取接口回显。账户接口通过不代表有搜索额度；第三方历史线索不作为实时开放端口。
+- **UI 异步状态**：修改地址、Key 但尚未保存时不会误测旧连接；切换数据源、项目或输入目标时忽略旧查询的迟到结果；每次外部翻页需重新确认查询。界面只显示功能、操作与实际状态。
+- **环境中心与 Agent 预检**（[#502](https://github.com/wxcvm/dsh-purge/pull/502)、[#503](https://github.com/wxcvm/dsh-purge/pull/503)）：工具路径与可运行版本验证状态分开；开始任务时优先做一次预检，后续按需要选择性复核，减少重复探测；不把路径存在当实际执行成功。
+- **作战台证据与批处理**（[#496](https://github.com/wxcvm/dsh-purge/pull/496)、[#497](https://github.com/wxcvm/dsh-purge/pull/497)、[#499](https://github.com/wxcvm/dsh-purge/pull/499)、[#500](https://github.com/wxcvm/dsh-purge/pull/500)）：批量评估与逐目标范围校验、资产/主机覆盖清单、结构化主机发现证据关联，以及报告对尚未核实发现的索引；不因采集线索直接确认漏洞。
+- **稳定性与 CI**（[#498](https://github.com/wxcvm/dsh-purge/pull/498)、[#501](https://github.com/wxcvm/dsh-purge/pull/501)）：回归测试使用一次性 Runner，并修正红队预设在较慢的配置热加载中意外被覆盖的问题。
+
+**验收边界**：Windows/Ubuntu 自动化、归档生成与 SHA256SUMS 是发行与回归证据，不等于 Windows Harness Desktop 安装、私有 FOFA 账号/第三方兼容网关或真实目标查询已实测。用户需在 Desktop 中更新、重启并确认实际加载的版本；当前版本不自动改写已有 FOFA Key 或作战项目。
+
+## English
+
+Version .24 includes the five-source survey center and scoped FOFA connection/search (with configurable HTTPS-compatible base URL, explicit Key management, account test, 20-item pages, and re-confirmed external queries), tool-state-aware environment readiness, reduced agent preflight repetition, target coverage and evidence linkage, report indexing of unverified host findings, and a preset hot-reload fix. Legacy provider settings remain intact though unsupported providers are hidden from the main survey UI. Historical passive intelligence is not live verification. Windows/Ubuntu CI, packaged ZIP and checksums do not establish real Desktop/FOFA credentials or production gateway acceptance.
+
+---
+
 # 1.1.92-wxcvm.23
 
 ## 中文

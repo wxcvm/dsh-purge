@@ -106,3 +106,24 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   assert.equal(fs.readFileSync(raw.reportFile, 'utf8'), original)
   assert.equal(report.markdown, original)
 })
+
+test('mask encrypted PEM credentials and complete API key header values', () => {
+  const input = [
+    '-----BEGIN ENCRYPTED PRIVATE KEY-----',
+    'synthetic-encrypted-key-body',
+    '-----END ENCRYPTED PRIVATE KEY-----',
+    'X-API-Key: synthetic-header-first synthetic-header-rest',
+    'public_note: keep this line',
+    '-----BEGIN CERTIFICATE-----',
+    'public-certificate-body',
+    '-----END CERTIFICATE-----',
+  ].join('\r\n')
+  const masked = redactCredentialText(input)
+  for (const value of ['synthetic-encrypted-key-body', 'synthetic-header-first', 'synthetic-header-rest']) {
+    assert.equal(masked.includes(value), false)
+  }
+  assert.match(masked, /\[REDACTED_PRIVATE_KEY\]/)
+  assert.match(masked, /X-API-Key: \[REDACTED_SECRET\]/)
+  assert.match(masked, /public_note: keep this line/)
+  assert.match(masked, /public-certificate-body/)
+})
