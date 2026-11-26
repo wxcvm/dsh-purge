@@ -55,7 +55,7 @@ enabled: true
 
 ## 搭配用法
 
-1. 指纹定型后：`redteam_cve_match` 拿候选 CVE → `redteam_armory_search` 查对应产品的 payload 与字典（如 weblogic → `Dic/web/middleware/weblogic` 的专属路径字典）。
-2. 注入确认后：`redteam_armory_search {kind:"dictionary", query:"列名"}` 拿列名字典继续拖库。
-3. 爆破前：密码字典按目标环境选——中文企业先试 `username pinyin` + `password`，网络设备试 `device-default`。
+1. 指纹定型后：**先查知识库**（`redteam_cve_match` 拿候选 CVE；若存在 POC 知识库 `redteam_poc_search` 查关键词）→ 命中即用 → 二层都没有才走本索引拿 payload/字典。
+2. 注入确认后：`redteam_armory_search {kind:"dictionary", query:"列名"}` 拿列名字典继续拖库；或调用 `redteam_poc_search {query:"<产品+版本>"}` 查已知列名/表名 POC。
+3. 爆破前：密码字典按目标环境选——中文企业先试 `username pinyin` + `password`，网络设备试 `device-default`；数据源新增 Shodan/Censys 被动查询见 `passive-recon`。
 4. 拿到文件路径后由执行环境读取本体；本索引只负责定位，不复制内容。
