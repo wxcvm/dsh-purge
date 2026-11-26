@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4bd98244ea5f4931";
+		const CLIENT_BUILD_ID = "89ed88d426770a57";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -6456,7 +6456,6 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
       env: ['M12 3v3', 'M12 18v3', 'M3 12h3', 'M18 12h3', 'M5.6 5.6l2.1 2.1', 'M16.3 16.3l2.1 2.1', 'M18.4 5.6l-2.1 2.1', 'M7.7 16.3l-2.1 2.1', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6'],
       'low-impact': ['M12 3l8 4v5c0 5-3 8-8 10c-5-2-8-5-8-10V7z', 'M9 12l2 2 4-4'],
       skills: ['M8 6l-5 6 5 6', 'M16 6l5 6-5 6', 'M14 4l-4 16'],
-      superagent: ['M8 5H5v16h14V5h-3', 'M8 3h8v4H8z', 'M8 12h8', 'M8 16h6'],
       agents: ['M9 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6', 'M16 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6', 'M3 20v-4a6 6 0 0 1 12 0v4', 'M16 13a5 5 0 0 1 5 5v2'],
       report: ['M6 2h8l5 5v15H6z', 'M14 2v5h5', 'M9 12h7', 'M9 16h7'],
       antiforensics: ['M12 2l9 5v5c0 7-4 10-9 12c-5-2-9-5-9-12V7z', 'M8 10l4 3 4-5', 'M9 15h6'],
@@ -6464,6 +6463,7 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
     function activeWorkbenchTab(tab) {
       switch (tab) {
         case 'skills': return 'knowledge-center'
+        case 'superagent': // Legacy saved tab; no separate page.
         case 'prompts': return 'agents'
         case 'local-search':
         case 'knowledge': return 'env'
@@ -13612,7 +13612,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         ),
       )
     }
-    function focusSuperAgent(node, engagement, section, request) {
+    function focusAgentReview(node, engagement, section, request) {
       if (!node || !request.current || request.current.engagement !== engagement || request.current.section !== section) return
       request.current = null
       node.focus()
@@ -13624,7 +13624,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-ops-section-head' }, h('h3', null, '智能体待阅回报')),
         h('p', { className: 'rt-ops-subtle', role: 'status' },
           count === null ? '暂未取得待阅数量。' : count === 0 ? '当前没有待阅回报。' : count + ' 条回报待人工查看。'),
-        h('button', { className: 'rt-btn', type: 'button', onClick: onOpen }, '打开 Super Agent 回报'))
+        h('button', { className: 'rt-btn', type: 'button', onClick: onOpen }, '查看智能体回报'))
     }
 
     function AgentReportReminder({ total, onOpen }) {
@@ -15456,18 +15456,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         : null
     }
 
-    function SuperAgentTab(props) {
+    function AgentReviewSection(props) {
       const eng = props.engagement
       const { refreshKey } = props
       const reports = React.useRef(null)
       const tasks = React.useRef(null)
-      return h('div', { className: 'rt-main' },
+      return h('section', { className: 'rt-card', 'aria-label': '人工核对与回报' },
         h('div', { className: 'rt-toolbar' },
-          h('h3', { tabIndex: -1, ref: props.onPageReady, style: { margin: 0 } }, 'Super Agent'),
+          h('h3', { tabIndex: -1, ref: props.onPageReady, style: { margin: 0 } }, '人工核对与回报'),
           h('div', { className: 'rt-spacer' }),
           eng ? h('button', { type: 'button', className: 'rt-btn', onClick: () => reports.current?.focus() }, '查看待阅回报') : null,
           eng ? h('button', { type: 'button', className: 'rt-btn', onClick: () => tasks.current?.focus() }, '查看持久任务') : null),
-        h('div', { className: 'rt-pane' },
+        h('div', null,
           h(AgentReports, { key: 'agent-reports:' + (eng || ''), engagement: eng, onReceipt: props.onReportReceipt,
             onSectionReady: (node) => { reports.current = node; props.onReportSectionReady?.(node) },
             onOpenReportSession: props.onOpenReportSession, maskReportOrigin: props.maskReportOrigin }),
@@ -15548,10 +15548,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-pane' },
           err ? h('div', { className: 'rt-err' }, err) : null,
           concurrency && concurrency.ok === false ? h('div', { className: 'rt-err' }, concurrency.error || '智能体状态读取失败') : null,
-          h('div', { className: 'rt-card' },
-            h('h4', null, '人工核对与回报'),
-            h('p', { className: 'rt-note' }, '持久任务、历史尝试和待阅回报在 Super Agent。当前页展示智能体状态和角色设置。'),
-            h('button', { className: 'rt-btn', type: 'button', onClick: props.onOpenSuperAgent }, '打开 Super Agent')),
+          h(AgentReviewSection, { engagement: eng, refreshKey, onReportReceipt: props.onReportReceipt,
+            onPageReady: props.onPageReady, onReportSectionReady: props.onReportSectionReady,
+            onOpenReportSession: props.onOpenReportSession, maskReportOrigin: props.maskReportOrigin }),
           h('div', { className: 'rt-card' },
             h('h4', null, '并发规则（硬约束）'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
@@ -16827,9 +16826,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [snapshotError, setSnapshotError] = React.useState(null)
       const snapshotRequest = React.useRef(0)
       const selectedEngagement = React.useRef(null)
-      const superAgentFocus = React.useRef(null)
+      const agentReviewFocus = React.useRef(null)
 
-      React.useEffect(() => { superAgentFocus.current = null }, [eng])
+      React.useEffect(() => { agentReviewFocus.current = null }, [eng])
 
       React.useEffect(() => {
         if (embedded) return undefined
@@ -17006,15 +17005,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
         { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '技能与知识库'], ['artex', 'ARTEX']] },
-        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['antiforensics', '防溯源'], ['low-impact', '智能隐私中心'], ['superagent', 'Super Agent'], ['agents', '智能体'], ['report', '报告']] },
+        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['antiforensics', '防溯源'], ['low-impact', '智能隐私中心'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
       const activeTab = activeWorkbenchTab(st.tab)
-      const openSuperAgent = (section = 'page') => {
-        superAgentFocus.current = { engagement: eng, section }
-        setUI({ tab: 'superagent', focus: null })
+      const openReportPage = () => {
+        if (!eng) return
+        agentReviewFocus.current = { engagement: eng, section: 'reports' }
+        setUI({ tab: 'agents', focus: null })
       }
-      const openReportPage = () => { if (eng) openSuperAgent('reports') }
       const openFull = () => {
         // A browser popup is not necessarily maximized. Request the available
         // desktop work area; individual browsers may ignore these hints.
@@ -17085,11 +17084,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           markTabSeen('findings')
           setUI({ tab: 'findings', focus: { engagement: eng, kind: 'vulns', assetId } })
         } })
-      else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey,
-        onOpenSuperAgent: () => openSuperAgent() })
-      else if (st.tab === 'superagent') body = h(SuperAgentTab, { engagement: eng, refreshKey, onReportReceipt,
-        onPageReady: (node) => focusSuperAgent(node, eng, 'page', superAgentFocus),
-        onReportSectionReady: (node) => focusSuperAgent(node, eng, 'reports', superAgentFocus),
+      else if (activeTab === 'agents') body = h(AgentsTab, { engagement: eng, refreshKey, onReportReceipt,
+        onPageReady: (node) => focusAgentReview(node, eng, 'page', agentReviewFocus),
+        onReportSectionReady: (node) => focusAgentReview(node, eng, 'reports', agentReviewFocus),
         onOpenReportSession: props?.onOpenReportSession, maskReportOrigin: props?.maskReportOrigin })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng, onRestored: (id) => { api({ op: 'activateEngagement', engagement: id }).finally(() => refreshList(id)) } })
       else if (!eng) {
@@ -17169,7 +17166,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onClick: deleteCurrentEngagement }, deleting ? '归档中…' : '归档靶标'),
           h('div', { className: 'rt-spacer' }),
           embedded ? null : h(VersionBar, null),
-          activeTab === 'superagent' ? null :
+          activeTab === 'agents' ? null :
             h(AgentReportReminder, { total: pendingAgentReports, onOpen: openReportPage }),
           full ? h('button', { className: 'rt-btn', title: '回到带侧栏的普通界面（或按 Esc）', onClick: exitFull }, '退出全面浏览') : null,
           h('button', { className: 'rt-btn', title: '刷新名册、快照与当前页面数据', onClick: refreshAll }, '刷新'),
