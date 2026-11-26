@@ -1,14 +1,14 @@
 ---
 name: fofa-recon
 description: 用 FOFA API 批量测绘靶标资产（域名/IP/端口/标题/指纹）；内置限速客户端，严格单线程 + 最小间隔 + 退避重试，避免触发 45012
-whenToUse: 已有 FOFA_KEY 且需要补充公开测绘数据时；普通资产发现优先使用 passive-recon 与 recon-pipeline
+whenToUse: 已有 FOFA_KEY 且需要补充公开测绘数据时；普通资产发现优先使用 passive-recon / recon-pipeline；也可与 Shodan/Censys 单 IP 查询结合使用
 role: recon
 enabled: true
 ---
 
 # FOFA 资产测绘（可选增强，限速安全版）
 
-> 本技能不是侦察阶段的前置依赖；没有 `FOFA_KEY` 时直接走 `passive-recon` 和 `recon-pipeline`，不要因为缺少密钥而中止主流程。
+> 本技能不是侦察阶段的前置依赖；只作为已配置 API Key 时的补充来源。没有 `FOFA_KEY` 时直接走 `passive-recon` 和 `recon-pipeline`，不要因为缺少密钥而中止主流程。
 
 ## 凭据
 - API Key：从环境变量 `FOFA_KEY` 读取（**任何 key 都不要写进仓库**；本技能所有脚本只读环境变量）
