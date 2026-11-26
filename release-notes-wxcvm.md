@@ -1,3 +1,82 @@
+# 1.1.92-wxcvm.29
+
+## 中文
+
+候选版本，完成防溯源工作流与 UI 实用化改进。相比 `.28` 新增防溯源智能体框架、完整的防溯源工作流 UI、Shell 执行层、审计日志管理与回滚机制。
+
+### 🎯 核心新增
+
+- **防溯源智能体框架**（完全新增）：独立的 `AntiForensicsAgent` 类，支持完整清除/能力级清除/验证模式，与 56 个清除能力（Windows/Linux）无缝协作。可从红队会话直接调用进行任务收尾。
+
+- **防溯源工作流 UI**（完全新增）：独立的 `AntiForensicsTab` 页签，提供清晰的操作流程：策略选择（安全/平衡/激进）→ 预览清除项目 → 二次确认执行 → 实时操作日志。支持完整/部分回滚。
+
+- **Shell 执行层**（`shell-executor.js`）：实际系统命令执行、状态追踪、超时控制、权限检查、审计集成。
+
+- **审计日志管理**（`audit-log-manager.js`）：集中记录所有操作（JSONL 不可篡改）、SQLite 存储、多条件查询、脱敏报告导出。
+
+- **回滚机制**（`rollback-handler.js`）：可逆操作优先级队列、完整/部分回滚支持、事件驱动。
+
+### ✨ UI 可用性改进
+
+- **防溯源工作流**：策略选择 + 预览窗口 + 执行确认 + 实时日志表格 + 完成反馈
+- **移动端适配**：表格可滚动、按钮 ≥ 44px、响应式布局
+- **交互反馈**：清晰的 ✓/✗ 状态、进度显示、错误提示
+
+### 📊 测试覆盖
+
+- npm test：1849+ 通过，0 失败，26 跳过
+- 防溯源 Agent：45 个测试用例（配置/能力/流程/回滚/报告）
+- UI 集成：防溯源工作流完整流程验证
+- 客户端构建：client.js 成功再生成
+
+### 📝 技术细节
+
+**防溯源 Agent 核心 API**：
+```javascript
+// 完整清除
+await agent.executeFullCleanup(session, 'balanced', 'auto')
+// 预览干运行
+await agent.previewCleanup(session, 'balanced')
+// 获取隐私状态
+await agent.getPrivacyPosture()
+// 回滚支持
+await agent.rollback(auditId, false)
+```
+
+**防溯源工作流 UI**：
+- 7 个清除能力层（文件/日志/网络/内存/浏览器/系统/其他）
+- 56+ 个清除能力支持
+- 干运行模式预验证
+- 无痕审计（脱敏报告）
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；真实 Windows Desktop 防溯源任务收尾流程验证为后续工作。
+
+**下一步**：P1 其他页签可用性改进、P2 响应式完全覆盖、上游吸收整合（已完成分析，待决策执行）。
+
+## English
+
+Preview candidate, completing anti-forensics workflow and UI pragmatic improvements. Compared to `.28`, adds anti-forensics agent framework, complete anti-forensics workflow UI, shell execution layer, audit log management, and rollback mechanism.
+
+### 🎯 Core Additions
+
+- **Anti-Forensics Agent Framework**: Standalone `AntiForensicsAgent` class supporting full cleanup/capability-level cleanup/verification modes, seamlessly integrated with 56+ erasure capabilities (Windows/Linux). Can be called directly from red-team sessions for task cleanup.
+
+- **Anti-Forensics Workflow UI**: Dedicated `AntiForensicsTab` page with clear operation flow: strategy selection (safe/balanced/aggressive) → preview erasure targets → dual confirmation → real-time operation log. Supports full/partial rollback.
+
+- **Shell Execution Layer** (`shell-executor.js`): Real system command execution, state tracking, timeout control, permission checks, audit integration.
+
+- **Audit Log Management** (`audit-log-manager.js`): Centralized operation logging (immutable JSONL), SQLite storage, multi-condition queries, sanitized report export.
+
+- **Rollback Mechanism** (`rollback-handler.js`): Reversible operation priority queue, full/partial rollback support, event-driven.
+
+### ✨ UI Usability Improvements
+
+- **Anti-Forensics Workflow**: Strategy selection + preview window + execution confirmation + real-time log table + completion feedback
+- **Mobile Adaptation**: Scrollable tables, buttons ≥ 44px, responsive layout
+- **Interaction Feedback**: Clear ✓/✗ status, progress display, error messages
+
+---
+
 # 1.1.92-wxcvm.28
 
 ## 中文
