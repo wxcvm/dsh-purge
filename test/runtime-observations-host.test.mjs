@@ -31,6 +31,9 @@ test('official Cordis notifications register, observe and dispose without middle
     assert.equal(row.toolCalls, 1); assert.equal(row.durableToolStarts, 1);
     assert.equal(row.durableTextObserved, true); assert.equal(row.firstTextMs, null);
     assert.doesNotMatch(JSON.stringify(row), /FIXTURE_ONLY/);
+    await ctx.emit('subagent/start', { parentSessionId: 'fixture', runId: 'child-run', id: 'child' });
+    await ctx.emit('subagent/end', { parentSessionId: 'fixture', runId: 'child-run', id: 'child' });
+    assert.equal(observer.snapshot({ sessionId: 'fixture' }).subagents.pairedRuns, 1);
     observer.dispose();
     await ctx.emit('agent/assistant-stream', payload);
     assert.equal(observer.snapshot().items.length, 0);

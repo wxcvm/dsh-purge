@@ -1,0 +1,434 @@
+[
+  {
+    "id": "fujiang:edge-device:cve-2018-13379-fortinet-fortios",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2018-13379-fortinet-fortios.md",
+    "metadata": {
+      "title": "FortiOS SSL VPN 路径穿越（凭据读取）",
+      "cve": "CVE-2018-13379",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Fortinet FortiOS (SSL VPN web portal)",
+      "versions": "5.4.0-5.4.12、5.6.3-5.6.7、6.0.0-6.0.4",
+      "ports": "443, 10443",
+      "keywords": "fortinet, fortigate, fortios, sslvpn, path-traversal, fgt_lang",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 5.4.13 / 5.6.8 / 6.0.5 及以上；**升级后改所有 VPN 账号口令**（漏洞期内的凭据已泄露）。\n- 临时：关闭 SSL VPN Web 门户（`config vpn ssl settings` → `set port 0`）；WAF 拦 `fgt_lang` 里的 `..`。",
+    "reference_notes": "- NVD CVE-2018-13379；Fortinet 公告 FG-IR-18-384。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2018-13379-fortinet-fortios.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2019-11510-pulse-secure-file-read",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2019-11510-pulse-secure-file-read.md",
+    "metadata": {
+      "title": "Pulse Secure 任意文件读取（凭据与会话）",
+      "cve": "CVE-2019-11510",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Pulse Secure Connect Secure / Policy Secure",
+      "versions": "8.1R15.1 前、8.2 < 8.2R12.1、8.3 < 8.3R7.1、9.0 < 9.0R3.4",
+      "ports": "443",
+      "keywords": "pulse, ivanti, file-read, session, 凭据",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 8.1R15.2 / 8.2R12.1 / 8.3R7.1 / 9.0R3.4+；**升级后强制所有用户改密**（会话库曾长期可读）。",
+    "reference_notes": "- NVD CVE-2019-11510；Pulse Secure SA44101（2019-04）。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2019-11510-pulse-secure-file-read.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2019-19781-citrix-path-traversal",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2019-19781-citrix-path-traversal.md",
+    "metadata": {
+      "title": "Citrix ADC 路径穿越 → 模板注入 RCE",
+      "cve": "CVE-2019-19781",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Citrix NetScaler ADC / Gateway",
+      "versions": "10.5、11.1、12.0、12.1、13.0（2019-12 前）",
+      "ports": "443",
+      "keywords": "citrix, netscaler, path-traversal, newbm, cve-2019-19781",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 13.0-58.32 / 12.1-55.18 / 12.0-62.20 / 11.1-65.20 / 10.5-70.19 及以上。\n- 临时：删除 `/vpns/portal/scripts/*.pl` 的脚本执行权限，或反代拒绝含 `../` 的 `/vpn/` 请求；手工检查 `/netscaler/portal/templates/` 是否有陌生 XML。",
+    "reference_notes": "- NVD CVE-2019-19781；Citrix 公告 CTX267679。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2019-19781-citrix-path-traversal.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2020-12812-fortios-2fa-case-bypass",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2020-12812-fortios-2fa-case-bypass.md",
+    "metadata": {
+      "title": "FortiOS SSL VPN 双因素绕过（用户名大小写）",
+      "cve": "CVE-2020-12812",
+      "severity": "high",
+      "source_cvss": "9.8",
+      "product": "Fortinet FortiOS",
+      "versions": "6.0.9 及以下、6.2.3 及以下、6.4.0（修复：6.0.10 / 6.2.4 / 6.4.1）",
+      "ports": "443, 10443",
+      "keywords": "fortigate, fortios, sslvpn, 2fa bypass, ldap, 大小写",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 6.0.10 / 6.2.4 / 6.4.1+；统一认证后端的大小写归一化；对 VPN 账号强制 MFA 且不允许\"跳过\"分支。",
+    "reference_notes": "- NVD CVE-2020-12812；Fortinet FG-IR-19-283。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2020-12812-fortios-2fa-case-bypass.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2020-5902-f5-tmui",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2020-5902-f5-tmui.md",
+    "metadata": {
+      "title": "F5 BIG-IP TMUI 未授权 RCE（..;/ 路径穿越）",
+      "cve": "CVE-2020-5902",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "F5 BIG-IP（TMUI 管理面）",
+      "versions": "11.6.1-11.6.5.2、12.1.0-12.1.5.1、13.1.0-13.1.3.3、14.1.0-14.1.2.5、15.1.0-15.1.0.3",
+      "ports": "443, 8443",
+      "keywords": "f5, bigip, tmui, 5902, tmsh, 路径穿越",
+      "verified": "false",
+      "sources": "NVD / F5 K52145254 / 公开 PoC"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 15.1.0.4 / 14.1.2.6 / 13.1.3.4 / 12.1.5.2 / 11.6.5.2+；管理面只对内网；WAF 拦 `..;/`。",
+    "reference_notes": "- NVD CVE-2020-5902；F5 K52145254。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2020-5902-f5-tmui.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2021-22986-f5-icontrol",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2021-22986-f5-icontrol.md",
+    "metadata": {
+      "title": "F5 iControl REST 未授权 RCE（2021 变体）",
+      "cve": "CVE-2021-22986",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "F5 BIG-IP / BIG-IQ（iControl REST）",
+      "versions": "16.0.0-16.0.1、15.1.0-15.1.2、14.1.0-14.1.3.1、13.1.0-13.1.3.5、12.1.0-12.1.5.3",
+      "ports": "443, 8443",
+      "keywords": "f5, icontrol, 22986, bash, 未授权",
+      "verified": "false",
+      "sources": "NVD / F5 K52510511 / 公开 PoC"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 16.0.1.1 / 15.1.2.1 / 14.1.3.2 / 13.1.3.6 / 12.1.5.4+；`/mgmt/` 只对内网。",
+    "reference_notes": "- NVD CVE-2021-22986；F5 K52510511。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2021-22986-f5-icontrol.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2022-1388-f5-icontrol",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2022-1388-f5-icontrol.md",
+    "metadata": {
+      "title": "F5 BIG-IP iControl REST 认证绕过 → 命令执行",
+      "cve": "CVE-2022-1388",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "F5 BIG-IP (iControl REST)",
+      "versions": "11.6.1 - 11.6.5、12.1.0 - 12.1.6、13.1.0 - 13.1.4、14.1.0 - 14.1.4、15.1.0 - 15.1.5、16.0.0 - 16.1.2",
+      "ports": "443, 8443",
+      "keywords": "f5, bigip, icontrol, auth-bypass, tmsh, cve-2022-1388",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 16.1.3 / 15.1.6 / 14.1.5 / 13.1.5 / 12.1.6.1 / 11.6.5.3 及以上。\n- 临时：管理口只对内网；禁止 `/mgmt/` 外部访问；WAF 拦 `X-F5-Auth-Token` + `Connection` 组合。",
+    "reference_notes": "- NVD CVE-2022-1388；F5 公告 K23605346。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2022-1388-f5-icontrol.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2022-40684-fortios-auth-bypass",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2022-40684-fortios-auth-bypass.md",
+    "metadata": {
+      "title": "FortiOS / FortiProxy 管理面认证绕过（假 Forwarded 头）",
+      "cve": "CVE-2022-40684",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Fortinet FortiOS / FortiProxy",
+      "versions": "FortiOS 7.0.0-7.0.6、7.2.0-7.2.1；FortiProxy 7.0.0-7.0.6、7.2.0（修复 7.0.7 / 7.2.2）",
+      "ports": "443, 8443, 10443",
+      "keywords": "fortinet, fortios, fortiproxy, auth bypass, forwarded header",
+      "verified": "false",
+      "sources": "NVD / Fortinet FG-IR-22-398 / Horizon3 分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 7.0.7 / 7.2.2 及以上；管理面只对管理网开放（`set allowaccess` 只留必要协议）；关闭公网管理面。",
+    "reference_notes": "- NVD CVE-2022-40684；Fortinet FG-IR-22-398；Horizon3.ai 的 PoC 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2022-40684-fortios-auth-bypass.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2023-35078-ivanti-epmm-auth-bypass",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2023-35078-ivanti-epmm-auth-bypass.md",
+    "metadata": {
+      "title": "Ivanti EPMM 认证绕过（CVE-2023-35078）",
+      "cve": "CVE-2023-35078",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Ivanti Endpoint Manager Mobile（原 MobileIron）",
+      "versions": "11.10.0.1 及更早、11.9.0.1、11.8.1.1（含 11.8/11.9/11.10 多个分支）",
+      "ports": "443",
+      "keywords": "ivanti, epmm, mobileiron, 2023-35078, auth bypass",
+      "verified": "false",
+      "sources": "公开资料整理（CISA KEV + 厂商公告）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2023-35078 补丁（RPM/ISO）；管理面只放内网。\n- 排查 `/mifs/aad/api/v2/admins` 访问日志，确认是否被扫过。",
+    "reference_notes": "- CISA KEV；Ivanti SA-2023-35078。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2023-35078-ivanti-epmm-auth-bypass.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2023-46805-2024-21887-ivanti",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2023-46805-2024-21887-ivanti.md",
+    "metadata": {
+      "title": "Ivanti Connect Secure 认证绕过 + 命令注入（串联）",
+      "cve": "CVE-2023-46805 / CVE-2024-21887",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Ivanti Connect Secure (原 Pulse Secure) / Policy Secure",
+      "versions": "9.x、22.1 - 22.7R1（22.7R2 修复）",
+      "ports": "443",
+      "keywords": "ivanti, pulse, authentication-bypass, command-injection, cve-2024-21887",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 22.7R2 及以上；升级前跑 Ivanti 的 ICT 完整性检查工具。\n- 临时：管理面只对可信网段；WAF 拦 URI 里的 `..;/`。",
+    "reference_notes": "- NVD CVE-2023-46805、CVE-2024-21887；Volexity / Mandiant 分析 2024-01。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2023-46805-2024-21887-ivanti.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2023-48788-forticlient-ems-sqli",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2023-48788-forticlient-ems-sqli.md",
+    "metadata": {
+      "title": "FortiClient EMS SQL 注入 → 未认证 RCE（CVE-2023-48788）",
+      "cve": "CVE-2023-48788",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Fortinet FortiClient EMS 7.0 / 7.2",
+      "versions": "7.0.1 - 7.0.10、7.2.0 - 7.2.2",
+      "ports": "443",
+      "keywords": "forticlient, ems, sqli, 2023-48788, 未授权",
+      "verified": "false",
+      "sources": "公开资料整理（厂商 FG-IR-24-051 + 公开 PoC 分析）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 7.2.3 / 7.0.11 及以上；EMS 管理口只对内网。\n- 关掉 EMS 的 `xp_cmdshell`；数据库账号降权。",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2023-48788-forticlient-ems-sqli.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2024-0012-panos-auth-bypass",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2024-0012-panos-auth-bypass.md",
+    "metadata": {
+      "title": "PAN-OS 管理面认证绕过 → root RCE（CVE-2024-0012 + CVE-2024-9474）",
+      "cve": "CVE-2024-0012 / CVE-2024-9474",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Palo Alto PAN-OS（GlobalProtect / 管理界面）",
+      "versions": "10.2.x < 10.2.12、11.0.x < 11.0.6、11.1.x < 11.1.5、11.2.x < 11.2.4",
+      "ports": "443, 8443",
+      "keywords": "panos, paloalto, 2024-0012, 2024-9474, auth bypass, 管理面",
+      "verified": "false",
+      "sources": "公开资料整理（厂商公告 PSIRT + 在野利用报告）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 11.1.5 / 11.0.6 / 10.2.12 及以上；管理面只放内网或跳板。\n- 临时：限制 `/php/*` 只允许管理网段；关掉未使用的 GlobalProtect 门户。",
+    "reference_notes": "- Palo Alto PSIRT CVE-2024-0012 / CVE-2024-9474 公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2024-0012-panos-auth-bypass.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2024-0204-goanywhere-auth-bypass",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2024-0204-goanywhere-auth-bypass.md",
+    "metadata": {
+      "title": "GoAnywhere MFT 认证绕过 → 新建管理员（CVE-2024-0204）",
+      "cve": "CVE-2024-0204",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Fortra GoAnywhere MFT",
+      "versions": "6.x < 6.4.3、7.x < 7.4.1（7.4.1 修复）",
+      "ports": "443, 8000, 8080",
+      "keywords": "goanywhere, mft, 2024-0204, 认证绕过, 管理员",
+      "verified": "false",
+      "sources": "公开资料整理（Fortra 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 7.4.1 / 6.4.3；管理端只放内网；检查是否出现陌生管理员。",
+    "reference_notes": "- Fortra 安全公告 CVE-2024-0204。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2024-0204-goanywhere-auth-bypass.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2024-24919-checkpoint-quantum",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2024-24919-checkpoint-quantum.md",
+    "metadata": {
+      "title": "Check Point Quantum 安全网关任意文件读（CVE-2024-24919）",
+      "cve": "CVE-2024-24919",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Check Point Quantum Security Gateway / CloudGuard（开启 IPSec VPN 或移动访问）",
+      "versions": "R80.20 / R80.30 / R80.40 / R81 / R81.10 / R81.20（2024-05 补丁前）",
+      "ports": "443, 80",
+      "keywords": "checkpoint, quantum, 2024-24919, 文件读取, vpn, 网关",
+      "verified": "false",
+      "sources": "公开资料整理（Check Point 公告 + 在野利用报告）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2024-05 官方热修（R81.20 等）；关闭未使用的 Mobile Access / IPSec VPN；\n- 网关管理面只放内网；排查 `/clients/MyCRL` 的异常 POST。",
+    "reference_notes": "- Check Point SK182336；CISA 在野利用告警。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2024-24919-checkpoint-quantum.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2024-3400-panos-globalprotect",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2024-3400-panos-globalprotect.md",
+    "metadata": {
+      "title": "PAN-OS GlobalProtect 命令注入",
+      "cve": "CVE-2024-3400",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Palo Alto Networks PAN-OS (GlobalProtect)",
+      "versions": "10.2.x < 10.2.9-h1、11.0.x < 11.0.4-h1、11.1.x < 11.1.2-h3",
+      "ports": "443",
+      "keywords": "panos, globalprotect, sessid, command-injection, cve-2024-3400",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 10.2.9-h1 / 11.0.4-h1 / 11.1.2-h3 及以上（含 hotfix）。\n- 临时：GlobalProtect 门户只对可信来源开放；威胁签名（Threat ID 95187 等）开启；检查 `/opt/panlogs/tmp/device_telemetry/` 是否有异常子目录。",
+    "reference_notes": "- NVD CVE-2024-3400；Palo Alto 安全公告 2024-04-12；Volexity 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2024-3400-panos-globalprotect.md"
+  },
+  {
+    "id": "fujiang:edge-device:cve-2024-47575-fortimanager-fortijump",
+    "category": "edge-device",
+    "source_ref": "plugin/knowledge/edge-device/cve-2024-47575-fortimanager-fortijump.md",
+    "metadata": {
+      "title": "FortiManager 未认证 RCE（FortiJump，CVE-2024-47575）",
+      "cve": "CVE-2024-47575",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Fortinet FortiManager / FortiManager Cloud",
+      "versions": "7.0.0-7.0.12、7.2.0-7.2.5、7.4.0-7.4.2、7.6.0",
+      "ports": "541, 443",
+      "keywords": "fortimanager, fortijump, 2024-47575, fgfm, 未认证",
+      "verified": "false",
+      "sources": "公开资料整理（厂商 FG-IR-24-423 + 在野利用报告）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 7.6.1 / 7.4.3 / 7.2.6 / 7.0.13；给 FGFM 加白名单（只允许已知设备 IP）。\n- 临时：`set fgfm-port` 改端口 + ACL。",
+    "reference_notes": "- Fortinet FG-IR-24-423；watchTowr FortiJump 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-edge-device/cve-2024-47575-fortimanager-fortijump.md"
+  }
+]

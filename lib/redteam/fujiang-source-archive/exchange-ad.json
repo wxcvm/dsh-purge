@@ -1,0 +1,380 @@
+[
+  {
+    "id": "fujiang:exchange-ad:adcs-esc1-esc8",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/adcs-esc1-esc8.md",
+    "metadata": {
+      "title": "AD CS 证书滥用（ESC1 / ESC8 等）",
+      "cve": "无单一 CVE（Certified Pre-Owned）",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Active Directory Certificate Services",
+      "versions": "任意 AD CS 部署（配置缺陷）",
+      "ports": "80, 443, 135, 445",
+      "keywords": "adcs, esc1, esc8, certipy, pki, certificate-template",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 模板去掉 `CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT`；限制谁可注册/写模板 ACL；CA 开启 EPA + 关闭 NTLM 的 Web Enrollment。\n- 检测：`certipy` 类工具会在 CA 上留下 4886/4887 事件与异常 `Request ID`。",
+    "reference_notes": "- SpecterOps《Certified Pre-Owned》；certipy 文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/adcs-esc1-esc8.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2017-0144-eternalblue",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2017-0144-eternalblue.md",
+    "metadata": {
+      "title": "EternalBlue（MS17-010 SMBv1 远程溢出）",
+      "cve": "CVE-2017-0144",
+      "severity": "critical",
+      "source_cvss": "9.3",
+      "product": "Windows SMBv1",
+      "versions": "Vista - 2016（未打 MS17-010）",
+      "ports": "445",
+      "keywords": "eternalblue, ms17-010, smbv1, doublepulsar, cve-2017-0144",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 MS17-010（KB4013389 等）；关闭 SMBv1（`Disable-WindowsOptionalFeature -Online -FeatureName smb1protocol`）。\n- 检测：445 上异常的 SMB `Trans2` 大包、`lsass` 异常访问。",
+    "reference_notes": "- NVD CVE-2017-0144；MS17-010 公告；Shadow Brokers 泄露的 ETERNALBLUE。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2017-0144-eternalblue.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2020-0688-exchange-viewstate",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2020-0688-exchange-viewstate.md",
+    "metadata": {
+      "title": "Exchange ViewState 反序列化（静态 machineKey）",
+      "cve": "CVE-2020-0688",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Microsoft Exchange Server",
+      "versions": "2010 SP3、2013 CU1-CU22、2016 CU1-CU16、2019 CU1-CU4（2020-02 补丁前）",
+      "ports": "443",
+      "keywords": "exchange, viewstate, machinekey, ysoserial.net, ecp",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2020-02 Exchange CU（KB4523171 等）——补丁后 machineKey 每安装随机生成。\n- 临时：限制 `/ecp` 外部访问；开启 ECP 的 MFA。",
+    "reference_notes": "- NVD CVE-2020-0688；ZDI-20-258；ysoserial.net 文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2020-0688-exchange-viewstate.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2020-1472-zerologon",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2020-1472-zerologon.md",
+    "metadata": {
+      "title": "Zerologon（Netlogon 密钥置零 → 域控接管）",
+      "cve": "CVE-2020-1472",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Windows Server (Netlogon)",
+      "versions": "2008 R2 - 2019（2020-08 补丁前）",
+      "ports": "445, 135",
+      "keywords": "zerologon, netlogon, dcsync, cve-2020-1472, domain-controller",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2020-08 补丁并开启 `FullSecureChannelProtection`（强制模式）；监控事件 4742/5805（Netlogon 安全通道弱化）。\n- 检测：短时间内大量 Netlogon 认证失败、DC 机器账号口令变更。",
+    "reference_notes": "- NVD CVE-2020-1472；Secura 的 Zerologon 白皮书。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2020-1472-zerologon.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2021-26855-proxylogon",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2021-26855-proxylogon.md",
+    "metadata": {
+      "title": "Exchange ProxyLogon（SSRF + 任意文件写入 → RCE）",
+      "cve": "CVE-2021-26855",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Microsoft Exchange Server",
+      "versions": "2013 CU23、2016 CU18/CU19、2019 CU7/CU8",
+      "ports": "443",
+      "keywords": "exchange, proxylogon, ssrf, ecp, autodiscover, cve-2021-26855",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2021 年 3 月 Exchange 累积补丁（KB5000871 等）；或启用 Exchange 的 ECP/OWA 双因素 + 限制 `/ecp` 外部访问。\n- 检测：`/owa/auth/` 下新增 `.aspx`；IIS 日志里 `X-BEResource`、`/ecp/proxyLogon.ecp` 的异常请求。",
+    "reference_notes": "- NVD CVE-2021-26855；Microsoft MSRC 2021-03；ProxyLogon 公开分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2021-26855-proxylogon.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2021-34473-proxyshell",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2021-34473-proxyshell.md",
+    "metadata": {
+      "title": "Exchange ProxyShell（三个洞串联 → RCE）",
+      "cve": "CVE-2021-34473",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Microsoft Exchange Server",
+      "versions": "2013、2016、2019（2021-07 补丁前）",
+      "ports": "443",
+      "keywords": "exchange, proxyshell, autodiscover, ews, mailboxexport, cve-2021-34473",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2021 年 7 月补丁（KB5004778 等）；关闭 `Autodiscover` 的外部暴露，或前置只放行 `/owa`。\n- 检测：IIS 日志里 `autodiscover.json?@` 形式；`New-MailboxExportRequest` 的异常导出。",
+    "reference_notes": "- NVD CVE-2021-34473 / 34523 / 31207；Orange Tsai 的 ProxyShell 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2021-34473-proxyshell.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2021-34527-printnightmare",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2021-34527-printnightmare.md",
+    "metadata": {
+      "title": "PrintNightmare（打印后台服务任意 DLL 加载）",
+      "cve": "CVE-2021-34527",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Windows Print Spooler",
+      "versions": "全版本（2021-07 补丁前；远程变体需 445 + 打印服务）",
+      "ports": "445, 135",
+      "keywords": "printnightmare, spooler, rpcaddprinterdriverex, dll, cve-2021-34527",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2021-07 补丁；设 `RestrictDriverInstallationToAdministrators=1`；禁用 Print Spooler（`Stop-Service Spooler; Set-Service Spooler -StartupType Disabled`）在 DC 上尤其必须。\n- 检测：事件 316/808（PrintService）、`spoolsv.exe` 加载非系统 DLL。",
+    "reference_notes": "- NVD CVE-2021-34527；MSRC 2021-07；cube0x0 的 PoC。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2021-34527-printnightmare.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2021-42287-nopac",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2021-42287-nopac.md",
+    "metadata": {
+      "title": "noPac（sAMAccountName 伪装 + 无 PAC 票据 → 域管）",
+      "cve": "CVE-2021-42287 / CVE-2021-42278",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Active Directory (Windows Server 2016/2019/2022)",
+      "versions": "2021-11 补丁前",
+      "ports": "88, 389, 445",
+      "keywords": "nopac, samaccountname, kerberos, golden-ticket, cve-2021-42278",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2021-11 累积补丁（KB5008602 等）；把 `ms-DS-MachineAccountQuota` 设为 0。\n- 检测：4662（目录复制/属性写）、4768/4769 里 `sAMAccountName` 与 SPN 不匹配的 TGT 请求。",
+    "reference_notes": "- NVD CVE-2021-42278、CVE-2021-42287；Cube0x0 的 noPac 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2021-42287-nopac.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2021-42321-exchange-deser",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2021-42321-exchange-deser.md",
+    "metadata": {
+      "title": "Exchange 认证后反序列化 RCE（CVE-2021-42321）",
+      "cve": "CVE-2021-42321",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Microsoft Exchange Server 2016 / 2019（EWS）",
+      "versions": "2019 CU10/CU11、2016 CU21/CU22（2021-11 补丁前）",
+      "ports": "443",
+      "keywords": "exchange, 2021-42321, 反序列化, ews, rce",
+      "verified": "false",
+      "sources": "公开资料整理（MSRC + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2021-11 补丁（2019 CU11 / 2016 CU22 之后）；EWS 只对内网；\n- 邮箱账号强口令 + 2FA。",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2021-42321-exchange-deser.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2022-30190-follina",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2022-30190-follina.md",
+    "metadata": {
+      "title": "MSDT 协议远程代码执行（Follina）",
+      "cve": "CVE-2022-30190",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Microsoft Windows（MSDT / ms-msdt 协议）",
+      "versions": "Windows 10/11、Server 2016-2022（2022-06 补丁前）",
+      "ports": "本地 / 文档投递",
+      "keywords": "follina, msdt, 30190, word, rtf, 钓鱼",
+      "verified": "false",
+      "sources": "NVD / MSRC 2022-06 / 公开分析"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 KB5014699（2022-06）；禁用 MSDT 协议（注册表 `ms-msdt` 删除）；禁用 Office 里的外部内容。",
+    "reference_notes": "- NVD CVE-2022-30190；MSRC 2022-06；公开分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2022-30190-follina.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2022-41040-proxynotshell",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2022-41040-proxynotshell.md",
+    "metadata": {
+      "title": "Exchange ProxyNotShell（SSRF + PowerShell 远程）",
+      "cve": "CVE-2022-41040 / CVE-2022-41082",
+      "severity": "critical",
+      "source_cvss": "8.8",
+      "product": "Microsoft Exchange Server",
+      "versions": "2013 CU23、2016 CU22/23、2019 CU11/12（2022-11 补丁前）",
+      "ports": "443",
+      "keywords": "exchange, proxynotshell, owassrf, ssrf, powershell",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2022-11 Exchange CU；卡死 autodiscover 的 `@` 形态（IIS URL Rewrite 规则）。\n- 临时：关闭 EWS/PowerShell 的外部访问；启用 MFA。",
+    "reference_notes": "- NVD CVE-2022-41040 / CVE-2022-41082；GTSC 与 CrowdStrike 的 OWASSRF 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2022-41040-proxynotshell.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2024-21410-exchange-ntlm-relay",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2024-21410-exchange-ntlm-relay.md",
+    "metadata": {
+      "title": "Exchange EWS NTLM 中继提权（CVE-2024-21410）",
+      "cve": "CVE-2024-21410",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Microsoft Exchange Server 2016 / 2019",
+      "versions": "2019 CU12-CU14、2016 CU23（2024-02 补丁前）",
+      "ports": "443",
+      "keywords": "exchange, ews, 2024-21410, ntlm, relay, 提权",
+      "verified": "false",
+      "sources": "公开资料整理（MSRC + 公开分析）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2024-02 补丁 + EPA；关 EWS NTLM；SMB 签名。",
+    "reference_notes": "- MSRC CVE-2024-21410。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2024-21410-exchange-ntlm-relay.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2024-21413-outlook-monikerlink",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2024-21413-outlook-monikerlink.md",
+    "metadata": {
+      "title": "Outlook MonikerLink 绕过与 NTLM 泄露（CVE-2024-21413）",
+      "cve": "CVE-2024-21413",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Microsoft Outlook（Office 2016-2021 / 365 桌面版）",
+      "versions": "2024-02 补丁前",
+      "ports": "25, 445, 443",
+      "keywords": "outlook, monikerlink, 2024-21413, ntlm, 钓鱼",
+      "verified": "false",
+      "sources": "公开资料整理（MSRC CVE-2024-21413 + 公开分析）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2024-02 补丁；SMB 签名；禁出网 445；网关拦 `file://` + `!`。",
+    "reference_notes": "- MSRC CVE-2024-21413。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2024-21413-outlook-monikerlink.md"
+  },
+  {
+    "id": "fujiang:exchange-ad:cve-2024-45519-zimbra-postjournal",
+    "category": "exchange-ad",
+    "source_ref": "plugin/knowledge/exchange-ad/cve-2024-45519-zimbra-postjournal.md",
+    "metadata": {
+      "title": "Zimbra postjournal 未授权命令执行（CVE-2024-45519）",
+      "cve": "CVE-2024-45519",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Zimbra Collaboration（ZCS 8.8.15 / 9.0 / 10.0）",
+      "versions": "8.8.15 < P46、9.0 < P41、10.0 < 10.0.9、10.1 < 10.1.1",
+      "ports": "25, 7025, 7071",
+      "keywords": "zimbra, 2024-45519, postjournal, 未授权, rce, 邮件",
+      "verified": "false",
+      "sources": "公开资料整理（Zimbra 公告 + Project Discovery 分析）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 2024-09 补丁；7025 只对内；`postjournal_enabled=FALSE`。",
+    "reference_notes": "- Zimbra CVE-2024-45519 公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-exchange-ad/cve-2024-45519-zimbra-postjournal.md"
+  }
+]

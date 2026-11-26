@@ -1,5 +1,13 @@
 # 外部分支核对：CallMeGuLab/dsh-purge-safe
 
+> **2026-11-20 状态更新（取代本文的旧结论）**：根据项目维护方提供的继任信息，现将 [CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe) 作为 **wxcvm/dsh-purge 的重点跟踪上游（优先参考来源）**，纳入现有上游审查与差异吸收流程。此处“上游”表示维护与技术参考优先级，**不代表本仓库与其形成 GitHub fork 关系，也不代表 GitHub/本地 Git 的 `upstream` remote 已配置**。此前 2026-11-09 的静态比较保留作历史记录，不再作为当前评价。
+>
+> 当前核对基线：`CallMeGuLab/dsh-purge-safe@d96c5f25ee40`（v2.0.0，适配 DSH 0.2.2-rc.3）与 `wxcvm/dsh-purge@4d9584da7bf6`（master，包版本 1.1.92-wxcvm.17）。重点跟踪发布/提交、Agent Teams、Agent 等待状态、Nuclei 模板更新、KEV、批量入库、演练台布局与提示词组装。每个功能按差异与真实测试单独评估、按需吸收；**不自动同步、合并、覆盖既有实现或替换当前版本**。其他已登记来源保留，许可与署名逐项核验。追踪台账：[Issue #347](https://github.com/wxcvm/dsh-purge/issues/347)。
+
+---
+
+
+
 核对日期：2026-11-09。此页记录一次版本来源对比，不把分支名称或自我描述等同于官方上游身份。
 
 | 项目 | 本维护分支 | 外部分支 |
