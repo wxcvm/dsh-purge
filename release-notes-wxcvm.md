@@ -1,4 +1,479 @@
-# 1.1.92-wxcvm.7
+# 1.1.92-wxcvm.29
+
+## 中文
+
+候选版本，完成防溯源工作流与 UI 实用化改进。相比 `.28` 新增防溯源智能体框架、完整的防溯源工作流 UI、Shell 执行层、审计日志管理与回滚机制。
+
+### 🎯 核心新增
+
+- **防溯源智能体框架**（完全新增）：独立的 `AntiForensicsAgent` 类，支持完整清除/能力级清除/验证模式，与 56 个清除能力（Windows/Linux）无缝协作。可从红队会话直接调用进行任务收尾。
+
+- **防溯源工作流 UI**（完全新增）：独立的 `AntiForensicsTab` 页签，提供清晰的操作流程：策略选择（安全/平衡/激进）→ 预览清除项目 → 二次确认执行 → 实时操作日志。支持完整/部分回滚。
+
+- **Shell 执行层**（`shell-executor.js`）：实际系统命令执行、状态追踪、超时控制、权限检查、审计集成。
+
+- **审计日志管理**（`audit-log-manager.js`）：集中记录所有操作（JSONL 不可篡改）、SQLite 存储、多条件查询、脱敏报告导出。
+
+- **回滚机制**（`rollback-handler.js`）：可逆操作优先级队列、完整/部分回滚支持、事件驱动。
+
+### ✨ UI 可用性改进
+
+- **防溯源工作流**：策略选择 + 预览窗口 + 执行确认 + 实时日志表格 + 完成反馈
+- **移动端适配**：表格可滚动、按钮 ≥ 44px、响应式布局
+- **交互反馈**：清晰的 ✓/✗ 状态、进度显示、错误提示
+
+### 📊 测试覆盖
+
+- npm test：1849+ 通过，0 失败，26 跳过
+- 防溯源 Agent：45 个测试用例（配置/能力/流程/回滚/报告）
+- UI 集成：防溯源工作流完整流程验证
+- 客户端构建：client.js 成功再生成
+
+### 📝 技术细节
+
+**防溯源 Agent 核心 API**：
+```javascript
+// 完整清除
+await agent.executeFullCleanup(session, 'balanced', 'auto')
+// 预览干运行
+await agent.previewCleanup(session, 'balanced')
+// 获取隐私状态
+await agent.getPrivacyPosture()
+// 回滚支持
+await agent.rollback(auditId, false)
+```
+
+**防溯源工作流 UI**：
+- 7 个清除能力层（文件/日志/网络/内存/浏览器/系统/其他）
+- 56+ 个清除能力支持
+- 干运行模式预验证
+- 无痕审计（脱敏报告）
+
+**防溯源 API 路由** (`/redteam/api`)：
+- `antiforensicsPreview`：干运行预览清除目标（无实际修改）
+- `antiforensicsExecute`：执行完整清除流程（返回脱敏审计日志）
+- `antiforensicsRollback`：回滚指定审计 ID 的清除操作（支持完整/部分回滚）
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；真实 Windows Desktop 防溯源任务收尾流程验证为后续工作。
+
+**下一步**：P1 其他页签可用性改进、P2 响应式完全覆盖、上游吸收整合（已完成分析，待决策执行）。
+
+## English
+
+Preview candidate, completing anti-forensics workflow and UI pragmatic improvements. Compared to `.28`, adds anti-forensics agent framework, complete anti-forensics workflow UI, shell execution layer, audit log management, and rollback mechanism.
+
+### 🎯 Core Additions
+
+- **Anti-Forensics Agent Framework**: Standalone `AntiForensicsAgent` class supporting full cleanup/capability-level cleanup/verification modes, seamlessly integrated with 56+ erasure capabilities (Windows/Linux). Can be called directly from red-team sessions for task cleanup.
+
+- **Anti-Forensics Workflow UI**: Dedicated `AntiForensicsTab` page with clear operation flow: strategy selection (safe/balanced/aggressive) → preview erasure targets → dual confirmation → real-time operation log. Supports full/partial rollback.
+
+- **Shell Execution Layer** (`shell-executor.js`): Real system command execution, state tracking, timeout control, permission checks, audit integration.
+
+- **Audit Log Management** (`audit-log-manager.js`): Centralized operation logging (immutable JSONL), SQLite storage, multi-condition queries, sanitized report export.
+
+- **Rollback Mechanism** (`rollback-handler.js`): Reversible operation priority queue, full/partial rollback support, event-driven.
+
+### ✨ UI Usability Improvements
+
+- **Anti-Forensics Workflow**: Strategy selection + preview window + execution confirmation + real-time log table + completion feedback
+- **Mobile Adaptation**: Scrollable tables, buttons ≥ 44px, responsive layout
+- **Interaction Feedback**: Clear ✓/✗ status, progress display, error messages
+
+---
+
+# 1.1.92-wxcvm.28
+
+## 中文
+
+候选版本，合并两个数据源功能扩展。相比 `.27` 新增 Shodan API 配置与 Censys PAT 加密存储。
+
+- **Shodan API 单 IP 查询**（[#586](https://github.com/wxcvm/dsh-purge/pull/586)）：作战台支持配置 Shodan REST API Key 和单个主机被动查询；InternetDB 保持免 Key 可用。
+- **Censys PAT 加密存储**（[#587](https://github.com/wxcvm/dsh-purge/pull/587)）：移出通用配置，改用 AES-256-GCM 加密独立存储；需设置 `DSH_PURGE_SECRET_KEY`（64 位十六进制）；保持环境变量回退和旧明文数据迁移支持。
+- **数据源查询状态**（两个 PR）：整合 UI 显示、连接测试、凭据安全包装和原有 InternetDB/FOFA/其他网页入口。
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；本地 Nuclei/KEV 管理、批处理与知识源整合为后续工作。
+
+**下一步**：P1-E #344 知识库去重与数据源整合，P1-A #343 Agent 待办 UI，P0 #336/#340/#341 真实 Windows Desktop 验收。
+
+## English
+
+Preview candidate, merging two data-source features. Compared to `.27`, adds Shodan API configuration and Censys PAT encrypted storage.
+
+- **Shodan API single-IP query** (#586): Settings support for Shodan REST API Key and passive host lookup in the survey center; InternetDB remains free and key-free.
+- **Censys PAT encrypted storage** (#587): Moved from general config, now using AES-256-GCM encryption in separate storage; requires `DSH_PURGE_SECRET_KEY` (64 hex chars); retains environment-variable fallback and legacy plaintext migration.
+- **Data-source query status** (both PRs): Integrated UI display, connection tests, credential safety and existing InternetDB/FOFA/website-only entries.
+
+---
+
+# 1.1.92-wxcvm.27
+
+## 中文
+
+正式版，基于 master `8facbaf` 及此前的预览积累。相比最新正式版 `.24` 包含大量安全加固、诊断改进、更新可靠性修复和新增 Censys 被动查询功能。
+
+- **Harness 原生安全边界**（[#552](https://github.com/wxcvm/dsh-purge/pull/552)、[#553](https://github.com/wxcvm/dsh-purge/pull/553)、[#554](https://github.com/wxcvm/dsh-purge/pull/554)）：新安装默认保留 Hook deny/ask；正常 Apply 路径跳过会改变原生审批、沙箱、文件系统围栏、Auto Review、外部网页不可信内容和子智能体权限范围的历史补丁。显式选择官方 `danger-full-access` 仍按 Harness 原生语义处理，不把它等同于自动批准。兼容性补丁与权限绕过分开管理。
+- **旧安装迁移保护**（[#555](https://github.com/wxcvm/dsh-purge/pull/555)、[#556](https://github.com/wxcvm/dsh-purge/pull/556)、[#558](https://github.com/wxcvm/dsh-purge/pull/558)、[#565](https://github.com/wxcvm/dsh-purge/pull/565)、[#566](https://github.com/wxcvm/dsh-purge/pull/566)）：仅对可验证的 Purge 自有修改做精确恢复；缺少备份、恢复失败、跨宿主未检查或历史结果歧义时保留现场并报告待核实，不进行整文件回滚。
+- **更新与桌面维护**（[#567](https://github.com/wxcvm/dsh-purge/pull/567)、[#568](https://github.com/wxcvm/dsh-purge/pull/568)、[#573](https://github.com/wxcvm/dsh-purge/pull/573)、[#574](https://github.com/wxcvm/dsh-purge/pull/574)、[#575](https://github.com/wxcvm/dsh-purge/pull/575)）：修正版本比较和稳定构建标签选择；保留 Harness 官方更新器与启动文件；退役旧的自动重应用、归档交换和更新准备入口。
+- **诊断证据**（[#569](https://github.com/wxcvm/dsh-purge/pull/569)、[#570](https://github.com/wxcvm/dsh-purge/pull/570)、[#581](https://github.com/wxcvm/dsh-purge/pull/581)）：增加磁盘 Renderer build ID 对照；限制 ASAR 与诊断路径边界；只读区分损坏/重定向 Desktop 布局，并报告 Harness alpha.2 Node 运行时要求。磁盘信息不代表插件已在当前进程加载。
+- **rc.5 与回归覆盖**（[#543](https://github.com/wxcvm/dsh-purge/pull/543)–[#549](https://github.com/wxcvm/dsh-purge/pull/549)、[#576](https://github.com/wxcvm/dsh-purge/pull/576)–[#578](https://github.com/wxcvm/dsh-purge/pull/578)）：覆盖子智能体权限继承、并行任务与结果回传、离线诊断、设置协调和分页边界。
+- **Censys Platform API v3 单 IP 被动查询**（主线 `8facbaf`）：补充作战台数据源，支持配置 Personal Access Token 和可选 Organization ID；单个主机查询消耗 1 credit；已集成源选择器与连接管理。
+
+**验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成、真实 npm pack 与全新临时 `DSH_HOME` 安装均通过。
+
+**仍需真实 Windows Harness Desktop 验收**：官方升级/重启后实际加载、Provider 请求投递、旧安装的权限迁移状态与回退，以及用户原有配置刷新/重启后的保留。相关追踪：[#336](https://github.com/wxcvm/dsh-purge/issues/336)、[#337](https://github.com/wxcvm/dsh-purge/issues/337)、[#550](https://github.com/wxcvm/dsh-purge/issues/550)、[#361](https://github.com/wxcvm/dsh-purge/issues/361)、[#364](https://github.com/wxcvm/dsh-purge/issues/364)。CI 夹具不替代实机证据；运行时验收完成后可转为正式版。
+
+## English
+
+Stable release based on master `8facbaf`, consolidating security hardening, diagnostic improvements, updater reliability fixes from preview iterations, plus new Censys Platform API v3 single-IP passive lookup with configurable PAT/Organization ID, integrated source selector and connection management. Windows/Ubuntu CI, hosted UI integration and clean packed-install checks passed. Live Desktop upgrade/restart, Provider delivery, existing-install migration/rollback and settings persistence remain separate acceptance items; real-world runtime validation completion allows transition to production status.
+
+---
+
+# 1.1.92-wxcvm.25-rc.1
+
+## 中文
+
+这是基于 `.24` 之后主线的预览候选，优先交付 Harness rc.5 兼容、安全边界与更新可靠性改进。旧版本标签、Release 和资产保持不变。
+
+- **原生审批、沙箱与 Hook 边界**（[#552](https://github.com/wxcvm/dsh-purge/pull/552)、[#553](https://github.com/wxcvm/dsh-purge/pull/553)、[#554](https://github.com/wxcvm/dsh-purge/pull/554)）：默认关闭 Hook deny 旁路；正常应用不再写入会改变 Harness 原生审批、拒绝、取消、沙箱和文件系统授权结果的历史补丁。启动/应用迁移只对可验证的 Purge 自有改动做精确恢复；备份缺失、内容歧义或恢复未验证时保留现场并报告待核实，不用整文件回滚覆盖其他改动。
+- **迁移与恢复完整性**（[#555](https://github.com/wxcvm/dsh-purge/pull/555)、[#556](https://github.com/wxcvm/dsh-purge/pull/556)、[#558](https://github.com/wxcvm/dsh-purge/pull/558)、[#565](https://github.com/wxcvm/dsh-purge/pull/565)、[#566](https://github.com/wxcvm/dsh-purge/pull/566)）：保留未解决恢复所需的原始备份；跨多个宿主分别核对，不因一个宿主完成而掩盖另一个宿主未检查；冲突历史不猜测恢复结果。
+- **本机接口与敏感数据**（[#557](https://github.com/wxcvm/dsh-purge/pull/557)、[#559](https://github.com/wxcvm/dsh-purge/pull/559)、[#560](https://github.com/wxcvm/dsh-purge/pull/560)、[#561](https://github.com/wxcvm/dsh-purge/pull/561)、[#562](https://github.com/wxcvm/dsh-purge/pull/562)、[#563](https://github.com/wxcvm/dsh-purge/pull/563)、[#564](https://github.com/wxcvm/dsh-purge/pull/564)）：原子更新工作区选择和元数据；拒绝把私有链接目标当作安全存储目录；收紧本机鉴权豁免与浏览器来源匹配；避免密钥对象被意外序列化，并扩展共享报告中的敏感字段遮蔽。
+- **桌面更新与诊断可靠性**（[#567](https://github.com/wxcvm/dsh-purge/pull/567)、[#568](https://github.com/wxcvm/dsh-purge/pull/568)、[#569](https://github.com/wxcvm/dsh-purge/pull/569)、[#570](https://github.com/wxcvm/dsh-purge/pull/570)、[#571](https://github.com/wxcvm/dsh-purge/pull/571)、[#572](https://github.com/wxcvm/dsh-purge/pull/572)、[#573](https://github.com/wxcvm/dsh-purge/pull/573)、[#574](https://github.com/wxcvm/dsh-purge/pull/574)、[#575](https://github.com/wxcvm/dsh-purge/pull/575)）：修正版本比较和稳定构建标签展示；增加磁盘 Renderer build ID 对照；加强归档/诊断边界和恢复快照保护；无效运行时状态不再被当成有效结果；退役旧的更新准备、自动重应用与归档交换入口，保留 Harness 官方更新器和启动文件。
+- **宿主契约与回归覆盖**（[#543](https://github.com/wxcvm/dsh-purge/pull/543)–[#549](https://github.com/wxcvm/dsh-purge/pull/549)、[#576](https://github.com/wxcvm/dsh-purge/pull/576)–[#578](https://github.com/wxcvm/dsh-purge/pull/578)）：补充 rc.5 子智能体权限继承、并行任务和结果回传测试；恢复离线诊断、设置协调及分页边界回归；增加只读 Desktop 版本清单检查。夹具测试不等于真实模型或真实桌面会话验收。
+
+**预览验收边界**：本候选须通过 Windows/Ubuntu 托管 CI、实际 npm 打包与全新临时 `DSH_HOME` 安装检查。真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、用户现场的历史权限迁移与回退，以及 ARTEX 双端联动仍需单独验收（#336/#337/#338/#343/#346/#550）。对无法验证的历史宿主改动不会自动覆盖或宣称已恢复。
+
+## English
+
+Preview candidate based on mainline changes after .24. It focuses on Harness rc.5 compatibility, native permission boundaries, recovery integrity, local API and secret handling, and desktop update reliability. Hook deny bypass is opt-in; normal apply no longer writes the legacy patches that alter native approval, cancellation, sandbox, or filesystem authorization outcomes. Migration restores only verifiable Purge-owned changes and preserves ambiguous or unverified host state. Additional changes improve atomic workspace metadata, local-origin checks, secret masking, renderer build evidence, archive boundaries, and retirement of unsafe legacy updater/reapply paths. Windows/Ubuntu hosted CI and clean packed-install checks are required; live Desktop upgrade/restart, Provider delivery, on-device migration/rollback, and ARTEX pairing remain separate acceptance items.
+
+---
+
+# 1.1.92-wxcvm.24
+
+## 中文
+
+本版在 .23 基础上整合测绘中心、环境检测、智能体预检和已保存证据的多项改进。此前版本的 Release、ZIP 和校验和均不覆盖。
+
+- **测绘中心**（[#504](https://github.com/wxcvm/dsh-purge/pull/504)）：改用「总览 / 数据源 / 开始测绘」，保留原「本地资产 / 外部情报与历史 / 本机测绘」。主要查询来源为本地 SQLite、无需商业 API Key 的 InternetDB、crt.sh、DNS，以及单独配置的 FOFA。Censys、ZoomEye、Quake、Hunter、Netlas 不再占用主页面，但旧配置和历史来源不删除。subfinder 仍按需使用原有工具；外部请求需明确确认。
+- **FOFA 连接与查询**（#504 与本次发版修订）：支持 FOFA 官方或遵循相同 API 契约的自定义 HTTPS 地址，保留旧 `FOFA_KEY`，新增读取配置状态、保存、账户接口连接测试及项目授权范围内的单 IP/域名历史查询。每页 20 条、最多 20 页，支持翻页和查询结果显示；换接口地址须明确提供新地址的 Key，凭据不会通过普通读取接口回显。账户接口通过不代表有搜索额度；第三方历史线索不作为实时开放端口。
+- **UI 异步状态**：修改地址、Key 但尚未保存时不会误测旧连接；切换数据源、项目或输入目标时忽略旧查询的迟到结果；每次外部翻页需重新确认查询。界面只显示功能、操作与实际状态。
+- **环境中心与 Agent 预检**（[#502](https://github.com/wxcvm/dsh-purge/pull/502)、[#503](https://github.com/wxcvm/dsh-purge/pull/503)）：工具路径与可运行版本验证状态分开；开始任务时优先做一次预检，后续按需要选择性复核，减少重复探测；不把路径存在当实际执行成功。
+- **作战台证据与批处理**（[#496](https://github.com/wxcvm/dsh-purge/pull/496)、[#497](https://github.com/wxcvm/dsh-purge/pull/497)、[#499](https://github.com/wxcvm/dsh-purge/pull/499)、[#500](https://github.com/wxcvm/dsh-purge/pull/500)）：批量评估与逐目标范围校验、资产/主机覆盖清单、结构化主机发现证据关联，以及报告对尚未核实发现的索引；不因采集线索直接确认漏洞。
+- **稳定性与 CI**（[#498](https://github.com/wxcvm/dsh-purge/pull/498)、[#501](https://github.com/wxcvm/dsh-purge/pull/501)）：回归测试使用一次性 Runner，并修正红队预设在较慢的配置热加载中意外被覆盖的问题。
+
+**验收边界**：Windows/Ubuntu 自动化、归档生成与 SHA256SUMS 是发行与回归证据，不等于 Windows Harness Desktop 安装、私有 FOFA 账号/第三方兼容网关或真实目标查询已实测。用户需在 Desktop 中更新、重启并确认实际加载的版本；当前版本不自动改写已有 FOFA Key 或作战项目。
+
+## English
+
+Version .24 includes the five-source survey center and scoped FOFA connection/search (with configurable HTTPS-compatible base URL, explicit Key management, account test, 20-item pages, and re-confirmed external queries), tool-state-aware environment readiness, reduced agent preflight repetition, target coverage and evidence linkage, report indexing of unverified host findings, and a preset hot-reload fix. Legacy provider settings remain intact though unsupported providers are hidden from the main survey UI. Historical passive intelligence is not live verification. Windows/Ubuntu CI, packaged ZIP and checksums do not establish real Desktop/FOFA credentials or production gateway acceptance.
+
+---
+
+# 1.1.92-wxcvm.23
+
+## 中文
+
+本版将 .22 之后完成的两项**接手版上游选择性吸收**合并发行：人工资产批量登记、Nuclei 本地模板索引显式刷新。其余提示词、Provider 请求和已保存的用户配置保持原样；历史 .22 标签及资产不覆盖。
+
+- **人工资产批量登记**（[#493](https://github.com/wxcvm/dsh-purge/pull/493)）：新增 `redteam_asset_batch`，允许一次预览/提交最多 500 条已有 IPv4 资产记录；默认 dry-run，仅 `commit:true` 使用既有 `importBundle` 事务和幂等 upsert。逐条返回拒绝原因、写入资产 ID，拒绝超出已登记 scope 的记录；未登记 scope 的实际提交须再明确 `confirm:true`。不会扫描目标、创建漏洞结论或自动记分。扫描文件仍走既有 `redteam_ingest`，不重复开发解析器。
+- **Nuclei 本地模板索引刷新**（[#494](https://github.com/wxcvm/dsh-purge/pull/494)）：已有 `redteam_poc_search` 增加可选 `refresh_index:true`。手动更新深层 YAML 后可强制重建既有索引，避免模板根目录 `mtime` 未变化时最多 7 天的旧缓存。默认仍使用原缓存；此参数不会下载安装模板、后台联网或执行扫描。Windows/Ubuntu 有针对性回归，测试临时模板目录与预装工具隔离。
+- **去重和上游取舍**：未照搬上游自动 Nuclei/KEV 启动下载、任意目标 SOCKS5 批量探测、批量评估/漏洞直接写库和未证实的审批/模型指令优先级调整。完整裁定与未完成的真实宿主验收继续由 #347/#351 管理。
+
+**验收边界**：Windows/Ubuntu CI、正式 ZIP 和 SHA256SUMS 只能证明发行候选及构建正常。用户 Windows Harness Desktop 0.2.2-rc.5 的安装、退出/重启加载、新工具展示与真实 Provider 最终请求，仍须按 #336/#340/#341/#343 实机验收。此版不声称完成全部上游/ARTEX 联动。
+
+## English
+
+Version .23 selectively adds manual multi-asset registration (#493) and an explicit offline rebuild of the existing local Nuclei template-search index (#494). Batch ingestion defaults to preview, requires explicit `commit:true` for existing SQLite upsert, returns per-item rejects/asset IDs, and does not scan or confirm findings. `redteam_poc_search(refresh_index:true)` rebuilds the cached YAML search metadata after manually updated nested templates without downloading anything. Existing prompts, provider behavior, runtime credentials and .22 assets remain untouched. Windows/Ubuntu CI and release artifacts do not establish successful live Windows Desktop installation or Provider delivery.
+
+---
+# 1.1.92-wxcvm.22
+
+## 中文
+
+本次是在已发布、不可覆盖的 .21 之上，交付**更新中断恢复修复**和**CISA KEV 公告参考查询**，并让后续 Release 在 GitHub 托管 Ubuntu Runner 上运行。不改动 .21 的统一提示词管理、HTTP 观察页、授权或真实模型通信。
+
+- **更新失败回退**（[#486](https://github.com/wxcvm/dsh-purge/pull/486)）：更新事务已经会复制 `third_party` 目录；恢复日志白名单现在也识别同一个目录，在中途中断时恢复已有 NOTICE、移除新创建但未完成的目录，保留用户配置。Windows/Ubuntu 相关测试通过；本修复在 .21 之后合并，因此 .21 ZIP 不含此修复。
+- **CISA KEV 公告层**（[#491](https://github.com/wxcvm/dsh-purge/pull/491)）：新增 `redteam_kev(action=status|lookup|refresh)`，本地缓存和精确 CVE 命中查询完全离线；只有明确调用 refresh 时才请求 CISA 官方 JSON，异常时保留旧缓存。缺库 `known_exploited=null` 与未收录 `false` 不混同。被 KEV 收录不表示特定资产确实存在或已验证漏洞，不自动改分、不扫描、不自动下载模板。
+- **发布 Runner 独立于本机 WSL**（[#490](https://github.com/wxcvm/dsh-purge/pull/490)）：Release 工作流改在 GitHub 托管 Ubuntu 上执行，保留已有固定分支/当前主线 SHA、标签、不可覆盖资产与 ZIP/校验和合约。插件运行时和 Desktop 仍由原宿主决定。
+- **向后兼容**：.21 的提示词页面、离线 HTTP 403→200 展示实验均保持不变；不调整用户已保存配置、不新增默认联网定时任务或付费依赖。
+
+**验收边界**：候选提交须通过 Windows/Ubuntu API 合约、UI/打包与独立干净安装检查，Release 需核对标签、ZIP、SHA256SUMS、工作流。真实 Windows Harness Desktop 中的 .22 安装、退出重启、KEV 工具可见性、Prompt 最终 Provider 请求与 ARTEX 联动仍须人工实机验收；CI 和公开 Release 不能代替这些证据。任务继续跟踪 #336/#337/#340/#341/#343/#347/#351。
+
+## English
+
+Version .22 builds on immutable .21 with recovery of the shipped `third_party` notices directory after interrupted updates (#486), opt-in CISA KEV cached reference status and exact CVE lookup (#491), and a release workflow moved to GitHub-hosted Ubuntu (#490). KEV status/lookup are offline; only an explicit refresh downloads the public feed. Missing cache is not reported as a negative finding, and inclusion does not establish an affected asset. No changes to the default prompts, provider permissions, wire HTTP responses or local user configuration. Windows/Ubuntu CI and release assets are not a substitute for real Desktop installation or Provider delivery checks.
+
+---
+
+# 1.1.92-wxcvm.21
+
+## 中文
+
+本次发行重点是让用户可直接试用**统一提示词工作区**与**HTTP 403 观察页**，不改变模型请求授权、上游拒绝或原有用户保存的配置。该版本在已发布 .20 的基础上，整合 [#487](https://github.com/wxcvm/dsh-purge/pull/487) 与 [#488](https://github.com/wxcvm/dsh-purge/pull/488)；旧 .20 等标签、ZIP 和校验文件保持不变。
+
+- **提示词管理统一单页**（#487）：在清洗台同一「提示词管理」页查看 GPT、Claude、Gemini、GLM 四家真实内置适配段（只读）；支持分别建立默认停用、未保存的模型专属局部规则，保留实际模型 ID 白名单与会话/Agent 约束。接手版副方案可查看资源状态并独立保存开关，不覆盖未保存的普通路由或既有正文。红队主提示词编辑器同页展开，继续使用原有保存/恢复接口。
+- **HTTP 状态观察**（#488）：新增「清洗台 → 诊断中心 → HTTP 响应观察」，复用只读运行记录，仅观察 Host 已提供的错误元数据、`CONTENT_REFUSED` 与近期 HTTP 403。未知 HTTP 状态明确标为未观测，Host 记录不等于抓到上游原始 HTTP 包。
+- **403 → 200 离线对照**（#488）：页面内模拟展示 HTTP 状态变为 200，保留原始 403、原错误码和错误终态，说明数字变成 200 并不能使服务商接受请求。**不会修改真实 Provider 响应、鉴权、Origin、内容安全或错误正文；不会偷偷重试请求。**
+- **回归与隐私**：增加模拟状态映射、缺失状态、诊断焦点、主副方案独立保存和模型规则草稿测试；页面不显示 HTTP URL、敏感 Header、Cookie、Token、Prompt 与原始响应正文。运行记录仅限内存窗口，页面离开/隐藏停止刷新。
+
+**验收边界**：Windows/Ubuntu 的 UI/打包与官方 rc.5/rc.3 隔离宿主合约仅证明源码和发行物可构建。仍须在实际 Windows Harness Desktop 下载 .21、核对 ZIP、退出重开与加载版本，再检查三个新入口及真实 Provider 请求。真实 Wire 403 是否到达 Host 仍依赖对应适配器的状态透传，不能从“未观测”推断成功。任务继续跟踪 #336/#340/#341/#343。此版本不承诺解除 Daybreak 或任何服务商权限限制。
+
+## English
+
+Version .21 ships the unified prompt-management page (#487) and a new read-only HTTP response observation page (#488). The prompt workspace displays actual built-in GPT/Claude/Gemini/GLM overlays, creates disabled and unsaved model-scoped drafts, exposes independent backup-source controls, and unfolds the original red-team editor in place. The new diagnostic page summarizes Host-observed status and `CONTENT_REFUSED`, with an **offline display-only 403→200 experiment** that retains the true 403 and its failure semantics. It does not change upstream responses, authentication, safety controls or error payloads. Pinned Windows/Ubuntu CI and packaging checks are not a substitute for a real Desktop installation, runtime load, or Provider wire delivery. Earlier tags and assets remain immutable.
+
+---
+
+# 1.1.92-wxcvm.20
+
+## 中文
+
+此版本集中交付 **.19 正式包尚未包含** 的 Harness Desktop `0.2.2-rc.5` 兼容修复及其后已合并改动。发布时以本次独立标签、Release ZIP 和 SHA256SUMS.txt 为准；旧版资产和标签不覆盖。
+
+- **rc.5 Desktop 本机接口恢复**（#470、#479）：兼容官方 rc.5 主进程转发的、绑定当前 Host 的 `dsh-auth-*` Cookie，保留新版 Desktop 会话路径以及跨来源/远端请求的既有限制；诊断会区分“同为 .19 但安装代码早于修复”的情况。解决已定位的 `cross-origin request rejected` 源码兼容根因，**真实用户 Desktop 是否已恢复仍需安装此版后验证**。
+- **rc.5 客户端入口**（#482）：移除不存在的旧客户端依赖 `dsh-client-runtime`、`dsh-client-ui-slots`，保留本插件实际使用的 `uiConversation`，增加客户端注入清单回归。Windows/Ubuntu CI 通过不等于用户已运行的桌面进程加载了本次代码。
+- **提示词和页面交互**（#480、#481）：修复工作台首次列表读取失败时的错误空状态、刷新后未选项目与概览回报入口异常；在现有提示词管理页显示主/备来源只读状态，保存普通路由仅发送修改过的字段、失败时保留草稿。不改变既有用户提示词正文和实际权限。
+- **知识与技能来源**（#471–#475）：显示技能来源、修订和许可，随安装包保留上游 LICENSE/NOTICE 和来源映射；选择性增加已登记的授权审查技能，修复分来源知识检索分页。外部 NetSpy 为可选依赖，不声称随包安装，也不自动联网执行。
+- **作战台与 Agent**（#476–#478、#483）：新增按演练隔离的清理登记台账、仅存脱敏元数据的数据存在性证明；官方 Team 任务结束通过隔离夹具核验；修复持久任务审核草稿跨 run/attempt 错带的问题。登记工具本身不删除真实资源，测试不等于实际 Provider 或远程靶标验收。
+
+**验收范围**：本次候选需以同一提交完成 Windows/Ubuntu CI、官方 rc.5/rc.3 隔离宿主合约、npm/Git ZIP 制品和发行包核验。Windows 11 当前 Harness Desktop 的实际安装、重启加载、首次访问与提示词设置保存、Provider 请求交付、回退、ARTEX 双端联动依旧分别追踪 #336/#337/#338/#340/#341/#343；**不得把 CI 绿灯当作这些实机项目已通过**。
+
+## English
+
+Version .20 delivers rc.5 compatibility changes missing from the immutable .19 release: the authority-bound legacy Desktop forwarding cookie (#470), inspection of stale installed bridge bytes (#479), and removal of retired client boot dependencies while preserving the conversation service (#482). It also brings workbench error-state repairs (#480), visible main/backup prompt source with sparse route saves (#481), source/license provenance and curated skills (#471–#475), per-engagement cleanup and redacted data-proof ledgers (#476–#478), stock keyless Team run checks (#477), and exact-attempt review draft handling (#483). No published older archive is replaced. Official pinned CI and packaging checks do not establish a successful live Windows Desktop upgrade, remote Provider delivery, or ARTEX pairing; those remain separate acceptance tasks.
+
+---
+
+# 1.1.92-wxcvm.19
+
+## 中文
+
+本次 `.19` 正式版本整合 `.18` 固定标签 `0bd3a58` 之后的主线改动。独立发布标签、实际 ZIP 与 SHA-256 以本次 GitHub Release 资产为准；`.18` 及更早标签和资产保持不变。
+
+- **提示词与工作区保存**：保护普通全局/局部提示词的编辑草稿、保存冲突和文件写入失败路径；完善实际组装时的当轮请求归属和工作区 UI，避免编辑界面“保存成功”与磁盘状态不一致（#433、#442–#445 等）。
+- **Agent 与运行时观测**：扩充 Super Agent 持久任务、人工审核和来源区分；修复 Agent 替换后迟到持久流事件归属，明确“观测到”与“真实 Provider 投递成功”的区别（#429–#430、#446）。
+- **安全与隐私**：收紧本机 API 的跨站写入边界与 opaque Origin 检查（#447）；隔离公共上游 Git 读取时的私有凭据与配置，保留显式代理（#448）；共享报告遮蔽私钥、passphrase 以及 YAML 多行敏感值（#449、#450）。这属于定向缺口修复，不代表全部敏感信息已自动脱敏，分享前仍须人工检查。
+- **兼容、更新与交付验证**：核实 Windows Desktop 插件安装、链接目录与构建字节的只读证据；改进 release/npm 双归档对账、干净 `DSH_HOME` 安装和回退隔离测试。CI、宿主只读检测、真实加载与实际模型输出仍是不同的验收等级。
+- **ARTEX 与其他 UI**：手动审查按明确来源隔离、保存冲突时保留草稿；进一步调整清洗台窗口布局、状态提示与相关管理页面，不把外部系统的状态误认成 Purge 自身确认的结果。
+
+- **Super Agent 本地预览与交付**：普通文档任务支持两项独立检查、依赖汇总、人工要求补充/确认、中断后人工恢复、精确提交的公开 GitHub 检查证据及可核对 SHA-256 的 ARTEX Markdown 手动交接；旧任务列表可翻阅超过 30 条记录（#459–#465、#467）。这是独立 Windows 本地预览，不是正式 Desktop 自动执行器，也未自动同步 ARTEX。
+- **官方 Agent Teams 运行基线**：在隔离官方 Harness `0.2.2-rc.5` 的固定无密钥夹具中确认真实 Team 会话、任务依赖顺序和队友消息（#466）。该基线未调用真实 Provider，也不证明 Purge 已在现用 Desktop 加载。
+- **版本与发布安全**：版本中心明确区分主线候选、正式 Release、磁盘安装和已加载后端（#458）；正式与历史恢复发布工作流禁止覆盖现有 ZIP / SHA256 资产（#452、#453），本机桥接来源仅接受明确支持的 Desktop 来源（#454），可选 Windows 制品上传故障独立警告、不再误伤编译或 API 测试门槛（#455）；个人知识库增加预览和来源核对（#456）。
+
+**已知尚未完成的实机验收**：Windows 11 Harness Desktop 原位升级、重启加载、实际提示词配置开关与回退；真实 Provider 请求送达，以及 ARTEX 双端登录态联动。Windows/Ubuntu CI 和构建包核对不等于这些实机测试；继续追踪 #336、#337、#338、#339、#340、#343。请从本次 Release 下载 ZIP 并核对随附的 SHA256SUMS.txt，不沿用候选包摘要。
+
+## English
+
+Release notes for changes since the immutable `.18` release: safer ordinary prompt save and draft conflict handling, Super Agent work/review improvements, late-stream observation reconciliation, local browser-origin checks, isolated public-upstream Git credentials, private-key and YAML multiline masking in opt-in shareable reports, and improved read-only package/Desktop evidence. The standalone Windows Super Agent document preview now supports independent checks, manual review/recovery, SHA-bound public GitHub check evidence, deterministic Markdown handoff to ARTEX and task pagination (#459–#465, #467); the official Agent Teams runtime was exercised with an isolated keyless fixture (#466), not a real Provider. Version identity and immutable Release/recovery asset protections were strengthened (#452–#455, #458), and personal knowledge import preview was added (#456). Windows Desktop upgrade/restart/rollback, actual Provider delivery, and ARTEX end-to-end pairing remain unverified and are not implied by CI. Download and verify this release's ZIP and SHA256SUMS.txt; previously published tags and assets remain untouched.
+
+---
+
+# 1.1.92-wxcvm.18
+
+## 中文
+
+本次版本将 .17 之后已经整合至主线的改动集中交付。发布范围以对应标签的源码提交为准，不修改 .17 及之前的 Release/标签/资产。
+
+- **提示词与模型兼容**：新增默认关闭、可切换的上游 dsh-purge-safe v2 提示词备用方案，并修复切换后的原生 persona 恢复（#382、#383）；加强官方 Harness rc.5 / rc.3 宿主契约、真实请求冻结边界和 Windows PowerShell 工具运行测试（#376、#386、#390）。测试覆盖宿主组装与工具边界，不等于远端 Provider 已实际接收或模型不再拒答。
+- **拒答与流式观测**：建立带引用归因、尾部判定与真正限制豁免的拒答判定表和基线（#381）；增加受限预算下的空心停止恢复、推理趋势观察、上游适配画像及日志指标。这些用于可观测与受控恢复，不承诺消除模型安全策略。
+- **红队 Agent 协同**：接入官方 Agent Teams 的红队根会话模式；以既有 engagement SQLite 持久化结构化子智能体汇报、关注队列与精确 ID 确认，兼容同名上游表并校验存储内容（#384、#385）。
+- **本地知识、探针与任务质量**：引入保守的 AboutSecurity 受影响版本范围、离线漏洞历史辅助优先级、独立本地 PoC 链接索引（#387、#391、#392）；补充手动探针运行与只读候选清单（#397、#398），不自动执行候选；加入可选的真实任务质量记录及继续能力（#388）。
+- **清洗台 / 工作区 UI**：修正「未执行」进度展示，恢复更有意义的操作进度（#377）；修复工作区原生规则取消勾选后仍进入组装的路径，提供模型、Provider、会话与 Agent 的本地快捷选择，并修整右侧留白（#400）；恢复隐私状态快捷入口（#401）。
+- **维护与发布**：拆分字节等价的补丁定义模块（#394），整合上游跟踪与 Codex 执行指引，新增回归测试。Windows 与 Linux 的主线兼容性 CI 已在提交 d93d7203 上通过；本次发布提交还需独立通过版本变更后的 CI 和发布工作流。
+
+**验收边界 / 已知待办**：Windows Desktop 真机安装、升级/回退与重启加载、实际 Provider HTTP 投递、跨页面配置持久化、作战台完整接口与真实 ARTEX 联动仍未凭本次 CI 全部证实，继续跟踪 #336、#337、#339、#341、#343、#361。请勿将自动化测试、界面勾选或本地目录存在误判为这些实机功能已验收。
+
+## English
+
+Consolidated release of post-.17 master changes: opt-in successor-upstream prompt backup with native persona restoration; rc.5/rc.3 host contract and Windows pwsh tests; refusal decision tables and bounded observation/recovery; official red-team Agent Teams plus durable exact-ID handoff attention; conservative offline CVE version ranges, local PoC link index, review-only probe candidates and optional task-quality capture; improved operation progress, workspace-rule opt-out behavior, local target pickers and privacy navigation. Existing published tags/assets remain unchanged.
+
+The Windows/Linux source and host-contract CI is **not** a substitute for real Windows Desktop installation/update/rollback, Provider HTTP delivery, end-to-end UI persistence or ARTEX acceptance. Those remain tracked in the existing issues.
+
+---
+
+# 1.1.92-wxcvm.17
+
+## 中文
+
+本次在 .16 基础上合入已经完成源码与 Windows/Ubuntu CI 验证的提示词组装、错误分类、社区技能和界面改进，不覆盖任何已发布版本的标签或资产。
+
+- **多模型提示词作用域一致性（#369、#372）**：整合三条注入路径的路由开关及组装证据；修复关闭 `modelAdaptive` 后仍向普通或红队规则追加模型家族专用段的问题。关闭时保留已命中的规则正文，开启后按实际模型选择适配；旧低层 API 的省略参数语义保持兼容。
+- **上游拒答的诊断与重试（#370、#371）**：正确识别 Harness `CONTENT_REFUSED`，不再误归类为普通 Provider 故障，也不对明确拒答触发自动重试或自动续接。普通的超时、网络错误及其他既有技术故障恢复行为保持原状。
+- **提示词管理界面（#373）**：保留三个路由开关，增加全局/局部提示词高级名单的通配符说明、黑白名单优先级说明及紧凑输入布局；没有回灌冲突的旧 `client.js`。
+- **社区技能与统一资料分页（#374）**：合并 Yaklang 两套社区技能索引及手动安装、更新、卸载管理；技能目录与统一知识库能够显示来源、浏览分页和读取详情，不自动拉取第三方技能或改变既有技能源。
+- **宿主边界测试（#369）**：Windows/Ubuntu CI 已通过官方 Cordis 组装、`renderPrompt` 和 `dsh-llm createSystemMessage` 结构验证，并确认生成客户端一致性。
+
+**尚未由 CI 证明**：真实 Windows Desktop 的安装、切模型／预设、重启后技能管理，以及真实 Provider HTTP 请求投递和拒答来源。系统消息构造成功不代表远端已收到，也不代表模型自身的拒答被消除。后续实机验收继续记录在现有 Issues。
+
+## English
+
+Version .17 incorporates verified source/CI changes since .16: prompt route switch consistency and opt-in model-family adaptation (#369/#372); recognition of upstream `CONTENT_REFUSED` without inappropriate automatic retries (#370/#371); compact advanced allow/deny editor guidance preserving the new routing switches (#373); and manually managed community skill packs plus paginated knowledge browsing (#374). Official Cordis assembly, prompt rendering, and neutral LLM system-message construction passed Windows and Ubuntu CI. Provider HTTP delivery, real Windows Desktop interactions, external skill installation and restart behavior are not yet evidenced by CI.
+
+---
+
+# 1.1.92-wxcvm.16
+
+## 中文
+
+本次在 .15 基础上修复「规则与技能」的工作区规则生效链路并增强诊断；旧版标签和发布资产不变。
+
+- **普通 Agent 也能使用所选工作区规则**：修复旧组装链路对非红队模式过早返回的问题，统一处理标准/极简等普通提示词与本地工作区规则。
+- **项目独立配置**：勾选文件、注入方式及逐文件适用范围按项目根目录分别保存；原全局选择仍可读取和保留。
+- **明确的组合模式**：默认仍是「空位兜底」，可为单个项目切换「与全局／局部提示词组合」。重复正文及宿主已包含的原生正文不重复注入，保留既有文件总量约束与原「工作区策略」设置。
+- **逐文件适用范围**：模型与 Provider 独立白/黑名单（支持通配符）、Agent 预设勾选及自定义预设开关。未设置时不额外限制，无法观测实际模型/厂商时不假装命中。
+- **真实状态而非勾选即成功**：显示最近一次实际服务端组装所记录的文件纳入/排除原因、时间与预设，不保存文件正文；组装结果不代表模型最终遵循。
+- **Skill 状态辨别**：区分本地文件格式有效、宿主登记未知与实际调用未知，不用文件存在推断成功。
+- **验收边界**：Windows/Ubuntu 自动化测试包含项目隔离、多文件组合、作用域匹配和普通模式实际组装。真实 Harness Desktop 的 cwd、模型路由和系统提示词最终效果仍需独立实机验证。
+
+## English
+
+Fixes workspace instruction routing in ordinary Agent modes, adds opt-in prompt composition while preserving the legacy fallback default, per-project selections, per-file model/provider allow/deny and Agent-preset scoping, deduplication, and observed assembly diagnostics. Skill file validity is no longer confused with host registration or successful invocation. CI does not replace real Desktop acceptance.
+
+---
+
+# 1.1.92-wxcvm.15
+
+## 中文
+
+此版本基于 .14，交付已合并的提示词分类界面修正（PR #365），不覆盖旧版本。
+
+- **分类与默认入口**：清洗台提示词管理默认进入「通用与局部提示词」，保留新版全局/局部编辑、模型/厂商/会话/Agent 预设的独立开关与黑白名单。
+- **红队单独展示**：原 `prompt-inject.md` 编辑界面归类为「红队专用提示词」，不再作为默认页面。
+- **行为不变**：未改提示词正文、既有保存数据、规则路由、Hooks 和注入行为；此次不声称修复模型自身拒答。
+- **验收边界**：PR #365 的 Windows/Ubuntu CI 已通过。发布包、SHA256 与 Windows Harness Desktop 实机安装交互仍需独立核对。
+
+## English
+
+UI-only prompt classification update (#365): general/local rules open by default, while `prompt-inject.md` is labeled Redteam-only. Existing per-rule model/provider/session/Agent preset switches and allow/deny lists remain. No saved prompt body, runtime routing, Hooks, or injection behavior was modified. Automated tests do not establish real Desktop acceptance.
+
+---
+# 1.1.92-wxcvm.14
+
+## 中文
+
+本次在 .13 基础上改进提示词管理的可用性与 Agent 预设选择，保持旧版本 Release 不变。
+
+- **直观双栏布局**：左侧直接编辑普通全局提示词，右侧展示局部规则清单和选中规则正文；新建规则无需预先设置 ID。常用开关放在正文下方，关键词/模型、厂商黑白名单及会话专属操作默认折叠，避免表单堆叠。
+- **按 Agent 预设启停**：每份提示词独立控制标准、PTC、极简、创造（Cordis）、红队五类模式，并有独立「未列出的预设也注入」开关；已显式关闭的模式不受兜底开关影响。身份未知时不假装匹配。
+- **红队独立管理**：继续保留旧版 `prompt-inject.md` 作为红队专用正文，普通全局/局部提示词只有明确启用红队预设才作为额外正文加入；保留旧会话手动锁定语义。
+- **测试确定性**：环境发现测试显式隔离 Runner 本地 Kali SSH 配置，避免用户已配置的 SSH 环境影响模拟清单测试；不修改实际的 WSL、Docker、ARTEX 发现逻辑。
+- **验收边界**：Windows/Ubuntu CI 及发布打包只验证自动化范围，真实 Windows Harness Desktop 的模型/厂商身份、Agent 预设实时切换、最终提示词组装与交互仍需要独立实机核对。
+
+## English
+
+Redesigns prompt management into an always-visible global editor and compact local rule cards, with per-rule Standard, PTC, Minimal, Creator/Cordis, and Redteam preset switches, plus a separate unlisted-presets fallback. Advanced rule scopes remain collapsible. Redteam's original `prompt-inject.md` is preserved, with ordinary prompts joining Redteam only by explicit opt-in. Environment discovery tests isolate host-specific Kali SSH settings without changing runtime discovery behavior. CI success does not establish physical Desktop acceptance.
+
+---
+
+# 1.1.92-wxcvm.13
+
+## 中文
+
+本次独立版本在 .12 基础上交付 Issue #340 的提示词规则改进；不移动或覆盖 .12 及更早标签和资产。
+
+- **通用全局与红队分离**：新增独立、默认关闭的全局提示词，沿用旧红队专属 prompt-inject.md，不会把红队内容自动注入普通会话；两者各自启停。
+- **局部规则**：新建按钮直接打开编辑草稿（无需预先填写 ID），可创建任意数量的局部正文与独立开关；本地保存后生效。适用的全局+局部规则按稳定优先级合并至单一 Purge section，不重写宿主原生提示词、工具与上下文。
+- **每条单独名单**：白名单、黑名单独立启停，模型、Provider 厂商、会话 ID、Agent 预设均可匹配；黑名单优先。支持精确 ID 与星号通配符；缺失的真实模型身份不宣称匹配。
+- **会话与预览**：旧锁定行为保持兼容，新增单条会话暂停/恢复；预览展示命中及排除原因，不调用模型。
+- **修复与验证**：避免把正文为空的规则误显示为已注入；补充持久化、宿主回调、作用域及 UI 交互测试。Windows + Ubuntu 自动化检查通过后才合并发布。真实 Desktop 的模型/厂商元数据、提示词 API 404 根因、安装升级和最终系统提示词装配仍需单独实机确认。
+
+## English
+
+Adds independently controlled ordinary global and local prompt rules while keeping the legacy redteam prompt separate. Per-rule allow/deny lists target models, providers, sessions and agent presets; matching rules combine in one Purge section. A new-rule button opens an editable local draft before saving. Per-session rule pause, explicit route preview and regression tests are included. Current CI does not establish real Desktop installation or runtime model metadata coverage.
+
+---
+
+# 1.1.92-wxcvm.12
+
+## 中文
+
+本次在已发布 .11 基础上整合清洗台导航与诊断修复。使用独立 .12 标签与安装包，不覆盖 .11 标签及资产。
+
+- **提示词与诊断**：合并 #353 的一级入口与子页签设计、提示词 API 404 说明，以及提交 791478b 的版本状态总览、默认折叠运行记录、错误细分和页面切换状态保留。
+- **加载状态与隐私**：分开显示磁盘插件、已加载后端、前端构建；断连或未重启时不再错误显示运行状态已核验；隐私设置未知时默认遮蔽会话标识和本地导入报告。
+- **配置保全**：原平台配置无法解析时拒绝覆盖，不回显原始解析内容。
+- **沙箱兼容**：保留已合并 #354 的 #13/#94 补丁：同级/非扩权请求无需额外审批，允许空 justification；实际已安装 Harness 是否打补丁仍需确认。
+- **验收范围**：合并后的自动化 CI、发布包资产和 Windows Desktop/Web 安装、重启、提示词 API、模型调用须分别核验。模拟测试通过不等于真实宿主通过。
+
+## English
+
+Integrates #353 and commit 791478b on top of .11, preserving #354. Unifies prompt and diagnostics navigation; adds a runtime overview, collapsible observations, separated API failures, preserved editor/filter state, and safe handling of unreadable platform configuration. The previous .11 release remains unchanged. GitHub CI, release artifact availability and real Desktop/Web acceptance are tracked separately.
+
+---
+
+# 1.1.92-wxcvm.11
+
+## 中文
+
+本次版本基于已发布的 1.1.92-wxcvm.10，合并 Purge PR #330 的提示词规则路由、清洗台管理与来源诊断。保持原 .10 Git 标签与已发布资产不可变；.11 使用独立标签与安装包。
+
+- **提示词库与任务路由**：新增可编辑的并列提示词、关键词/排除词及优先级匹配、会话手动锁定；红队预设沿用原 prompt-inject.md；普通模式无匹配时保留宿主原生装配。
+- **会话和宿主兼容**：子代理默认继承父会话提示词，显式锁定可覆盖；只替换 Purge 自身的注入段，保留宿主工具/身份/上下文。
+- **清洗台诊断**：区分结构化策略错误、Provider 失败、明确文本拒答与不完整流；增加只读任务类型/能力建议，不自动调用工具。
+- **验证状态**：PR #330 最新提交 `076f47f` 的 Windows 与 Ubuntu CI 通过。合并后的 master 集成 CI、真实 Windows Desktop 页面点击/即时模式切换/子代理实际运行及 .11 安装升级需另行核验。本文不把 CI 当作实机验收。
+
+## English
+
+This release follows the immutable .10 publication and includes merged PR #330: editable rule-based prompt profiles, per-session locks, source-aware response diagnostics, and advisory-only task dispatch. The red-team preset still uses the existing prompt-inject.md; unmatched standard tasks keep native Harness assembly. The PR head passed Windows and Ubuntu CI; real Desktop acceptance and final .11 release/install checks remain independent.
+
+---
+
+# 1.1.92-wxcvm.10
+
+## 中文
+
+本次 .10 正式版候选整合 master 中已合并、已通过相应 Windows + Ubuntu 兼容性 PR CI 的清洗、运行时、Agent、知识库与 ARTEX 改进。已有 .9 Git 标签固定在较早提交，不能用于打包这些新改动；因此改用新的 .10 版本，不移动原有标签。最终 master 联合验收、非发布式打包预演和 Desktop 实机验收仍需单独确认。
+
+- **清洗与响应判定**：减少引用内容造成的拒答误判，保留明确的授权范围与权限拒绝、安全边界；普通任务指导按任务需要调整，并减少无效的中性重复检查。此项改善判定精度，不承诺绕过模型自身的安全策略。
+- **Provider 与流式运行时**：区分最终响应与失败的流式尝试；保留宿主请求决策和 Provider 自身重试语义，识别永久性失败，取消过期重试，并改进原生工具结果、任务上下文和 token 预算的证据归因；清理陈旧后续请求并遮蔽运行诊断中的敏感内容。
+- **Agent 协作与长对话连续性**：支持按依赖关系组织独立只读审查批次，保留任务优先级和顺序，并按可用执行槽位调度；补入 #317 的显式任务连续性、子 Agent 分范围预留、有限交接证据及既有 Agent 页状态显示；不将该能力扩大为活动攻击任务的自动并发调度。
+- **富江知识库与技能索引**：整合 167 篇原始资料（105 条组件/CVE、59 条业务安全控制、3 条方法论）与 9 份分类入口；区分来源资料与厂商核对公告（#318），统一 CVE 编号书写和联合检索（#319），修复一条漏洞记录含多个 CVE 的任务上下文关联（#320），避免将四段构建版本截短后误判适用性（#321）。匹配结果仍不等于目标漏洞已验证。
+- **ARTEX 与预设修复**：报告审查区分原生分诊状态与报告证据可用性，不把外部状态误写为 DSH 独立确认；修复红队预设 YAML persona 前缀缩进，确保角色与操作章节保留在预期提示词块中。
+- **Purge × ARTEX 联动**：Purge 工作台新增直达 ARTEX「资产同步 → Purge 情报」的本机入口（#326），同时保留原首页入口；保存、解除或刷新独立情报配对后清除旧公司概览，避免误显示历史任务和报告（#327）。与 ARTEX `v0.6.0` 的公司预选、可读发现计数和深链接功能（#156、#160）配套；安装器、宿主权限和 Windows 双端实机验收仍分别进行，不把 CI 通过写成已发布或已实测。
+- **离线质量评估**：整合离线 Agent 推理基线和虚构记录审查评估工具，用于回归与证据质量分析；这些数据不代表真实目标测试结果，也不构成对实战得分或模型能力的保证。
+
+主要整合：#278–#281、#283–#290、#296–#297、#282、#295，以及 #317–#321 中已合并的专项改动。此前 .8 的 ARTEX 宿主注入与会话靶标绑定修复保持不变。
+
+## English
+
+- Refines cleaning guidance and refusal classification while preserving explicit scope, permission and safety boundaries.
+- Improves provider/stream evidence attribution, retry and cancellation handling, task-context correlation, and privacy-safe runtime diagnostics.
+- Adds dependency-aware batches for independent read-only reviews; #317 improves long-session task continuity, subagent reservations, bounded handoff evidence and agent status.
+- Integrates 167 Fujiang source articles (105 component/CVE references, 59 business-security controls and 3 methodology entries) plus 9 category guides. #318–#321 add advisory links, normalized and multi-CVE lookup, task-context mapping and safer four-part version handling; results remain unverified against live targets.
+- Distinguishes ARTEX report availability from native triage status and fixes redteam persona-prefix YAML indentation.
+- Coordinates with ARTEX v0.6.0: adds a direct Purge intelligence page link and clears stale company overview after local pairing changes (#326, #327; ARTEX #156, #160). Both applications remain independently installed, and real Windows cross-app acceptance is pending.
+- Adds offline quality and evidence-review regression suites; synthetic results are not claims about live-target performance.
+
+Existing .8 and .9 tags remain unchanged. The .9 tag points to an older source revision, so the next release candidate uses the new version .10. Real Windows Desktop acceptance remains a separate step and is not implied by CI.
+
+---
+
+## 历史发布说明：1.1.92-wxcvm.8
+
+
+### 中文
+
+本补丁修复 .7 正式版在真实 Harness Desktop 的两个问题：ARTEX 本机联动出现 `cannot get property "redteam" without inject`（#274），以及聊天输入框缺少靶标选择指令（#275）。
+
+- ARTEX 状态接口通过独立的 Cordis 注入作用域取得 Purge 数据服务，保留实际配置的数据根目录。
+- 数据服务未就绪时返回明确的 503 提示；服务恢复或重载后重新检测即可。主插件及其它 Web 路由不增加硬依赖。
+- 新增严格注入代理、服务生命周期及自定义目录回归测试。
+- 恢复原生 `/bind` 靶标选择与绑定、解除绑定、当前对话隔离及显式绑定持久化；复用同一份本地绑定记录（#275）。
+- 不修改 ARTEX 公司 ID、令牌、项目数据或外部连接配置。真实 Desktop 复验仍需在安装补丁后进行。
+
+### English
+
+- Fixes the ARTEX local-status endpoint on strict Cordis hosts by declaring the store dependency in its own lifecycle scope (#274).
+- Uses the actual store root, reports temporary service unavailability clearly, and handles service reload without changing unrelated routes.
+- Restores the native `/bind` target picker, per-session binding/unbinding and persisted explicit bindings (#275).
+- Adds regression coverage for strict injection, custom roots and service lifecycle. Real Desktop acceptance remains to be verified.
+
+The .7 release remains immutable. See [update recovery](docs/UPDATE_RECOVERY.zh-CN.md) for authorized update and recovery instructions.
+
+---
+
+## Historical notes: 1.1.92-wxcvm.7
 
 ## 中文
 
