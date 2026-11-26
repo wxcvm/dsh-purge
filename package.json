@@ -96,7 +96,8 @@
   },
   "dependencies": {
     "proxy-agent": "^6.5.0",
-    "yaml": "^2.9.1"
+    "yaml": "^2.9.1",
+    "better-sqlite3": "^9.2.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
