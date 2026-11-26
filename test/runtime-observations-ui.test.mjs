@@ -270,10 +270,10 @@ test('clean workspace combines runtime observations under diagnostics and preser
   assert.match(nav, /id: "diagnostics", title: "诊断中心"/);
   assert.match(source, /runtimeVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "diagnostics" \|\| diagnosticsPane !== "runtime" \}/);
   assert.match(source, /active: section === "diagnostics" && diagnosticsPane === "runtime"/);
-  assert.match(source, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "prompt" \|\| promptPane !== "library"/);
+  assert.match(source, /profilesVisited \? h\("div", \{ className: "dshp-clean-pane", hidden: section !== "prompt"/);
   assert.match(source, /setRuntimeVisited\(true\)/);
   assert.match(source, /onNavigate: navigate/);
-  assert.match(source, /hidden: section === "rules" \|\| \(section === "prompt" && promptPane === "library"\)/);
+  assert.match(source, /hidden: section === "rules" \|\| \(section === "prompt" && !redteamExpanded\)/);
   assert.match(source, /api: api, useTemporaryPrivacy: useTemporaryPrivacy/);
 });
 

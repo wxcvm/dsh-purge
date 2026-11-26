@@ -26,6 +26,7 @@ enabled: true
 - `exposes`：资产开放端口或服务（asset → port/service）。
 - `shares_cert`：两个端点出现相同证书标识；它只表示共享证书，不表示同一所有者。
 - `trusts`：有文档或配置证据支持的信任关系；没有证据时不要创建。
+- `correlated_by`：通过被动情报关联（例如通过 `passive-recon` Shodan/Censys/FOFA/crt.sh 单 IP 查询观察到的关联）；置信度因工具而异。
 
 先用 `redteam_asset_query` 或 `redteam_asset_get` 读取已有记录，使用返回的真实 ID。需要建立关系时调用 `redteam_asset_link`，填写 `src_kind`、`src_id`、`dst_kind`、`dst_id`、`relation`，并按证据强度填写 `confidence`（0–1）。不要猜测或手工编造 ID。
 

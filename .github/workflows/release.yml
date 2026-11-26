@@ -20,7 +20,8 @@ concurrency:
 jobs:
   release:
     if: github.repository == 'wxcvm/dsh-purge' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
-    runs-on: [self-hosted, Linux, X64, purge-ci]
+    # Release has no local-device dependency; keep publication independent of AH-WSL availability.
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:

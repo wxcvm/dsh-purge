@@ -1,9 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, statSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, statSync, rmSync, existsSync, readFileSync, linkSync, unlinkSync, symlinkSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
+import { privateDirectory, privateFile } from '../lib/redteam/private-storage.js'
 
 const onUnix = process.platform !== 'win32'
 const mode = (p) => statSync(p).mode & 0o777
@@ -45,4 +46,81 @@ test('current workspace data and SQLite contents remain usable', (t) => {
   assert.equal(store.activeEngagementId(), id)
   assert.ok(store.stats(id))
   store.archiveDir()
+})
+
+test('updating workspace selection atomically replaces a hard-linked pointer without changing its other file', { skip: !onUnix }, (t) => {
+  const { root, store } = fixture(t)
+  const id = store.openEngagement('atomic-selection').id
+  const unrelated = join(root, 'unrelated.txt')
+  writeFileSync(unrelated, 'preserve original contents', { mode: 0o644 })
+  unlinkSync(store.currentPath())
+  linkSync(unrelated, store.currentPath())
+  assert.equal(store.setActiveEngagement(id), true)
+  assert.equal(readFileSync(unrelated, 'utf8'), 'preserve original contents')
+  assert.equal(store.activeEngagementId(), id)
+  assert.equal(mode(store.currentPath()), 0o600)
+})
+
+test('workspace metadata replacement preserves linked file contents and private mode', { skip: !onUnix }, t => {
+  const { root, store } = fixture(t)
+  const id = store.openEngagement('metadata-fixture').id
+  const meta = store.metaPathOf(id)
+  const original = readFileSync(meta, 'utf8')
+  const other = join(root, 'metadata-original.txt')
+  linkSync(meta, other)
+  store.openEngagement('metadata-fixture')
+  assert.equal(readFileSync(other, 'utf8'), original)
+  assert.notEqual(statSync(meta).ino, statSync(other).ino)
+  assert.equal(mode(meta), 0o600)
+})
+
+test('clearing a stale workspace pointer replaces the record without changing a linked file', { skip: !onUnix }, t => {
+  const { root, store } = fixture(t)
+  const other = join(root, 'stale-original.txt')
+  writeFileSync(other, 'missing-fixture', { mode: 0o644 })
+  linkSync(other, store.currentPath())
+  const result = store.deleteEngagement('missing-fixture')
+  assert.equal(result.not_found, true)
+  assert.equal(readFileSync(other, 'utf8'), 'missing-fixture')
+  assert.equal(readFileSync(store.currentPath(), 'utf8'), '')
+  assert.equal(mode(store.currentPath()), 0o600)
+})
+
+test('archiving a synthetic workspace does not overwrite an unrelated linked selection file', { skip: !onUnix }, t => {
+  const { root, store } = fixture(t)
+  const id = store.openEngagement('archive-fixture').id
+  const other = join(root, 'selection-original.txt')
+  linkSync(store.currentPath(), other)
+  const result = store.deleteEngagement(id)
+  assert.equal(result.archived, true)
+  assert.equal(readFileSync(other, 'utf8'), id)
+  assert.equal(readFileSync(store.currentPath(), 'utf8'), '')
+  assert.equal(mode(store.currentPath()), 0o600)
+})
+
+test('private directory rejects a linked destination before callers can write into it', t => {
+  const root = mkdtempSync(join(tmpdir(), 'private-link-check-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const target = join(root, 'original')
+  const alias = join(root, 'alias')
+  mkdirSync(target)
+  symlinkSync(target, alias, process.platform === 'win32' ? 'junction' : 'dir')
+  const before = mode(target)
+  assert.throws(() => privateDirectory(alias))
+  assert.deepEqual(readdirSync(target), [])
+  assert.equal(mode(target), before)
+})
+
+test('private file rejects nonregular paths and leaves linked files untouched', { skip: !onUnix }, t => {
+  const root = mkdtempSync(join(tmpdir(), 'private-file-check-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const target = join(root, 'original.txt')
+  const alias = join(root, 'alias.txt')
+  writeFileSync(target, 'synthetic original')
+  chmodSync(target, 0o644)
+  symlinkSync(target, alias, 'file')
+  assert.throws(() => privateFile(alias), /regular file/)
+  assert.throws(() => privateFile(root), /regular file/)
+  assert.equal(readFileSync(target, 'utf8'), 'synthetic original')
+  assert.equal(mode(target), 0o644)
 })
