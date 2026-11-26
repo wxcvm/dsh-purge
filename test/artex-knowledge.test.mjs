@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { savePlatformConfig, loadPlatformConfig } from '../lib/redteam/platform-config.js'
 import { DatabaseSync } from 'node:sqlite'
 import {
   artexKnowledgePath, artexKnowledgeStatus, searchArtexKnowledge, getArtexKnowledge,
@@ -85,4 +86,65 @@ test('Purge source and embedded runtime expose the same local knowledge UI', () 
     assert.match(source, /op: 'artexKnowledgeGet'/)
     assert.match(source, /kbDetail\.content/)
   }
+})
+
+test('knowledge status distinguishes missing, empty, ready and unusable sources', (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-purge-artkb-status-'))
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+  const env = { ARTEX_KB_DIR: home }
+  const file = join(home, 'knowledge.db')
+  const missing = artexKnowledgeStatus({ env })
+  assert.equal(missing.state, 'missing')
+  assert.equal(missing.available, false)
+  assert.equal(missing.source, 'local-artex-knowledge')
+
+  mkdirSync(file)
+  const directory = artexKnowledgeStatus({ env })
+  assert.equal(directory.state, 'unavailable')
+  assert.equal(directory.ok, false)
+  assert.equal(directory.count, null)
+  assert.equal(directory.fts, null)
+  rmSync(file, { recursive: true })
+
+  writeFileSync(file, 'not a SQLite database')
+  const invalid = artexKnowledgeStatus({ env })
+  assert.equal(invalid.state, 'unavailable')
+  assert.equal(invalid.ok, false)
+  assert.equal(invalid.count, null)
+  assert.equal(invalid.error.includes(home), false)
+  rmSync(file)
+
+  const db = new DatabaseSync(file)
+  db.exec('CREATE TABLE poc (id INTEGER PRIMARY KEY)')
+  db.close()
+  const empty = artexKnowledgeStatus({ env })
+  assert.equal(empty.state, 'empty')
+  assert.equal(empty.available, true)
+  assert.equal(empty.count, 0)
+  assert.equal(empty.read_only, true)
+
+  const writer = new DatabaseSync(file)
+  writer.exec('INSERT INTO poc VALUES (1)')
+  writer.close()
+  const ready = artexKnowledgeStatus({ env })
+  assert.equal(ready.state, 'ready')
+  assert.equal(ready.count, 1)
+})
+
+test('default Windows installation and saved portable knowledge path are usable without restart', (t) => {
+  const { path, env } = knowledgeFixture(t)
+  const local = mkdtempSync(join(tmpdir(), 'dsh-artex-install-'))
+  t.after(() => rmSync(local, { recursive: true, force: true }))
+  const dir = join(local, 'Programs', 'ARTEX', 'knowledge')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'knowledge.db'), readFileSync(path))
+  assert.equal(artexKnowledgeStatus({ env: { LOCALAPPDATA: local } }).count, 1)
+  const root = join(local, 'redteam')
+  savePlatformConfig({ env: { FOFA_KEY: 'keep' } }, root)
+  const saved = dispatch({ root }, { op: 'artexLocalConfigSave', paths: { ARTEX_KB_DIR: env.ARTEX_KB_DIR } })
+  assert.equal(saved.ok, true)
+  assert.equal(dispatch({ root }, { op: 'artexLocalConfigGet' }).paths.ARTEX_KB_DIR, env.ARTEX_KB_DIR)
+  assert.equal(dispatch({ root }, { op: 'artexKnowledgeStatus' }).count, 1)
+  assert.equal(loadPlatformConfig(root).env.FOFA_KEY, 'keep')
+  assert.equal(dispatch({ root }, { op: 'artexLocalConfigSave', paths: { ARTEX_HOME: 'relative' } }).ok, false)
 })

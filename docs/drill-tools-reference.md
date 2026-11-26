@@ -51,13 +51,56 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 后续 `redteam_next_action` **自动读取**所有持久阻塞键；`previous_task` 与临时 `blocked_task_key(s)` 保持只读、不会自动落库。条件发生变化后要明确 `unblock`，不把暂时故障永久封禁。
 
+### `redteam_next_action`
+只读生成下一步任务卡，返回 `focus`、候选 `actions` 与 `parallel_review`。
+- `parallel_review.status=ready` 时，`batch` 只包含明确标记的独立只读记录核查任务（目前是候选漏洞的证据缺口/授权范围关联核对）。
+- 同一批最多 `parallel_review.max_parallel` 项（默认 3，随当前并发设置调整）；必须是不同记录 ID，且无依赖、共享可变状态或证据前置关系。其余任务进入 `sequential` 或 `deferred`，不因候选列表靠前就自动并行。
+- 子任务只读本地记录与现有证据索引，不访问目标、不扫描、不登录、不验证漏洞、不写库、不再委派。由主会话等待本批返回后统一核对并决定是否更新记录。
+- 需要主动探测、漏洞验证、凭据操作、利用、隧道或内网操作的任务不属于此只读批次，仍按既有依赖顺序推进。
+- `child_writes_allowed=false` 表示子智能体不得直接修改事实库；主会话必须核对记录 ID、证据引用和推理依据。
+
+### `redteam_attention`
+【只读回报/显式确认】从**当前靶标的同一份 SQLite 事实库**列出子 Agent 最后一条尚未处理的结构化回报。
+仅当子 Agent 最终消息末尾明确包含 `redteamReport: {"status":"waiting|blocked|ready|progress|failed|dropped", "blocked_reason":"…", "needs":[{"kind":"…","detail":"…"}]}` 时才记录；普通自然语言不推断状态，也不保存完整消息正文。
+
+- `action=list`（默认）：查询 `items`，每项有 `id/session_id/status/blocked_reason/needs/created_at`；`awaiting_person` 统计 `waiting/blocked`。
+- `action=ack` + `report_id`：**精确确认一次**，不会清掉同一子会话随后新增的新回报；确认后旧回报不复活。
+- `engagement`：可选；省略按当前会话的靶标绑定解析；不同靶标之间不混排。
+- `limit`：默认 20，最大 100。
+
+不使用这项回报更改 `redteam_agent_slot` 并发计数或释放正在运行的子 Agent。没有结构化回报时展示 0 项，不声称无人等待或所有任务已完成。只保存经过基本凭据遮蔽与长度裁剪的状态/需求摘要；不要把凭据原文写在需求字段中。
+
+### `redteam_work_item`
+【SuperAgent 持久任务与执行轮次】使用当前演练已经存在的 SQLite，记录同一任务多次分派、精确运行 ID、状态和历史；**不创建真实子会话、不会自动执行、不会替代官方 Agent Teams 任务板或** `redteam_attention`。它的结果是「已记录的工作状态」，不是实际宿主或目标任务已经完成的证明。
+
+参数：
+
+- `action` — 必填：`create` 登记任务；`list` 分页；`get` 查看单条及最多 100 次历史；`assign` 将确切 `session_id/run_id` 记为本轮执行；`report` 在精确宿主结束事件已观察后登记本轮结算；`recovery` 列出需核对的持久化运行记录。
+- `engagement` — 当前靶标，默认会话绑定；不同靶标隔离。
+- `task_key / role / objective` — `create` 必填。相同 task_key 不覆盖已有记录，重复操作幂等。
+- `task_id` — `get / assign / report` 必填。
+- `session_id / run_id` — `assign / report` 必填，防止前一轮迟到报告覆盖新轮次。
+- `status / summary` — `report`：`waiting|ready|blocked|failed|interrupted` 和结果摘要；摘要进行有限的凭据文本遮蔽。
+- `done/dropped` 的最终收口改由工作台人工复核后通过本机 UI 接口完成；模型工具不允许代替操作者关闭任务。
+- `limit / offset` — 分页查询，最多 100 条。
+
+宿主真实 `subagent/end` 事件到达时，若演练绑定及 `session_id/run_id` 精确匹配本任务的已登记 Assignment，将仅补记 `host_end_at/host_stop_reason`，不会自动完成或重新执行任务。详情见 [第二阶段真实事件对账](SUPERAGENT_DURABLE_TASKS.zh-CN.md#第二阶段真实子智能体结束事件对账本-pr-增量)。
+
+结算约束：模型工具不会提供人工 `host_checked` 声明，只有已观察到本次精确 `subagent/end` 的任务轮次才可由模型调用 `report` 结算。无结束事件时须在工作台明确核对后人工结算；该勾选是操作者声明而不是独立宿主证明。
+
+恢复语义：宿主重启后 `recovery` 显示 `host_activity=unverified`，**并不推断原子智能体已退出**；必须先核对其真实会话和执行状态，再显式记 `interrupted` 并分配新轮次。没有自动重启、自动重派、自动批准或后台任务。本轮完整使用说明见 [SuperAgent 持久任务阶段一](SUPERAGENT_DURABLE_TASKS.zh-CN.md)。
+
 ### `redteam_agent_slot`
-【主会话派活前后用】执行智能体的并发闸门：同一靶标**最多同时 3 个**在跑（可用 REDTEAM_MAX_AGENTS 配置）。action=status 看还剩几个名额与谁在跑；action=acquire 占一个名额（满了会直接拒绝，**不要重试硬塞**）；action=release 释放（子智能体结束时服务端也会自动释放）。
+【主会话派活前后用】执行智能体的并发闸门：同一靶标的有效上限由 settings.json / REDTEAM_MAX_AGENTS 控制（默认 3，用户可调整）。action=status 返回有效 max、used 和 free；action=acquire 占一个名额（满了会直接拒绝）；action=release 释放（子智能体结束时服务端也会自动释放）。
 
 参数：
 - `action` — status 查看 / acquire 占用 / release 释放
 - `label` — acquire 时的任务标签，例如「信息收集：主域与 C 段」
-- `key` — release 时指定要释放的键（省略则释放最早的一个预留）
+- `key` — acquire 可指定稳定任务键，重复申请复用同一预留（保留原始时间）；未提供时沿用自动生成键。release 指定释放键，省略则沿用原有释放方式。
+
+注册表不可用时 `free` 为 null，`free_upper_bound` 仅表示已知占用推算的上界；原有配置上限不变。
+
+「智能体」页现通过现有 `agentsStatus` 只读接口按根会话展示近期任务交接：活动预留（`reserved`）、已关联子运行（`delegated`）、正常结束且有最终回复但未验收（待核验）或异常结束（需关注）。来源为现有 `redteam_agent_slot` 的预留与持久交接索引，每个会话只显示自己的任务键；不自动更新工作记录，也不把子智能体结束当成任务完成。页面每次只显示最近 12 条，完整状态仍可通过 `redteam_agent_slot(action=status)` 查看。
 
 ### `redteam_tool_select`
 【只读】按任务类型查找当前本机可用路径，自动优先推荐具有明确版本探测参数的工具；可返回候选与来源。不会执行网络探测或目标扫描，不把“找到可执行文件”当作实际测试成功。
@@ -65,9 +108,9 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 参数：
 - `task` — `domains`、`services`、`web`、`vulns`、`internal`、`identity`、`connectivity`
 - `verify` — 可选；`true` 时仅执行推荐工具已定义的本地版本参数，返回 `version-verified`、`path-only` 或 `verification-failed`。默认不运行任何程序。
-- `include_environments` — 可选；`true` 时附带上次用户显式发现的 WSL、SSH Kali、Docker 环境中，确实经过用户版本探针的工具候选及评分（最多 12 项以减少模型上下文）。不执行新的版本检测或任务。
+- `include_environments` — 可选；`true` 返回最近显式发现的跨环境候选及实际探针状态（最多 12 项），`false` 仅返回本机结果。省略时，本机无候选或版本验证失败才补充一个已有版本证据的远端候选。不执行新的远端探针或任务。
 
-候选优先级根据本机路径与已知版本探测能力确定，不修改已有工具的执行权限，也不会自动选择执行目标测试。其他自定义工具在环境目录中显示但不作为自动执行的候选。 跨环境评分由本机已定位路径和服务端本次会话里保存的显式探针结果决定；没有观测到某环境中某工具版本成功时，结果保持 `unknown` 而非推测已安装。`include_environments` 默认关闭。
+候选优先级根据本机路径与已知版本探测能力确定，不修改已有工具的执行权限，也不会自动选择执行目标测试。其他自定义工具在环境目录中显示但不作为自动执行的候选。 跨环境评分由本机已定位路径和服务端本次会话里保存的显式探针结果决定；没有观测到某环境中某工具版本成功时，结果保持 `unknown` 而非推测已安装。默认本机优先，仅在本机无候选或版本验证失败时补充已有版本证据的远端候选。
 
 ### `redteam_preflight`
 【开工前必须跑一次】平台技能与资源自检：逐个检查红队技能的必需环境变量（如 FOFA 测绘的 FOFA_KEY）、本机工具与二进制（suo5 / fscan / gogo / frp / 冰蝎 / 哥斯拉 / nmap / nuclei…）、外部基础设施（反弹 Shell 用的 VPS）。返回 available/broken 清单与每个坏掉的技能"缺什么、怎么补"。**缺 key / 缺 VPS 时直接向用户要，或改用替代方案，不要假装能跑。**
@@ -95,6 +138,23 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 ## B. 资产测绘（recon / assess 用）
 
 _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用 asset_assess 打 priority/potential/reason。_
+
+### `redteam_asset_batch`
+
+【本机批量资产 / 批量评估】复用上游 `redteam_batch` 的独有 `kind=assets|assess` 用途，但不照搬其直接批量漏洞写入或请求证据副作用。本工具不联网、不扫描、不创建已确认漏洞，也不写分数。
+
+参数：
+- `engagement` — 可选，默认会话绑定的演练
+- `kind` — `assets`（默认，兼容已有用法）或 `assess`
+- `items` — `assets`：1–500 条已获取的 IPv4 资产，需 `ip` 与 `provenance=active|passive`，可带 `names`、`ports`、发现时间；`assess`：1–200 条**已有资产**，每条 `asset_id` 或 `ip`、必填 `priority=high|medium|low` 和非空 `reason`，可选 `potential`、`assessed_by`
+- `commit` — 默认 false，仅预览数量、拒绝原因与最多十条示例；`true` 才写入数据库
+- `confirm` — 演练没有登记允许的 scope 时，实际 `commit=true` 还需显式确认；已登记范围内对每条资产 IP 核对，超出范围跳过
+
+`assets` 复用既有 `store.importBundle` 的 SQLite 事务与幂等 upsert，逐条返回 `index/ip/asset_id`，重复提交不会重复建资产或覆盖首次发现时间。同批重复 IP 作为 `duplicate_in_batch` 拒绝。
+
+`assess` 先只读解析现有资产并核对身份、scope、字段，再逐条调用已有 `store.assessAsset` 更新优先级与理由；不存在的资产拒绝，不创建新资产。`results` 返回原始下标与资产 ID；**逐项提交可能部分成功，并非整批原子事务**，返回 `assessed/rejected/partial`，不可将被拒绝的条目计作已评估。评估只是人工判断，不是漏洞验证。
+
+源码来源：[接手版上游 redteam_batch](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）。只保留实际有价值的批量已知资产操作，HTTP 请求/响应及确认漏洞仍走已有独立证据接口。
 
 ### `redteam_asset_add`
 把一个资产及其端口/服务/指纹写入资产库（幂等 upsert）。每条发现必须标注 provenance：被动收集填 passive，主动探测填 active，并填写 tool（数据源或工具名）。
@@ -159,6 +219,8 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 ### `redteam_skill_search`
 【离线只读】检索当前 purge 随包技能，以及按需下载到 `$DSH_HOME/redteam/external-skills/aboutsecurity/skills` 的 AboutSecurity 技能。不需要另外安装 `dsh-prompt-custom` 插件。
 
+社区技能包也会被检索：`$DSH_HOME/redteam/external-skills/community/<pack>/skills/`；可显式执行 `node scripts/install-community-skills.mjs` 安装 Yaklang 的 `hack-skills` 与 `yak-skills`，用 `--source` 选择单包、`--update` 更新、`--home` 指定当前 DSH 主目录。不会在插件启动时自动安装，也不会覆盖随包技能。
+
 参数：`query`（名称/主题/关键词；空值列出）、`limit`（默认 10，上限 50）。
 
 返回稳定 `key`、名称、描述与来源，另外用 `aboutsecurity_installed` 明确该外部技能库是否已找到。没有安装外部技能时仍能搜索内置技能。
@@ -187,6 +249,16 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 
 用户可以在智能体会话中让它先搜索、再按条目 ID 读取；但这不是自动发现或执行漏洞的功能。运行于 DSH 的宿主必须能直接访问本机 ARTEX 知识库，单纯远程部署的数据库不能凭空读取。
 
+### `redteam_kev`
+【CISA KEV 已知在野利用公告参考】读取本地 CISA 官方公告缓存，**不扫描目标、不改变资产记录或漏洞结论**。与 `redteam_cve_match` 的离线指纹候选不同：它只说明某 CVE 是否在指定时间的 KEV 公告中被收录，不意味着某台主机受影响。
+
+参数：
+- `action=status`：只读显示缓存是否可用、更新时刻、条目数量和是否超过 24 小时；缺库时明确返回 unavailable，**不会联网**。
+- `action=lookup` + `cve=CVE-2021-44228`：只查本地缓存；未下载时 `known_exploited=null`，未被当前缓存收录时为 `false`，两者不能混淆。
+- `action=refresh`：仅在用户明确要求更新公告时手动请求 CISA 官方 JSON，失败保留旧缓存；不会启动自动更新、下载 Nuclei 模板或执行 PoC。
+
+公开数据源：[CISA Known Exploited Vulnerabilities Catalog](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)，使用上游 [dsh-purge-safe KEV 层](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d0a9abda6e2eb020dde85b48b5727b45d26582a7/lib/redteam/kev.js) 的分层设计思路，现有知识/模板库和工具权限保持不变。
+
 ### `redteam_cve_match`
 【离线只读】按现有 SQLite 资产的服务、指纹、产品与端口，或直接输入 CVE / 产品名，查找随包公开漏洞候选索引。只返回候选与原始资料链接，**不执行 PoC、不联网、不写漏洞库、不自动确认成功**。同产品命中不代表版本确实受影响。
 
@@ -199,6 +271,35 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 - `limit` — 返回条数，默认 10，最多 30
 
 示例：先 `redteam_asset_query` 找到资产 id，再 `redteam_cve_match(asset_id=12)`；没有数据库也可以 `redteam_cve_match(product="Grafana", port=3000)`。用 `redteam_poc_search` 查本地已验证 PoC / Nuclei 模板；这两套检索互补，不会相互覆盖。
+
+### `redteam_armory_search`
+【离线只读】搜索随包武器库索引：payload 库（19 类 68 文件——SQL 注入/XSS/SSRF/XXE/RCE/反弹 shell/403 绕过等载荷）与字典库（68 类 252 文件——目录/用户名/密码/子域名/端口/中间件路径/设备默认口令等字典）。返回分类、文件路径、行数与用途说明；**文件本体保留在本地 AboutSecurity 仓库，索引不含内容**，由执行环境决定可用性。
+
+参数：
+- `kind` — `payload`（载荷库）/ `dictionary`（字典库）/ `all`（默认两者都搜）
+- `query` — 关键词，如 `sql盲注`、`xss`、`子域名`、`密码`、`403绕过`、`weblogic路径`
+- `limit` — 每类最多返回条数，默认 20，最多 50
+
+示例：注入确认后 `redteam_armory_search(kind="dictionary", query="列名")` 拿列名字典继续拖库；打 WebLogic 前 `redteam_armory_search(query="weblogic 路径")` 拿专属目录字典。与 `redteam_cve_match` 串联：CVE 候选 → 按产品查 payload 与字典 → 实测记录回 `redteam_vuln_add`。
+
+### `redteam_chain_plan`
+【离线规划】从资产指纹或手动输入生成**利用计划**：CVE 候选按 severity/无认证/版本适用性排序，每条展开为带占位符命令模板的 exploit 步骤，并按攻击类型（LFI/反序列化/SQLi/RCE…）联动武器库索引给 payload 与字典。**纯规划不执行**；`verified=false` 全程，不做"已利用"断言。
+
+参数：
+- `asset_id` — 资产 id（读取 SQLite 指纹/端口）或手动输入
+- `cve` / `product` / `port` / `limit` — 精确 CVE / 产品名 / 端口 / 候选数（默认 5）
+
+示例：`redteam_chain_plan(product="WebLogic", port=7001)` → 按 critical 无认证排前的候选步骤（ysoserial 构造 + T3 发送模板 + shiro/fastjson 各自的向量模板），每步带武器库路径。执行后每步 `redteam_chain_add(tool=命令原文, result=回显)` 落库，命中 `redteam_vuln_add(status=exploited)`。
+
+### `redteam_chain_advance`
+【离线规划】推进**入侵链路**到下一阶段（recon→fingerprint→vuln_match→weaponize→exploit→post_exploit→lateral）：给出该阶段的结构化步骤建议；`fingerprint` 之后自动把观测喂给 vuln_match 生成计划。**阻断不终止**——无凭据/需交互/超范围/WAF 拦截时转为 blocked 步骤并给占位符工作流，链路保持可推进形态。
+
+参数：
+- `stage` — 当前所处阶段（推进到下一阶段）
+- `asset_id` / `product` / `port` — 观测输入
+- `blockers` — 已知阻断 `[{reason, detail}]`：`no-credentials / network-unreachable / waf-blocked / needs-interaction / version-mismatch / out-of-scope / tool-missing / evidence-missing`
+
+示例：`redteam_chain_advance(stage="fingerprint", product="Grafana", port=3000)` → 下一阶段 vuln_match 的候选计划；`stage="exploit", blockers=[{reason:"no-credentials"}]` → post_exploit 清单 + 无凭据阻断的占位符降级步骤。与 `redteam_attack_chain`（已发生步骤的五阶段计分视图）互补：advance 管"接下来做什么"，attack_chain 管"已经做到哪"。
 
 ### `redteam_data_quality`
 只读核对资产库记录的完整性：区分候选漏洞缺证据与已确认/利用记录缺证据，统计 HTTP 请求/响应为空，以及漏洞、HTTP 证据、截图中的资产/漏洞孤立引用。只返回汇总数量，不返回原始证据或凭据，不迁移数据库，也不把记录完整当成漏洞已验证。
@@ -249,6 +350,30 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 - `potential` — 预期成果，如「账号权限+RCE」「数据库权限」「大量敏感信息」
 - `reason` — 判断理由：指纹版本命中 Nday、接口未鉴权、口令弱、暴露数据库、WAF 强弱等
 - `assessed_by`
+
+### `redteam_coverage`
+
+【离线逐项检查清单】选择性吸收接手版的 `redteam_asset/asset_next` 与 `redteam_host/hostNextActions` 核心价值：**检查项有明确状态、未完成不能收口、可查看待核队列**。我们仍使用原有 `redteam_asset_test` 表示测试过程与 WAF 状态、`redteam_next_action` 表示任务优先级；本工具不重复替代它们。
+
+- `engagement` — 默认为会话绑定的演练；每个演练在自己的 SQLite 内保存记录
+- `phase` — `external` 外部资产（`surface/web/auth/cve/app`），或 `internal` 主机检查（`files/privesc/web/db/lateral`）
+- `action=status` + `asset_id` — 只读查看五项状态、缺项、人工备注和能否收口；**不会因为已有扫描/测试/得分而自动标记已完成**
+- `action=update` + `asset_id` + `updates` — 一次明确更新 1–5 项，格式 `[{"field":"web","state":"done"}]`；状态为 `untested|partial|done|blocked|not_applicable`，可额外填 `note`（最大 2000 字符）。已关闭的清单再次编辑会重新开放，避免陈旧“已完成”。也支持只更新备注
+- `action=close` + `asset_id` + `status=closed|blocked` — `closed` 要求五项全部为 `done|blocked|not_applicable`，否则返回缺项且不写入；`blocked` 必须填写非空 `reason`，表示被阻塞而不是已完成
+- `action=queue` + 可选 `asset_id`、`limit=1..30` — 只读返回未关闭清单及各项缺口，默认按现有优先级排序；只显示相应内外网资产，不调用扫描器、不创建 Agent 任务。超过 2000 条样本显示 `partial=true`，不可将样本待核数量当成全库总数
+
+**结构化主机发现（本轮补齐上游 `redteam_host(op=finding)` 的独有能力）：**
+- `phase=internal` + `action=finding` + `asset_id` + `kind` + `title`：记录已观察到的主机元数据。`kind` 支持 `file/credential/privesc/lateral/web/db/config/share`；可填 `detail`（不含明文凭据、令牌、私钥或原始 HTTP 报文）。
+- 可选 `evidence_kind` + `evidence_id` 成对填写：只接受本次演练**同一资产**里已存在的 `http_evidence`（含经 `vuln_id` 关联的资产）、`attack_step`、`access_session` 或 `vuln` 记录。引用无效、对象不存在或归属不一致一律拒绝入库。仅有引用不代表漏洞已证实。
+- `phase=internal` + `action=findings` + `asset_id`：离线只读列出最近的 20 条记录（`limit` 最多 100），报告真实 `total/partial`；`redteam_asset_get` 的资产详情也包含 `host_findings`。
+- 这部分**复用 `observation` 表**（`attr=host_finding`，`raw_ref=证据类型:ID`），不新增第三张数据库表、不额外注册工具，也不外传原始证据正文。发现可记录但无证据时返回 `evidence_linked=false`。
+- 新增发现**不会自动更新五项检查状态、改写 `asset_test`、创建权限会话、确认漏洞或计分**，仍须人工明确核验与操作。与上游自动把检查推进 `partial` 的做法不同，这是有意保留的分离。
+
+本仓 #496 已合并的 `redteam_asset_batch(kind=assess)` 只更新资产优先级与评估理由，**不能将其评估成功自动当作本清单检查完成**；两个功能必须分别记录。
+
+新增的 `asset_checklist` 单表由现有 SQLite DDL 幂等建立，旧资产库加载时无须删除或改写原有 `asset.test_status/test_surface`；两种状态语义不同，绝不自动把旧的 `tested` 等同于五项全部 done。被阻塞的清单也不计 `complete`。
+
+对照来源：[接手版 redteam asset/host coverage](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/redteam/tools.js)（Apache-2.0）。**未移植**自动主机操作、权限推断、目标探测、得分推荐或上游两套覆盖度表，以免和现有 `next_action` / Super Agent 混淆。
 
 ### `redteam_asset_test`
 记录对某个资产的测试情况：本次做了什么测试（`test`，追加式）、还剩什么攻击面（`surface`，覆盖式）、当前测试状态、是否被 WAF 封禁。**每个资产开始测之前先调一次（status=testing），测完/放弃再调一次**——资产测绘页面据此显示「未测试 / 测试中 / 已测试 / 被封禁 / 已放弃 / 无攻击面」。排除结论、登录失败原因、重测理由都写在 `test` 里。
@@ -373,6 +498,39 @@ _confirmed/exploited 才算成果；claimed 必须用 evidence_upgrade 升级成
 - `confidence` — claimed | observed | derived | inferred
 - `limit`
 - `offset`
+
+### `redteam_data_proof`
+结构化记录数据暴露事实，仅保存目标、来源、接口标识、字段名、记录条数、样本检查数量和脱敏证据引用。工具不接收或保存原始样本行、原始查询、请求正文、凭据或个人数据值；`sample_count` 只表示检查过几行，样本值不入库。
+
+参数：
+- `engagement`
+- `op` — add | list
+- `target` 或 `asset_id` — 至少提供一个
+- `source` — api | db | file | backup | other
+- `interface` — 接口路径、表名或文件路径
+- `fields` — 1–32 个字段名，不得填写字段值
+- `row_count` — 非负整数
+- `sample_count` — 0–3，仅数量
+- `evidence_ref` — 已脱敏证据路径或 ID
+- `pii_type` — pii | three_elements | financial | credential | other
+- `vuln_id`、`note`、`limit`
+
+它不会自动确认漏洞等级或记分。当前 `score-rules.js` 中 100 万行只是量级粗筛；G5 正式门槛仍按规则文件中的超 1 亿条或 10TB 判断，不得把上游旧实现的 1 万条标记直接当作得分门槛。
+
+旧版上游数据库可能仍有 `sample` / `query` 历史列及旧值；当前工具和报告不会读取或返回这些列，但不会自动删除历史数据。分享或导出旧数据库前，应单独检查并脱敏历史记录。
+### `redteam_cleanup`
+清理台账只登记本次演练创建的临时资源，不执行删除、禁用、关闭或远程清理。交付前检查 open 项；用户明确要求保留的资源标记为 kept 并写明原因。`done` 表示操作者已确认清理完成，不代表工具执行过清理。不要记录口令、令牌、私钥、Cookie 或其他秘密值。
+
+参数：
+- `engagement`
+- `op` — add | list | update
+- `id` — op=update 的台账 id
+- `kind` — webshell | account | tunnel | file | task | ssh_key | other
+- `target` — 资源所属主机、资产或目标
+- `location` — URL / 路径 / 主机:端口
+- `detail` — 脱敏说明、清理方式或保留原因
+- `status` — open | done | kept；list 另支持 all，默认只列 open
+- `limit` — list 默认 100，最多 500
 
 ### `redteam_evidence_upgrade`
 把 claimed / inferred 升级为 observed。必须带 verified_result（亲自验证的回显/数据）。
@@ -678,6 +836,7 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `source` — web（互联网）| self（手搓）| manual（人工）| nuclei-template
 - `verified` — true 只看实测验证过的（优先用这些）
 - `templateLimit` — 本机 nuclei 模板最多返回几条，默认 20
+- `refresh_index` — 默认 false。手动运行过 nuclei 模板更新、复制/修改嵌套 YAML 以后，显式设为 true，**只重建本机检索索引**，让新增/更新的模板立即可搜索；不会联网、不下载模板、不启动扫描或修改模板内容。响应的 `local_templates.reindexed` 报告是否找到目录并重建索引。
 - `limit` — 知识库条目上限，默认 200
 
 ### `redteam_poc_get`
@@ -773,6 +932,10 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 ### `redteam_score_report`
 攻击得分链路复现报告：只收录"拿到了分"的成果（没得分的漏洞不进报告），每一项都尽量附上可直接粘贴进 Yakit Repeater 复现的原始请求。需要交付报告时用这个，而不是 redteam_report。
+
+**新增附录 6：未核实主机发现索引。** 若当前演练通过 `redteam_coverage(phase=internal,action=finding)` 登记了主机发现，报告会单独列出最多最近 100 条的记录 ID、资产 IP、发现类别、已有证据记录引用与「未验证/未关联」状态，超出数量明确显示截断。**它们不进入得分正文、不确认漏洞、不改变总分**，只是方便报告使用者回到资产详情核对。为免人工标题/说明或原始证据正文带出敏感数据，附录**不输出**发现自由文本、请求/响应、命令、凭据；`--shareable` 导出模式还会通过已有掩码处理资产 IP。没有主机发现时不新增空附录。
+
+实际落盘的 `scripts/export-engagement-report.mjs` 及工具的 `redteam_score_report(markdown=true)` 共用 `scoreReport` 生成的 Markdown。
 
 参数：
 - `engagement`
@@ -870,9 +1033,13 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 参数：`engagement`、`limit`（默认 8，最多 20）。
 
 ### `redteam_scope_review`
-离线只读地把库内资产与用户明确列出的允许范围进行匹配，支持 IPv4/IPv6、CIDR、域名与通配子域名。匹配结果不是授权证明；超过查询上限时会报告部分覆盖。
+【离线只读】保留原有库内资产审查，并选择性补齐上游 `redteam_scope_check` 的**指定目标核对**，复用当前 `targetInScope`，不发 DNS/HTTP/扫描请求；登记的 scope 不是实际授权的证明。
 
-参数：`engagement`、`allowed`（必填，逗号或换行分隔）、`limit`（默认 25，最多 100）。
+两种模式：
+- **资产清单审查（旧模式不变）**：传 `allowed`（必填的范围字符串，逗号或换行分隔）和可选 `limit`（默认 25，最多 100），将库内资产与这份显式范围比对，显示样本数和是否仅部分覆盖
+- **指定目标审查（新增）**：传 `target` 一个目标，或 `targets` 1–50 个目标（IP、域名、HTTP(S) URL），依据当前演练元数据登记的 scope 逐条核对，返回 `mode=target-check`、`in-scope`、`out-of-scope`、`unscoped` 或 `name-only`。后者仅域名匹配，`needs_ip_review=true`，不能据此确认解析 IP 属于授权网段
+
+两种模式互斥。未登记 scope 不能悄悄算作允许；本工具既不更新 scope，也不会触发实际目标连接。
 
 ### `redteam_delivery_audit`
 只读检查已记录得分的目标、证据结果与来源关联缺口；文本完整不代表漏洞已可复现，也不会自动加分。
@@ -903,8 +1070,15 @@ redteam_score_report             出交付报告
 
 ### 作战台本机主动测绘与隐私保护状态（UI）
 
-「资源 → 测绘中心」除了离线筛选外，可使用本机 Nmap/httpx 对**已登记的单个授权目标**执行探测，经 `localActiveSurvey` API 复用 `scan-runner`、原始输出记录与 `importBundle`；默认为仅预览，选择入库后才写资产，结果可在历史页核验。模型既有 `redteam_scan_run` 仍保持范围校验。
+「管理 → 环境 → 测绘中心」除了离线筛选外，可使用本机 Nmap/httpx 对**已登记的单个授权目标**执行探测，经 `localActiveSurvey` API 复用 `scan-runner`、原始输出记录与 `importBundle`；默认为仅预览，选择入库后才写资产，结果可在历史页核验。模型既有 `redteam_scan_run` 仍保持范围校验。
 
 「管理 → 低干扰」新增 `scanPreferences.noReverseDns` 和 `scanPreferences.maskAssetResults`：前者真实影响下一次 Nmap 命令的 `-n` 参数，后者只保护测绘中心的可视展示。 `privacyPosture` 根据已保存配置列出已经生效、可启用及目标侧日志等无法保护的项目，不能用它声称实现匿名或隐身。
 
 Purge 的 `privacyPosture.bridge` 现在会在 Node HTTP 请求能获取所属服务器的 `server.address()` 时报告实际监听 `boundAddress`、`boundPort` 和 `listenerScope`（`loopback_bound` / `all_interfaces` / `specific_interface`），并与连接接受地址 `acceptedAddress`、`acceptedPort` 区分；无法读取时仍返回 `not_inspected`。**绑定回环地址并不保证公网不可访问**（例如反向代理、容器端口映射或隧道可转发请求），`publicReachability` 始终为 `not_tested`。本项仅做本地运行时观测，不扫描外网、不更改监听行为。
+
+### Unified local reference library
+
+- `redteam_knowledge_search`: browse bundled Chinese reference articles or search personal documents, CVE references, skills and local ARTEX knowledge. Results preserve source and ID; semantic mode uses only the explicitly configured local embedding service.
+- `redteam_knowledge_get`: read a selected reference by source and ID. Returns bounded text and attribution; does not execute reference content or verify a target.
+
+- Pagination: choose a specific source and pass `offset` for `bundled`, `personal`, `cve`, `redteam`, or `aboutsecurity` (20 items per page). `source=all` returns each source's first page; the ARTEX adapter has no `offset` and uses its separate search tool.

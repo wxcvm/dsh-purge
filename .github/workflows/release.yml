@@ -2,9 +2,13 @@ name: Release
 
 on:
   push:
-    branches:
-      - master
+    branches: ["release/v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify the release archive without publishing
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -15,13 +19,24 @@ concurrency:
 
 jobs:
   release:
-    # 上游保持 master 自动发布；wxcvm fork 只允许在 master 上手动触发，避免每次合并发布。
-    if: github.repository == 'YuJunZhiXue/dsh-purge' || (github.repository == 'wxcvm/dsh-purge' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
+    if: github.repository == 'wxcvm/dsh-purge' && ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/v')))
+    # Release has no local-device dependency; keep publication independent of AH-WSL availability.
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install declared dependencies without lifecycle scripts
+        run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional --package-lock=false --prefer-offline
 
       - name: Syntax-check plugin entry
         run: |
@@ -30,9 +45,10 @@ jobs:
           node --check lib/reapply.js
           node --input-type=module -e "import './lib/index.js'"
 
-      - name: Publish GitHub Release
+      - name: Build, verify and optionally publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
@@ -46,11 +62,32 @@ jobs:
             echo "$notes 第一行必须是 # ${version}，现在是: ${first}"
             exit 1
           fi
+          # Keep the release description scoped to this candidate; the notes
+          # file is a changelog and also includes all older version sections.
+          current_notes="$(mktemp)"
+          trap 'rm -f "$current_notes"' EXIT
+          awk 'NR > 1 && /^# / { exit } { print }' "$notes" > "$current_notes"
           zip="dsh-purge-$version.zip"
-          # Retry with the tag's exact source revision rather than moving master.
+          # Never package an older tagged source under a new master candidate.
           commit="$GITHUB_SHA"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            expected_branch="release/$tag"
+            if [ "$GITHUB_REF_NAME" != "$expected_branch" ]; then
+              echo "::error::Release branch must match package version: $expected_branch"
+              exit 1
+            fi
+            master_commit="$(git rev-parse refs/remotes/origin/master)"
+            if [ "$master_commit" != "$commit" ]; then
+              echo "::error::Release branch must point to current master ($master_commit), not $commit"
+              exit 1
+            fi
+          fi
           if git rev-parse -q --verify "refs/tags/$tag^{}" >/dev/null; then
-            commit="$(git rev-parse "refs/tags/$tag^{}")"
+            tagged_commit="$(git rev-parse "refs/tags/$tag^{}")"
+            if [ "$tagged_commit" != "$commit" ]; then
+              echo "::error::Version $version already has tag $tag at $tagged_commit, not master $commit; use a new version instead of republishing old source."
+              exit 1
+            fi
           fi
           git archive --format=zip --prefix="dsh-purge-$version/" --output="$zip" "$commit"
           test -s "$zip"
@@ -63,13 +100,22 @@ jobs:
             done
           fi
           sha256sum "$zip" > SHA256SUMS.txt
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            case "$version" in
-              *beta*|*alpha*|*rc*|*wxcvm*)
-                gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" --prerelease ;;
-              *)
-                gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$notes" ;;
-            esac
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Release archive verified: $zip (no publication)"
+            cat SHA256SUMS.txt
+            exit 0
           fi
-          gh release upload "$tag" "$zip" SHA256SUMS.txt --clobber
+          # A published release is immutable: never replace its archives, even on a rerun.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Release $tag already exists; refusing to overwrite immutable assets. Use a new version."
+            exit 1
+          fi
+          case "$version" in
+            *beta*|*alpha*|*rc*)
+              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$current_notes" --prerelease ;;
+            *)
+              gh release create "$tag" --target "$commit" --title "$tag" --notes-file "$current_notes" ;;
+          esac
+          # GitHub must reject any existing asset name instead of silently replacing it.
+          gh release upload "$tag" "$zip" SHA256SUMS.txt
           echo "published https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"

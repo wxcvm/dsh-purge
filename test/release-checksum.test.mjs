@@ -6,11 +6,17 @@ const updater = readFileSync(new URL('../scripts/update-desktop-fork.ps1', impor
 
 test('published zip has a checksum generated from exactly the uploaded file', () => {
   assert.match(workflow, /sha256sum "\$zip" > SHA256SUMS\.txt/)
-  assert.match(workflow, /gh release upload "\$tag" "\$zip" SHA256SUMS\.txt --clobber/)
+  assert.match(workflow, /gh release upload "\$tag" "\$zip" SHA256SUMS\.txt(?:\r?\n|$)/)
+  assert.doesNotMatch(workflow, /--clobber/)
+  assert.match(workflow, /if gh release view "\$tag" >\/dev\/null 2>&1; then/)
 })
 
-test('fork only permits manual release dispatch on master', () => {
-  assert.match(workflow, /github\.repository == 'wxcvm\/dsh-purge' && github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/master'/)
+test('fork permits manual master dispatch or a version-matched release branch pinned to master', () => {
+  assert.match(workflow, /github\.repository == 'wxcvm\/dsh-purge' && \(\(github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/master'/)
+  assert.match(workflow, /github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/heads\/release\/v'\)/)
+  assert.match(workflow, /expected_branch="release\/\$tag"/)
+  assert.match(workflow, /"\$GITHUB_REF_NAME" != "\$expected_branch"/)
+  assert.match(workflow, /"\$master_commit" != "\$commit"/)
   assert.doesNotMatch(workflow, /startsWith\(github\.event\.head_commit\.message/)
 })
 
@@ -27,3 +33,9 @@ test('fork release archive and installed profile require the same ARTEX knowledg
   }
 })
 
+
+test('stable fork versions are not marked prerelease just because they carry the fork suffix', () => {
+  assert.match(workflow, /\*beta\*\|\*alpha\*\|\*rc\*\)/)
+  assert.doesNotMatch(workflow, /\*wxcvm\*\)/)
+  assert.match(workflow, /Install declared dependencies without lifecycle scripts/)
+})

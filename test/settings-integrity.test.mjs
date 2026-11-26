@@ -3,13 +3,19 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { readSettings, settingsPathOf, writeSettings } from '../lib/redteam/settings.js'
+import { readSettings, settingsPathOf, writeSettings, maxAgentsOf } from '../lib/redteam/settings.js'
 
 function temporary(t) {
   const root = mkdtempSync(join(tmpdir(), 'dsh-settings-integrity-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   return root
 }
+
+test('configured agent concurrency is honored above the default of three', t => {
+  const root = temporary(t)
+  writeSettings(root, { maxAgents: 9 })
+  assert.equal(maxAgentsOf(root, {}), 9)
+})
 
 test('settings merge preserves unrelated nested keys and own __proto__ values', t => {
   const root = temporary(t)

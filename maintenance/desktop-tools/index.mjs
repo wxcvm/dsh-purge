@@ -1,4 +1,4 @@
-import { validateRecords, renderReport, replayRecords } from './records.mjs';
+import { validateRecords, renderReport, replayRecords, resumeRecords } from './records.mjs';
 import { listTemplates, getTemplate } from './catalog.mjs';
 
 export const name = 'harness-maintenance-tools';
@@ -22,8 +22,10 @@ export function definitions() {
       {json:input},['json'],({json})=>validateRecords(json)),
     definition('maintenance_export_report','Render the supplied records as Markdown or JSON text, without writing files.',
       {json:input,format:{type:'string',enum:['markdown','json']}},['json','format'],({json,format})=>renderReport(json,format)),
-    definition('maintenance_replay_records','Show supplied historical records in time order. Records are never executed.',
-      {json:input},['json'],({json})=>({records:replayRecords(json)})),
+    definition('maintenance_replay_records','Show supplied historical records in time order and the recorded open, blocked and completed work. Records are never executed.',
+      {json:input, coordination:{type:'string',description:'Optional JSON output of redteam_agent_slot status from the same task owner. Match task record id to the acquired slot key.'}},
+      ['json'],({json,coordination})=>({records:replayRecords(json),
+        resume:resumeRecords(json, coordination === undefined ? undefined : JSON.parse(coordination))})),
     definition('maintenance_template_catalog','List bundled ordinary task templates, or return the text for a selected template id.',
       {id:{type:'string',enum:['patch','schedule','compat','diagnose','review','release']}},[],
       ({id})=>id===undefined?listTemplates():getTemplate(id))
