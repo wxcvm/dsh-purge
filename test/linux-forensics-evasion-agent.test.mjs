@@ -126,8 +126,10 @@ test('linux-forensics: capabilities use Linux commands (sed/rm/shred)', () => {
       cap.command.includes('journalctl') ||
       cap.command.includes('systemctl') ||
       cap.command.includes('auditctl') ||
-      cap.command.includes('find'),
-      `${cap.name} command should use Linux utilities (got: ${cap.command.substring(0, 30)})`
+      cap.command.includes('find') ||
+      cap.command.includes('swapoff') ||
+      cap.command.includes('dd '),
+      `${cap.name} command should use Linux utilities (got: ${cap.command.substring(0, 50)}...)`
     );
   }
 });
