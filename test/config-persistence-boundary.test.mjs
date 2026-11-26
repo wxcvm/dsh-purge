@@ -32,10 +32,9 @@ test('fresh load returns empty defaults with exists=false', () => {
   assert.equal(cfg.exists, false, 'fresh config should not exist');
   assert.equal(cfg.error, undefined, 'no error on fresh load');
   assert.ok(cfg.path, 'path should be set');
-  // env has default keys initialized to empty strings
+  // env has default keys initialized to empty strings (CENSYS_PAT stored separately in encrypted storage)
   assert.deepEqual(cfg.env, {
     FOFA_KEY: '',
-    CENSYS_PAT: '',
     CENSYS_ORG_ID: '',
     REDTEAM_VPS_HOST: '',
     REDTEAM_VPS_USER: '',
@@ -87,16 +86,14 @@ test('partial updates preserve unmodified fields', () => {
 test('empty env values are stored and do not leak previous ones', () => {
   const redteamDir = isolatedRedteamDir('env-isolation');
   const cfg1 = savePlatformConfig({
-    env: { FOFA_KEY: 'secret', CENSYS_PAT: 'token' },
+    env: { FOFA_KEY: 'secret' },
   }, redteamDir);
   assert.equal(cfg1.env.FOFA_KEY, 'secret');
-  assert.equal(cfg1.env.CENSYS_PAT, 'token');
 
   const cfg2 = savePlatformConfig({
     env: { FOFA_KEY: '' },
   }, redteamDir);
   assert.equal(cfg2.env.FOFA_KEY, '', 'explicit empty should clear FOFA_KEY');
-  assert.equal(cfg2.env.CENSYS_PAT, 'token', 'CENSYS_PAT should persist');
   assert.equal(cfg2.env.REDTEAM_VPS_HOST, '', 'other defaults should stay empty');
 });
 
