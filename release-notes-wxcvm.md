@@ -49,6 +49,11 @@ await agent.rollback(auditId, false)
 - 干运行模式预验证
 - 无痕审计（脱敏报告）
 
+**防溯源 API 路由** (`/redteam/api`)：
+- `antiforensicsPreview`：干运行预览清除目标（无实际修改）
+- `antiforensicsExecute`：执行完整清除流程（返回脱敏审计日志）
+- `antiforensicsRollback`：回滚指定审计 ID 的清除操作（支持完整/部分回滚）
+
 **验收完成**：Windows/Ubuntu 兼容性 CI、Hosted UI 集成均通过；真实 Windows Desktop 防溯源任务收尾流程验证为后续工作。
 
 **下一步**：P1 其他页签可用性改进、P2 响应式完全覆盖、上游吸收整合（已完成分析，待决策执行）。
