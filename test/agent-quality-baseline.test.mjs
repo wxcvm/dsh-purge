@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cases, answerKey, casePacket, evaluate } from '../scripts/agent-quality-eval.mjs'
+import { cases, answerKey, casePacket, evaluate, compareRuns } from '../scripts/agent-quality-eval.mjs'
 
 const correct = () => cases.map(({ id }) => ({ id, ...answerKey[id] }))
 
@@ -115,4 +115,21 @@ test('case-associated subagent summaries retain overlap and missing-event eviden
     ] }), /subagent snapshot/)
   }
   assert.throws(() => evaluate({ reports: [], subagentSnapshots: [snapshots[0], snapshots[0]] }), /duplicate/)
+})
+
+
+test('run comparison retains quality changes and only compares paired observations', () => {
+  const [a,b] = cases.map(c => c.id)
+  const snap = { scope:'direct-parent', observed:true, startsObserved:2, endsObserved:2, pairedRuns:2, startOnly:0, endOnly:0, outOfOrder:0, peakPairedOverlap:1, capacity:200, evicted:0 }
+  const before = { reports: correct(), trace:[{id:a, check:'read',status:'ok'}, {id:a,check:'read',status:'ok'},{id:b,check:'read',status:'ok'}], subagentSnapshots:[{id:a,snapshot:snap},{id:b,snapshot:snap}] }
+  const after = { reports: correct().slice(0,5), trace:[{id:a,check:'read',status:'ok'},{id:a,check:'new',status:'ok'}], subagentSnapshots:[{id:a,snapshot:{...snap,peakPairedOverlap:2}},{id:b,snapshot:{...snap,evicted:1}}] }
+  const result = compareRuns(before,after)
+  assert.equal(result.qualityDelta.passed,-1)
+  assert.equal(result.byCase[0].traceDelta.repeatAfterSuccess,-1)
+  assert.equal(result.byCase[0].traceDelta.distinctSuccessfulChecks,1)
+  assert.deepEqual(result.byCase[0].subagentDelta,{pairedRuns:0,peakPairedOverlap:1})
+  assert.equal(result.byCase[1].traceDelta,null)
+  assert.equal(result.byCase[1].subagentDelta,null)
+  assert.equal(result.byCase[5].candidate.completed,false)
+  assert.equal(compareRuns({reports:[]},{reports:[]}).byCase[0].traceDelta,null)
 })

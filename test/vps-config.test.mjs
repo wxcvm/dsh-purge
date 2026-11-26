@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { loadPlatformConfig, savePlatformConfig, mergeConfigEnv } from '../lib/redteam/platform-config.js'
 import {
   splitLegacyVpsHost, normalizeVpsConfig, validateVpsConfig,
-  selectedVpsAddress, vpsLegacyEnvironment,
+  selectedVpsAddress, vpsLegacyEnvironment, vpsPreflightState,
 } from '../lib/redteam/vps-config.js'
 
 const workspace = (t) => {
@@ -56,6 +56,22 @@ test('VPS fields reject malformed addresses while allowing optional blank addres
   assert.match(validateVpsConfig({ ...dual, user: 'bad user' }), /用户名/)
   assert.match(validateVpsConfig({ ...dual, addressMode: 'ipv6', ipv6: '' }), /IPv6 优先/)
   assert.equal(validateVpsConfig({ user: 'ubuntu', domain: '', ipv4: '', ipv6: '' }), null)
+})
+
+test('VPS preflight distinguishes missing host, missing key and unverified SSH', () => {
+  assert.deepEqual(vpsPreflightState('', true), {
+    status: 'missing_host', hostConfigured: false, keyPresent: true, sshVerified: false,
+  })
+  assert.equal(vpsPreflightState('root@', true).status, 'missing_host')
+  assert.equal(vpsPreflightState('http://bad.example', true).status, 'missing_host')
+  assert.deepEqual(vpsPreflightState('root@192.0.2.10', false), {
+    status: 'missing_key', hostConfigured: true, keyPresent: false, sshVerified: false,
+  })
+  assert.deepEqual(vpsPreflightState('root@[2001:db8::10]', true), {
+    status: 'configured_unverified', hostConfigured: true, keyPresent: true, sshVerified: false,
+  })
+  assert.equal(vpsPreflightState('vps.example.com', true).status, 'configured_unverified')
+  assert.doesNotMatch(JSON.stringify(vpsPreflightState('vps.example.com', true)), /id_rsa|identityFile/)
 })
 
 test('old platform config migrates on explicit new UI save and preserves unrelated fields', (t) => {

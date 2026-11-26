@@ -58,6 +58,6 @@ curl -s --socks5 127.0.0.1:1080 "http://10.0.0.8:8080/api/user/1" -H "Cookie: JS
 - 隧道掉了用 `redteam_tunnel_update` 标 down；不要留一个"看起来在跑其实不通"的隧道给后续角色踩空。
 
 ## 注意事项
-- 隧道端点文件用完后按需清理，恢复目标原状。
+- 成功启动的临时隧道及端点文件用 `redteam_cleanup(op=add,kind=tunnel,status=open)` 登记；确认停止/删除后标 `done`，用户要求保留的标 `kept`；只回收本次创建且获准回收的资源。
 - 免费公网代理不适合承载隧道；suo5 走的是目标自身的 WebShell，不需要额外代理。
 - 只在授权范围内使用。

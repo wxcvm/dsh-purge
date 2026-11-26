@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { loadFujiangReferences } from '../lib/redteam/fujiang-reference.js'
-import { loadCveCatalog } from '../lib/redteam/cve-knowledge.js'
+import { loadCveCatalog, matchCveCandidates } from '../lib/redteam/cve-knowledge.js'
 import { listBundledKnowledge, getBundledKnowledge } from '../lib/redteam/knowledge-bundled.js'
 
 test('all original archive knowledge filenames are represented once, with nine reconstructed category guides', () => {
@@ -16,6 +16,9 @@ test('all original archive knowledge filenames are represented once, with nine r
   const counts = Object.fromEntries(['cloud-container','edge-device','exchange-ad','gray-market','java-deser','java-web','linux-priv','triage','web-cms'].map(category=>[category,rows.filter(r=>r.fujiang_category===category).length]))
   assert.deepEqual(counts,{'cloud-container':15,'edge-device':17,'exchange-ad':15,'gray-market':60,'java-deser':10,'java-web':23,'linux-priv':12,'triage':4,'web-cms':20})
   for (const row of loadCveCatalog()) {
+    // 只遍历 fujiang 来源：AboutSecurity 导入条目（as-vuln-*.json）不在
+    // fujiang archive 的 176 篇里，目录名与文件名都无法对应。
+    if (row.source_url.includes('wgpsec/AboutSecurity')) continue
     const name = row.source_url.split('/').pop()
     const ref = rows.find(r=>r.source_ref==='plugin/knowledge/'+row.category+'/'+name)
     assert.ok(ref, name)
@@ -184,4 +187,137 @@ test('Confluence and ActiveMQ source claims do not override corrected branch bou
   const mq=getBundledKnowledge('fujiang:java-web:cve-2023-46604-activemq-openwire')
   assert.match(mq.body,/5\.15\.16 之前/)
   assert.match(mq.body,/Apache Software Foundation CNA 评分为 10\.0/)
+})
+
+
+test('Fortinet edge advisories retain original claims and corrected product-specific scope', () => {
+  const get = name => getBundledKnowledge('fujiang:edge-device:' + name)
+  const fortios = get('cve-2018-13379-fortinet-fortios')
+  assert.match(fortios.body, /5\.4\.6–5\.4\.12/)
+  assert.match(fortios.body, /原始版本声明.*5\.4\.0-5\.4\.12/)
+  assert.match(fortios.body, /FortiProxy/)
+  const mfa = get('cve-2020-12812-fortios-2fa-case-bypass')
+  assert.match(mfa.body, /LDAP/)
+  assert.match(mfa.body, /6\.0\.10/)
+  const ems = get('cve-2023-48788-forticlient-ems-sqli')
+  assert.match(ems.body, /7\.0\.11/)
+  assert.match(ems.body, /7\.2\.3/)
+  const manager = get('cve-2024-47575-fortimanager-fortijump')
+  assert.match(manager.body, /7\.2\.8/)
+  assert.match(manager.body, /7\.4\.5/)
+  assert.match(manager.body, /Cloud 7\.6 不受影响/)
+  assert.match(manager.body, /6\.2\.13/)
+  assert.ok([fortios, mfa, ems, manager].every(row => row.verified === false))
+  const versionStatus = (cve, version) => matchCveCandidates({cve, version}).items[0].version_applicability.status
+  assert.equal(versionStatus('CVE-2020-12812', '6.2.3'), 'affected')
+  assert.equal(versionStatus('CVE-2020-12812', '6.2.4'), 'not_affected')
+  assert.equal(versionStatus('CVE-2023-48788', '7.0.10'), 'affected')
+  assert.equal(versionStatus('CVE-2023-48788', '7.0.11'), 'not_affected')
+  assert.equal(versionStatus('CVE-2024-47575', '7.6.0'), 'unknown')
+  assert.equal(versionStatus('CVE-2018-13379', '5.4.12'), 'unknown')
+})
+
+
+test('additional edge advisories preserve corrected build and product boundaries', () => {
+  const get = name => getBundledKnowledge('fujiang:edge-device:' + name)
+  const citrix = get('cve-2019-19781-citrix-path-traversal')
+  assert.match(citrix.body, /10\.5\.70\.12/)
+  assert.match(citrix.body, /13\.0\.47\.24/)
+  assert.match(citrix.body, /SD-WAN WANOP/)
+  const f5 = get('cve-2021-22986-f5-icontrol')
+  assert.match(f5.body, /12\.1\.5\.3/)
+  assert.match(f5.body, /7\.1\.0\.3/)
+  assert.match(f5.body, /BIG-IQ/)
+  const ivanti = get('cve-2023-35078-ivanti-epmm-auth-bypass')
+  assert.match(ivanti.body, /RPM/)
+  assert.match(ivanti.body, /更旧版本/)
+  const mft = get('cve-2024-0204-goanywhere-auth-bypass')
+  assert.match(mft.body, /7\.4\.1/)
+  assert.match(mft.body, /6\.4\.3/)
+  assert.ok([citrix, f5, ivanti, mft].every(row => row.verified === false))
+  const status = version => matchCveCandidates({cve:'CVE-2024-0204', version}).items[0].version_applicability.status
+  assert.equal(status('6.4.3'), 'affected')
+  assert.equal(status('7.4.0'), 'affected')
+  assert.equal(status('7.4.1'), 'not_affected')
+})
+
+
+test('remaining edge advisories retain product, build and configuration distinctions', () => {
+  const get = name => getBundledKnowledge('fujiang:edge-device:' + name)
+  const pulse = get('cve-2019-11510-pulse-secure-file-read')
+  assert.match(pulse.body, /8\.2R12\.1/)
+  assert.match(pulse.body, /8\.1R15\.1/)
+  assert.match(pulse.body, /历史/)
+  const tmui = get('cve-2020-5902-f5-tmui')
+  assert.match(tmui.body, /11\.6\.1–11\.6\.5\.1/)
+  assert.match(tmui.body, /11\.6\.5\.2/)
+  assert.match(tmui.body, /15\.0\.0/)
+  const rest = get('cve-2022-1388-f5-icontrol')
+  assert.match(rest.body, /16\.1\.2\.2/)
+  assert.match(rest.body, /控制平面/)
+  assert.match(rest.body, /BIG-IQ/)
+  const forti = get('cve-2022-40684-fortios-auth-bypass')
+  assert.match(forti.body, /7\.0\.5 B8001/)
+  assert.match(forti.body, /FortiSwitchManager 7\.0\.1/)
+  const ivanti = get('cve-2023-46805-2024-21887-ivanti')
+  assert.match(ivanti.body, /9\.1R18\.3/)
+  assert.match(ivanti.body, /22\.4R2\.2/)
+  assert.match(ivanti.body, /Policy Secure 22\.5R1\.1/)
+  const cp = get('cve-2024-24919-checkpoint-quantum')
+  assert.match(cp.body, /Maestro/)
+  assert.match(cp.body, /R77\.20/)
+  assert.match(cp.body, /hotfix/)
+  const pan = get('cve-2024-0012-panos-auth-bypass')
+  assert.match(pan.body, /10\.1\.14-h6/)
+  assert.match(pan.body, /0012 不影响 10\.1/)
+  const gp = get('cve-2024-3400-panos-globalprotect')
+  assert.match(gp.body, /10\.2\.7-h8/)
+  assert.match(gp.body, /设备遥测不需要启用/)
+  assert.match(gp.body, /Panorama appliances/)
+  assert.ok([pulse, tmui, rest, forti, ivanti, cp, pan, gp].every(row => row.verified === false))
+  const versionStatus = (cve, version) => matchCveCandidates({cve, version}).items[0].version_applicability.status
+  assert.equal(versionStatus('CVE-2020-5902', '11.6.5.2'), 'unknown')
+  assert.equal(versionStatus('CVE-2024-3400', '10.2.7-h8'), 'unknown')
+  assert.equal(versionStatus('CVE-2023-46805', '22.4R2.2'), 'unknown')
+})
+
+
+test('all nine Java deserialization-category references preserve advisory scope and historic claims', () => {
+  const get = name => getBundledKnowledge('fujiang:java-deser:' + name)
+  const wls = get('cve-2015-4852-weblogic-t3')
+  assert.match(wls.body, /CVSS v2 7\.5/)
+  assert.match(wls.body, /2075927\.1/)
+  const shiro = get('cve-2016-4437-shiro-rememberme')
+  assert.match(shiro.body, /1\.2\.5 之前/)
+  assert.match(shiro.body, /未设置加密密钥/)
+  const wsat = get('cve-2017-10271-weblogic-wls-wsat')
+  assert.match(wsat.body, /12\.2\.1\.1\.0/)
+  assert.match(wsat.body, /WLS Security\/T3 拒绝服务/)
+  const struts = get('cve-2017-5638-struts2-s2-045')
+  assert.match(struts.body, /2\.5\.10\.1/)
+  assert.match(struts.body, /Jakarta Multipart parser/)
+  const log4j = get('cve-2021-44228-log4shell')
+  assert.match(log4j.body, /log4j-core/)
+  assert.match(log4j.body, /log4j-api 不受影响/)
+  assert.match(log4j.body, /2\.17\.1/)
+  const yaml = get('cve-2022-1471-snakeyaml')
+  assert.match(yaml.body, /SafeConstructor/)
+  assert.match(yaml.body, /2\.0 边界差异/)
+  const ecdsa = get('cve-2022-21449-psychic-signatures')
+  assert.match(ecdsa.body, /18\.0\.1/)
+  assert.match(ecdsa.body, /GraalVM/)
+  const spring = get('cve-2022-22965-spring4shell')
+  assert.match(spring.body, /5\.2\.20\.RELEASE/)
+  assert.match(spring.body, /具体方式/)
+  const fastjson = get('cve-2022-25845-fastjson-autotype')
+  assert.match(fastjson.body, /1\.2\.83/)
+  assert.match(fastjson.body, /safeMode/)
+  assert.ok([wls, shiro, wsat, struts, log4j, yaml, ecdsa, spring, fastjson].every(row => row.verified === false))
+  const status = (cve, version) => matchCveCandidates({cve, version}).items[0].version_applicability.status
+  assert.equal(status('CVE-2016-4437', '1.2.4'), 'affected')
+  assert.equal(status('CVE-2016-4437', '1.2.5'), 'not_affected')
+  assert.equal(status('CVE-2022-25845', '1.2.82'), 'affected')
+  assert.equal(status('CVE-2022-25845', '1.2.83'), 'not_affected')
+  assert.equal(status('CVE-2017-5638', '2.5.10.1'), 'unknown')
+  assert.equal(status('CVE-2022-1471', '2.0'), 'unknown')
 })

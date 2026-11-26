@@ -1,0 +1,2684 @@
+{
+ "source": "https://github.com/wgpsec/AboutSecurity",
+ "source_commit": "c0d3a4645f26be5b94f64344b501db4191dc9788",
+ "kind": "dictionary",
+ "note": "索引指向本地 AboutSecurity 仓库；文件本体不随包分发。",
+ "groups": [
+  {
+   "category": "dic",
+   "description": "渗透测试字典总集合，涵盖认证凭据、Web路径、端口服务、基础数据等各类字典",
+   "files": [
+    {
+     "name": "readme.md",
+     "path": "Dic/readme.md",
+     "lines": 94,
+     "bytes": 1787,
+     "description": "字典目录结构和使用说明文档",
+     "usage": "了解字典分类结构和各目录用途",
+     "tags": "documentation,说明文档,readme,目录说明"
+    }
+   ]
+  },
+  {
+   "category": "auth",
+   "description": "认证相关字典集合，包含用户名密码对、凭据组合",
+   "files": [
+    {
+     "name": "credential-pair.txt",
+     "path": "Dic/auth/credential-pair.txt",
+     "lines": 701,
+     "bytes": 10105,
+     "description": "常见的用户名:密码组合对（冒号分隔）",
+     "usage": "批量凭据填充攻击、多服务默认账密快速验证",
+     "tags": "credential-pair,凭据对,用户名密码组合,默认账密"
+    }
+   ]
+  },
+  {
+   "category": "auth/device-default",
+   "description": "政府/政务及政企内网常见安全设备与OA系统的默认口令（出厂初始口令）集合，用于授权范围内的资产默认口令核验与弱口令排查",
+   "files": [
+    {
+     "name": "security-appliance-default.txt",
+     "path": "Dic/auth/device-default/security-appliance-default.txt",
+     "lines": 34,
+     "bytes": 564,
+     "description": "防火墙/VPN/安全审计/日志审计等安全设备默认口令（天融信、华为、H3C、启明星辰、深信服、安恒、绿盟、网神、联想网御等）",
+     "usage": "授权范围内安全设备默认口令快速核验、登录爆破初筛",
+     "tags": "firewall,防火墙,vpn,审计,日志,绿盟,天融信,华为,H3C,启明星辰,深信服,安恒,网神,联想网御,默认口令,default-credential"
+    },
+    {
+     "name": "oa-system-default.txt",
+     "path": "Dic/auth/device-default/oa-system-default.txt",
+     "lines": 5,
+     "bytes": 77,
+     "description": "政务/企业 OA 系统默认口令（致远OA、泛微OA 等）",
+     "usage": "授权范围内 OA 系统默认口令核验",
+     "tags": "oa,致远,泛微,办公系统,默认口令,default-credential"
+    }
+   ]
+  },
+  {
+   "category": "auth/flask",
+   "description": "Flask session 常见 SECRET_KEY 短字典，用于离线爆破 cookie 签名",
+   "files": [
+    {
+     "name": "flask-secret-key.txt",
+     "path": "Dic/auth/flask/flask-secret-key.txt",
+     "lines": 12,
+     "bytes": 195,
+     "description": "常见 Flask SECRET_KEY 示例（flask secret key wordlist）",
+     "usage": "使用 flask-unsign 或 hashcat 离线爆破 Flask session cookie 的 SECRET_KEY",
+     "tags": "flask,flask secret key,flask secret key wordlist,secret_key,SECRET_KEY"
+    }
+   ]
+  },
+  {
+   "category": "auth/jwt",
+   "description": "JWT HMAC 弱密钥字典，用于离线爆破 HS256/HS384/HS512",
+   "files": [
+    {
+     "name": "jwt-secret.txt",
+     "path": "Dic/auth/jwt/jwt-secret.txt",
+     "lines": 42,
+     "bytes": 431,
+     "description": "常见默认 JWT HMAC 密钥（jwt secret wordlist）",
+     "usage": "使用 jwt_tool、hashcat 或 john 离线爆破 HS256/HS384/HS512 密钥",
+     "tags": "jwt secret wordlist,jwt,secret,hmac,hs256"
+    }
+   ]
+  },
+  {
+   "category": "auth/password",
+   "description": "常见弱口令及按使用频率排序的密码字典集合",
+   "files": [
+    {
+     "name": "pass-admin.txt",
+     "path": "Dic/auth/password/pass-admin.txt",
+     "lines": 586,
+     "bytes": 7025,
+     "description": "以admin为前缀的管理员常用密码组合",
+     "usage": "后台管理员账户密码爆破",
+     "tags": "admin,管理员,admin-password,后台密码"
+    },
+    {
+     "name": "password-top10.txt",
+     "path": "Dic/auth/password/password-top10.txt",
+     "lines": 10,
+     "bytes": 78,
+     "description": "最常见的10个弱口令，覆盖常见密码与 rockyou 高频口令子集",
+     "usage": "快速验证默认密码、登录初筛",
+     "tags": "top10,common,weak,极简弱口令,top,wordlist,password top,常见密码,rockyou"
+    },
+    {
+     "name": "password-top100.txt",
+     "path": "Dic/auth/password/password-top100.txt",
+     "lines": 173,
+     "bytes": 1520,
+     "description": "最常见的约100个弱口令，覆盖常见密码与 rockyou 高频口令子集",
+     "usage": "登录爆破初筛、快速验证默认口令",
+     "tags": "top100,common,weak,弱口令,top,wordlist,password top,常见密码,rockyou"
+    },
+    {
+     "name": "password-top1000.txt",
+     "path": "Dic/auth/password/password-top1000.txt",
+     "lines": 1888,
+     "bytes": 16220,
+     "description": "约1000个常见弱口令集合，覆盖常见密码与 rockyou 高频口令子集",
+     "usage": "中等规模登录爆破",
+     "tags": "top1000,medium,弱口令,常用密码,top,wordlist,password top,常见密码,rockyou"
+    },
+    {
+     "name": "password-top20000.txt",
+     "path": "Dic/auth/password/password-top20000.txt",
+     "lines": 19315,
+     "bytes": 165181,
+     "description": "约20000个常用密码集合，可替代 rockyou 做常见密码爆破",
+     "usage": "大规模登录爆破、深度密码猜测",
+     "tags": "top20000,large,弱口令,密码字典,top,wordlist,password top,常见密码,rockyou"
+    },
+    {
+     "name": "password-top100000.txt",
+     "path": "Dic/auth/password/password-top100000.txt",
+     "lines": 94123,
+     "bytes": 805573,
+     "description": "约100000个密码的超大字典，可替代 rockyou 常见密码字典",
+     "usage": "全面密码爆破、离线哈希碰撞",
+     "tags": "top100000,exhaustive,密码字典,大字典,top,wordlist,password top,常见密码,rockyou"
+    },
+    {
+     "name": "sql.txt",
+     "path": "Dic/auth/password/sql.txt",
+     "lines": 121,
+     "bytes": 1902,
+     "description": "SQL注入认证绕过用的密码Payload",
+     "usage": "登录框SQL注入绕过测试",
+     "tags": "sqli,injection,注入绕过,万能密码"
+    }
+   ]
+  },
+  {
+   "category": "auth/password/complex",
+   "description": "按复杂度规则生成的密码字典，含大小写字母、数字、特殊字符组合",
+   "files": [
+    {
+     "name": "alphanum-6char.txt",
+     "path": "Dic/auth/password/complex/alphanum-6char.txt",
+     "lines": 76905,
+     "bytes": 740541,
+     "description": "6位字母数字混合密码（含大小写和数字）",
+     "usage": "针对6位最低复杂度策略的密码爆破",
+     "tags": "6char,alphanumeric,字母数字,混合密码"
+    },
+    {
+     "name": "alphanum-8char.txt",
+     "path": "Dic/auth/password/complex/alphanum-8char.txt",
+     "lines": 60850,
+     "bytes": 619038,
+     "description": "8位字母数字混合密码（含大小写和数字）",
+     "usage": "针对8位最低复杂度策略的密码爆破",
+     "tags": "8char,alphanumeric,字母数字,混合密码"
+    },
+    {
+     "name": "complex-6char-all-four-rules.txt",
+     "path": "Dic/auth/password/complex/complex-6char-all-four-rules.txt",
+     "lines": 2972,
+     "bytes": 34660,
+     "description": "6位密码，满足大写+小写+数字+特殊字符四种规则",
+     "usage": "绕过严格密码策略（四种字符类型必须包含）的爆破",
+     "tags": "6char,four-rules,四种字符,最强策略"
+    },
+    {
+     "name": "complex-6char-alpha-digit-special.txt",
+     "path": "Dic/auth/password/complex/complex-6char-alpha-digit-special.txt",
+     "lines": 27563,
+     "bytes": 305104,
+     "description": "6位密码，含字母+数字+特殊字符",
+     "usage": "针对要求字母数字特殊字符组合的密码策略爆破",
+     "tags": "6char,alpha-digit-special,字母数字特殊"
+    },
+    {
+     "name": "complex-6char-three-of-four.txt",
+     "path": "Dic/auth/password/complex/complex-6char-three-of-four.txt",
+     "lines": 107960,
+     "bytes": 1086520,
+     "description": "6位密码，满足四种字符类型中的任意三种",
+     "usage": "针对\"四选三\"复杂度策略的密码爆破",
+     "tags": "6char,three-of-four,四选三,复杂度策略"
+    },
+    {
+     "name": "complex-6char-upper-lower-digit-no-repeat.txt",
+     "path": "Dic/auth/password/complex/complex-6char-upper-lower-digit-no-repeat.txt",
+     "lines": 76905,
+     "bytes": 740541,
+     "description": "6位密码，含大小写+数字且无重复字符",
+     "usage": "针对禁止重复字符的密码策略爆破",
+     "tags": "6char,no-repeat,无重复,大小写数字"
+    },
+    {
+     "name": "complex-6char-upper-lower-digit.txt",
+     "path": "Dic/auth/password/complex/complex-6char-upper-lower-digit.txt",
+     "lines": 75945,
+     "bytes": 730972,
+     "description": "6位密码，含大写+小写+数字",
+     "usage": "针对要求大小写和数字的密码策略爆破",
+     "tags": "6char,upper-lower-digit,大小写数字"
+    },
+    {
+     "name": "complex-8char-all-four-rules.txt",
+     "path": "Dic/auth/password/complex/complex-8char-all-four-rules.txt",
+     "lines": 2548,
+     "bytes": 31597,
+     "description": "8位密码，满足大写+小写+数字+特殊字符四种规则",
+     "usage": "绕过8位严格密码策略（四种字符类型必须包含）的爆破",
+     "tags": "8char,four-rules,四种字符,最强策略"
+    },
+    {
+     "name": "complex-8char-alpha-digit-special.txt",
+     "path": "Dic/auth/password/complex/complex-8char-alpha-digit-special.txt",
+     "lines": 26857,
+     "bytes": 299773,
+     "description": "8位密码，含字母+数字+特殊字符",
+     "usage": "针对8位要求字母数字特殊字符组合的密码策略爆破",
+     "tags": "8char,alpha-digit-special,字母数字特殊"
+    },
+    {
+     "name": "complex-8char-three-of-four.txt",
+     "path": "Dic/auth/password/complex/complex-8char-three-of-four.txt",
+     "lines": 91281,
+     "bytes": 960262,
+     "description": "8位密码，满足四种字符类型中的任意三种",
+     "usage": "针对8位\"四选三\"复杂度策略的密码爆破",
+     "tags": "8char,three-of-four,四选三,复杂度策略"
+    },
+    {
+     "name": "complex-8char-upper-lower-digit-no-repeat.txt",
+     "path": "Dic/auth/password/complex/complex-8char-upper-lower-digit-no-repeat.txt",
+     "lines": 60850,
+     "bytes": 619038,
+     "description": "8位密码，含大小写+数字且无重复字符",
+     "usage": "针对8位禁止重复字符的密码策略爆破",
+     "tags": "8char,no-repeat,无重复,大小写数字"
+    },
+    {
+     "name": "complex-8char-upper-lower-digit.txt",
+     "path": "Dic/auth/password/complex/complex-8char-upper-lower-digit.txt",
+     "lines": 59995,
+     "bytes": 610200,
+     "description": "8位密码，含大写+小写+数字",
+     "usage": "针对8位要求大小写和数字的密码策略爆破",
+     "tags": "8char,upper-lower-digit,大小写数字"
+    },
+    {
+     "name": "complex-top100.txt",
+     "path": "Dic/auth/password/complex/complex-top100.txt",
+     "lines": 104,
+     "bytes": 1010,
+     "description": "最常见的100个复杂密码",
+     "usage": "快速测试常见复杂密码组合",
+     "tags": "top100,常见复杂密码,快速筛查"
+    },
+    {
+     "name": "complex-top1000.txt",
+     "path": "Dic/auth/password/complex/complex-top1000.txt",
+     "lines": 1299,
+     "bytes": 13873,
+     "description": "最常见的1000个复杂密码",
+     "usage": "中等规模复杂密码爆破",
+     "tags": "top1000,常见复杂密码,中等规模"
+    },
+    {
+     "name": "complex-top30.txt",
+     "path": "Dic/auth/password/complex/complex-top30.txt",
+     "lines": 35,
+     "bytes": 326,
+     "description": "最常见的30个复杂密码",
+     "usage": "极速验证最常用的复杂密码",
+     "tags": "top30,常见复杂密码,极速筛查"
+    },
+    {
+     "name": "readme.md",
+     "path": "Dic/auth/password/complex/readme.md",
+     "lines": 19,
+     "bytes": 425,
+     "description": "复杂密码字典的生成规则说明文档",
+     "usage": "了解各字典文件的生成规则与适用场景",
+     "tags": "documentation,说明文档,readme"
+    }
+   ]
+  },
+  {
+   "category": "auth/password/wpa",
+   "description": "WPA/WPA2无线网络密码字典，按常见WiFi密码频率排序",
+   "files": [
+    {
+     "name": "top200000-wpa.txt",
+     "path": "Dic/auth/password/wpa/top200000-wpa.txt",
+     "lines": 203806,
+     "bytes": 2121749,
+     "description": "约20万个最常见的WPA/WiFi密码",
+     "usage": "大规模WiFi握手包离线破解",
+     "tags": "top200000,大字典,wifi-crack,离线破解"
+    },
+    {
+     "name": "top447-wpa.txt",
+     "path": "Dic/auth/password/wpa/top447-wpa.txt",
+     "lines": 447,
+     "bytes": 4147,
+     "description": "最常见的447个WiFi密码",
+     "usage": "WiFi密码快速猜测验证",
+     "tags": "top447,快速验证,常见WiFi密码"
+    },
+    {
+     "name": "top4800-wpa.txt",
+     "path": "Dic/auth/password/wpa/top4800-wpa.txt",
+     "lines": 4800,
+     "bytes": 45275,
+     "description": "最常见的4800个WiFi密码",
+     "usage": "中等规模WiFi密码爆破",
+     "tags": "top4800,中等规模,WiFi密码"
+    },
+    {
+     "name": "top62-wpa.txt",
+     "path": "Dic/auth/password/wpa/top62-wpa.txt",
+     "lines": 62,
+     "bytes": 572,
+     "description": "最常见的62个WiFi密码",
+     "usage": "WiFi密码极速初筛",
+     "tags": "top62,极速筛查,WiFi弱口令"
+    }
+   ]
+  },
+  {
+   "category": "auth/username",
+   "description": "各类用户名字典，含邮箱、手机号、英文名等常见账户名",
+   "files": [
+    {
+     "name": "cn-email.txt",
+     "path": "Dic/auth/username/cn-email.txt",
+     "lines": 309,
+     "bytes": 4911,
+     "description": "中国常见测试邮箱地址格式的用户名（含163/qq/gmail等后缀）",
+     "usage": "中国目标的测试邮箱账户枚举与登录爆破",
+     "tags": "email,邮箱,中国邮箱,cn-email,chinese,china"
+    },
+    {
+     "name": "cn-phone.txt",
+     "path": "Dic/auth/username/cn-phone.txt",
+     "lines": 345,
+     "bytes": 4140,
+     "description": "中国常见测试手机号码格式",
+     "usage": "以测试手机号为用户名的系统登录爆破",
+     "tags": "phone,手机号,中国手机,mobile"
+    },
+    {
+     "name": "username-top10000.txt",
+     "path": "Dic/auth/username/username-top10000.txt",
+     "lines": 10415,
+     "bytes": 74819,
+     "description": "约10000个通用用户名集合",
+     "usage": "大规模用户名枚举与爆破",
+     "tags": "large,大字典,通用用户名,枚举"
+    },
+    {
+     "name": "user-mail.txt",
+     "path": "Dic/auth/username/user-mail.txt",
+     "lines": 59,
+     "bytes": 404,
+     "description": "常见的邮件系统管理员用户名",
+     "usage": "邮件服务器用户名枚举",
+     "tags": "mail,邮件,管理员,mail-admin"
+    },
+    {
+     "name": "user-us.txt",
+     "path": "Dic/auth/username/user-us.txt",
+     "lines": 2092,
+     "bytes": 17753,
+     "description": "英文常见用户名集合",
+     "usage": "英文系统/国际化目标的用户名枚举",
+     "tags": "english,英文用户名,us,international"
+    },
+    {
+     "name": "user-web.txt",
+     "path": "Dic/auth/username/user-web.txt",
+     "lines": 113,
+     "bytes": 855,
+     "description": "Web应用常见用户名及数字ID",
+     "usage": "Web应用用户名枚举与账户爆破",
+     "tags": "web,网站用户名,数字ID,web-app"
+    }
+   ]
+  },
+  {
+   "category": "auth/username/pinyin",
+   "description": "中文姓名拼音相关的用户名字典，适用于国内系统",
+   "files": [
+    {
+     "name": "cn-firstname.txt",
+     "path": "Dic/auth/username/pinyin/cn-firstname.txt",
+     "lines": 128,
+     "bytes": 685,
+     "description": "中国常见名字（中文汉字）",
+     "usage": "生成中文姓名组合、社工字典基础数据",
+     "tags": "firstname,名字,中文名,given-name"
+    },
+    {
+     "name": "cn-surname.txt",
+     "path": "Dic/auth/username/pinyin/cn-surname.txt",
+     "lines": 117,
+     "bytes": 500,
+     "description": "中国常见姓氏（中文汉字，含复姓）",
+     "usage": "生成中文姓名组合、社工字典基础数据",
+     "tags": "surname,姓氏,百家姓,family-name"
+    },
+    {
+     "name": "lastname.txt",
+     "path": "Dic/auth/username/pinyin/lastname.txt",
+     "lines": 189,
+     "bytes": 819,
+     "description": "中国常见姓氏的拼音格式",
+     "usage": "拼音用户名枚举的姓氏部分",
+     "tags": "lastname,姓氏拼音,surname-pinyin"
+    },
+    {
+     "name": "cn-fullname-1k.txt",
+     "path": "Dic/auth/username/pinyin/cn-fullname-1k.txt",
+     "lines": 1068,
+     "bytes": 9167,
+     "description": "常见中文全名（汉字，约1000个）",
+     "usage": "国内系统以中文全名为用户名的枚举",
+     "tags": "fullname,中文全名,汉字姓名,chinese-name"
+    },
+    {
+     "name": "cn-fullname-14k.txt",
+     "path": "Dic/auth/username/pinyin/cn-fullname-14k.txt",
+     "lines": 14391,
+     "bytes": 123749,
+     "description": "大规模中文全名集合（汉字，约14000个）",
+     "usage": "大规模中文全名用户名枚举",
+     "tags": "fullname,中文全名,大字典,large"
+    },
+    {
+     "name": "pinyin-abbrev.txt",
+     "path": "Dic/auth/username/pinyin/pinyin-abbrev.txt",
+     "lines": 1443,
+     "bytes": 9780,
+     "description": "姓氏全拼+名字首字母缩写格式（如zhangj、caijh）",
+     "usage": "缩写格式用户名枚举",
+     "tags": "abbreviation,缩写,姓全拼+名首字母"
+    },
+    {
+     "name": "pinyin-firstname.txt",
+     "path": "Dic/auth/username/pinyin/pinyin-firstname.txt",
+     "lines": 1402,
+     "bytes": 9996,
+     "description": "中文名字的拼音（如anqi、anyang）",
+     "usage": "拼音名字部分的用户名枚举",
+     "tags": "firstname,名字拼音,given-name-pinyin"
+    },
+    {
+     "name": "pinyin-dot-fullname.txt",
+     "path": "Dic/auth/username/pinyin/pinyin-dot-fullname.txt",
+     "lines": 1133,
+     "bytes": 10668,
+     "description": "点分全名拼音格式（如zhang.wei、w.zhang）",
+     "usage": "邮箱/企业系统常见的点分拼音用户名枚举",
+     "tags": "dot-separated,点分格式,email-style,企业用户名"
+    },
+    {
+     "name": "pinyin-fullname.txt",
+     "path": "Dic/auth/username/pinyin/pinyin-fullname.txt",
+     "lines": 991,
+     "bytes": 9640,
+     "description": "中文姓名全拼连写格式（如anwenran、baihonglu）",
+     "usage": "全拼连写格式的用户名枚举",
+     "tags": "pinyin,全拼连写,中文名,fullname"
+    },
+    {
+     "name": "pinyin-initials.txt",
+     "path": "Dic/auth/username/pinyin/pinyin-initials.txt",
+     "lines": 217,
+     "bytes": 775,
+     "description": "中文姓名首字母缩写格式（如cb、cf）",
+     "usage": "首字母缩写格式的用户名枚举",
+     "tags": "initials,首字母,缩写,initials-only"
+    }
+   ]
+  },
+  {
+   "category": "network",
+   "description": "网络扫描相关字典，含DNS服务器、排除网段和本地IP变体",
+   "files": [
+    {
+     "name": "dns-servers.txt",
+     "path": "Dic/network/dns-servers.txt",
+     "lines": 10,
+     "bytes": 118,
+     "description": "常用公共DNS服务器IP地址（含国内外）",
+     "usage": "DNS查询时指定可靠的DNS服务器",
+     "tags": "dns,dns-server,公共DNS,resolver,域名解析"
+    },
+    {
+     "name": "exclude.txt",
+     "path": "Dic/network/exclude.txt",
+     "lines": 18,
+     "bytes": 250,
+     "description": "扫描时应排除的保留IP网段（内网、环回等）",
+     "usage": "网络扫描时排除非目标网段",
+     "tags": "ip,exclude,排除,reserved,保留网段,内网"
+    },
+    {
+     "name": "local-ip.txt",
+     "path": "Dic/network/local-ip.txt",
+     "lines": 55,
+     "bytes": 824,
+     "description": "本地回环地址的各种编码和表示变体",
+     "usage": "SSRF漏洞测试中绕过IP过滤",
+     "tags": "localhost,回环地址,ssrf-bypass,ip-bypass"
+    }
+   ]
+  },
+  {
+   "category": "network/subdomain",
+   "description": "子域（subdomain）枚举常用字典，覆盖域名（domain）常见子域前缀、环境与业务关键字，用于授权范围内子域名爆破/枚举",
+   "files": [
+    {
+     "name": "subdomain-common.txt",
+     "path": "Dic/network/subdomain/subdomain-common.txt",
+     "lines": 150,
+     "bytes": 778,
+     "description": "常见子域名字典（业务/环境/基础设施关键字，如 api、admin、oa、vpn、mail、test、dev 等）",
+     "usage": "授权范围内子域名枚举、域名爆破、子域接管排查",
+     "tags": "subdomain,子域,子域名,domain,域名,wordlist,字典,dictionary,枚举,爆破,dns,brute,content discovery,api,admin,oa,vpn,mail,test,dev"
+    }
+   ]
+  },
+  {
+   "category": "port",
+   "description": "各类网络服务端口的默认凭据字典集合，含端口列表",
+   "files": [
+    {
+     "name": "port-list.md",
+     "path": "Dic/port/port-list.md",
+     "lines": 5939,
+     "bytes": 249444,
+     "description": "常见端口号与对应服务的详细对照表",
+     "usage": "端口识别、服务判断参考",
+     "tags": "port-list,端口列表,服务对照,参考文档"
+    },
+    {
+     "name": "port.txt",
+     "path": "Dic/port/port.txt",
+     "lines": 2087,
+     "bytes": 10445,
+     "description": "常用端口号列表",
+     "usage": "端口扫描目标范围指定",
+     "tags": "port-scan,端口扫描,端口号,nmap"
+    }
+   ]
+  },
+  {
+   "category": "port/db2",
+   "description": "IBM DB2数据库默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/db2/pass.txt",
+     "lines": 2,
+     "bytes": 15,
+     "description": "DB2数据库常见默认密码",
+     "usage": "DB2数据库密码爆破",
+     "tags": "password,密码,db2-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/db2/user.txt",
+     "lines": 4,
+     "bytes": 32,
+     "description": "DB2数据库常见默认用户名",
+     "usage": "DB2数据库用户名爆破",
+     "tags": "username,用户名,db2-user"
+    }
+   ]
+  },
+  {
+   "category": "port/esxi",
+   "description": "VMware ESXi虚拟化平台默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/esxi/pass.txt",
+     "lines": 46,
+     "bytes": 376,
+     "description": "ESXi常见密码",
+     "usage": "ESXi管理平台密码爆破",
+     "tags": "password,密码,esxi-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/esxi/user.txt",
+     "lines": 5,
+     "bytes": 29,
+     "description": "ESXi常见用户名",
+     "usage": "ESXi管理平台用户名爆破",
+     "tags": "username,用户名,esxi-user"
+    }
+   ]
+  },
+  {
+   "category": "port/ftp",
+   "description": "FTP文件传输服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/ftp/pass.txt",
+     "lines": 114,
+     "bytes": 682,
+     "description": "FTP服务常见密码",
+     "usage": "FTP服务密码爆破",
+     "tags": "password,密码,ftp-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/ftp/user.txt",
+     "lines": 12,
+     "bytes": 68,
+     "description": "FTP服务常见用户名",
+     "usage": "FTP服务用户名爆破",
+     "tags": "username,用户名,ftp-user"
+    }
+   ]
+  },
+  {
+   "category": "port/memcached",
+   "description": "Memcached缓存服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/memcached/pass.txt",
+     "lines": 33,
+     "bytes": 262,
+     "description": "Memcached常见密码",
+     "usage": "Memcached认证密码爆破",
+     "tags": "password,密码,memcached-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/memcached/user.txt",
+     "lines": 4,
+     "bytes": 19,
+     "description": "Memcached常见用户名",
+     "usage": "Memcached认证用户名爆破",
+     "tags": "username,用户名,memcached-user"
+    }
+   ]
+  },
+  {
+   "category": "port/mongodb",
+   "description": "MongoDB数据库默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/mongodb/pass.txt",
+     "lines": 62,
+     "bytes": 558,
+     "description": "MongoDB常见密码",
+     "usage": "MongoDB数据库密码爆破",
+     "tags": "password,密码,mongodb-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/mongodb/user.txt",
+     "lines": 4,
+     "bytes": 21,
+     "description": "MongoDB常见用户名",
+     "usage": "MongoDB数据库用户名爆破",
+     "tags": "username,用户名,mongodb-user"
+    }
+   ]
+  },
+  {
+   "category": "port/mysql",
+   "description": "MySQL数据库默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/mysql/pass.txt",
+     "lines": 233,
+     "bytes": 2215,
+     "description": "MySQL常见密码",
+     "usage": "MySQL数据库密码爆破",
+     "tags": "password,密码,mysql-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/mysql/user.txt",
+     "lines": 7,
+     "bytes": 34,
+     "description": "MySQL常见默认用户名",
+     "usage": "MySQL数据库用户名爆破",
+     "tags": "username,用户名,mysql-user"
+    }
+   ]
+  },
+  {
+   "category": "port/oracle",
+   "description": "Oracle数据库默认凭据和SID字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/oracle/pass.txt",
+     "lines": 511,
+     "bytes": 3397,
+     "description": "Oracle数据库常见密码",
+     "usage": "Oracle数据库密码爆破",
+     "tags": "password,密码,oracle-pass"
+    },
+    {
+     "name": "sid.txt",
+     "path": "Dic/port/oracle/sid.txt",
+     "lines": 575,
+     "bytes": 3835,
+     "description": "Oracle数据库常见SID名称",
+     "usage": "Oracle SID枚举与发现",
+     "tags": "sid,实例名,oracle-sid,枚举"
+    },
+    {
+     "name": "user-common.txt",
+     "path": "Dic/port/oracle/user-common.txt",
+     "lines": 10,
+     "bytes": 56,
+     "description": "Oracle最常见的默认用户名（精简版）",
+     "usage": "Oracle数据库快速用户名验证",
+     "tags": "username,用户名,oracle-user,精简"
+    },
+    {
+     "name": "user-extended.txt",
+     "path": "Dic/port/oracle/user-extended.txt",
+     "lines": 479,
+     "bytes": 3152,
+     "description": "Oracle数据库用户名大字典",
+     "usage": "Oracle数据库全面用户名枚举",
+     "tags": "username,用户名,oracle-user,大字典"
+    }
+   ]
+  },
+  {
+   "category": "port/pop3",
+   "description": "POP3邮件服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/pop3/pass.txt",
+     "lines": 27,
+     "bytes": 203,
+     "description": "POP3邮件服务常见密码",
+     "usage": "POP3邮件服务密码爆破",
+     "tags": "password,密码,pop3-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/pop3/user.txt",
+     "lines": 1502,
+     "bytes": 14432,
+     "description": "POP3邮件服务用户名大字典",
+     "usage": "POP3邮箱账户枚举与爆破",
+     "tags": "username,用户名,pop3-user,邮箱账户"
+    }
+   ]
+  },
+  {
+   "category": "port/postgresql",
+   "description": "PostgreSQL数据库默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/postgresql/pass.txt",
+     "lines": 38,
+     "bytes": 307,
+     "description": "PostgreSQL常见密码",
+     "usage": "PostgreSQL数据库密码爆破",
+     "tags": "password,密码,postgres-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/postgresql/user.txt",
+     "lines": 3,
+     "bytes": 19,
+     "description": "PostgreSQL常见默认用户名",
+     "usage": "PostgreSQL数据库用户名爆破",
+     "tags": "username,用户名,postgres-user"
+    }
+   ]
+  },
+  {
+   "category": "port/rdp",
+   "description": "RDP远程桌面服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/rdp/pass.txt",
+     "lines": 264,
+     "bytes": 2510,
+     "description": "RDP远程桌面常见密码",
+     "usage": "RDP远程桌面密码爆破",
+     "tags": "password,密码,rdp-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/rdp/user.txt",
+     "lines": 27,
+     "bytes": 206,
+     "description": "RDP远程桌面常见用户名",
+     "usage": "RDP远程桌面用户名爆破",
+     "tags": "username,用户名,rdp-user"
+    }
+   ]
+  },
+  {
+   "category": "port/redis",
+   "description": "Redis缓存数据库密码字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/redis/pass.txt",
+     "lines": 38,
+     "bytes": 310,
+     "description": "Redis常见认证密码",
+     "usage": "Redis未授权/弱口令爆破",
+     "tags": "password,密码,redis-pass,弱口令"
+    }
+   ]
+  },
+  {
+   "category": "port/smtp",
+   "description": "SMTP邮件发送服务凭据字典",
+   "files": [
+    {
+     "name": "cn-email-username.txt",
+     "path": "Dic/port/smtp/cn-email-username.txt",
+     "lines": 1959,
+     "bytes": 14196,
+     "description": "中国常见邮箱用户名集合",
+     "usage": "国内邮件服务器用户名枚举",
+     "tags": "cn-email,中国邮箱,用户名,枚举"
+    },
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/smtp/pass.txt",
+     "lines": 27,
+     "bytes": 203,
+     "description": "SMTP邮件服务常见密码",
+     "usage": "SMTP邮件服务密码爆破",
+     "tags": "password,密码,smtp-pass"
+    },
+    {
+     "name": "us-email-username.txt",
+     "path": "Dic/port/smtp/us-email-username.txt",
+     "lines": 2092,
+     "bytes": 17754,
+     "description": "英文常见邮箱用户名集合",
+     "usage": "国外邮件服务器用户名枚举",
+     "tags": "us-email,英文邮箱,用户名,枚举"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/smtp/user.txt",
+     "lines": 1502,
+     "bytes": 14432,
+     "description": "SMTP邮件服务通用用户名大字典",
+     "usage": "SMTP邮件服务用户名全面枚举",
+     "tags": "username,用户名,smtp-user,大字典"
+    }
+   ]
+  },
+  {
+   "category": "port/snmp",
+   "description": "SNMP网络管理协议社区字符串字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/snmp/pass.txt",
+     "lines": 119,
+     "bytes": 837,
+     "description": "SNMP常见社区字符串（Community String）",
+     "usage": "SNMP社区字符串爆破与信息获取",
+     "tags": "community,社区字符串,snmp-community"
+    }
+   ]
+  },
+  {
+   "category": "port/sqlserver",
+   "description": "SQL Server数据库默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/sqlserver/pass.txt",
+     "lines": 198,
+     "bytes": 1865,
+     "description": "SQL Server常见密码",
+     "usage": "SQL Server数据库密码爆破",
+     "tags": "password,密码,mssql-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/sqlserver/user.txt",
+     "lines": 6,
+     "bytes": 28,
+     "description": "SQL Server常见默认用户名",
+     "usage": "SQL Server数据库用户名爆破",
+     "tags": "username,用户名,mssql-user,sa"
+    }
+   ]
+  },
+  {
+   "category": "port/ssh",
+   "description": "SSH远程登录服务凭据字典",
+   "files": [
+    {
+     "name": "pass-common.txt",
+     "path": "Dic/port/ssh/pass-common.txt",
+     "lines": 107,
+     "bytes": 837,
+     "description": "SSH常见密码精简版",
+     "usage": "SSH密码快速爆破",
+     "tags": "password,密码,ssh-pass,精简"
+    },
+    {
+     "name": "pass-extended.txt",
+     "path": "Dic/port/ssh/pass-extended.txt",
+     "lines": 300,
+     "bytes": 2935,
+     "description": "SSH常见密码扩展版",
+     "usage": "SSH密码中等规模爆破",
+     "tags": "password,密码,ssh-pass,扩展"
+    },
+    {
+     "name": "user-common.txt",
+     "path": "Dic/port/ssh/user-common.txt",
+     "lines": 6,
+     "bytes": 36,
+     "description": "SSH最常见默认用户名（精简版）",
+     "usage": "SSH用户名快速验证",
+     "tags": "username,用户名,ssh-user,精简"
+    },
+    {
+     "name": "user-extended.txt",
+     "path": "Dic/port/ssh/user-extended.txt",
+     "lines": 26,
+     "bytes": 155,
+     "description": "SSH常见用户名扩展版",
+     "usage": "SSH用户名枚举",
+     "tags": "username,用户名,ssh-user,扩展"
+    }
+   ]
+  },
+  {
+   "category": "port/svn",
+   "description": "SVN版本控制服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/svn/pass.txt",
+     "lines": 22,
+     "bytes": 177,
+     "description": "SVN服务常见密码",
+     "usage": "SVN服务密码爆破",
+     "tags": "password,密码,svn-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/svn/user.txt",
+     "lines": 5,
+     "bytes": 24,
+     "description": "SVN服务常见用户名",
+     "usage": "SVN服务用户名爆破",
+     "tags": "username,用户名,svn-user"
+    }
+   ]
+  },
+  {
+   "category": "port/telnet",
+   "description": "Telnet远程登录服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/telnet/pass.txt",
+     "lines": 28,
+     "bytes": 218,
+     "description": "Telnet服务常见密码",
+     "usage": "Telnet服务密码爆破",
+     "tags": "password,密码,telnet-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/telnet/user.txt",
+     "lines": 5,
+     "bytes": 24,
+     "description": "Telnet服务常见用户名",
+     "usage": "Telnet服务用户名爆破",
+     "tags": "username,用户名,telnet-user"
+    }
+   ]
+  },
+  {
+   "category": "port/vnc",
+   "description": "VNC远程桌面服务密码字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/vnc/pass.txt",
+     "lines": 31,
+     "bytes": 259,
+     "description": "VNC远程桌面常见密码",
+     "usage": "VNC服务密码爆破",
+     "tags": "password,密码,vnc-pass,弱口令"
+    }
+   ]
+  },
+  {
+   "category": "port/weblogic",
+   "description": "WebLogic应用服务器默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/port/weblogic/pass.txt",
+     "lines": 3,
+     "bytes": 30,
+     "description": "WebLogic常见默认密码",
+     "usage": "WebLogic控制台密码爆破",
+     "tags": "password,密码,weblogic-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/port/weblogic/user.txt",
+     "lines": 1,
+     "bytes": 8,
+     "description": "WebLogic默认用户名",
+     "usage": "WebLogic控制台用户名验证",
+     "tags": "username,用户名,weblogic-user"
+    }
+   ]
+  },
+  {
+   "category": "regular",
+   "description": "通用基础数据字典，含字母、数字、地址、关键词等规则化数据",
+   "files": [
+    {
+     "name": "eicar.txt",
+     "path": "Dic/regular/eicar.txt",
+     "lines": 1,
+     "bytes": 68,
+     "description": "EICAR防病毒测试文件标准字符串",
+     "usage": "测试杀毒软件是否正常工作",
+     "tags": "eicar,antivirus,防病毒测试,安全检测"
+    },
+    {
+     "name": "readme.md",
+     "path": "Dic/regular/readme.md",
+     "lines": 44,
+     "bytes": 1532,
+     "description": "规则化数据字典的说明文档",
+     "usage": "了解各基础数据字典的生成规则",
+     "tags": "documentation,说明文档,readme"
+    }
+   ]
+  },
+  {
+   "category": "regular/address",
+   "description": "中国行政区划和地址数据字典",
+   "files": [
+    {
+     "name": "area-code.txt",
+     "path": "Dic/regular/address/area-code.txt",
+     "lines": 4072,
+     "bytes": 52953,
+     "description": "全国行政区划代码（省/市/区/县）",
+     "usage": "身份证号码生成、行政区划数据参考",
+     "tags": "area-code,行政区划代码,身份证前缀"
+    },
+    {
+     "name": "cn-areas.txt",
+     "path": "Dic/regular/address/cn-areas.txt",
+     "lines": 2995,
+     "bytes": 35206,
+     "description": "中国区/县级行政区名称",
+     "usage": "地址信息枚举、社工信息收集",
+     "tags": "area,区县,行政区名,county"
+    },
+    {
+     "name": "cn-cities.txt",
+     "path": "Dic/regular/address/cn-cities.txt",
+     "lines": 342,
+     "bytes": 4136,
+     "description": "中国城市名称列表",
+     "usage": "城市信息枚举、社工信息收集",
+     "tags": "city,城市,城市名,municipality"
+    },
+    {
+     "name": "cn-pcas.json",
+     "path": "Dic/regular/address/cn-pcas.json",
+     "lines": 1,
+     "bytes": 676611,
+     "description": "中国省市区街道四级联动JSON数据",
+     "usage": "完整地址数据参考、地址生成",
+     "tags": "pcas,省市区,json,四级联动"
+    }
+   ]
+  },
+  {
+   "category": "regular/keyword",
+   "description": "敏感关键词字典",
+   "files": [
+    {
+     "name": "keyword-common.txt",
+     "path": "Dic/regular/keyword/keyword-common.txt",
+     "lines": 22,
+     "bytes": 145,
+     "description": "配置文件中的敏感关键词（数据库连接、密码等）",
+     "usage": "代码审计和配置文件中的敏感信息搜索",
+     "tags": "sensitive-keyword,敏感词,配置泄露,代码审计"
+    }
+   ]
+  },
+  {
+   "category": "regular/letter",
+   "description": "字母排列组合字典，含1-4位大小写字母全排列",
+   "files": [
+    {
+     "name": "lower-1char.txt",
+     "path": "Dic/regular/letter/lower-1char.txt",
+     "lines": 26,
+     "bytes": 51,
+     "description": "单个小写字母a到z",
+     "usage": "单字母枚举基础数据",
+     "tags": "single,单字母,lowercase,小写,a-z"
+    },
+    {
+     "name": "upper-1char.txt",
+     "path": "Dic/regular/letter/upper-1char.txt",
+     "lines": 26,
+     "bytes": 51,
+     "description": "单个大写字母A到Z",
+     "usage": "单字母枚举基础数据（大写）",
+     "tags": "single,单字母,uppercase,大写,A-Z"
+    },
+    {
+     "name": "lower-2char.txt",
+     "path": "Dic/regular/letter/lower-2char.txt",
+     "lines": 676,
+     "bytes": 2027,
+     "description": "两位小写字母全排列（aa到zz）",
+     "usage": "两位字母组合枚举",
+     "tags": "2char,两位字母,lowercase,排列组合"
+    },
+    {
+     "name": "upper-2char.txt",
+     "path": "Dic/regular/letter/upper-2char.txt",
+     "lines": 676,
+     "bytes": 2027,
+     "description": "两位大写字母全排列（AA到ZZ）",
+     "usage": "两位字母组合枚举（大写）",
+     "tags": "2char,两位字母,uppercase,排列组合"
+    },
+    {
+     "name": "lower-3char.txt",
+     "path": "Dic/regular/letter/lower-3char.txt",
+     "lines": 17576,
+     "bytes": 70303,
+     "description": "三位小写字母全排列（aaa到zzz）",
+     "usage": "三位字母组合枚举",
+     "tags": "3char,三位字母,lowercase,排列组合"
+    },
+    {
+     "name": "upper-3char.txt",
+     "path": "Dic/regular/letter/upper-3char.txt",
+     "lines": 17576,
+     "bytes": 70303,
+     "description": "三位大写字母全排列（AAA到ZZZ）",
+     "usage": "三位字母组合枚举（大写）",
+     "tags": "3char,三位字母,uppercase,排列组合"
+    },
+    {
+     "name": "lower-4char.txt",
+     "path": "Dic/regular/letter/lower-4char.txt",
+     "lines": 456976,
+     "bytes": 2284879,
+     "description": "四位小写字母全排列（aaaa到zzzz）",
+     "usage": "四位字母组合枚举",
+     "tags": "4char,四位字母,lowercase,排列组合"
+    },
+    {
+     "name": "upper-4char.txt",
+     "path": "Dic/regular/letter/upper-4char.txt",
+     "lines": 456976,
+     "bytes": 2284880,
+     "description": "四位大写字母全排列（AAAA到ZZZZ）",
+     "usage": "四位字母组合枚举（大写）",
+     "tags": "4char,四位字母,uppercase,排列组合"
+    },
+    {
+     "name": "misc.txt",
+     "path": "Dic/regular/letter/misc.txt",
+     "lines": 67,
+     "bytes": 133,
+     "description": "数字和常见短字符串混合集合",
+     "usage": "简单ID和短字符串枚举",
+     "tags": "misc,混合,数字字母,短字符串"
+    }
+   ]
+  },
+  {
+   "category": "regular/number",
+   "description": "数字序列字典，含各范围纯数字和日期格式",
+   "files": [
+    {
+     "name": "num-0-10.txt",
+     "path": "Dic/regular/number/num-0-10.txt",
+     "lines": 11,
+     "bytes": 22,
+     "description": "数字0到10",
+     "usage": "小范围数字参数枚举",
+     "tags": "basic,基础数字,0-10"
+    },
+    {
+     "name": "num-0-100.txt",
+     "path": "Dic/regular/number/num-0-100.txt",
+     "lines": 101,
+     "bytes": 293,
+     "description": "数字0到100",
+     "usage": "百以内数字参数枚举",
+     "tags": "basic,基础数字,0-100"
+    },
+    {
+     "name": "num-0-1000.txt",
+     "path": "Dic/regular/number/num-0-1000.txt",
+     "lines": 1001,
+     "bytes": 3895,
+     "description": "数字0到1000",
+     "usage": "千以内数字参数枚举",
+     "tags": "basic,基础数字,0-1000"
+    },
+    {
+     "name": "num-0-5000.txt",
+     "path": "Dic/regular/number/num-0-5000.txt",
+     "lines": 5001,
+     "bytes": 23894,
+     "description": "数字0到5000",
+     "usage": "五千以内数字参数枚举",
+     "tags": "medium,中等范围,0-5000"
+    },
+    {
+     "name": "num-0-10000.txt",
+     "path": "Dic/regular/number/num-0-10000.txt",
+     "lines": 10001,
+     "bytes": 48895,
+     "description": "数字0到10000",
+     "usage": "万以内数字参数枚举",
+     "tags": "medium,中等范围,0-10000"
+    },
+    {
+     "name": "num-0-100000.txt",
+     "path": "Dic/regular/number/num-0-100000.txt",
+     "lines": 100001,
+     "bytes": 588897,
+     "description": "数字0到100000",
+     "usage": "十万以内数字参数枚举",
+     "tags": "large,大范围,0-100000"
+    },
+    {
+     "name": "num-00-99.txt",
+     "path": "Dic/regular/number/num-00-99.txt",
+     "lines": 100,
+     "bytes": 299,
+     "description": "两位数字00到99（补零格式）",
+     "usage": "两位数字枚举",
+     "tags": "2digit,两位数,补零,00-99"
+    },
+    {
+     "name": "num-000-999.txt",
+     "path": "Dic/regular/number/num-000-999.txt",
+     "lines": 1000,
+     "bytes": 3999,
+     "description": "三位数字000到999（补零格式）",
+     "usage": "三位数字枚举",
+     "tags": "3digit,三位数,补零,000-999"
+    },
+    {
+     "name": "num-0000-1000.txt",
+     "path": "Dic/regular/number/num-0000-1000.txt",
+     "lines": 1001,
+     "bytes": 5004,
+     "description": "四位数字0000到1000（补零格式）",
+     "usage": "四位数字枚举（验证码等）",
+     "tags": "4digit,四位数,补零,验证码"
+    },
+    {
+     "name": "num-000000-010000.txt",
+     "path": "Dic/regular/number/num-000000-010000.txt",
+     "lines": 10001,
+     "bytes": 70007,
+     "description": "六位数字000000到010000",
+     "usage": "六位数字验证码枚举",
+     "tags": "6digit,六位数,验证码,010000"
+    },
+    {
+     "name": "num-000000-100000.txt",
+     "path": "Dic/regular/number/num-000000-100000.txt",
+     "lines": 100001,
+     "bytes": 700007,
+     "description": "六位数字000000到100000",
+     "usage": "六位数字验证码全面枚举",
+     "tags": "6digit,六位数,验证码,100000"
+    },
+    {
+     "name": "num-1000-9999.txt",
+     "path": "Dic/regular/number/num-1000-9999.txt",
+     "lines": 9000,
+     "bytes": 44999,
+     "description": "四位数字1000到9999",
+     "usage": "四位纯数字密码/验证码爆破",
+     "tags": "4digit,四位数,密码,验证码"
+    },
+    {
+     "name": "birthday.txt",
+     "path": "Dic/regular/number/birthday.txt",
+     "lines": 110912,
+     "bytes": 962205,
+     "description": "日期格式数字集合（19800101-20201231等）",
+     "usage": "生日密码爆破、日期参数枚举",
+     "tags": "birthday,生日,日期,date,密码"
+    }
+   ]
+  },
+  {
+   "category": "regular/seo",
+   "description": "SEO相关关键词字典",
+   "files": [
+    {
+     "name": "seo-word.txt",
+     "path": "Dic/regular/seo/seo-word.txt",
+     "lines": 21201,
+     "bytes": 396996,
+     "description": "黑帽SEO/博彩/棋牌等违规关键词集合",
+     "usage": "网站篡改检测、黑链识别、违规内容排查",
+     "tags": "blackhat-seo,黑帽SEO,博彩关键词,违规检测"
+    }
+   ]
+  },
+  {
+   "category": "web",
+   "description": "Web方向字典总集合，按用途细分为目录扫描、API参数、文件上传、备份文件、HTTP头、Webshell、DNS、报错指纹、CMS、中间件与服务等子字典",
+   "files": [
+    {
+     "name": "api-param/",
+     "path": "Dic/web/api-param/",
+     "lines": 51156,
+     "bytes": 4096,
+     "description": "Web API参数名和参数值Fuzz字典，按漏洞类型分类",
+     "usage": "接口参数发现与参数级漏洞Fuzz",
+     "tags": "parameter,参数,api,接口,fuzz,参数发现"
+    },
+    {
+     "name": "cms/",
+     "path": "Dic/web/cms/",
+     "lines": 248,
+     "bytes": 4096,
+     "description": "CMS框架路径和控制器字典（WordPress、ThinkPHP）",
+     "usage": "CMS指纹识别与敏感路径探测",
+     "tags": "cms,内容管理,wordpress,thinkphp,框架路径"
+    },
+    {
+     "name": "ctf/",
+     "path": "Dic/web/ctf/",
+     "lines": 363,
+     "bytes": 4096,
+     "description": "CTF Web常用payload与源码泄露路径字典",
+     "usage": "CTF Web题目快速解题与payload试错",
+     "tags": "ctf,竞赛,payload,源码泄露,文件包含,命令执行"
+    },
+    {
+     "name": "directory/",
+     "path": "Dic/web/directory/",
+     "lines": 445001,
+     "bytes": 4096,
+     "description": "Web目录和路径扫描字典集合，按语言和用途分类",
+     "usage": "目录爆破、后台与敏感路径发现",
+     "tags": "directory,目录扫描,路径发现,dirsearch,gobuster,内容发现"
+    },
+    {
+     "name": "dns/",
+     "path": "Dic/web/dns/",
+     "lines": 151749,
+     "bytes": 4096,
+     "description": "子域名与DNS相关字典，含子域名前缀、OOB平台域名、顶级域名后缀",
+     "usage": "子域名爆破、DNS枚举、无回显漏洞OOB域名选择",
+     "tags": "dns,子域名,subdomain,枚举,oob"
+    },
+    {
+     "name": "errors/",
+     "path": "Dic/web/errors/",
+     "lines": 97,
+     "bytes": 4096,
+     "description": "各类Web报错信息指纹集合",
+     "usage": "报错回显识别与框架指纹辅助判断",
+     "tags": "error,报错,指纹,错误回显"
+    },
+    {
+     "name": "file-backup/",
+     "path": "Dic/web/file-backup/",
+     "lines": 58673,
+     "bytes": 4096,
+     "description": "备份文件与敏感文件路径字典，含文件名与目录两类",
+     "usage": "备份文件与源码泄露探测",
+     "tags": "backup,备份文件,源码泄露,敏感文件,信息泄露"
+    },
+    {
+     "name": "http/",
+     "path": "Dic/web/http/",
+     "lines": 2750,
+     "bytes": 4096,
+     "description": "HTTP请求头与协议相关字典，含User-Agent、MIME、认证头、HTTP方法等",
+     "usage": "请求头伪造与WAF绕过测试",
+     "tags": "http,header,请求头,user-agent,mime,绕过"
+    },
+    {
+     "name": "middleware/",
+     "path": "Dic/web/middleware/",
+     "lines": 103700,
+     "bytes": 4096,
+     "description": "Web中间件默认凭据和配置字典集合",
+     "usage": "中间件默认口令验证与配置探测",
+     "tags": "middleware,中间件,默认口令,default-credential"
+    },
+    {
+     "name": "service/",
+     "path": "Dic/web/service/",
+     "lines": 310,
+     "bytes": 4096,
+     "description": "常见Web服务与运维平台字典（Druid、Jira、phpMyAdmin、XXL-JOB）",
+     "usage": "运维平台默认口令与敏感路径探测",
+     "tags": "service,服务,管理平台,信息泄露"
+    },
+    {
+     "name": "upload/",
+     "path": "Dic/web/upload/",
+     "lines": 414,
+     "bytes": 4096,
+     "description": "文件上传绕过字典，含扩展名变形、Content-Type、.htaccess",
+     "usage": "上传黑名单绕过与扩展名Fuzz",
+     "tags": "upload,文件上传,绕过,bypass,扩展名"
+    },
+    {
+     "name": "webshell/",
+     "path": "Dic/web/webshell/",
+     "lines": 490363,
+     "bytes": 4096,
+     "description": "Webshell路径扫描与连接密码爆破字典",
+     "usage": "Webshell落地路径选择与连接密码爆破",
+     "tags": "webshell,木马,后门,路径扫描,密码爆破"
+    }
+   ]
+  },
+  {
+   "category": "web/api-param",
+   "description": "Web API参数名和参数值Fuzz字典，按漏洞类型分类",
+   "files": [
+    {
+     "name": "api.txt",
+     "path": "Dic/web/api-param/api.txt",
+     "lines": 28,
+     "bytes": 141,
+     "description": "API路径分隔符和特殊编码字符",
+     "usage": "API路径Fuzz、WAF绕过测试",
+     "tags": "api-path,路径分隔,特殊字符,waf-bypass"
+    },
+    {
+     "name": "param-callback.txt",
+     "path": "Dic/web/api-param/param-callback.txt",
+     "lines": 9,
+     "bytes": 111,
+     "description": "JSONP回调函数常见参数名及测试值",
+     "usage": "JSONP劫持漏洞检测",
+     "tags": "jsonp,callback,回调劫持,跨域"
+    },
+    {
+     "name": "param-captcha.txt",
+     "path": "Dic/web/api-param/param-captcha.txt",
+     "lines": 50,
+     "bytes": 275,
+     "description": "验证码绕过用的常见测试值",
+     "usage": "验证码逻辑绕过测试",
+     "tags": "captcha,验证码,bypass,绕过"
+    },
+    {
+     "name": "param-common.txt",
+     "path": "Dic/web/api-param/param-common.txt",
+     "lines": 70,
+     "bytes": 832,
+     "description": "常见敏感信息相关参数名（身份证、手机号、用户ID等）",
+     "usage": "敏感接口参数枚举、越权漏洞测试",
+     "tags": "sensitive-param,敏感参数,idor,越权"
+    },
+    {
+     "name": "param-extended.txt",
+     "path": "Dic/web/api-param/param-extended.txt",
+     "lines": 50360,
+     "bytes": 526276,
+     "description": "大规模通用HTTP参数名字典",
+     "usage": "全面参数发现与隐藏参数枚举",
+     "tags": "large,大字典,通用参数,param-discovery"
+    },
+    {
+     "name": "param-findpassword.txt",
+     "path": "Dic/web/api-param/param-findpassword.txt",
+     "lines": 57,
+     "bytes": 632,
+     "description": "找回密码功能相关的接口路径和参数名",
+     "usage": "密码重置功能枚举与逻辑漏洞测试",
+     "tags": "password-reset,找回密码,逻辑漏洞,密码重置"
+    },
+    {
+     "name": "param-imagesize.txt",
+     "path": "Dic/web/api-param/param-imagesize.txt",
+     "lines": 18,
+     "bytes": 352,
+     "description": "图片尺寸相关参数名及大数值Payload",
+     "usage": "图片处理DoS漏洞测试（超大尺寸触发资源耗尽）",
+     "tags": "image-size,图片处理,dos,资源耗尽"
+    },
+    {
+     "name": "param-json.txt",
+     "path": "Dic/web/api-param/param-json.txt",
+     "lines": 12,
+     "bytes": 73,
+     "description": "JSON格式的分页请求Payload模板",
+     "usage": "JSON接口分页参数Fuzz",
+     "tags": "json,分页,pagination,json-body"
+    },
+    {
+     "name": "param-lfi.txt",
+     "path": "Dic/web/api-param/param-lfi.txt",
+     "lines": 25,
+     "bytes": 196,
+     "description": "本地文件包含（LFI）常见参数名",
+     "usage": "LFI漏洞参数发现与测试",
+     "tags": "lfi,文件包含,file-inclusion,本地文件读取"
+    },
+    {
+     "name": "param-login.txt",
+     "path": "Dic/web/api-param/param-login.txt",
+     "lines": 14,
+     "bytes": 119,
+     "description": "登录接口常见路径和参数名",
+     "usage": "登录入口发现与认证接口枚举",
+     "tags": "login,登录,signin,认证接口"
+    },
+    {
+     "name": "param-rce.txt",
+     "path": "Dic/web/api-param/param-rce.txt",
+     "lines": 25,
+     "bytes": 191,
+     "description": "远程命令执行（RCE）常见参数名",
+     "usage": "RCE漏洞参数发现与命令注入测试",
+     "tags": "rce,命令执行,command-injection,命令注入"
+    },
+    {
+     "name": "param-redirect.txt",
+     "path": "Dic/web/api-param/param-redirect.txt",
+     "lines": 89,
+     "bytes": 1797,
+     "description": "URL重定向绕过Payload集合",
+     "usage": "开放重定向漏洞的绕过测试",
+     "tags": "redirect,重定向,open-redirect,url-bypass"
+    },
+    {
+     "name": "param-register.txt",
+     "path": "Dic/web/api-param/param-register.txt",
+     "lines": 38,
+     "bytes": 342,
+     "description": "用户注册功能相关的接口路径和参数名",
+     "usage": "注册接口发现与枚举",
+     "tags": "register,注册,signup,用户注册"
+    },
+    {
+     "name": "param-sqli.txt",
+     "path": "Dic/web/api-param/param-sqli.txt",
+     "lines": 25,
+     "bytes": 181,
+     "description": "SQL注入常见参数名",
+     "usage": "SQL注入漏洞参数发现",
+     "tags": "sqli,sql注入,injection,注入点"
+    },
+    {
+     "name": "param-ssrf.txt",
+     "path": "Dic/web/api-param/param-ssrf.txt",
+     "lines": 25,
+     "bytes": 194,
+     "description": "SSRF常见参数名",
+     "usage": "SSRF漏洞参数发现",
+     "tags": "ssrf,服务端请求伪造,url-param,请求伪造"
+    },
+    {
+     "name": "param-xss.txt",
+     "path": "Dic/web/api-param/param-xss.txt",
+     "lines": 27,
+     "bytes": 207,
+     "description": "XSS常见参数名",
+     "usage": "XSS漏洞参数发现与反射测试",
+     "tags": "xss,跨站脚本,反射型,参数注入"
+    },
+    {
+     "name": "top100-param-cookie.txt",
+     "path": "Dic/web/api-param/top100-param-cookie.txt",
+     "lines": 100,
+     "bytes": 960,
+     "description": "最常见的100个Cookie参数名",
+     "usage": "Cookie参数分析与会话安全测试",
+     "tags": "cookie,会话,session,top100"
+    },
+    {
+     "name": "top100-param-get.txt",
+     "path": "Dic/web/api-param/top100-param-get.txt",
+     "lines": 99,
+     "bytes": 519,
+     "description": "最常见的100个GET请求参数名",
+     "usage": "GET参数枚举与隐藏接口发现",
+     "tags": "get,get-param,top100,参数枚举"
+    },
+    {
+     "name": "top100-param-post.txt",
+     "path": "Dic/web/api-param/top100-param-post.txt",
+     "lines": 85,
+     "bytes": 563,
+     "description": "最常见的100个POST请求参数名",
+     "usage": "POST参数枚举与表单接口分析",
+     "tags": "post,post-param,top100,表单参数"
+    }
+   ]
+  },
+  {
+   "category": "web/cms",
+   "description": "CMS内容管理系统路径和控制器字典",
+   "files": [
+    {
+     "name": "thinkphp-controller.txt",
+     "path": "Dic/web/cms/thinkphp-controller.txt",
+     "lines": 58,
+     "bytes": 884,
+     "description": "ThinkPHP框架控制器和类名集合",
+     "usage": "ThinkPHP RCE漏洞利用时的控制器枚举",
+     "tags": "thinkphp,controller,控制器,rce利用"
+    },
+    {
+     "name": "wordpress.txt",
+     "path": "Dic/web/cms/wordpress.txt",
+     "lines": 190,
+     "bytes": 5375,
+     "description": "WordPress核心文件和管理路径集合",
+     "usage": "WordPress站点指纹识别与敏感路径发现",
+     "tags": "wordpress,wp,核心文件,管理路径"
+    }
+   ]
+  },
+  {
+   "category": "web/ctf",
+   "description": "CTF竞赛常用Payload字典",
+   "files": [
+    {
+     "name": "param.txt",
+     "path": "Dic/web/ctf/param.txt",
+     "lines": 45,
+     "bytes": 1829,
+     "description": "CTF常用的文件包含和命令执行Payload",
+     "usage": "CTF Web题目中的文件读取和RCE利用",
+     "tags": "payload,文件包含,命令执行,php-filter"
+    },
+    {
+     "name": "sql.txt",
+     "path": "Dic/web/ctf/sql.txt",
+     "lines": 95,
+     "bytes": 307,
+     "description": "CTF SQL注入常用数字和测试值",
+     "usage": "CTF SQL注入题目的基础测试",
+     "tags": "sqli,sql注入,数字,基础测试"
+    },
+    {
+     "name": "uri.txt",
+     "path": "Dic/web/ctf/uri.txt",
+     "lines": 223,
+     "bytes": 2590,
+     "description": "CTF常用的备份文件和源码泄露路径",
+     "usage": "CTF Web题目的源码泄露探测",
+     "tags": "backup,源码泄露,备份文件,信息收集"
+    }
+   ]
+  },
+  {
+   "category": "web/directory",
+   "description": "Web目录和路径扫描字典集合，按语言和用途分类",
+   "files": [
+    {
+     "name": "admin-dir.txt",
+     "path": "Dic/web/directory/admin-dir.txt",
+     "lines": 2167,
+     "bytes": 28195,
+     "description": "后台管理目录路径集合",
+     "usage": "网站后台入口发现",
+     "tags": "admin,后台,管理目录,admin-panel"
+    },
+    {
+     "name": "api.txt",
+     "path": "Dic/web/directory/api.txt",
+     "lines": 342,
+     "bytes": 6929,
+     "description": "API接口路径和Spring Actuator端点",
+     "usage": "API端点发现、Actuator未授权访问探测",
+     "tags": "api,actuator,接口发现,endpoint,endpoints,controller,控制器,路径,字典,爆破,fuzz,api paths wordlist,paths,wordlist"
+    },
+    {
+     "name": "common.txt",
+     "path": "Dic/web/directory/common.txt",
+     "lines": 5379,
+     "bytes": 80934,
+     "description": "通用Web目录和文件路径",
+     "usage": "通用Web目录扫描",
+     "tags": "common,通用,目录扫描,常见路径,common paths,paths,directory fuzz wordlist,fuzz,wordlist"
+    },
+    {
+     "name": "login.txt",
+     "path": "Dic/web/directory/login.txt",
+     "lines": 1443,
+     "bytes": 18171,
+     "description": "登录页面路径集合",
+     "usage": "登录入口发现",
+     "tags": "login,登录页,认证入口,signin"
+    },
+    {
+     "name": "payment-callback.txt",
+     "path": "Dic/web/directory/payment-callback.txt",
+     "lines": 73,
+     "bytes": 1251,
+     "description": "微信支付、支付宝异步通知与支付回调路径",
+     "usage": "支付回调接口发现、微信/支付宝 notify 与 callback 枚举",
+     "tags": "wechat,pay,alipay,notify,callback,微信支付,支付宝,支付回调,异步通知"
+    },
+    {
+     "name": "main.txt",
+     "path": "Dic/web/directory/main.txt",
+     "lines": 35004,
+     "bytes": 370581,
+     "description": "大规模综合目录扫描字典",
+     "usage": "全面目录扫描、深度路径发现",
+     "tags": "main,comprehensive,大字典,全面扫描"
+    },
+    {
+     "name": "redteam-config.txt",
+     "path": "Dic/web/directory/redteam-config.txt",
+     "lines": 65,
+     "bytes": 1108,
+     "description": "红队常用的敏感配置文件路径（.aws、.git、.env等）",
+     "usage": "信息泄露检测、敏感配置文件发现",
+     "tags": "redteam,config,配置泄露,敏感文件,信息泄露,sensitive,file,path"
+    },
+    {
+     "name": "redteam-file-suffix.txt",
+     "path": "Dic/web/directory/redteam-file-suffix.txt",
+     "lines": 38,
+     "bytes": 203,
+     "description": "红队常用的敏感文件后缀名",
+     "usage": "配合文件名生成备份文件扫描路径",
+     "tags": "suffix,后缀,backup,备份文件后缀"
+    },
+    {
+     "name": "redteam-file.txt",
+     "path": "Dic/web/directory/redteam-file.txt",
+     "lines": 251,
+     "bytes": 1572,
+     "description": "红队常用的敏感文件名（不含后缀）",
+     "usage": "配合后缀名生成敏感文件扫描路径",
+     "tags": "redteam,filename,敏感文件名,信息收集,sensitive,file"
+    }
+   ]
+  },
+  {
+   "category": "web/directory/asp",
+   "description": "ASP语言相关的Web目录扫描字典",
+   "files": [
+    {
+     "name": "asp-directory.txt",
+     "path": "Dic/web/directory/asp/asp-directory.txt",
+     "lines": 60721,
+     "bytes": 1477359,
+     "description": "ASP网站目录路径大字典",
+     "usage": "ASP网站全面目录扫描",
+     "tags": "asp-dir,大字典,目录扫描,全面"
+    },
+    {
+     "name": "asp.txt",
+     "path": "Dic/web/directory/asp/asp.txt",
+     "lines": 70848,
+     "bytes": 1012603,
+     "description": "ASP文件路径大字典（含.asp后缀）",
+     "usage": "ASP网站文件路径枚举",
+     "tags": "asp-file,大字典,文件扫描,asp路径"
+    },
+    {
+     "name": "top100-asp.txt",
+     "path": "Dic/web/directory/asp/top100-asp.txt",
+     "lines": 87,
+     "bytes": 1194,
+     "description": "最常见的100个ASP页面路径",
+     "usage": "ASP网站快速扫描",
+     "tags": "top100,快速扫描,常见asp页面"
+    }
+   ]
+  },
+  {
+   "category": "web/directory/aspx",
+   "description": "ASPX和ASHX相关的Web目录扫描字典",
+   "files": [
+    {
+     "name": "ashx.txt",
+     "path": "Dic/web/directory/aspx/ashx.txt",
+     "lines": 26263,
+     "bytes": 400069,
+     "description": "ASHX处理程序路径字典",
+     "usage": ".NET网站ASHX处理程序枚举",
+     "tags": "ashx,handler,处理程序,dotnet"
+    },
+    {
+     "name": "aspx-directory.txt",
+     "path": "Dic/web/directory/aspx/aspx-directory.txt",
+     "lines": 46191,
+     "bytes": 1456202,
+     "description": "ASPX网站目录路径大字典",
+     "usage": "ASPX网站全面目录扫描",
+     "tags": "aspx-dir,大字典,目录扫描,全面"
+    },
+    {
+     "name": "aspx.txt",
+     "path": "Dic/web/directory/aspx/aspx.txt",
+     "lines": 26334,
+     "bytes": 401034,
+     "description": "ASPX文件路径字典",
+     "usage": "ASPX网站文件路径枚举",
+     "tags": "aspx-file,文件扫描,aspx路径"
+    },
+    {
+     "name": "top100-ashx.txt",
+     "path": "Dic/web/directory/aspx/top100-ashx.txt",
+     "lines": 162,
+     "bytes": 3046,
+     "description": "最常见的ASHX处理程序路径",
+     "usage": ".NET网站ASHX快速扫描",
+     "tags": "top100,ashx,快速扫描,常见路径"
+    },
+    {
+     "name": "top100-aspx.txt",
+     "path": "Dic/web/directory/aspx/top100-aspx.txt",
+     "lines": 96,
+     "bytes": 2095,
+     "description": "最常见的100个ASPX页面路径",
+     "usage": "ASPX网站快速扫描",
+     "tags": "top100,快速扫描,常见aspx页面"
+    }
+   ]
+  },
+  {
+   "category": "web/directory/js",
+   "description": "JavaScript文件路径扫描字典",
+   "files": [
+    {
+     "name": "js.txt",
+     "path": "Dic/web/directory/js/js.txt",
+     "lines": 266,
+     "bytes": 3011,
+     "description": "常见JS文件路径集合",
+     "usage": "JS文件发现、前端信息泄露检测",
+     "tags": "javascript,js-file,前端文件,信息泄露"
+    }
+   ]
+  },
+  {
+   "category": "web/directory/jsp",
+   "description": "JSP/Struts/Java Web相关的目录扫描字典",
+   "files": [
+    {
+     "name": "action.txt",
+     "path": "Dic/web/directory/jsp/action.txt",
+     "lines": 269,
+     "bytes": 5663,
+     "description": "Struts的.action路径集合",
+     "usage": "Struts框架Action接口枚举",
+     "tags": "struts,action,框架路径,java-web"
+    },
+    {
+     "name": "do-directory.txt",
+     "path": "Dic/web/directory/jsp/do-directory.txt",
+     "lines": 4004,
+     "bytes": 88205,
+     "description": ".do后缀的目录路径字典",
+     "usage": "Java Web的.do路径目录扫描",
+     "tags": "do-dir,java-web,目录扫描"
+    },
+    {
+     "name": "do.txt",
+     "path": "Dic/web/directory/jsp/do.txt",
+     "lines": 41954,
+     "bytes": 529127,
+     "description": ".do后缀的文件路径大字典",
+     "usage": "Java Web的.do路径全面扫描",
+     "tags": "do-file,大字典,java-web"
+    },
+    {
+     "name": "jsp-directory.txt",
+     "path": "Dic/web/directory/jsp/jsp-directory.txt",
+     "lines": 4218,
+     "bytes": 99334,
+     "description": "JSP网站目录路径字典",
+     "usage": "JSP网站目录扫描",
+     "tags": "jsp,tomcat,jsp-dir,目录扫描,java-web"
+    },
+    {
+     "name": "jsp.txt",
+     "path": "Dic/web/directory/jsp/jsp.txt",
+     "lines": 42015,
+     "bytes": 572460,
+     "description": "JSP文件路径大字典",
+     "usage": "JSP网站文件路径全面枚举",
+     "tags": "jsp,tomcat,jsp-file,大字典,全面扫描"
+    },
+    {
+     "name": "top100-do.txt",
+     "path": "Dic/web/directory/jsp/top100-do.txt",
+     "lines": 88,
+     "bytes": 990,
+     "description": "最常见的100个.do路径",
+     "usage": "Java Web .do路径快速扫描",
+     "tags": "top100,do,快速扫描,常见路径"
+    },
+    {
+     "name": "top100-jsp.txt",
+     "path": "Dic/web/directory/jsp/top100-jsp.txt",
+     "lines": 88,
+     "bytes": 1065,
+     "description": "最常见的100个JSP页面路径",
+     "usage": "JSP网站快速扫描",
+     "tags": "jsp,tomcat,top100,快速扫描,常见路径"
+    }
+   ]
+  },
+  {
+   "category": "web/directory/php",
+   "description": "PHP相关的Web目录扫描字典",
+   "files": [
+    {
+     "name": "php-directory.txt",
+     "path": "Dic/web/directory/php/php-directory.txt",
+     "lines": 3392,
+     "bytes": 75981,
+     "description": "PHP网站目录路径字典",
+     "usage": "PHP网站目录扫描",
+     "tags": "php-dir,目录扫描,php路径"
+    },
+    {
+     "name": "php.txt",
+     "path": "Dic/web/directory/php/php.txt",
+     "lines": 48095,
+     "bytes": 655998,
+     "description": "PHP文件路径大字典",
+     "usage": "PHP网站文件路径全面枚举",
+     "tags": "php-file,大字典,全面扫描"
+    },
+    {
+     "name": "top100-php.txt",
+     "path": "Dic/web/directory/php/top100-php.txt",
+     "lines": 94,
+     "bytes": 1315,
+     "description": "最常见的100个PHP页面路径",
+     "usage": "PHP网站快速扫描",
+     "tags": "top100,快速扫描,常见php页面"
+    }
+   ]
+  },
+  {
+   "category": "web/directory/secondary",
+   "description": "网站二级目录路径字典",
+   "files": [
+    {
+     "name": "secondary-common.txt",
+     "path": "Dic/web/directory/secondary/secondary-common.txt",
+     "lines": 718,
+     "bytes": 6913,
+     "description": "常见二级目录路径精简版",
+     "usage": "二级目录快速枚举",
+     "tags": "secondary,二级目录,精简版,快速"
+    },
+    {
+     "name": "secondary-extended.txt",
+     "path": "Dic/web/directory/secondary/secondary-extended.txt",
+     "lines": 24336,
+     "bytes": 170351,
+     "description": "二级目录路径大字典",
+     "usage": "二级目录全面枚举",
+     "tags": "secondary,二级目录,大字典,全面"
+    }
+   ]
+  },
+  {
+   "category": "web/dns",
+   "description": "DNS子域名枚举和OOB平台字典",
+   "files": [
+    {
+     "name": "dns.txt",
+     "path": "Dic/web/dns/dns.txt",
+     "lines": 151548,
+     "bytes": 1235839,
+     "description": "超大规模子域名前缀字典",
+     "usage": "全面子域名枚举爆破",
+     "tags": "subdomain,子域名,域名枚举,子域名爆破,大字典,全面枚举"
+    },
+    {
+     "name": "oob.txt",
+     "path": "Dic/web/dns/oob.txt",
+     "lines": 24,
+     "bytes": 266,
+     "description": "常见OOB（带外数据）DNS平台域名",
+     "usage": "漏洞验证时选择可用的DNSLog/OOB平台",
+     "tags": "oob,dnslog,带外,漏洞验证平台"
+    },
+    {
+     "name": "top-dns.txt",
+     "path": "Dic/web/dns/top-dns.txt",
+     "lines": 177,
+     "bytes": 1162,
+     "description": "最常见的子域名前缀",
+     "usage": "子域名快速枚举",
+     "tags": "subdomain,子域名,域名枚举,top,常见子域名,快速枚举,精简"
+    }
+   ]
+  },
+  {
+   "category": "web/errors",
+   "description": "Web应用常见错误信息指纹字典",
+   "files": [
+    {
+     "name": "top100-errors.txt",
+     "path": "Dic/web/errors/top100-errors.txt",
+     "lines": 97,
+     "bytes": 2276,
+     "description": "最常见的100个Web应用错误信息特征",
+     "usage": "数据库类型识别、框架指纹识别、报错注入判断",
+     "tags": "error-message,报错特征,数据库识别,框架识别"
+    }
+   ]
+  },
+  {
+   "category": "web/file-backup",
+   "description": "网站备份文件和敏感文件扫描字典，按文件类型分类",
+   "files": [
+    {
+     "name": "bak-directory.txt",
+     "path": "Dic/web/file-backup/bak-directory.txt",
+     "lines": 1576,
+     "bytes": 27795,
+     "description": "备份文件目录路径字典",
+     "usage": "网站备份文件目录扫描",
+     "tags": "backup,备份文件,bak,备份目录,目录扫描,backup-dir"
+    },
+    {
+     "name": "bak.txt",
+     "path": "Dic/web/file-backup/bak.txt",
+     "lines": 1444,
+     "bytes": 10398,
+     "description": "常见备份文件路径（.bak等）",
+     "usage": "网站备份文件发现",
+     "tags": "backup,bak,备份文件,bak-file"
+    },
+    {
+     "name": "cfm-directory.txt",
+     "path": "Dic/web/file-backup/cfm-directory.txt",
+     "lines": 248,
+     "bytes": 14912,
+     "description": "ColdFusion CFM文件目录路径",
+     "usage": "ColdFusion站点目录扫描",
+     "tags": "cfm,coldfusion,目录扫描"
+    },
+    {
+     "name": "cfm.txt",
+     "path": "Dic/web/file-backup/cfm.txt",
+     "lines": 56,
+     "bytes": 844,
+     "description": "ColdFusion CFM敏感文件路径",
+     "usage": "ColdFusion敏感文件发现",
+     "tags": "cfm,coldfusion,敏感文件"
+    },
+    {
+     "name": "cgi-directory.txt",
+     "path": "Dic/web/file-backup/cgi-directory.txt",
+     "lines": 97,
+     "bytes": 3403,
+     "description": "CGI脚本目录路径",
+     "usage": "CGI脚本目录扫描",
+     "tags": "cgi,cgi-bin,脚本目录"
+    },
+    {
+     "name": "cgi.txt",
+     "path": "Dic/web/file-backup/cgi.txt",
+     "lines": 80,
+     "bytes": 1001,
+     "description": "CGI脚本文件路径",
+     "usage": "CGI敏感脚本发现",
+     "tags": "cgi,脚本文件,cgi-script"
+    },
+    {
+     "name": "db-directory.txt",
+     "path": "Dic/web/file-backup/db-directory.txt",
+     "lines": 944,
+     "bytes": 18274,
+     "description": "数据库文件目录路径（.mdb等）",
+     "usage": "Web数据库文件泄露扫描",
+     "tags": "database,数据库文件,mdb,目录扫描"
+    },
+    {
+     "name": "db.txt",
+     "path": "Dic/web/file-backup/db.txt",
+     "lines": 868,
+     "bytes": 10626,
+     "description": "数据库文件路径（.mdb等）",
+     "usage": "Web数据库文件下载检测",
+     "tags": "database,数据库文件,mdb,文件泄露"
+    },
+    {
+     "name": "misc.txt",
+     "path": "Dic/web/file-backup/misc.txt",
+     "lines": 51505,
+     "bytes": 553389,
+     "description": "综合杂项文件扫描大字典",
+     "usage": "全面的Web文件扫描",
+     "tags": "misc,综合,大字典,全面扫描"
+    },
+    {
+     "name": "py.txt",
+     "path": "Dic/web/file-backup/py.txt",
+     "lines": 131,
+     "bytes": 1678,
+     "description": "Python脚本文件路径",
+     "usage": "Python Web应用敏感文件发现",
+     "tags": "python,py,脚本文件,源码泄露"
+    },
+    {
+     "name": "suffix.txt",
+     "path": "Dic/web/file-backup/suffix.txt",
+     "lines": 403,
+     "bytes": 2456,
+     "description": "备份文件后缀变体集合（.bak、.swp等编辑器临时文件）",
+     "usage": "配合文件名批量生成备份文件扫描路径",
+     "tags": "backup,备份文件,suffix,后缀,临时文件,编辑器备份"
+    },
+    {
+     "name": "txt.txt",
+     "path": "Dic/web/file-backup/txt.txt",
+     "lines": 1321,
+     "bytes": 14465,
+     "description": "TXT文本文件路径",
+     "usage": "敏感文本文件发现（robots.txt、readme等）",
+     "tags": "txt,文本文件,信息泄露,robots"
+    }
+   ]
+  },
+  {
+   "category": "web/http",
+   "description": "HTTP协议相关字典，含请求头、方法、User-Agent等",
+   "files": [
+    {
+     "name": "header-auth.txt",
+     "path": "Dic/web/http/header-auth.txt",
+     "lines": 8,
+     "bytes": 124,
+     "description": "常见认证相关的HTTP请求头（Token、Authorization等）",
+     "usage": "认证头Fuzz、未授权访问测试",
+     "tags": "header,请求头,auth-header,认证头,token,authorization"
+    },
+    {
+     "name": "header-mimetypes.txt",
+     "path": "Dic/web/http/header-mimetypes.txt",
+     "lines": 1864,
+     "bytes": 50658,
+     "description": "完整的MIME类型（Content-Type）列表",
+     "usage": "文件上传Content-Type绕过、响应头分析",
+     "tags": "header,请求头,mime,content-type,文件类型,上传绕过"
+    },
+    {
+     "name": "header-redteam.txt",
+     "path": "Dic/web/http/header-redteam.txt",
+     "lines": 66,
+     "bytes": 1660,
+     "description": "红队工具和扫描器的User-Agent特征",
+     "usage": "识别常见安全工具的请求特征、WAF规则编写",
+     "tags": "header,请求头,user-agent,指纹,redteam,scanner,扫描器特征,工具指纹"
+    },
+    {
+     "name": "header-refer-ip.txt",
+     "path": "Dic/web/http/header-refer-ip.txt",
+     "lines": 7,
+     "bytes": 189,
+     "description": "IP伪造相关的HTTP请求头（X-Forwarded-For等）",
+     "usage": "源IP伪造绕过访问控制",
+     "tags": "header,请求头,ip-spoof,xff,ip伪造,访问控制绕过"
+    },
+    {
+     "name": "header-refer.txt",
+     "path": "Dic/web/http/header-refer.txt",
+     "lines": 114,
+     "bytes": 1454,
+     "description": "常见HTTP请求头名称集合",
+     "usage": "请求头Fuzz、隐藏参数发现",
+     "tags": "header,请求头,header-name,请求头名,fuzz,枚举"
+    },
+    {
+     "name": "header-sessionid.txt",
+     "path": "Dic/web/http/header-sessionid.txt",
+     "lines": 11,
+     "bytes": 113,
+     "description": "常见Session ID的Cookie名称",
+     "usage": "会话标识识别、Session劫持测试",
+     "tags": "header,请求头,session,sessionid,会话,cookie"
+    },
+    {
+     "name": "header-spider.txt",
+     "path": "Dic/web/http/header-spider.txt",
+     "lines": 25,
+     "bytes": 2239,
+     "description": "主流搜索引擎爬虫的User-Agent",
+     "usage": "伪装搜索引擎爬虫绕过访问限制",
+     "tags": "header,请求头,user-agent,指纹,spider,爬虫,搜索引擎"
+    },
+    {
+     "name": "methods.txt",
+     "path": "Dic/web/http/methods.txt",
+     "lines": 32,
+     "bytes": 248,
+     "description": "HTTP请求方法集合（含标准和非标准方法）",
+     "usage": "HTTP方法枚举、PUT/DELETE等危险方法检测",
+     "tags": "method,请求方法,http-verb,危险方法"
+    },
+    {
+     "name": "proxifier-filter.txt",
+     "path": "Dic/web/http/proxifier-filter.txt",
+     "lines": 176,
+     "bytes": 2669,
+     "description": "Proxifier代理过滤规则域名列表",
+     "usage": "配置Proxifier代理工具的过滤规则",
+     "tags": "proxifier,proxy,代理,过滤规则"
+    },
+    {
+     "name": "top500-user-agent.txt",
+     "path": "Dic/web/http/top500-user-agent.txt",
+     "lines": 447,
+     "bytes": 30088,
+     "description": "最常见的500个User-Agent字符串",
+     "usage": "User-Agent轮换、反爬虫绕过",
+     "tags": "header,请求头,user-agent,指纹,ua,浏览器指纹,反爬绕过"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware",
+   "description": "Web中间件默认凭据和配置字典集合",
+   "files": [
+    {
+     "name": "middleware-pass.txt",
+     "path": "Dic/web/middleware/middleware-pass.txt",
+     "lines": 24,
+     "bytes": 225,
+     "description": "各类中间件的默认用户名密码对照表",
+     "usage": "快速查阅各中间件默认凭据",
+     "tags": "default-password,默认密码,对照表,汇总"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/cas",
+   "description": "CAS单点登录系统默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/middleware/cas/pass.txt",
+     "lines": 1,
+     "bytes": 6,
+     "description": "CAS系统默认密码",
+     "usage": "CAS单点登录系统密码验证",
+     "tags": "password,密码,cas-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/middleware/cas/user.txt",
+     "lines": 1,
+     "bytes": 7,
+     "description": "CAS系统默认用户名",
+     "usage": "CAS单点登录系统用户名验证",
+     "tags": "username,用户名,cas-user"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/rabbitmq",
+   "description": "RabbitMQ消息队列服务默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/middleware/rabbitmq/pass.txt",
+     "lines": 37,
+     "bytes": 291,
+     "description": "RabbitMQ常见密码",
+     "usage": "RabbitMQ管理控制台密码爆破",
+     "tags": "password,密码,rabbitmq-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/middleware/rabbitmq/user.txt",
+     "lines": 6,
+     "bytes": 36,
+     "description": "RabbitMQ常见用户名",
+     "usage": "RabbitMQ管理控制台用户名爆破",
+     "tags": "username,用户名,rabbitmq-user"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/shiro",
+   "description": "Apache Shiro框架密钥字典",
+   "files": [
+    {
+     "name": "key.txt",
+     "path": "Dic/web/middleware/shiro/key.txt",
+     "lines": 101148,
+     "bytes": 2528679,
+     "description": "Shiro RememberMe加密密钥（AES Key）大字典",
+     "usage": "Shiro反序列化漏洞利用时的密钥爆破",
+     "tags": "aes-key,shiro-key,rememberme,反序列化利用"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/spring",
+   "description": "Spring Boot框架配置属性字典",
+   "files": [
+    {
+     "name": "spring-configuration-metadata.txt",
+     "path": "Dic/web/middleware/spring/spring-configuration-metadata.txt",
+     "lines": 1713,
+     "bytes": 60101,
+     "description": "Spring Boot配置属性名集合",
+     "usage": "Spring Boot配置属性枚举、Actuator env端点信息提取",
+     "tags": "config-property,配置属性,metadata,spring-env"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/tomcat",
+   "description": "Apache Tomcat应用服务器凭据和路径字典",
+   "files": [
+    {
+     "name": "basic.txt",
+     "path": "Dic/web/middleware/tomcat/basic.txt",
+     "lines": 228,
+     "bytes": 3212,
+     "description": "Tomcat Manager的用户名:密码组合对（Basic认证格式）",
+     "usage": "Tomcat Manager控制台Basic认证爆破",
+     "tags": "basic-auth,凭据对,manager,控制台"
+    },
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/middleware/tomcat/pass.txt",
+     "lines": 38,
+     "bytes": 300,
+     "description": "Tomcat常见密码",
+     "usage": "Tomcat Manager密码爆破",
+     "tags": "password,密码,tomcat-pass"
+    },
+    {
+     "name": "tomcat.txt",
+     "path": "Dic/web/middleware/tomcat/tomcat.txt",
+     "lines": 90,
+     "bytes": 2474,
+     "description": "Tomcat敏感路径和管理接口",
+     "usage": "Tomcat管理接口发现与路径枚举",
+     "tags": "path,路径,管理接口,tomcat-path"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/middleware/tomcat/user.txt",
+     "lines": 6,
+     "bytes": 36,
+     "description": "Tomcat常见用户名",
+     "usage": "Tomcat Manager用户名爆破",
+     "tags": "username,用户名,tomcat-user"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/weblogic",
+   "description": "WebLogic应用服务器凭据和路径字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/middleware/weblogic/pass.txt",
+     "lines": 44,
+     "bytes": 387,
+     "description": "WebLogic控制台常见密码",
+     "usage": "WebLogic管理控制台密码爆破",
+     "tags": "password,密码,weblogic-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/middleware/weblogic/user.txt",
+     "lines": 11,
+     "bytes": 81,
+     "description": "WebLogic控制台常见用户名",
+     "usage": "WebLogic管理控制台用户名爆破",
+     "tags": "username,用户名,weblogic-user"
+    },
+    {
+     "name": "weblogic.txt",
+     "path": "Dic/web/middleware/weblogic/weblogic.txt",
+     "lines": 349,
+     "bytes": 7355,
+     "description": "WebLogic敏感路径和管理接口集合",
+     "usage": "WebLogic管理接口和敏感路径发现",
+     "tags": "path,路径,管理接口,weblogic-path"
+    }
+   ]
+  },
+  {
+   "category": "web/middleware/zabbix",
+   "description": "Zabbix监控系统默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/middleware/zabbix/pass.txt",
+     "lines": 1,
+     "bytes": 6,
+     "description": "Zabbix默认密码",
+     "usage": "Zabbix监控系统密码验证",
+     "tags": "password,密码,zabbix-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/middleware/zabbix/user.txt",
+     "lines": 3,
+     "bytes": 18,
+     "description": "Zabbix常见用户名",
+     "usage": "Zabbix监控系统用户名爆破",
+     "tags": "username,用户名,zabbix-user"
+    }
+   ]
+  },
+  {
+   "category": "web/service",
+   "description": "常见Web服务与运维平台字典集合，含默认凭据与敏感路径",
+   "files": [
+    {
+     "name": "druid/",
+     "path": "Dic/web/service/druid/",
+     "lines": 8,
+     "bytes": 4096,
+     "description": "Druid监控平台默认用户名和密码字典",
+     "usage": "Druid监控页面默认口令验证与爆破",
+     "tags": "druid,alibaba,数据库监控,默认口令"
+    },
+    {
+     "name": "jira/",
+     "path": "Dic/web/service/jira/",
+     "lines": 22,
+     "bytes": 4096,
+     "description": "Jira敏感接口与信息泄露路径字典",
+     "usage": "Jira未授权访问与信息泄露探测",
+     "tags": "jira,atlassian,项目管理,敏感路径,信息泄露"
+    },
+    {
+     "name": "phpmyadmin/",
+     "path": "Dic/web/service/phpmyadmin/",
+     "lines": 269,
+     "bytes": 4096,
+     "description": "phpMyAdmin默认用户名和密码字典",
+     "usage": "phpMyAdmin登录界面口令爆破",
+     "tags": "phpmyadmin,mysql,数据库管理,默认口令"
+    },
+    {
+     "name": "xxljob/",
+     "path": "Dic/web/service/xxljob/",
+     "lines": 11,
+     "bytes": 4096,
+     "description": "XXL-JOB任务调度平台部署路径字典",
+     "usage": "XXL-JOB管理平台入口发现",
+     "tags": "xxl-job,scheduler,任务调度,路径发现"
+    }
+   ]
+  },
+  {
+   "category": "web/service/druid",
+   "description": "Druid数据库监控平台默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/service/druid/pass.txt",
+     "lines": 4,
+     "bytes": 27,
+     "description": "Druid监控平台常见密码",
+     "usage": "Druid监控平台密码爆破",
+     "tags": "password,密码,druid-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/service/druid/user.txt",
+     "lines": 4,
+     "bytes": 20,
+     "description": "Druid监控平台常见用户名",
+     "usage": "Druid监控平台用户名爆破",
+     "tags": "username,用户名,druid-user"
+    }
+   ]
+  },
+  {
+   "category": "web/service/jira",
+   "description": "Jira项目管理系统敏感路径字典",
+   "files": [
+    {
+     "name": "jira.txt",
+     "path": "Dic/web/service/jira/jira.txt",
+     "lines": 22,
+     "bytes": 1344,
+     "description": "Jira敏感接口和信息泄露路径",
+     "usage": "Jira未授权访问和信息泄露探测",
+     "tags": "jira-path,敏感路径,未授权,信息泄露"
+    }
+   ]
+  },
+  {
+   "category": "web/service/phpmyadmin",
+   "description": "phpMyAdmin数据库管理工具默认凭据字典",
+   "files": [
+    {
+     "name": "pass.txt",
+     "path": "Dic/web/service/phpmyadmin/pass.txt",
+     "lines": 267,
+     "bytes": 2543,
+     "description": "phpMyAdmin常见密码",
+     "usage": "phpMyAdmin管理界面密码爆破",
+     "tags": "password,密码,phpmyadmin-pass"
+    },
+    {
+     "name": "user.txt",
+     "path": "Dic/web/service/phpmyadmin/user.txt",
+     "lines": 2,
+     "bytes": 10,
+     "description": "phpMyAdmin常见用户名",
+     "usage": "phpMyAdmin管理界面用户名验证",
+     "tags": "username,用户名,phpmyadmin-user,root"
+    }
+   ]
+  },
+  {
+   "category": "web/service/xxljob",
+   "description": "XXL-JOB任务调度平台路径字典",
+   "files": [
+    {
+     "name": "xxl-path.txt",
+     "path": "Dic/web/service/xxljob/xxl-path.txt",
+     "lines": 11,
+     "bytes": 111,
+     "description": "XXL-JOB管理平台常见部署路径",
+     "usage": "XXL-JOB调度平台入口发现",
+     "tags": "xxl-path,部署路径,管理入口,任务调度"
+    }
+   ]
+  },
+  {
+   "category": "web/upload",
+   "description": "文件上传漏洞绕过字典，按Web语言分类",
+   "files": [
+    {
+     "name": "asp.txt",
+     "path": "Dic/web/upload/asp.txt",
+     "lines": 30,
+     "bytes": 276,
+     "description": "ASP文件上传后缀绕过变体",
+     "usage": "ASP环境下的文件上传黑名单绕过",
+     "tags": "asp,后缀绕过,大小写,截断"
+    },
+    {
+     "name": "content-type.txt",
+     "path": "Dic/web/upload/content-type.txt",
+     "lines": 253,
+     "bytes": 4858,
+     "description": "Content-Type MIME类型集合",
+     "usage": "文件上传Content-Type白名单绕过",
+     "tags": "content-type,mime,白名单绕过"
+    },
+    {
+     "name": "htaccess.txt",
+     "path": "Dic/web/upload/htaccess.txt",
+     "lines": 37,
+     "bytes": 369,
+     "description": ".htaccess文件名大小写变体",
+     "usage": "Apache .htaccess上传绕过",
+     "tags": "htaccess,apache,配置覆盖,大小写"
+    },
+    {
+     "name": "jsp.txt",
+     "path": "Dic/web/upload/jsp.txt",
+     "lines": 30,
+     "bytes": 276,
+     "description": "JSP文件上传后缀绕过变体",
+     "usage": "JSP环境下的文件上传黑名单绕过",
+     "tags": "jsp,后缀绕过,大小写,截断"
+    },
+    {
+     "name": "php.txt",
+     "path": "Dic/web/upload/php.txt",
+     "lines": 30,
+     "bytes": 276,
+     "description": "PHP文件上传后缀绕过变体",
+     "usage": "PHP环境下的文件上传黑名单绕过",
+     "tags": "php,后缀绕过,大小写,phtml"
+    },
+    {
+     "name": "upload-suffix.txt",
+     "path": "Dic/web/upload/upload-suffix.txt",
+     "lines": 34,
+     "bytes": 158,
+     "description": "通用文件上传后缀名集合",
+     "usage": "文件上传功能测试的后缀名枚举",
+     "tags": "suffix,后缀,后缀名,黑名单,通用,文件类型"
+    }
+   ]
+  },
+  {
+   "category": "web/webshell",
+   "description": "Webshell路径扫描和密码爆破字典",
+   "files": [
+    {
+     "name": "dir.txt",
+     "path": "Dic/web/webshell/dir.txt",
+     "lines": 52412,
+     "bytes": 763240,
+     "description": "常见Webshell文件路径大字典",
+     "usage": "服务器Webshell后门文件扫描",
+     "tags": "webshell-path,路径扫描,后门路径,文件扫描,大字典"
+    },
+    {
+     "name": "webshell-pass.txt",
+     "path": "Dic/web/webshell/webshell-pass.txt",
+     "lines": 437951,
+     "bytes": 3492371,
+     "description": "Webshell连接密码超大字典",
+     "usage": "已知Webshell的连接密码爆破",
+     "tags": "webshell-password,连接密码,超大字典,密码爆破"
+    }
+   ]
+  }
+ ]
+}

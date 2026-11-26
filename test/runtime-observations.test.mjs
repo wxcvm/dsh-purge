@@ -17,7 +17,7 @@ test('stream metadata is read-only; first text excludes reasoning; usage is a sn
   chunk(o, a, 4, { type: 'finish', reason: { kind: 'stop' }, replayState: { secret: 'PRIVATE' } });
   time = 30; end(o, a, 5);
   const r = o.snapshot().items[0];
-  assert.equal(r.firstTextMs, 15); assert.equal(r.elapsedMs, 20); assert.equal(r.usage.totalTokens, 12);
+  assert.equal(r.firstTextMs, 15); assert.equal(r.firstReasoningMs, 5); assert.equal(r.reasoningChunks, 1); assert.equal(r.reasoningChars, secret.text.length); assert.equal(r.elapsedMs, 20); assert.equal(r.usage.totalTokens, 12);
   assert.equal(r.provider, 'fixture'); assert.equal(r.finish, 'stop'); assert.equal(r.settlement, 'committed');
   assert.equal(r.turnOutcome, null); assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE/);
   r.usage.totalTokens = 999; assert.equal(o.snapshot().items[0].usage.totalTokens, 12);
@@ -487,4 +487,257 @@ test('missing assistant tool content remains unknown; no tools is observed only 
     const evidence=o.snapshot().items[0].toolEvidence;
     assert.equal(evidence===null?null:evidence.requested,expected);
   }
+});
+
+
+test('thinking timeline isolates attempts and preserves interleaved event evidence', () => {
+  let time=0; const o=createRuntimeObservations({now:()=>time}), a=agent('s'), b=agent('b');
+  start(o,a); time=2; chunk(o,a,0,{type:'reasoning-delta',text:'PRIVATE A'});
+  time=4; chunk(o,a,1,{type:'text-delta',text:'PRIVATE TEXT'});
+  time=7; chunk(o,a,2,{type:'reasoning-delta',text:'PRIVATE B'});
+  time=9; chunk(o,a,3,{type:'block-start',blockType:'tool-call'});
+  start(o,b); time=10; chunk(o,b,0,{type:'reasoning-delta',text:''});
+  const row=o.snapshot({sessionId:'s'}).items[0], other=o.snapshot({sessionId:'b'}).items[0];
+  assert.equal(row.firstReasoningMs,2); assert.equal(row.lastReasoningMs,7); assert.equal(row.firstTextMs,4);
+  assert.equal(row.reasoningAfterText,true); assert.equal(row.firstToolMs,9); assert.equal(row.reasoningChunks,2);
+  assert.equal(other.firstReasoningMs,null); assert.equal(other.lastReasoningMs,null); assert.equal(other.reasoningChunks,0);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
+});
+
+
+test('runtime snapshot reports bounded coverage and observed turn-end clock',()=>{
+  let time=10;const o=createRuntimeObservations({now:()=>time}),a=agent('s'),b=agent('b');
+  start(o,a);time=20;end(o,a,0);time=30;o.event(a.session,{seq:4,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
+  start(o,b);const snap=o.snapshot({limit:1});
+  assert.equal(snap.matchedCount,2);assert.equal(snap.returnedCount,1);
+  const one=o.snapshot({sessionId:'s'});assert.equal(one.matchedCount,1);assert.equal(one.items[0].turnEndedAt,30);
+});
+
+
+test('committed reasoning blocks are visible without live or durable reasoning deltas',()=>{
+  let time=10;const o=createRuntimeObservations({now:()=>time}),a=agent('s');
+  start(o,a);time=12;chunk(o,a,0,{type:'block-start',blockType:'reasoning'});
+  time=20;chunk(o,a,1,{type:'text-delta',text:'PRIVATE FINAL'});
+  const content=Object.freeze([Object.freeze({type:'reasoning',text:'PRIVATE THINK'}),Object.freeze({type:'text',text:'PRIVATE FINAL'})]);
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content},stream:[
+    {chunk:{type:'block-start',blockType:'reasoning'}},{chunk:{type:'block-end'}},
+    {chunk:{type:'block-start',blockType:'text'}},{chunk:{type:'finish',reason:{kind:'stop'}}}
+  ]}});
+  end(o,a,2);const r=o.snapshot().items[0];
+  assert.equal(r.reasoningBlockStarts,1);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);
+  assert.equal(r.durableReasoningBlockStarts,1);assert.equal(r.durableReasoningDeltaChunks,0);
+  assert.equal(r.durableReasoningBlocks,1);assert.equal(r.durableReasoningTextBlocks,1);assert.equal(r.durableReasoningChars,'PRIVATE THINK'.length);
+  assert.equal(r.firstTextMs,10);assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});
+test('reasoning content unknown differs from absent; a late commit only updates its matched row',()=>{
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:1}});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content:[{type:'reasoning',text:'PRIVATE'}]}}});
+  const [current,previous]=o.snapshot().items;
+  assert.equal(current.durableReasoningBlocks,null);assert.equal(previous.durableReasoningBlocks,1);
+  assert.equal(previous.durableReasoningDeltaChunks,null);assert.equal(previous.firstReasoningMs,null);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()),/PRIVATE/);
+});
+
+
+test('native compact reasoning and text batches are counted separately without live timing',()=>{
+  const o=createRuntimeObservations(),a=agent('s');start(o,a);
+  const batch=Object.freeze({type:'reasoning-chunks',index:1,time0:100,dt:[1,2,3],texts:Object.freeze(['PRIVATE A','','PRIVATE B'])});
+  o.event(a.session,{seq:3,type:'assistant/message',data:{turn:1,step:1,message:{content:[{type:'reasoning',text:'PRIVATE APRIVATE B'}]},stream:[
+    {chunk:{type:'block-start',blockType:'reasoning'}},batch,{chunk:{type:'block-end'}},
+    {type:'text-chunks',texts:['PRIVATE FINAL']},
+    {type:'reasoning-chunks',texts:['PRIVATE',null]},
+    {chunk:{type:'reasoning-delta',text:'PRIVATE EXPLICIT'}},
+    {chunk:{type:'finish',reason:{kind:'stop'}}}
+  ]}});
+  end(o,a,0);const r=o.snapshot().items[0];
+  assert.equal(r.durableCompactReasoningRecords,1);assert.equal(r.durableCompactReasoningChunks,2);
+  assert.equal(r.durableCompactReasoningChars,18);assert.equal(r.durableCompactTextChunks,1);assert.equal(r.durableCompactInvalidRecords,1);
+  assert.equal(r.durableReasoningDeltaChunks,1);assert.equal(r.durableReasoningBlocks,1);
+  assert.equal(r.durableTextObserved,true);assert.equal(r.reasoningChunks,0);assert.equal(r.firstReasoningMs,null);assert.equal(r.firstTextMs,null);
+  assert.doesNotMatch(JSON.stringify(r),/PRIVATE/);
+});
+
+
+test('one turn/end event assigns one clock timestamp to all attempts in the turn',()=>{
+  let time=0;const o=createRuntimeObservations({now:()=>++time}),a=agent('s');
+  start(o,a);end(o,a,0);
+  o.frame({agent:a,frame:{type:'start',attemptId:'s:2',revision:3,turn:1,step:2}});
+  o.frame({agent:a,frame:{type:'end',attemptId:'s:2',revision:4,index:0,outcome:{kind:'committed',eventType:'assistant/message',seq:4}}});
+  o.event(a.session,{seq:5,type:'turn/end',data:{turn:1,reason:{kind:'completed'}}});
+  const [second,first]=o.snapshot().items;
+  assert.equal(second.turnEndedAt,first.turnEndedAt);
+  assert.equal(second.turnEndedAt>second.startedAt,true);
+  assert.equal(first.turnOutcome,'completed');assert.equal(second.turnOutcome,'completed');
+});
+
+
+test('long session never reuses a completed human task, even with a stale snapshot', () => {
+  const o = createRuntimeObservations(), a = agent('long-session');
+  let seq = 0, revision = 0;
+  const events = [];
+  a.session.events = events;
+  for (let turn = 1; turn <= 100; turn++) {
+    const human = turn % 2 ? { seq: ++seq, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK ' + turn } } : null;
+    if (human) { events.push(human); o.event(a.session, human); }
+    if (turn % 10 === 0) o.event(a.session, { seq: ++seq, type: 'compaction/end', data: {} });
+    const attemptId = 'long:' + turn;
+    o.frame({ agent: a, frame: { type: 'start', attemptId, revision: ++revision, turn, step: 1 } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.humanSeqAtStart, human?.seq ?? 0);
+    assert.equal(row.humanSourceAtStart, human ? 'session-event' : 'not-observed');
+    o.event(a.session, { seq: ++seq, type: 'turn/end', data: { turn, reason: { kind: 'completed' } } });
+    // Deliberately leave the completed human message in a stale snapshot.
+  }
+  assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE TASK/);
+});
+
+test('context-only route change does not inherit the previous output reservation', () => {
+  const o = createRuntimeObservations(), a = agent('context-only-route');
+  o.event(a.session, { seq: 1, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } });
+  o.event(a.session, { seq: 2, type: 'request/context', data: { provider: 'p', model: 'a', contextWindow: 32768 } });
+  start(o, a);
+  o.event(a.session, { seq: 3, type: 'request/context', data: { model: 'b', contextWindow: 16384 } });
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 2, turn: 2, step: 1 } });
+  const [next, old] = o.snapshot().items;
+  assert.equal(next.model, 'b');
+  assert.equal(next.contextWindow, 16384);
+  assert.equal(next.requestMaxTokens, null);
+  assert.equal(next.requestHeaderSeq, null);
+  assert.equal(next.contextBudget.messageBudgetTokens, null);
+  assert.equal(old.requestMaxTokens, 4096);
+});
+
+
+test('late mount restores the recorded route and compaction from the history prefix', () => {
+  const o = createRuntimeObservations(), a = agent('late-history');
+  a.session.events = [
+    { seq: 70, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } },
+    { seq: 71, type: 'request/context', data: { provider: 'p', model: 'a', contextWindow: 32768 } },
+    { seq: 72, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } },
+    { seq: 73, type: 'turn/end', data: { turn: 80 } },
+    { seq: 74, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } },
+  ];
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 'late:81', revision: 1, turn: 81, step: 1 } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.startSeq, 74);
+  assert.equal(row.humanSeqAtStart, 74);
+  assert.equal(row.humanSourceAtStart, 'session-snapshot');
+  assert.equal(row.compactionSeqAtStart, 72);
+  assert.equal(row.contextBudget.messageBudgetTokens, 28672);
+  assert.equal(row.requestHeaderSeq, 70);
+  assert.equal(row.requestContextSeq, 71);
+  assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+});
+
+test('first live event bounds historical replay and later requests retain live route changes', () => {
+  const o = createRuntimeObservations(), a = agent('history-boundary');
+  a.session.events = [
+    { seq: 1, type: 'request/header', data: { header: { config: { provider: 'p', model: 'a', maxTokens: 4096 } } } },
+    { seq: 2, type: 'request/context', data: { model: 'a', contextWindow: 32768 } },
+    { seq: 3, type: 'compaction/end', data: {} },
+    { seq: 4, type: 'turn/end', data: { turn: 79 } },
+    { seq: 6, type: 'request/context', data: { model: 'future', contextWindow: 131072 } },
+  ];
+  o.event(a.session, { seq: 5, type: 'request/header', data: { header: { config: { provider: 'p', model: 'b', maxTokens: 2048 } } } });
+  start(o, a);
+  const first = o.snapshot().items[0];
+  assert.equal(first.model, 'b');
+  assert.equal(first.contextWindow, null);
+  assert.equal(first.requestMaxTokens, 2048);
+  assert.equal(first.compactionSeqAtStart, 3);
+  assert.equal(first.humanSeqAtStart, 0);
+  o.event(a.session, a.session.events[4]);
+  o.frame({ agent: a, frame: { type: 'start', attemptId: 's:2', revision: 2, turn: 2, step: 1 } });
+  const [next, old] = o.snapshot().items;
+  assert.equal(next.model, 'future');
+  assert.equal(next.contextWindow, 131072);
+  assert.equal(next.requestMaxTokens, null);
+  assert.equal(old.model, 'b');
+});
+
+
+test('long-session task visibility compares exact task before and after compaction without claiming causation', () => {
+  for (const [before, after, compact, expected] of [
+    [true, true, true, 'present-at-both'],
+    [true, false, true, 'missing-at-response'],
+    [false, false, true, 'missing-at-both'],
+    [false, true, false, 'visible-at-response'],
+    [true, false, false, 'missing-at-response'],
+  ]) {
+    const o = createRuntimeObservations(), a = agent('continuity');
+    const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'PRIVATE TASK' } };
+    a.session.events = before ? [human] : [];
+    o.event(a.session, human);
+    start(o, a);
+    if (compact) o.event(a.session, { seq: 2, type: 'compaction/end', data: { summary: 'PRIVATE SUMMARY' } });
+    a.session.events = after ? [human] : [];
+    o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'PRIVATE RESPONSE' } } });
+    const row = o.snapshot().items[0];
+    assert.equal(row.taskContinuity.status, expected);
+    assert.equal(row.taskContinuity.compactionObservedBetween, compact);
+    assert.equal(row.taskContinuity.start, before ? 'present' : 'missing');
+    assert.equal(row.taskContinuity.response, after ? 'present' : 'missing');
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE/);
+  }
+});
+
+test('unavailable task snapshot is not reported as context loss', () => {
+  const o = createRuntimeObservations(), a = agent('unavailable-continuity');
+  const human = { seq: 1, type: 'user/message', data: { source: { kind: 'human' }, content: 'Task' } };
+  a.session.events = [human];
+  o.event(a.session, human);
+  start(o, a);
+  assert.equal(o.snapshot().items[0].taskContinuity.compactionObservedBetween, null);
+  a.session.snapshotEvents = () => { throw new Error('unavailable'); };
+  o.event(a.session, { seq: 2, type: 'assistant/message', data: { turn: 1, step: 1, message: { content: 'Done' } } });
+  const row = o.snapshot().items[0];
+  assert.equal(row.taskContinuity.status, 'insufficient-evidence');
+  assert.equal(row.taskContinuity.response, 'unavailable');
+});
+
+test('out-of-order committed records attach once after replacement, without rewinding the new request', () => {
+  const o = createRuntimeObservations();
+  const old = agent('s');
+  o.event(old.session, { seq: 1, type: 'request/header', data: { header: { config: { provider: 'original' } } } });
+  start(o, old); end(o, old, 0);
+  o.agentDisposed({ agent: old });
+  const replacement = { id: 's', session: old.session };
+  o.event(old.session, { seq: 4, type: 'request/header', data: { header: { config: { provider: 'new' } } } });
+  o.event(old.session, { seq: 5, type: 'compaction/end', data: {} });
+  start(o, replacement, 's:2');
+  const message = { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1,
+    interrupted: true, usage: { totalTokens: 9 }, message: { source: { model: 'received-model' } },
+    stream: [{ chunk: { type: 'finish', reason: { kind: 'aborted', failure: { message: 'PRIVATE' } } } }],
+  } };
+  o.event(old.session, { ...message, type: 'assistant/attempt' });
+  assert.equal(o.snapshot().items[1].durableArrival, 'not-observed', 'wrong committed event type stays unmatched');
+  o.event(old.session, message);
+  o.event(old.session, { ...message, data: { ...message.data, usage: { totalTokens: 999 }, interrupted: false } });
+  const [active, previous] = o.snapshot().items;
+  assert.equal(active.provider, 'new');
+  assert.equal(active.durableArrival, 'not-observed');
+  assert.equal(active.finishObserved, false);
+  assert.equal(previous.provider, 'original');
+  assert.equal(previous.model, 'received-model');
+  assert.equal(previous.durableArrival, 'exact-late');
+  assert.equal(previous.finish, 'aborted');
+  assert.equal(previous.usage.totalTokens, 9, 'duplicate must not replace the accepted evidence');
+  assert.equal(previous.interrupted, true);
+  assert.equal(previous.compactionSeqAtResponse, null);
+  assert.equal(previous.taskContextAtResponse, 'not-observed');
+  assert.equal(previous.firstTextMs, null);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE/);
+});
+
+test('identical visible session IDs and commit sequences do not cross live session objects', () => {
+  const o = createRuntimeObservations(), a = agent('same-display'), b = agent('same-display');
+  start(o, a); end(o, a, 0);
+  start(o, b); end(o, b, 0);
+  o.event(a.session, { seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'aborted' } } });
+  o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, usage: { totalTokens: 7 } } });
+  const [second, first] = o.snapshot().items;
+  assert.equal(second.durableArrival, 'not-observed');
+  assert.equal(first.durableArrival, 'exact-late');
+  assert.equal(first.usage.totalTokens, 7);
 });
