@@ -81,7 +81,7 @@ npm run test:all
 - 参考上游：[CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe)。
 - 本分支维护：[WXCVM](https://github.com/wxcvm)。
 
-本项目沿用 [Apache License 2.0](LICENSE)，请保留 [NOTICE](NOTICE)、原作者署名以及第三方许可。原作者要求不得转售原始构建，衍生项目须注明来源。
+本项目沿用 [Apache License 2.0](LICENSE)。原始代码及上游代码保留各自版权，WXCVM 对其自行创作的修改与新增内容保留版权；其他贡献者保留各自版权。再分发时应遵守许可证并保留适用的 [NOTICE](NOTICE)、署名及第三方许可。原作者提出不转售原始构建的请求；该请求不改变 Apache-2.0 正文所授予的权利。
 
 ---
 
