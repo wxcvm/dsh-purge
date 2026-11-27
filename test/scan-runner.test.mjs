@@ -32,6 +32,9 @@ test('running a local scanner preserves raw output and verifiable metadata', asy
   }, {
     root, config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (path, args, cfg, done) => {
       invoked++
       assert.equal(path, executable)
@@ -64,6 +67,9 @@ test('failed execution preserves diagnostics but never invokes ingestion', async
   }, {
     root, config: { platform: 'windows', tools: { httpx: file }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (_bin, _argv, _cfg, done) => done(new Error('binary exited 1'), '', 'bad input'),
     ingest: () => { throw new Error('must not ingest failed run') },
   })
@@ -82,6 +88,9 @@ test('successful run reuses ingestion and records the outcome on the same manife
   }, {
     root, config: { platform: 'windows', tools: { httpx: file }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (_bin, args, cfg, done) => {
       assert.deepEqual(args, ['-u', 'https://example.org', '-json', '-silent'])
       done(null, '{"url":"https://example.org","port":443}\n', '')
@@ -111,6 +120,9 @@ test('scanner output without recognized findings never reports a successful impo
   }, {
     root, config: { platform: 'windows', tools: { nmap: file }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (_bin, _argv, _cfg, done) => done(null, '<nmaprun></nmaprun>', ''),
     ingest: () => ({ ok: true, assets: 0, ports: 0, vulns: 0 }),
   })
@@ -129,6 +141,9 @@ test('opt-in low-impact Nmap uses fewer service probes and a configured timeout'
     root, config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [],
       scanPreferences: { mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false } },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (path, argv, opt, callback) => {
       assert.deepEqual(argv, ['-sT', '--open', '-oX', '-', '--max-retries', '1', '192.0.2.10'])
       assert.equal(opt.timeout, 60000)

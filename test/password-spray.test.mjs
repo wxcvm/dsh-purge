@@ -139,16 +139,22 @@ test('spraySSH returns candidate credentials with rate limit', async () => {
 })
 
 test('spraySMB handles unreachable hosts', async () => {
+  /* 注入失败的探针：宿主机若启用 TUN（如 FlClash），真实 TCP 会把任意地址
+     （含 unreachable.invalid）伪造为可达，这个用例就失去意义。 */
   const result = await spraySMB(
     ['unreachable.invalid'],
     ['admin'],
     ['password'],
     'DOMAIN',
-    { rateLimit: 100 }
+    {
+      rateLimit: 100,
+      probe: async (host) => ({ reachable: false, host, reason: 'unreachable.invalid does not resolve' }),
+    }
   )
 
   assert.ok(result.errors.length > 0)
   assert.ok(result.errors[0].error.includes('unreachable'))
+  assert.equal(result.valid.length, 0, 'an unreachable host must not yield candidate credentials')
 })
 
 test('sprayDatabase recognizes valid database type', async () => {
