@@ -32,6 +32,9 @@ test('running a local scanner preserves raw output and verifiable metadata', asy
   }, {
     root, config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (path, args, cfg, done) => {
       invoked++
       assert.equal(path, executable)
@@ -65,6 +68,9 @@ test('failed execution preserves diagnostics but never invokes ingestion', async
   }, {
     root, config: { platform: 'windows', tools: { httpx: file }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (_bin, _argv, _cfg, done) => done(new Error('binary exited 1'), '', 'bad input'),
     ingest: () => { throw new Error('must not ingest failed run') },
   })
@@ -83,6 +89,9 @@ test('successful run reuses ingestion and records the outcome on the same manife
   }, {
     root, config: { platform: 'windows', tools: { httpx: file }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (_bin, args, cfg, done) => {
       assert.deepEqual(args, ['-u', 'https://example.org', '-json', '-silent'])
       done(null, '{"url":"https://example.org","port":443}\n', '')
@@ -112,6 +121,9 @@ test('scanner output without recognized findings never reports a successful impo
   }, {
     root, config: { platform: 'windows', tools: { nmap: file }, toolkitDir: root, binDirs: [] },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (_bin, _argv, _cfg, done) => done(null, '<nmaprun></nmaprun>', ''),
     ingest: () => ({ ok: true, assets: 0, ports: 0, vulns: 0 }),
   })
@@ -130,6 +142,9 @@ test('opt-in low-impact Nmap uses fewer service probes and a configured timeout'
     root, config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [],
       scanPreferences: { mode: 'low-impact', timeoutSeconds: 60, captureDiagnostics: false } },
     env: { PATH: '' },
+    /* 这些用例注入 execFileFn、不真正发包；显式声明"无隧道网卡"，
+       否则守卫会按宿主真实环境（FlClash TUN）把扫描拦下。 */
+    interfaces: () => ({}),
     execFileFn: (path, argv, opt, callback) => {
       assert.deepEqual(argv, ['-sT', '--open', '-oX', '-', '--max-retries', '1', '192.0.2.10'])
       assert.equal(opt.timeout, 60000)
@@ -159,6 +174,7 @@ test('optional reverse DNS suppression only changes Nmap when enabled', () => {
     ['-u', 'https://192.0.2.10', '-json', '-silent'])
 })
 
+
 test('selected WSL environment is revalidated and recorded in the scan manifest', async (t) => {
   const root = temp(t)
   const calls = []
@@ -167,6 +183,7 @@ test('selected WSL environment is revalidated and recorded in the scan manifest'
     outputDir: join(root, 'records'),
   }, {
     platform: 'win32',
+    interfaces: () => ({}),
     execFileFn: (command, args, options, done) => {
       calls.push({ command, args })
       assert.equal(command, 'wsl.exe')
@@ -187,4 +204,35 @@ test('selected WSL environment is revalidated and recorded in the scan manifest'
   const manifest = JSON.parse(readFileSync(run.manifestFile, 'utf8'))
   assert.equal(manifest.environmentId, 'wsl:Ubuntu-24.04')
   assert.equal(manifest.execution.transport, 'wsl')
+})
+
+
+test('host TUN guard blocks WSL target execution before probing or scanning', async (t) => {
+  const root = temp(t)
+  let calls = 0
+  const result = await runDiscoveryScan({ kind: 'nmap', target: '192.0.2.60', environmentId: 'wsl:Ubuntu-24.04', outputDir: join(root, 'records') }, {
+    platform: 'win32',
+    interfaces: () => ({ FlClash: [{ address: '198.18.0.1', family: 'IPv4' }] }),
+    execFileFn: () => { calls++ },
+  })
+  assert.equal(result.status, 'tunnel-detected')
+  assert.equal(result.execution.attempted, false)
+  assert.equal(calls, 0)
+})
+
+test('SSH Kali scan records remote egress as unverified despite a host TUN', async (t) => {
+  const root = temp(t)
+  const run = await runDiscoveryScan({ kind: 'httpx', target: 'https://example.org', environmentId: 'ssh:kali-vm', outputDir: join(root, 'records') }, {
+    root, config: { kaliVm: { host: '192.0.2.10', user: 'kali', port: 22 } },
+    interfaces: () => ({ FlClash: [{ address: '198.18.0.1', family: 'IPv4' }] }),
+    execFileFn: (_command, args, _options, done) => {
+      const remote = args.at(-1)
+      if (remote === 'cat /etc/os-release') return done(null, 'ID=kali\\nPRETTY_NAME="Kali GNU/Linux"\\n', '')
+      if (remote.includes('-version')) return done(null, 'httpx 1.6.0\\n', '')
+      done(null, '{"url":"https://example.org/"}\\n', '')
+    },
+  })
+  assert.equal(run.status, 'executed')
+  assert.equal(run.scanEnvironment.scope, 'remote-ssh')
+  assert.match(run.scanEnvironment.warning, /远端出站路由未由本机检查/)
 })

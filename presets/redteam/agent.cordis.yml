@@ -51,7 +51,7 @@
       ## 开工前预检一次，任务工具按需选择
       1. **开始一次新的演练或独立工作流程时**，先读取当前会话的宿主工具、MCP 和 Skills 目录，再运行一次 `redteam_preflight`，核对本轮所需能力和缺项。不要沿用其他会话、旧环境的结论。
       2. **每个执行角色开始一个新的工具型任务前，必须调用一次 `redteam_tool_select`**，按任务选择 `domains / services / web / vulns / internal / identity / connectivity`。把具体任务类型写进 subagent brief，要求执行角色自己完成选择；不要只在主会话预检一次后假设所有子环境相同。仅当准备使用的候选支持版本参数时才传 `verify:true`；本机没有候选或验证失败时传 `include_environments:true`；用户明确选择 WSL / SSH Kali / Docker 时也传 `include_environments:true`，只从当前返回的环境 ID 中选择，不得自行猜测。
-      3. **选择结果不是执行结果**：`redteam_tool_select` 只返回候选路径与已有探针证据，不会运行目标任务。Nmap / ProjectDiscovery httpx 单目标扫描必须走 `redteam_scan_run`，复用实际配置路径、授权范围门禁、原始输出和入库记录；默认 `environment_id=local`，明确选择远端候选时必须把当前候选的完整 ID 传入 `environment_id`，执行器会再次发现环境并验证工具版本，不得自动切换。其他工具必须先加载匹配 Skill，再按该 Skill 给出的参数，通过当前会话真实可用的 Shell / MCP 调用；使用工具选择返回的实际路径，不得照抄过期路径或猜命令参数。
+      3. **选择结果不是执行结果**：`redteam_tool_select` 只返回候选路径与已有探针证据，不会运行目标任务。Nmap / ProjectDiscovery httpx 单目标扫描必须走 `redteam_scan_run`，复用实际配置路径、授权范围门禁、原始输出和入库记录；默认 `environment_id=local`，明确选择远端候选时必须把当前候选的完整 ID 传入 `environment_id`，执行器会再次发现环境并验证工具版本，不得自动切换。若返回 `tunnel-detected`，不要重试 Nmap/httpx 或把 TCP open 记为发现；改用 `redteam_l7_probe` 对同一授权主机做应用层复核，最多传入 64 个明确端口。SSH Kali 的远端出站路由未由本机检查，必须如实标注。其他工具必须先加载匹配 Skill，再按该 Skill 给出的参数，通过当前会话真实可用的 Shell / MCP 调用；使用工具选择返回的实际路径，不得照抄过期路径或猜命令参数。
       4. 用户添加的 `customTools` 目前只用于显示与路径核对，不属于自动执行候选。若某个已配置工具没有受支持的执行适配器或对应 Skill 没有明确调用方式，报告“已配置但尚不能执行”，不要用通用 Shell 猜测调用，也不要静默换成未配置工具。
       5. 同一会话、同一环境推进后续任务时，复用开工预检结果；新任务只需确认它新增依赖的工具或技能，并按第 2 条调用任务工具选择，不必重新运行完整 preflight。区分“目录可见 / 路径已找到 / 版本命令可运行 / 真实任务已执行 / 结果已验证”；执行失败、切换宿主、安装或配置变化时，只重新检查受影响的能力，不对全部工具逐项探测，也不在每个子智能体步骤重复预检。
       6. `FOFA_KEY`、`REDTEAM_VPS_HOST` 与某个扫描器不是全部任务的强制前提；缺一项只影响依赖它的那个任务。工具状态检查本身不扫描目标、不安装工具、不发起远端执行。

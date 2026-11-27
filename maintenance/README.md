@@ -28,9 +28,20 @@ desktop-tools 子目录是独立本地包 harness-maintenance-tools。提供显�
 
 详细的数据格式与命令见 desktop-tools 目录的 README。当前声明的宿主是已验证的 0.2.2-rc.1，不扩大到未经验证的版本。发布到现有 desktop profile 需要单独完成真实启动和认证验收；提交源码或打包本身不会安装。
 
+## 桌面更新前后检查
+
+从仓库根目录运行以下只读命令。拿到经过核验的目标版本 ASAR 后，升级前可加上 `--target-archive <绝对路径>` 预先检查插件在目标宿主上的确切依赖版本；省略它只检查当前版本。
+
+    node scripts/prepare-official-update.mjs --install-root 'D:\dsh'
+    node scripts/prepare-official-update.mjs --install-root 'D:\dsh' --expect-version 0.2.2-rc.5
+
+预检会列出缺少的运行时文件、留在安装目录内的旧解包树和目录联接，以及插件声明的版本冲突。退出码 2 表示有问题待处理，退出码 1 表示检查没有完成。旧解包目录应保存在安装目录外。脚本不会移动目录、启动安装器或修改插件。版本范围仍由 DSH 自带校验判断；精确版本相符也要做实际加载验证。
+
+升级后用目标版本复查，确认内置 pnpm 可以启动，再在应用内打开插件管理验证。任一项失败都保留为待验收。遇到精确的依赖版本冲突时，确认插件发布了与宿主匹配的版本后再更新。插件没有匹配版本时保留停用状态。
+
 ## 自动验证
 
     & .\maintenance\Test-HarnessRecovery.ps1
-    node --test .\maintenance\archive-evidence.test.mjs .\maintenance\desktop-tools\records.test.mjs .\maintenance\desktop-tools\skills.test.mjs
+    node --test .\maintenance\update-health.test.mjs .\maintenance\archive-evidence.test.mjs .\maintenance\desktop-tools\records.test.mjs .\maintenance\desktop-tools\skills.test.mjs
 
 合成测试涵盖占用、过期指纹、原子替换／回退、文件边界、记录渲染、只读索引和工具生命周期。正式工具注册、执行及卸载通过 Build-DesktopTools 的已验证宿主测试，不等价于生产桌面加载或模型行为验收。

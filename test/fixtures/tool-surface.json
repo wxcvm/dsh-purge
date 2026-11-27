@@ -49,6 +49,7 @@
   "redteam_kev",
   "redteam_knowledge_get",
   "redteam_knowledge_search",
+  "redteam_l7_probe",
   "redteam_local_asset_search",
   "redteam_next_action",
   "redteam_poc_add",

@@ -39,3 +39,70 @@ test('official Cordis notifications register, observe and dispose without middle
     assert.equal(observer.snapshot().items.length, 0);
   } finally { observer.dispose(); await ctx.fiber.dispose(); }
 });
+
+
+test('official Session distinguishes committed history from the surface seen at stream start', {
+  skip: !process.env.DSH_COMPAT_HOST_ROOT && 'requires pinned official host fixture',
+}, async (t) => {
+  const req = createRequire(join(process.env.DSH_COMPAT_HOST_ROOT, 'package.json'));
+  const load = name => import(pathToFileURL(req.resolve(name)).href);
+  const { Context } = await load('@deepseek-ai/cordis');
+  const { default: SessionStore } = await load('@deepseek-ai/dsh-session');
+  const { createUserMessage, createAssistantMessage } = await load('@deepseek-ai/dsh-llm');
+  const ctx = new Context();
+  let observer;
+  try {
+    await ctx.plugin(SessionStore);
+    const session = ctx.sessions.create('real-surface-fixture');
+    session.append('turn/start', { turn: 1 });
+    const text = value => [{ type: 'text', text: value }];
+    const original = session.append('user/message', createUserMessage({
+      source: { kind: 'user' }, content: text('ORIGINAL_FIXTURE_TEXT'),
+    }), { surfaceOp: 'append' });
+    if (!Array.isArray(session.surface?.nodes)) {
+      return t.skip('official Session surface membership is unavailable in this fixture');
+    }
+
+    const agent = { session, id: 'real-surface-agent' };
+    const emitStart = step => ctx.emit('agent/assistant-stream', { agent, frame: {
+      type: 'start', attemptId: 'fixture:' + step, revision: step, turn: 1, step,
+    } });
+
+    // An observer mounted after the first start must not reconstruct a past observation.
+    await emitStart(1);
+    observer = installRuntimeObservations(ctx);
+    assert.deepEqual(observer.snapshot().items, []);
+    await emitStart(2);
+    const expected = status => ({
+      status, userMessageSeq: original.seq, source: 'session-surface-at-stream-start',
+    });
+    assert.deepEqual(observer.snapshot().items[0].taskRequestSurface, expected('present'));
+
+    session.append('user/message', createUserMessage({
+      source: { kind: 'compact-checkpoint', compactionId: 'test-only' },
+      content: text('SUMMARY_FIXTURE_TEXT'),
+    }), {
+      surfaceOp: { op: 'replace', startSeq: original.seq, endSeq: original.seq },
+      sourceEventSeqs: [original.seq],
+    });
+    assert.ok(session.snapshotEvents().some(event => event.seq === original.seq));
+    assert.ok(!session.surface.nodes.includes(original.seq));
+    assert.deepEqual(session.deriveMessages().map(message => message.content[0].text), ['SUMMARY_FIXTURE_TEXT']);
+
+    await emitStart(3);
+    session.append('assistant/message', {
+      turn: 1, step: 3, stream: [], message: createAssistantMessage({
+        source: { provider: 'fixture', model: 'fixture' }, content: text('REPLY_FIXTURE_TEXT'),
+      }),
+    }, { surfaceOp: 'append' });
+
+    const [current, previous] = observer.snapshot().items;
+    assert.deepEqual(current.taskRequestSurface, expected('absent'));
+    assert.equal(current.taskContinuity.status, 'present-at-both');
+    assert.deepEqual(previous.taskRequestSurface, expected('present'));
+    assert.doesNotMatch(JSON.stringify([current, previous]), /FIXTURE_TEXT/);
+  } finally {
+    observer?.dispose();
+    await ctx.fiber.dispose();
+  }
+});

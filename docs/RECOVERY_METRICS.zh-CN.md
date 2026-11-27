@@ -9,6 +9,7 @@
 | --- | --- | --- | --- |
 | `enabled` | bool | `true` | 总开关，关掉后三套动作都不跑 |
 | `retryRefusal` | bool | `true` | 良性任务里的明确拒答，允许一次中性复核 |
+| `targetScrub` | bool | `false` | 显式开启后，仅替换模型请求副本中的目标；会话原文与历史记录不改写 |
 | `maxRetries` | 0–3 | `1` | 复核次数上限（每会话、每个新请求重置） |
 | `continueHollow` | bool | `true` | 空心停摆（本轮没有正文）续跑 |
 | `maxContinues` | 0–3 | `1` | 续跑次数上限 |

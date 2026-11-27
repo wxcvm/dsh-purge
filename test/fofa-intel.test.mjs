@@ -161,3 +161,50 @@ test('UI has no marketing copy in survey headings', async () => {
     assert.doesNotMatch(page, /简洁且可用|开箱即用|五项就够|鸟鸟的实施计划/)
   }
 })
+
+test('FOFA gateway without fields support falls back to default columns on page 1', async t => {
+  /* 实测事故：api.hualuopd.org 这类中转不支持 fields，返回
+     { error:false, size:N, results:[] } —— 报成功但结果为空，
+     会被误判成"目标没有资产"。首页遇到空结果应回退默认字段重试。 */
+  const { root, store } = fixture(t)
+  savePlatformConfig({ env: { FOFA_KEY: 'relay-key' } }, root)
+  let calls = 0
+
+  const result = await runFofaSearch(store, { target: ip, confirmExternal: true }, {
+    fetch: async (url) => {
+      calls++
+      const withFields = url.searchParams.get('fields') !== null
+      if (withFields) {
+        return new Response(JSON.stringify({ error: false, size: 7, results: [] }))
+      }
+      return new Response(JSON.stringify({ error: false, size: 7, results: [
+        ['https://host.example.test', ip, 443],
+        ['https://two.example.test', ip, 80],
+      ] }))
+    },
+  })
+
+  assert.equal(calls, 2, 'first attempt with fields, one fallback without')
+  assert.equal(result.ok, true)
+  assert.equal(result.fields_supported, false)
+  assert.match(String(result.fields_note), /不支持 fields/)
+  assert.equal(result.items.length, 2, 'fallback rows must survive instead of reporting an empty target')
+})
+
+test('FOFA does not retry on later pages when results are empty', async t => {
+  const { root, store } = fixture(t)
+  savePlatformConfig({ env: { FOFA_KEY: 'relay-key' } }, root)
+  let calls = 0
+
+  const result = await runFofaSearch(store, { target: ip, confirmExternal: true, page: 3 }, {
+    fetch: async () => {
+      calls++
+      return new Response(JSON.stringify({ error: false, size: 40, results: [] }))
+    },
+  })
+
+  assert.equal(calls, 1, 'an empty later page means past the end, not a field-capability problem')
+  assert.equal(result.ok, true)
+  assert.equal(result.fields_supported, true)
+  assert.equal(result.hasNext, false)
+})

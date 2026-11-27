@@ -26,6 +26,8 @@ function fixture(t, scope = ['192.0.2.10']) {
     config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [],
       scanPreferences: { mode: 'low-impact', timeoutSeconds: 60, noReverseDns: true } },
     env: { PATH: '' },
+    /* 注入式单元测试不真发包；显式声明"无隧道网卡"，避免守卫按宿主真实环境拦截。 */
+    interfaces: () => ({}),
     execFileFn: (_exe, argv, options, cb) => {
       assert.deepEqual(argv,
         ['-sT', '--open', '-oX', '-', '--max-retries', '1', '-n', '-p', '80,443', '192.0.2.10'])
