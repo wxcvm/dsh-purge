@@ -5,7 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import YAML from "yaml";
 
-import { ensureProfileBodyInsert, profileHasPurgeBodyInsertAst, INSERT_BLOCK } from "../lib/profile-insert.js";
+import { ensureProfileBodyInsert, profileHasPurgeBodyInsertAst, INSERT_BLOCK,
+  ensureAllProfileInstall } from "../lib/profile-insert.js";
 
 const mkProfile = (body) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "purge-insert-"));
@@ -102,5 +103,26 @@ test("only the exact previously generated malformed empty overlay is repaired", 
       assert.equal(read(dir), "# native description\n" + INSERT_BLOCK);
       assert.equal(YAML.parse(read(dir))[0].insert[0].id, "dsh-purge");
     } else assert.equal(read(dir), before);
+  }
+});
+
+
+test("profile startup never changes a native Purge build denial or pending decision", t => {
+  for (const value of ["false # operator decision", '"set this to true or false"']) {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "purge-approval-"));
+    t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+    const profile = path.join(home, "profiles", "web");
+    fs.mkdirSync(profile, { recursive: true });
+    fs.writeFileSync(path.join(profile, "package.json"), JSON.stringify({
+      name: "dsh-profile-web", packageManager: "pnpm@11.28.5",
+      dsh: { profile: { bundles: ["dsh-purge"] } },
+    }));
+    const settings = path.join(profile, "pnpm-workspace.yaml");
+    const native = "# native policy\nallowBuilds:\n  dsh-purge: " + value + "\n  other: false\n";
+    fs.writeFileSync(settings, native);
+    const [result] = ensureAllProfileInstall(home);
+    assert.equal(result.insert.wrote, true, "ordinary profile support is still repaired");
+    assert.equal(result.pnpm.wrote, false);
+    assert.equal(fs.readFileSync(settings, "utf8"), native);
   }
 });
