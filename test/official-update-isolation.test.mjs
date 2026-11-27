@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { patchAppliesHere } from '../lib/core.js';
 import { ALL_PATCHES } from '../lib/patches-definitions.js';
 
@@ -27,19 +28,30 @@ test('startup settle does not automatically mutate or restart official hosts', (
   assert.doesNotMatch(body, /reapplyInstalled|applyPatchesAllHosts|autoUpdateIfNeeded|scheduleRestart|clearStaleExtractedApps|rememberUnpackedArchive|patchAllShims|markPatchesApplied/);
 });
 
-test('legacy update preparation refuses to modify an installation in every invocation mode', async () => {
+test('official update health entry point is read-only and refuses incomplete installations', async (t) => {
   const { spawnSync } = await import('node:child_process');
-  const { fileURLToPath } = await import('node:url');
+  const root = mkdtempSync(path.join(tmpdir(), 'read-only-update-health-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const resources = path.join(root, 'resources');
+  const profile = path.join(root, 'profile');
+  mkdirSync(resources);
+  mkdirSync(profile);
   const script = fileURLToPath(new URL('../scripts/prepare-official-update.mjs', import.meta.url));
-  for (const args of [[], ['--dry-run'], ['--exe', 'ignored.exe']]) {
-    const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8', timeout: 10000 });
+  for (const extra of [[], ['--dry-run']]) {
+    const result = spawnSync(process.execPath, [script, '--install-root', root, '--profile-root', profile, ...extra], {
+      encoding: 'utf8', timeout: 10000,
+    });
     assert.ifError(result.error);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /已停用/);
-    assert.match(result.stderr, /官方安装器/);
+    assert.match(result.stderr, /plain resources directory and a packed app\.asar/);
+    assert.deepEqual(readdirSync(root).sort(), ['profile', 'resources']);
+    assert.deepEqual(readdirSync(resources), []);
   }
   const source = readFileSync(script, 'utf8');
-  assert.doesNotMatch(source, /node:fs|node:child_process|copyFile|renameSync|unlinkSync|rmSync|spawn\(/);
+  assert.match(source, /auditUpdate/);
+  assert.doesNotMatch(source, /copyFile|renameSync|unlinkSync|rmSync|spawn\(/);
+  const audit = readFileSync(new URL('../maintenance/update-health.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(audit, /writeFileSync|renameSync|unlinkSync|rmSync|spawn\(/);
 });
 
 test('legacy post-update reapply entry point never starts host modification', async () => {
