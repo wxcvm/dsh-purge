@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "62e1ff94e22d64eb";
+		const CLIENT_BUILD_ID = "5796136493763781";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -12790,6 +12790,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       ]
       const sourceLabels = { config: '自定义路径', toolkit: '工具箱', binDir: '搜索目录',
         path: '系统 PATH', artex: 'ARTEX' }
+      const executionPolicyLabels = {
+        'dedicated-adapter': '专用执行适配器',
+        'skill-guided-host-tool': 'Skill + 宿主工具',
+        'manual-review-only': '需本次人工确认',
+        'unmapped-manual-review': '未审查，禁止执行',
+      }
       const filteredTools = tools.filter((t) =>
         (toolGroup === 'all' || t.group === toolGroup)
         && (toolStatusFilter === 'all' || envToolReadiness(t, toolChecks[t.id]) === toolStatusFilter)
@@ -13249,7 +13255,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           sectionCard('tools', { className: 'rt-card' },
             h('h4', null, '按任务选择工具'),
             h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
-              '按本机路径、可版本检测性和已保存的首选工具推荐；先点上方「保存」让新的偏好生效，计划不会运行任何任务。'),
+              '按任务顺序、本机路径、工具来源和已保存的首选工具推荐；版本探针仅作信息展示，不参与排名。先点上方「保存」让新的偏好生效，计划不会运行任何任务。'),
             h('div', { style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } },
               h('select', { className: 'rt-input', style: { flex: '1 1 150px' },
                 value: taskId, onChange: (e) => { setTaskId(e.target.value); setTaskPlan(null); setEnvironmentTaskPlan(null) } },
@@ -13287,6 +13293,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     '评分：' + taskPlan.selected.score + ' · ' + (taskPlan.selected.reasons || []).join('；')) : null,
                   taskPlan.selected ? h('div', { className: 'rt-mono', style: { fontSize: 11, overflowWrap: 'anywhere' } },
                     '来源：' + (sourceLabels[taskPlan.selected.source] || taskPlan.selected.source) + ' · ' + taskPlan.selected.path) : null,
+                  taskPlan.selected ? h('p', { className: 'rt-foot' },
+                    '执行策略：' + (executionPolicyLabels[taskPlan.selected.executionPolicy] || '未定义')
+                    + (taskPlan.selected.operatorConfirmationRequired ? ' · 需要本次动作确认' : '')
+                    + ' · 不会自动执行') : null,
+                  taskPlan.selected ? h('p', { className: 'rt-foot' },
+                    taskPlan.selected.skillRequirements?.length
+                      ? '必读 Skill：' + taskPlan.selected.skillRequirements.map((item) => item.name).join('、') + '（尚未读取）'
+                      : '没有经过审查的 Skill 映射；不得猜测调用方式。') : null,
+                  taskPlan.selected?.policyNote ? h('p', { className: 'rt-foot' }, taskPlan.selected.policyNote) : null,
                   h('div', { style: { opacity: 0.8, marginTop: 4 } },
                     (taskPlan.candidates || []).map((c) => c.label + '：' + (c.detected ? '已找到' : '缺失')).join(' / ')),
                   taskPlan.selected && taskPlan.selected.canProbe
