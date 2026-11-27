@@ -109,7 +109,17 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.ok(fileRow)
   assert.equal(Object.hasOwn(fileRow, 'path'), false)
   assert.equal(Object.hasOwn(fileRow, 'evidence'), false)
+  assert.equal(Object.hasOwn(fileRow, 'description'), false)
   assert.doesNotMatch(JSON.stringify(attackFiles), /private-evidence-marker|private-file-body-marker/)
+
+  redteam.addChainStep(sensitiveEngagement, {
+    stage_code: 'recon', tool: 'sensitive-command-marker', result: 'private-chain-result-marker', agent: 'recon',
+  })
+  const chain = JSON.parse(await registered.get('redteam_chain').execute({ engagement: sensitiveEngagement }, {}))
+  assert.doesNotMatch(JSON.stringify(chain), /sensitive-command-marker|private-chain-result-marker/)
+  assert.equal(Object.hasOwn(chain.items[0], 'tool'), false)
+  assert.equal(Object.hasOwn(chain.items[0], 'result'), false)
+  assert.equal(Object.hasOwn(chain.items[0], 'evidence_ref'), false)
 
   const evidenceUpgrade = JSON.parse(await registered.get('redteam_evidence_upgrade').execute({
     engagement: sensitiveEngagement, claimed_ev_id: 'fake-evidence-id', verified_result: { verified: true },
