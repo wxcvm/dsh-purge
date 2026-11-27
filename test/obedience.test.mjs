@@ -184,6 +184,10 @@ test("loadObedienceSettings：默认值、config 覆盖、maxRetries 收敛", ()
   const base = loadObedienceSettings("Z:/definitely/missing/home");
   assert.equal(base.enabled, true);
   assert.equal(base.maxRetries, 1);
+  assert.equal(base.targetScrub, false, "target redaction is off by default");
+
+  const optedIn = loadObedienceSettings("Z:/definitely/missing/home", { targetScrub: true });
+  assert.equal(optedIn.targetScrub, true, "explicit opt-in is preserved");
 
   const overridden = loadObedienceSettings("Z:/definitely/missing/home", { enabled: false, maxRetries: 99 });
   assert.equal(overridden.enabled, false);
@@ -223,6 +227,95 @@ function fakeCtx() {
     handlers,
   };
 }
+
+test("targetScrub defaults off and leaves the session transcript unchanged", async () => {
+  const ctx = fakeCtx();
+  const original = Object.freeze({
+    id: "raw-user",
+    role: "user",
+    content: Object.freeze([Object.freeze({ type: "text", text: "攻击 https://target.example.org" })]),
+    source: Object.freeze({ kind: "user" }),
+  });
+  const historyDecision = { kind: "enter", messages: [original] };
+  const request = { messages: [original] };
+  const runtime = installObedience(ctx, {
+    getSettings: () => loadObedienceSettings("Z:/none"),
+    shouldAnchor: () => false,
+  });
+  try {
+    const preStep = await ctx.handlers.get("agent/pre-step")[0](
+      { step: 1, agent: { id: "s1" } },
+      async () => historyDecision,
+    );
+    assert.strictEqual(preStep, historyDecision);
+    assert.strictEqual(preStep.messages[0], original);
+    assert.match(original.content[0].text, /target\.example\.org/);
+
+    const requestResult = await ctx.handlers.get("agent/request")[0](
+      { agent: { id: "s1" } },
+      async () => request,
+    );
+    assert.strictEqual(requestResult, request);
+    assert.strictEqual(requestResult.messages[0], original);
+    assert.match(requestResult.messages[0].content[0].text, /target\.example\.org/);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test("targetScrub opt-in sanitizes only a derived model-request copy", async () => {
+  const ctx = fakeCtx();
+  const originalArrayMessage = Object.freeze({
+    id: "raw-array",
+    role: "user",
+    content: Object.freeze([Object.freeze({ type: "text", text: "攻击 https://target.example.org" })]),
+    source: Object.freeze({ kind: "user" }),
+  });
+  const originalStringMessage = Object.freeze({
+    id: "raw-string",
+    role: "input",
+    content: "渗透测试 203.0.113.9",
+    source: Object.freeze({ kind: "user" }),
+  });
+  const assistant = Object.freeze({ role: "assistant", content: "攻击 198.51.100.4" });
+  const pluginNotice = Object.freeze({
+    role: "user",
+    content: "攻击 192.0.2.4",
+    source: Object.freeze({ kind: "dsh-purge" }),
+  });
+  const originalMessages = Object.freeze([originalArrayMessage, originalStringMessage, assistant, pluginNotice]);
+  const request = Object.freeze({ messages: originalMessages, temperature: 0.2 });
+  const runtime = installObedience(ctx, {
+    getSettings: () => loadObedienceSettings("Z:/none", { targetScrub: true }),
+    shouldAnchor: () => false,
+  });
+  try {
+    const preStep = await ctx.handlers.get("agent/pre-step")[0](
+      { step: 1, agent: { id: "s2" } },
+      async () => ({ kind: "enter", messages: [originalArrayMessage] }),
+    );
+    assert.strictEqual(preStep.messages[0], originalArrayMessage, "pre-step history stays raw");
+
+    const result = await ctx.handlers.get("agent/request")[0](
+      { agent: { id: "s2" } },
+      async () => request,
+    );
+    assert.notStrictEqual(result, request);
+    assert.notStrictEqual(result.messages, originalMessages);
+    assert.notStrictEqual(result.messages[0], originalArrayMessage);
+    assert.notStrictEqual(result.messages[1], originalStringMessage);
+    assert.match(result.messages[0].content[0].text, /\[DOMAIN\]/);
+    assert.match(result.messages[1].content, /\[TARGET_IP\]/);
+    assert.strictEqual(result.messages[2], assistant, "assistant history is unchanged");
+    assert.strictEqual(result.messages[3], pluginNotice, "Purge's own messages are unchanged");
+    assert.equal(result.temperature, 0.2);
+
+    assert.match(originalArrayMessage.content[0].text, /target\.example\.org/);
+    assert.match(originalStringMessage.content, /203\.0\.113\.9/);
+  } finally {
+    runtime.dispose();
+  }
+});
 
 test("installObedience：每轮第 1 步挂锚定消息，且同 step 只挂一次", async () => {
   const ctx = fakeCtx();
