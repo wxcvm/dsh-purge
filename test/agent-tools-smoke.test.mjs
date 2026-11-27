@@ -55,6 +55,11 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
     kind: 'socks5', listen: '127.0.0.1:1080', reach: '10.0.0.0/8', command: 'tunnel-command-marker',
   })
 
+  redteam.addAccess(sensitiveEngagement, {
+    host: '192.0.2.12', username: 'operator', method: 'ssh', privilege: 'user',
+    session_ref: 'private-access-session-marker', note: 'private-access-note-marker',
+  })
+
   // Credential CRUD/check tools are intentionally absent from the model-visible surface.
   // Legacy credential records may remain in local storage, but no tool can retrieve or test them.
   for (const name of ['redteam_credential_list', 'redteam_credential_add', 'redteam_credential_check']) {
@@ -71,6 +76,11 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
 
   const sessions = JSON.parse(await registered.get('redteam_sessions').execute({ engagement: sensitiveEngagement }, {}))
   assert.doesNotMatch(JSON.stringify(sessions), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
+  const accessList = JSON.parse(await registered.get('redteam_access_list').execute({ engagement: sensitiveEngagement }, {}))
+  assert.equal(accessList.items.length, 1)
+  assert.equal(Object.hasOwn(accessList.items[0], 'session_ref'), false)
+  assert.equal(Object.hasOwn(accessList.items[0], 'note'), false)
+  assert.doesNotMatch(JSON.stringify(accessList), /private-access-session-marker|private-access-note-marker/)
   for (const name of ['redteam_webshell_add', 'redteam_tunnel_add', 'redteam_session_check', 'redteam_access_add']) {
     const result = JSON.parse(await registered.get(name).execute({ engagement: sensitiveEngagement }, {}))
     assert.equal(result.status, 'unsupported', name)
