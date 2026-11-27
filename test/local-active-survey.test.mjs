@@ -114,6 +114,46 @@ test('empty scope needs explicit confirmation, with no extension to batch scans'
   assert.equal(bad.ok, false)
 })
 
+test('hostname-only scope does not authorize importing its resolved IP as an asset', async t => {
+  const { store, imported, scan } = fixture(t, ['example.test'])
+  const output = '<nmaprun><host><address addr="192.0.2.50" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host></nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: 'example.test',
+    ports: '80,443', commit: true,
+  }, { ...scan, execFileFn: (_exe, argv, _options, cb) => {
+    assert.equal(argv.at(-1), 'example.test')
+    cb(null, output, '')
+  } })
+  assert.equal(result.ok, true)
+  assert.equal(result.scope, 'name-only')
+  assert.equal(result.assets, 0)
+  assert.equal(result.ports, 0)
+  assert.match(result.note, /IP\/CIDR/)
+  assert.equal(imported.length, 0)
+  assert.ok(result.output_file, 'raw scan output remains available for manual review')
+})
+
+test('hostname scope plus an explicit matching IP/CIDR rule can import the resolved asset', async t => {
+  const { store, imported, scan } = fixture(t, ['example.test', '192.0.2.0/24'])
+  const output = '<nmaprun><host><address addr="192.0.2.50" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host></nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: 'example.test',
+    ports: '80,443', commit: true,
+  }, { ...scan, execFileFn: (_exe, argv, _options, cb) => {
+    assert.equal(argv.at(-1), 'example.test')
+    cb(null, output, '')
+  } })
+  assert.equal(result.assets, 1)
+  assert.equal(imported.length, 1)
+  assert.equal(imported[0].bundle.assets[0].ip, '192.0.2.50')
+})
+
 test('Nmap parser retains bounded host records, names, service versions and CPE evidence', () => {
   const observed = parseLocalDiscovery('nmap',
     '<nmaprun>'
