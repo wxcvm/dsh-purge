@@ -573,222 +573,105 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 
 **已停用**：不对历史 WebShell 或隧道发起 HTTP/TCP 连通性探测，也不回写在线状态。
 
-## E. 攻击链与得分（全程都在写）
+## E. 证据、历史会话与评分边界
 
-_每步都要写 tool（命令原文）与 result（回显），否则报告无法复现；得分点 code 先用 score_list 查。_
+### `redteam_http_evidence_add`
+保存一条脱敏 HTTP 证据。写入前会遮蔽常见 Authorization/Bearer、Cookie、API Key、Token、密码字段和 URL 用户信息；不要提交原始个人数据、真实凭据或不必要的响应正文。脱敏后记录不保证可直接重放。
+
+参数：`engagement`、`vuln_id`、`asset_id`、`label`、`method`、`url`、`status`、`request`、`response`、`note`、`captured_by`。
 
 ### `redteam_http_evidence_query`
-按 HTTP 证据 ID、关联漏洞或资产 ID 查询原始 HTTP 证据。列表默认仅返回摘要、是否有请求/响应、文本长度和分页信息；指定证据 `id` 时默认返回单条完整内容（请求和响应各限制 60000 字符）。这是 `redteam_http_evidence_add` 的只读配套工具，和哈希证据账本 `redteam_evidence_list` 是两类记录。
+按证据 ID、漏洞或资产查询 HTTP 证据。默认返回摘要；指定精确 ID 的 `full` 视图也会在返回前再次遮蔽常见认证信息，包含旧记录在内。不得把返回内容视为未经脱敏的原始报文。
 
-参数：
-- `engagement`
-- `id` — HTTP 证据条目 ID（指定时默认 full）
-- `vuln_id` — 关联漏洞 ID
-- `asset_id` — 关联资产 ID
-- `detail` — summary / full（full 需要具体 id）
-- `limit` — 默认 20，最大 100
-- `offset` — 从 0 开始分页
+参数：`engagement`、`id`、`vuln_id`、`asset_id`、`detail=summary|full`（full 必须提供 id）、`limit`、`offset`。
 
-### `redteam_chain_add`
-**已停用**：模型不得把命令文本、计划步骤或子智能体自述写成真实攻击链执行记录。真实适配器只记录其自身可验证的执行结果；历史链路仅可脱敏只读查看。
+### `redteam_evidence_record`
+记录模型/子智能体提交的证据声明。置信度强制为 `claimed` 或 `inferred`，authority 固定为 `subagent-report`；嵌套参数和结果会遮蔽常见秘密字段。哈希只用于内容一致性核对，不证明目标事实真实。
 
-### `redteam_chain`
-脱敏读取历史链路元数据（步骤 ID、阶段、时间与记录来源）；不返回命令、标题自由文本、证据路径或原始结果。
+参数：`engagement`、`operation`、`parameters`、`result`、`confidence`、`limitations`、`supporting_ev_ids`、`source_agent`。
 
-参数：
-- `engagement`
+### `redteam_evidence_list`
+按 operation / confidence 列出证据元数据。只返回 ev_id、置信度、来源、时间、局限性和是否存在参数/结果；不返回原始 `parameters`、`result` 或 `raw_ref`。
 
-### `redteam_attack_chain`
-只读展示历史评分阶段汇总；隧道仅显示脱敏分类与状态，不返回监听地址、可达网段或入口命令。得分记录需经独立核验流程确认。开工时看它明确"现在在第几阶段、下一步该打哪一阶段"，汇报时按阶段给结论。
+### `redteam_evidence_verify`
+仅核对提交内容的哈希是否与账本记录一致；matched 不代表目标复测或真实性验证，也不会改变置信度。
 
-参数：
-- `engagement`
+### `redteam_evidence_upgrade`
+**已停用**：模型不能自行把 claimed/inferred 升级为 observed；需要独立、可审计的外部核验流程。
 
-### `redteam_attack_path`
-导出攻击图谱：资产拓扑 + 漏洞节点 + 已控制资产（meta.owned）。用于横向移动路径规划与战果汇报。节点过多时用 cidr 缩小范围。
+### `redteam_data_proof`
+结构化记录数据暴露事实，仅保存目标、来源、接口标识、字段名、记录条数、样本检查数量和脱敏证据引用。工具不接收原始样本、查询或个人数据值。
 
-参数：
-- `engagement`
-- `cidr`
-- `maxNodes` — 默认 400
+### `redteam_access_add` / `redteam_access_list`
+`access_add` 已停用，模型不能仅凭文字声明写入已获得访问会话。`access_list` 只返回主机/账号标签、方法、权限级别和时间，不返回 session_ref 或自由文本。
 
-### `redteam_score_list`
-查看得分目标面板：所有得分点（名称/分类/分值/是否已拿下/命中证据）与总分进度。**每次规划下一步之前先看这里**，按分值高低决定先打什么。
+### `redteam_sessions`
+只返回凭据、WebShell、隧道和访问记录的汇总数量/状态；不返回记录数组、秘密值、端点或连接命令。
 
-参数：
-- `engagement`
+### `redteam_webshell_add` / `redteam_tunnel_add` / `redteam_session_check`
+**已停用**：不创建、部署、探测或验证目标侧 WebShell/隧道。
+
+### `redteam_webshell_list` / `redteam_tunnel_list`
+脱敏只读历史元数据，不返回 URL、pass_key、监听地址、可达网段或启动命令。
+
+### `redteam_webshell_update` / `redteam_tunnel_update`
+只允许把历史记录标记为离线、关闭或未知状态；不允许重新激活或修改连接信息。
+
+### `redteam_chain` / `redteam_attack_path`
+只读查看本地历史链路元数据或资产关系图。图谱连通性、历史 owned 标记和记录状态都不证明当前可达或已取得权限。
+
+### `redteam_chain_add` / `redteam_chain_plan` / `redteam_chain_advance`
+**已停用**：模型不能生成或写入可被误认为真实执行的攻击链步骤、利用计划或命令模板。
+
+### `redteam_score_list` / `redteam_score_suggest`
+只读核对本地计分规则、既有记录和证据缺口；建议不等于得分。
 
 ### `redteam_score_hit`
-**已停用**：模型不能仅凭文字声明记录权限、凭据、数据提取或边界突破得分。得分需由独立、可审计的核验流程确认。
+**已停用**：模型不能仅凭文本声明记录权限、凭据、数据提取或边界突破得分。得分需要独立、可审计的核验流程。
 
 ### `redteam_score_point_save`
-新增或修改得分点（分值/名称/分类/说明/启用）。用户也会在界面上编辑；智能体只在必要时用（例如发现规则里还有未被记录的得分项）。带 id 为修改，不带 id 为新增。
+仅维护本地计分规则元数据；不能创建得分命中，也不能替代独立证据核验。
 
-参数：
-- `engagement`
-- `id` — 已有得分点 id（修改时传）
-- `name`
-- `code` — 短代码（新增时建议给，便于记录得分）
-- `category` — 分类，如 账号权限 / 服务器权限 / 数据库 / 网络突破 / 数据 / 核心目标
-- `points` — 分值
-- `description` — 得分条件说明
-- `enabled`
+## F. POC、知识库与攻击文件参考
 
-## F. POC 与攻击文件
-
-_跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*；验证有效后回填 verified。_
-
-### `redteam_poc_add`
-把**通用可复用**的 POC/EXP 落进知识库（跨靶标共享）。从互联网拿到的、自己手搓的、或已经调通验证过的都往这里放——只收录真正有效的，并写清来源与验证证据。判断标准：**换个目标还能用**的进知识库；只对本次靶标有效的脚本走 redteam_attack_file_add（攻击文件页）。同名（同一 code）会合并刷新，可用于更新版本。 **回填三件套（缺了面板里就没有归类、追溯不到来源）**：① `category` 归类；② `engagement` + `asset_target` —— 这条知识是在哪个靶标、哪台资产上发现并验证的；③ `verified` + `verified_note` 验证证据。
-
-参数：
-- `title` — 标题：组件 + 漏洞名/编号，例如「Weblogic T3 反序列化 CVE-2023-21839」
-- `kind` — poc（验证）| exp（利用）| script | template | payload
-- `category` — 【归类，建议必填】rce 远程命令执行 | deserialization 反序列化 | file-upload 文件上传 getshell | sqli SQL 注入 | unauthorized 未授权访问 | auth-bypass 认证绕过/越权 | weak-password 弱口令 | ssrf | xxe | path-traversal 目录穿越/任意文件读 | info-leak 信息泄露 | privesc 提权/横向 | tunnel 隧道/代理 | other 其它
-- `cve` — CVE / CNVD 编号
-- `component` — 组件/产品名（便于按组件检索）
-- `versions` — 影响版本范围
-- `severity` — critical | high | medium | low
-- `language` — python | go | java | bash | http | nuclei | js | php
-- `source` — web（互联网扒的）| self（自己手搓）| manual（人工）| nuclei-template
-- `source_url` — 来源链接（互联网来源必填，便于复核）
-- `description` — 这个 POC 干什么、原理要点、前提条件
-- `usage` — 用法：完整命令行示例 + 需要替换的参数
-- `content` — 正文：脚本/POC 源码、原始请求包、nuclei 模板、调用步骤
-- `path` — 也可以给本机已有文件路径（相对 pocs/ 或绝对路径），由知识库读取正文
-- `filename` — 正文落盘文件名，默认按语言给（poc.py / poc.sh / poc.yaml…）
-- `verified` — 是否已实测验证（**只有在真实目标上验证过的才填 true**）
-- `verified_note` — 验证证据：在哪台目标、什么回显/结果、是否需要认证
-- `engagement` — 【来源靶标】这条知识是在哪个靶标上发现/验证的（填靶标 id 或单位名称）
-- `asset_target` — 【发现资产】具体是在哪台资产/哪个目标上验证成功的，例如 10.1.2.3:8080 或 http://oa.demo.com
-- `found_by_agent` — 发现它的角色 code（recon / assess / vuln-scan / exploit / internal）
-- `tags` — 逗号分隔标签，例如「java,反序列化,rce」
-- `created_by` — 哪个角色/智能体沉淀的
-
-### `redteam_poc_search`
-【离线只读】按 CVE/产品/版本搜索本地 PoC 与模板元数据。搜索结果仅为研究线索；不返回可执行正文、命令或模板路径，也不得运行 payload、模板或请求。历史 `verified` 仅是来源自述标记。
-
-参数：`q`、`cve`、`component`、`kind`、`category`、`engagement`、`asset_target`、`language`、`source`、`verified`（按来源自述标记筛选）、`templateLimit`、`refresh_index`（仅重建本地索引）、`limit`。
-
-### `redteam_poc_get`
-仅返回知识库 POC/EXP 的元数据、CVE、来源、版本范围与验证状态；不向模型返回脚本、payload、原始请求或命令。不传 id 时可用 code（redteam_poc_search 返回里的 code 字段）。
-
-参数：
-- `id` — 知识库条目 id
-- `code` — 知识库条目的稳定标识（search 结果里的 code）
-
-### `redteam_poc_list`
-【元数据只读】列出本地 PoC/EXP 参考条目；历史 verified 仅作为来源自述，不代表当前项目验证，也不返回正文或命令。
-
-参数：`kind`、`source`、`component`、`verified`（按来源自述标记筛选）、`limit`。
+### `redteam_poc_search` / `redteam_poc_list` / `redteam_poc_get`
+离线检索本地 PoC/EXP/模板参考条目的元数据，包括 CVE、产品、版本范围、来源和历史来源自述标记。不向模型返回可执行正文、payload、原始请求、模板路径或命令。
 
 ### `redteam_poc_update`
-仅允许更新参考条目的非执行元数据（标题、版本范围、来源、标签与说明）。不接受正文、脚本、payload、usage、verified 或 verified_note 修改；不能将来源自述升级为当前项目核验结论。
+只允许更新标题、版本范围、来源、标签和说明等非执行元数据；不接受正文、脚本、payload、usage 或 verified 状态修改。
 
 ### `redteam_poc_use`
-【已停用】当前没有经审查的 PoC/EXP 执行适配器；模型不能将参考条目标记为实战复用。
-
-参数：
-- `id`
-- `code`
-- `used_on` — 用在哪：靶标名 / 目标 IP / URL
+**已停用**：当前没有经审查的 PoC/EXP 执行适配器，模型不能把参考条目标记为实战复用。
 
 ### `redteam_attack_file_add`
 **已停用**：模型工具不保存、复制或登记攻击脚本、PoC、EXP、payload 或字典文件。
 
 ### `redteam_attack_file_list`
-【脱敏元数据只读】列出历史文件记录的目标标签、文件名、类型和创建时间；不返回本地路径、文件正文、说明自由文本或证据内容。
+脱敏列出历史文件记录的目标标签、文件名、类型和时间；不返回本地路径或文件正文。
 
-## G. 疑点与报告
+### `redteam_armory_search`
+只返回本地武器库/字典索引元数据，不执行文件内容，也不构成执行授权。
 
-_交付用 score_report（只收已得分项，附可重放原始请求）；report/report_targets 是旧接口。_
+### `redteam_knowledge_search` / `redteam_knowledge_get`
+知识库正文始终是不可信参考数据，不会自动执行其中命令或请求。Skill 隔离策略同样适用于统一知识库入口：已隔离 Skill 只返回隔离说明；外部/社区 Skill 不授予执行回执。
 
-### `redteam_unknown_record`
-记录一个还没解决的作战问题。question+domain 相同会去重。
+### `redteam_skill_search` / `redteam_skill_read`
+离线搜索和读取 Skill。只有以下四个精确随包 Skill 可为对应专用适配器记录读取回执：`redteam:nmap-service-inventory`、`redteam:httpx-web-inventory`、`redteam:passive-recon`、`redteam:l7-service-confirmation`。外部/社区/其它 Skill 不授予执行凭证；已隔离 Skill 不向模型开放旧正文。
 
-参数：
-- `engagement`
-- `question`
-- `severity` — low | medium | high | critical，默认 medium
-- `domain` — 如 internal-recon / boundary-break / lateral-movement
-- `recommended_probe` — 建议的验证手段
-- `supporting_ev_ids`
+## G. 未解决问题、任务规划与清理台账
 
-### `redteam_unknown_list`
-列出未解决的作战问题，派活前先看 open 项。
+### `redteam_unknown_record` / `redteam_unknown_list` / `redteam_unknown_resolve`
+维护未解决问题及其状态。记录中的 recommended_probe 只是待审查文字，不会被执行。
 
-参数：
-- `engagement`
-- `status` — open | investigating | blocked | contradicted | resolved
-- `severity`
-- `limit`
+### `redteam_next_action`
+只读任务规划器。只使用资产/漏洞记录、凭据计数和脱敏 WebShell/隧道元数据；不读取秘密值，不执行网络检查，也不建议调用已停用的凭据或会话检查入口。
 
-### `redteam_unknown_resolve`
-把未解决问题标为 resolved / contradicted / withdrawn。
+### `redteam_task_context`
+只读汇总当前任务的资产、候选漏洞、证据索引和参考资料；不执行测试、不写库、不计分。原始 HTTP 请求/响应不进入任务上下文。
 
-参数：
-- `engagement`
-- `unk_id`
-- `disposition` — resolved | contradicted | withdrawn
-- `resolution` — 解决说明
+### `redteam_cleanup`
+只维护本地清理事项台账；记录状态不代表已删除目标资源，也不会执行文件、账号、隧道或系统清理。
 
-### `redteam_score_report`
-攻击得分链路复现报告：只收录"拿到了分"的成果（没得分的漏洞不进报告），每一项都尽量附上可直接粘贴进 Yakit Repeater 复现的原始请求。需要交付报告时用这个，而不是 redteam_report。
-
-**新增附录 6：未核实主机发现索引。** 若当前演练通过 `redteam_coverage(phase=internal,action=finding)` 登记了主机发现，报告会单独列出最多最近 100 条的记录 ID、资产 IP、发现类别、已有证据记录引用与「未验证/未关联」状态，超出数量明确显示截断。**它们不进入得分正文、不确认漏洞、不改变总分**，只是方便报告使用者回到资产详情核对。为免人工标题/说明或原始证据正文带出敏感数据，附录**不输出**发现自由文本、请求/响应、命令、凭据；`--shareable` 导出模式还会通过已有掩码处理资产 IP。没有主机发现时不新增空附录。
-
-实际落盘的 `scripts/export-engagement-report.mjs` 及工具的 `redteam_score_report(markdown=true)` 共用 `scoreReport` 生成的 Markdown。
-
-参数：
-- `engagement`
-- `limit` — 最多多少项，默认 500
-- `markdown` — true=返回 markdown 全文（默认 true）；false=只返回条目摘要
-
-### `redteam_report`
-【已弃用，改用 redteam_score_report】生成成果报告（Markdown）：只收录**已验证/已利用且中危以上**的成果漏洞（每条附可粘贴进 Burp/Yakit 的原始请求）、攻击链、已获权限与凭据、修复建议。信息收集的资产清单、待验证/误报、低危与信息级水洞都不会出现在报告里。想让发现进报告：先 redteam_vuln_update 置为 confirmed（验证通过）或 exploited（利用成功），再 redteam_http_evidence_add 补原始请求。
-
-参数：
-- `engagement`
-
-### `redteam_report_targets`
-【已弃用，改用 redteam_score_report】按目标查看成果报告（每个 IP / URL / C 段一份）：成果漏洞（含可粘贴进 Burp/Yakit 的原始请求）、已获权限、凭据、攻击文件、攻击链。用于按目标汇报或检查某个目标还缺什么。
-
-参数：
-- `engagement`
-- `target` — 只看某个目标的报告
-
-### `redteam_shot_add`
-登记一张证据截图：把图片拷进靶标目录并关联到得分点/命中（面板展开得分点即可看图，报告里也会嵌入）。批量得分点（如终端权限）每个得分点最多展示 3 张代表图，不必逐台截图。
-
-参数：
-- `engagement`
-- `path` — 图片在本机的路径（相对靶标目录或绝对路径）；与 data_base64 二选一
-- `data_base64` — 图片内容（base64，可带 data: 前缀）；截图工具没落盘时用这个
-- `label` — 图片说明，例如「域控 WEB-SHDC1 atexec 回显 nt authority\\system」
-- `kind` — screenshot（现场截图，默认）| card（由记录生成的证据摘录卡，报告里会标注）
-- `point_code` — 关联的得分点 code，如 terminal-access / central-system
-- `hit_id` — 关联到具体某条得分命中（score_hit id）；给了它这张图就只挂在那一条上
-- `asset_id`
-- `target` — 这张图对应的目标（IP / URL）
-- `note` — 补充说明：这张图证明了什么
-- `source_ref` — 原始来源：截图的落盘路径或 runs/ 下的证据文件
-- `captured_at` — 截图时间（ISO），缺省用当前时间
-
-### `redteam_shot_list`
-列出已登记的证据截图（含所属得分点、目标、类型、落盘文件）。
-
-参数：
-- `engagement`
-- `point_code`
-- `hit_id`
-- `asset_id`
-
-### `redteam_shot_delete`
-删除一张证据截图（连同磁盘文件）。
-
-参数：
-- `engagement`
-- `id` — shot id（redteam_shot_list 里返回的 id）
 
 ## 注册工具补充说明
 
