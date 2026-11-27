@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import semver from 'semver';
 
 const root = process.env.DSH_COMPAT_HOST_ROOT;
 const expected = process.argv[2];
@@ -18,8 +19,11 @@ for (const [name, pin] of Object.entries(dependencies)) {
 }
 const [tools, llm, error, cordis] = ['dsh-tools', 'dsh-llm', 'dsh-error', 'cordis']
   .map(name => installed['@deepseek-ai/' + name]);
-assert.equal(tools.peerDependencies[llm.name], llm.version, 'tools → llm peer');
-assert.equal(llm.peerDependencies[error.name], error.version, 'llm → error peer');
+for (const [owner, peer] of [[tools, llm], [llm, error], [tools, cordis], [llm, cordis]]) {
+  const range = owner.peerDependencies?.[peer.name];
+  assert.ok(semver.validRange(range) && semver.satisfies(peer.version, range),
+    owner.name + ' requires ' + peer.name + '@' + range + ', found ' + peer.version);
+}
 console.log('DSH_COMPAT_HOST_ROOT=' + root);
 console.log(Object.keys(installed).length + ' exact pins verified; ' +
   [tools, llm, error, cordis].map(pkg => pkg.name + '@' + pkg.version).join(', '));

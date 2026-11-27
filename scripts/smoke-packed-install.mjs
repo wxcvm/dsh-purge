@@ -14,6 +14,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import semver from 'semver';
 import { checkCandidateArchives } from './check-candidate-archives.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -69,7 +70,7 @@ try {
     version: '0.0.0', private: true, type: 'module',
   }, null, 2) + '\n');
   // The redteam tools entrypoint is loaded by a real host, not a standalone
-  // npm plugin install. Use the already-validated official rc.5 fixture tree;
+  // npm plugin install. Use the already-validated, version-pinned official fixture tree;
   // its dsh-tools module imports additional published host packages.
   const hostRoot = process.env.DSH_COMPAT_HOST_ROOT;
   assert.ok(hostRoot && existsSync(path.join(hostRoot, 'node_modules', '@deepseek-ai',
@@ -77,8 +78,8 @@ try {
     'set DSH_COMPAT_HOST_ROOT to an installed, independently verified official host fixture');
   const toolsManifest = JSON.parse(readFileSync(path.join(hostRoot, 'node_modules',
     '@deepseek-ai', 'dsh-tools', 'package.json'), 'utf8'));
-  assert.match(toolsManifest.version, /^\d+\.\d+\.\d+-rc\.\d+$/,
-    'the official host API fixture must use a fixed rc version');
+  assert.ok(semver.valid(toolsManifest.version) && semver.satisfies(toolsManifest.version, manifest.engines.dsh),
+    'the official host API fixture must match a supported exact version');
   command(npm, [
     'install', '--prefix', home, archive,
     '--ignore-scripts', '--legacy-peer-deps', '--no-audit', '--no-fund',
@@ -96,7 +97,7 @@ try {
     'client.js', 'lib/index.js', 'lib/redteam/index.js', 'lib/redteam/store.js',
     'lib/redteam/ui.js', 'lib/redteam/tools.js', 'lib/redteam/agent-work-items.js',
     'bin/dsh-purge.js', 'cordis.patch.yml', 'skills/redteam/deepseek-web-intel.md',
-    'maintenance/Harness-Recovery.ps1',
+    'maintenance/Harness-Recovery.ps1', 'maintenance/update-health.mjs', 'scripts/prepare-official-update.mjs',
   ]) {
     assert.ok(statSync(path.join(installed, file)).isFile(), 'missing packed runtime file: ' + file);
   }
@@ -133,7 +134,9 @@ try {
     "  assert.equal(typeof plugin.apply, 'function', file + ': packaged apply entry');",
     "  assert.ok(Array.isArray(plugin.inject), file + ': packaged inject contract');",
     "}",
-    "console.log('five packaged host entrypoints import successfully');",
+    "const health = await import(pathToFileURL(path.join(root, 'maintenance/update-health.mjs')).href);",
+    "assert.equal(typeof health.auditUpdate, 'function', 'packed preflight imports its dependencies');",
+    "console.log('five packaged host entrypoints and the read-only preflight import successfully');",
   ].join('\n');
   const childEnv = {
     ...env, PURGE_PACK_SMOKE_INSTALLED: installed,
