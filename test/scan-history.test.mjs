@@ -252,6 +252,7 @@ test('on-demand preview returns bounded real output from selected engagement onl
 test('scan board renders real timeline and never leaks masked output previews', () => {
   const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
   assert.match(source, /className: 'rt-run-timeline'/)
+  assert.match(source, /item\.execution\.transport/)
   assert.match(source, /event.at \|\| '阶段时间未单独记录'/)
   assert.match(source, /op: 'scanArtifactPreview'/)
   assert.match(source, /if \(previewing \|\| maskHistory\) return/)
