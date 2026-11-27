@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-test("scrubTargets 核心行为：识别目标但不保存原文到诊断摘要", () => {
+test("scrubTargets 核心行为：识别目标且保留开发域名与普通请求", () => {
   const r = scrubTargets("拿下 http://bank.example.cn 的 5.6.7.8");
   assert.match(r.text, /\[DOMAIN\]/);
   assert.match(r.text, /\[TARGET_IP\]/);
