@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "1525d99a86395e0a";
+		const CLIENT_BUILD_ID = "62e1ff94e22d64eb";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10254,6 +10254,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     + ' · ' + (item.execution.binary_source || '路径来源未知')
                     + ' · ' + (item.execution.attempted ? '实际调用已发起' : '调用未成功发起')
                   : '执行来源：旧记录未标注，不能据此推断运行环境'),
+                item.scan_environment?.warning && !maskHistory
+                  ? h('div', { className: 'rt-err' }, '网络环境提示：' + item.scan_environment.warning) : null,
                 h('div', null, '文件大小：' + item.bytes + ' 字节 · ' + (item.ingested ? '已写入资产库' : '未确认导入')),
                 item.output_file && !maskHistory ? h('div', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
                   '原始输出：' + item.output_file) : null,

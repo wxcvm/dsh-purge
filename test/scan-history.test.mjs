@@ -253,6 +253,7 @@ test('scan board renders real timeline and never leaks masked output previews', 
   const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
   assert.match(source, /className: 'rt-run-timeline'/)
   assert.match(source, /item\.execution\.transport/)
+  assert.match(source, /item\.scan_environment\?\.warning/)
   assert.match(source, /event.at \|\| '阶段时间未单独记录'/)
   assert.match(source, /op: 'scanArtifactPreview'/)
   assert.match(source, /if \(previewing \|\| maskHistory\) return/)
@@ -276,6 +277,10 @@ test('scan history exposes only real manifest execution lineage; legacy records 
   write('alpha', TWO, 'httpx', 'failed', 'problem')
   const manifestFile = join(root, 'alpha', 'scan-output', ONE + '.json')
   const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
+  manifest.scanEnvironment = {
+    scope: 'remote-ssh', tunneled: null, adapters: [],
+    warning: 'SSH Kali 的远端出站路由未由本机检查',
+  }
   manifest.execution = {
     executionId: ONE, environmentId: 'docker:' + 'a'.repeat(64), transport: 'docker', toolId: 'nmap',
     binarySource: 'config', attempted: true,
@@ -291,6 +296,9 @@ test('scan history exposes only real manifest execution lineage; legacy records 
   assert.equal(recent.execution.tool_id, 'nmap')
   assert.equal(recent.execution.result_status, 'executed')
   assert.equal(recent.execution.attempted, true)
+  assert.equal(recent.scan_environment.scope, 'remote-ssh')
+  assert.equal(recent.scan_environment.tunneled, null)
+  assert.match(recent.scan_environment.warning, /远端出站路由未由本机检查/)
   const legacy = history.items.find((item) => item.run_id === TWO)
   assert.equal(legacy.execution, null, 'legacy manifests must not be upgraded to invented execution proof')
   assert.equal(legacy.environment_id, null)
