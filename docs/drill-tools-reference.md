@@ -1011,15 +1011,15 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 列表同时返回 `feedback`：按同工具、完全相同目标汇总最新状态与重复次数。失败、预览、导入失败、空输出会提示先复核旧记录，不自动重试或禁用工具；成功的后续记录会覆盖同目标的旧失败提示。`redteam_next_action` 和概览页复用这些建议，同时保留漏洞/资产原有优先级。
 
-### \`redteam_passive_recon\`
+### `redteam_passive_recon`
 
-【被动域名情报适配器】所有操作都要求项目明确登记精确 \`*.根域名\` 范围；只处理该根域下的具体主机名，不把解析出的 IP 自动授权或写入资产/端口/漏洞表。
+【被动域名情报适配器】所有操作都要求项目明确登记精确 `*.根域名` 范围；只处理该根域下的具体主机名，不把解析出的 IP 自动授权或写入资产/端口/漏洞表。
 
-- \`action=subdomains\`：离线读取最近 CT 快照；可显式选择固定被动模式的 subfinder（\`-d\`、限时、限速、每来源结果上限，不启用 \`-all\` / \`-active\`），或 Amass \`enum -passive\`。每次外部数据源请求都必须先取得用户明确同意并传 \`confirm_external=true\`。subfinder 可在明确选择的 local/WSL/Docker/SSH Kali 环境执行；Amass 当前仅 local。输出只合并授权范围内主机名，最多 1000 项。
-- \`action=resolve\`：只读取最近保存的子域快照，最多 200 个名称；dnsx 固定查询 A/AAAA/CNAME，限速 10 qps、5 线程、单次重试。只接受已输入名称的响应，CNAME 超出授权范围时丢弃且不跟进。需要 \`confirm_external=true\`；当前仅 local，检测到 TUN/fake-IP 时不启动。
-- \`action=history\`：离线读取最近子域快照，不联网。
+- `action=subdomains`：离线读取最近 CT 快照；可显式选择固定被动模式的 subfinder（`-d`、限时、限速、每来源结果上限，不启用 `-all` / `-active`），或 Amass `enum -passive`。每次外部数据源请求都必须先取得用户明确同意并传 `confirm_external=true`。subfinder 可在明确选择的 local/WSL/Docker/SSH Kali 环境执行；Amass 当前仅 local。输出只合并授权范围内主机名，最多 1000 项。
+- `action=resolve`：只读取最近保存的子域快照，最多 200 个名称；dnsx 固定查询 A/AAAA/CNAME，限速 10 qps、5 线程、单次重试。只接受已输入名称的响应，CNAME 超出授权范围时丢弃且不跟进。需要 `confirm_external=true`；当前仅 local，检测到 TUN/fake-IP 时不启动。
+- `action=history`：离线读取最近子域快照，不联网。
 
-参数：\`action\`（subdomains / resolve / history）、\`target\`（根域名）、\`engagement\`、\`use_subfinder\`、\`use_amass\`、\`confirm_external\`、\`environment_id\`、\`max_names\`、\`commit\`（默认 false）。只有显式 \`commit=true\` 才保存快照。工具执行失败、未安装、环境不支持、无结果和模拟结果必须分别报告；不得使用通用 Shell 兜底。
+参数：`action`（subdomains / resolve / history）、`target`（根域名）、`engagement`、`use_subfinder`、`use_amass`、`confirm_external`、`environment_id`、`max_names`、`commit`（默认 false）。只有显式 `commit=true` 才保存快照。工具执行失败、未安装、环境不支持、无结果和模拟结果必须分别报告；不得使用通用 Shell 兜底。
 
 禁止字典枚举、DNS 爆破、AXFR、DNS 追踪、主动端口/Web 扫描、自动范围扩张或将 DNS 答案作为漏洞/存活证明。原始命令参数由适配器固定构造，不接受任意 argv。
 
