@@ -249,7 +249,7 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 
 ### `redteam_skill_read`
 
-完整读取 `redteam:` Skill 后会记录当前根会话 30 分钟的执行前置凭证；被截断的正文不记为已读。Nmap/httpx 与 `redteam_passive_recon` 会在执行入口强制核验，缺少记录、换根会话或凭证过期时拒绝执行。重启后需重新读取。该凭证只证明当前会话读取过对应 Skill，不证明授权、环境可用或任务已执行。
+只有四份经过审查的随包 Skill（`redteam:nmap-service-inventory`、`redteam:httpx-web-inventory`、`redteam:passive-recon`、`redteam:l7-service-confirmation`）完整读取后，才会记录当前根会话 30 分钟的专用适配器前置凭证。外部/社区 Skill、其它随包 Skill 和已隔离 Skill 均不会授予执行凭证；隔离 Skill 只返回隔离说明，不返回旧正文。该凭证只证明当前会话读取过对应 Skill，不证明授权、环境可用或任务已执行。
 【离线只读】根据上一步的 `key` 读取技能 Markdown 正文；不会执行技能里面的命令，也不允许任意文件路径读取。查询结果里的 `key` 是唯一入口。
 
 参数：`key`（必填，如 `aboutsecurity:recon/passive-recon` 或 `redteam:web-injection`）、`max_chars`（默认 16000）。
@@ -429,7 +429,7 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 
 ## C. 漏洞与证据（vuln-scan / exploit 用）
 
-_confirmed/exploited 才算成果；claimed 必须用 evidence_upgrade 升级成 observed 才能进报告。_
+_模型写入的证据默认是 claimed/inferred；模型工具不能自行升级为 observed。只有独立核验流程产生的可审计证据才能进入已确认成果。_
 
 ### `redteam_vuln_add`
 记录一条漏洞发现（漏洞检测角色）。带 cve 时按 (asset_id, cve, target) 幂等更新。severity：critical|high|medium|low|info；status：candidate（待验证）|confirmed（已验证）|false-positive|exploited|fixed。必须附证据（请求/响应片段、复现命令、证据文件路径）。
@@ -557,13 +557,12 @@ _confirmed/exploited 才算成果；claimed 必须用 evidence_upgrade 升级成
 - `limit` — list 默认 100，最多 500
 
 ### `redteam_evidence_upgrade`
-把 claimed / inferred 升级为 observed。必须带 verified_result（亲自验证的回显/数据）。
+【已停用】模型不能自行把 claimed / inferred 升级为 observed；升级需要独立、可审计的外部核验流程。
 
 参数：
 - `engagement`
 - `claimed_ev_id` — 要升级的证据 ID
-- `verified_result` — 亲自验证后的实际结果
-- `verified_by` — 谁核实的，默认 coordinator
+当前工具只返回 `unsupported`，不接受核验结果，也不会修改证据置信度。
 
 ### `redteam_evidence_verify`
 核对子智能体回报与证据账本是否一致（hash 级核对）。matched=false 表示子智能体改口、夸大或库里没有。
@@ -584,139 +583,41 @@ _confirmed/exploited 才算成果；claimed 必须用 evidence_upgrade 升级成
 参数：
 - `engagement`
 
-## D. 权限与入口（exploit / internal 用）
+## D. 历史访问记录（脱敏、只读）
 
-_隧道必须写 entry_kind（target-http / target-outbound / target-agent）；只在自己 VPS 上开的不算突破。马必须冰蝎/哥斯拉。_
-
-### `redteam_webshell_add`
-登记一个已上线的 WebShell。**必须上传冰蝎马（behinder）或哥斯拉马（godzilla）的加密马**——用户在控制台要用对应客户端直连，一句话马/自研马/MemShell 用户连不上，不算可交付的入口。shell_type 只能填 godzilla | behinder；确实只能用其它形式时填 other 并在 note 里写清为什么。同一 url+pass_key 重复登记会合并刷新。登记后所有角色智能体都能复用它，不要重复打点。
-
-参数：
-- `engagement`
-- `url` — WebShell 完整 URL
-- `shell_type` — godzilla（哥斯拉）| behinder（冰蝎）；其它形式才用 antsword/other 并说明原因
-- `pass_key` — 连接密码 / 密钥（冰蝎马写 pass，哥斯拉写 key）
-- `privilege` — 当前权限，例如 www-data / root / iis
-- `secret_ref` — 凭据/证据引用，例如 runs/ws-10.0.0.5.txt（不要把明文口令写进库）
-- `asset_id`
-- `note`
-- `found_by_agent`
-
-### `redteam_webshell_list`
-列出已登记的 WebShell（含在线状态与最后检查时间）。
-
-参数：
-- `engagement`
-- `status` — online | offline | unknown
-- `asset_id`
-
-### `redteam_webshell_update`
-更新 WebShell 状态（被删/掉线/权限变化）或补充说明。
-
-参数：
-- `engagement`
-- `id` — WebShell 记录 id
-- `status` — online | offline | dead | unknown
-- `privilege`
-- `note`
-- `check_note`
-
-### `redteam_tunnel_add`
-登记一条内网隧道。**打进内网必须先用技能 suo5-tunnel 通过 WebShell/HTTP 建 socks5（kind=suo5）**；没有隧道就不要手搓内网探测脚本。listen 写本机可用地址（如 127.0.0.1:1080），reach 写它能到达的网段。登记后扫描器可直接 -socks5 <listen>。 **红线：自己的 VPS / 自己配置的服务器不算隧道。** 只在你自己服务器上开的 socks5、frp 服务端、代理，没有碰到目标，**不算跨越靶标边界、不算边界突破或内网突破**（这类填 entry_kind=self-only，会被标成"不算突破"）。**必须说清目标侧的那一端**： · target-outbound — 目标主动连出到我方（**自己服务器收目标反弹 shell**、目标上跑 frp/Stowaway 客户端）； · target-http — 经目标 WebShell/HTTP 通道（suo5、Neo-ReGeorg、reGeorg）； · target-agent — 经目标已控进程/会话转发（SSH -R 由目标发起等）。
-
-参数：
-- `engagement`
-- `kind` — suo5（首选，走 WebShell/HTTP）| socks5 | ssh-r | frp | chisel | other
-- `listen` — 本地监听地址 host:port
-- `entry` — 入口：WebShell URL / 跳板机 / 命令
-- `reach` — 可达网段，例如 10.0.0.0/8
-- `entry_kind` — 【重要】通道的目标侧那一端是什么：target-outbound（目标反弹 shell 到我方/目标上跑 frp 客户端）| target-http（经目标 WebShell 的 suo5/Neo-ReGeorg）| target-agent（经目标已控进程转发）| self-only（只在自己 VPS/自建服务器上，**不算突破**）
-- `webshell_id` — 由哪个 WebShell 建立
-- `asset_id`
-- `command` — 建立命令，便于重建
-- `pid`
-- `note`
-- `found_by_agent`
-
-### `redteam_tunnel_list`
-列出已登记的内网隧道（含状态、监听地址、可达网段、entry_kind 与 legit 判定）。**legit=false 表示只在自己 VPS/自建服务器上开的通道，不算跨越靶标边界、不算突破**；legit=null 表示未声明 entry_kind。
-
-参数：
-- `engagement`
-- `status` — active | down | unknown
-
-### `redteam_tunnel_update`
-更新隧道状态（关闭/失效/更换监听地址）或补 entry_kind 判定。用完隧道务必标为 down 并说明，避免后续误用。**老记录没声明入口归属的（legit=null，界面显示"待确认"），用 entry_kind 补上目标侧那一端**，补完才算突破凭证。
-
-参数：
-- `engagement`
-- `id`
-- `status` — active | down | closed | unknown
-- `listen`
-- `reach`
-- `entry` — 入口：WebShell URL / 跳板机 / 命令
-- `entry_kind` — 补声明目标侧那一端：target-outbound | target-http | target-agent | self-only（只在自己服务器上，不算突破）
-- `note`
-- `check_note`
+`exploit` / `internal` 角色已停用。模型工具不创建 WebShell、不部署隧道、不测试凭据、不探测旧会话，也不把文字声明写成已获得访问。历史记录仅用于盘点和清理。
 
 ### `redteam_credential_add`
-历史兼容字段：当前执行契约不采集、不复用目标凭据。不要把密码、Token、私钥或连接串写入 secret_value；既有记录仅按最小权限和本地保密要求管理，不向模型或报告输出明文。
 
-参数：
-- `engagement`
-- `host` — 所属主机（IP 或域名）
-- `username`
-- `secret_type` — password | hash | key | token | connection-string，默认 password
-- `secret_value` — 【必填】凭据明文：口令 / Hash / 私钥 / Token / 连接串
-- `secret_ref` — 证据引用路径，例如 runs/cred-vnc-10.0.0.5.txt
-- `privilege` — 该凭据的权限级别，如 admin / user / db-read
-- `asset_id`
-- `source` — 来源：exploit / dump / config-leak …
-- `tool`
-- `note`
-- `found_by_agent`
+仅登记主机、用户名、类型、来源和脱敏元数据；不接收密码、Hash、Token、私钥或连接串。秘密值不会通过模型工具存入或回显。
 
 ### `redteam_credential_list`
-列出已收集的凭据（含明文 secret_value），用于凭据复用与横向移动。
 
-参数：
-- `engagement`
-- `host`
-- `username`
+只返回凭据元数据与 `secret_present` 布尔标记，不返回 `secret_value`。
+
+### `redteam_credential_check`
+
+**已停用**：不发起 TCP 探测、协议认证或凭据有效性检查，返回 `unsupported`。
 
 ### `redteam_access_add`
-记录一次成功获得的访问会话（横向移动起点）。method 例如 vnc/rdp/ssh/web-shell/webshell/db；privilege 例如 admin/user/system。
 
-参数：
-- `engagement`
-- `host`
-- `username`
-- `method` — 获得访问的方式
-- `privilege`
-- `asset_id`
-- `session_ref` — 会话/证据引用，例如 runs/session-vnc-10.0.0.5.md
-- `note`
-- `found_by_agent`
+**已停用**：模型不能仅凭文字声明写入已获得访问会话。未核验报告应记录为 `claimed` evidence。
 
-### `redteam_access_list`
-列出已获得的访问会话。
+### `redteam_webshell_add` / `redteam_tunnel_add`
 
-参数：
-- `engagement`
-- `host`
+**已停用**：不生成、上传、部署或登记目标侧 WebShell/隧道。
+
+### `redteam_webshell_list` / `redteam_tunnel_list` / `redteam_sessions`
+
+仅返回脱敏元数据、记录数量和状态；不返回 URL、pass_key、监听地址、可达网段、入口或启动命令。
+
+### `redteam_webshell_update` / `redteam_tunnel_update`
+
+仅允许把历史记录标记为 `offline/dead/unknown` 或 `down/closed/unknown`，不允许重新激活或修改连接信息。
 
 ### `redteam_session_check`
-实测所有 WebShell 与隧道的连通性（由 host 侧真实发起 HTTP / TCP 连接），并把在线/离线状态回写数据库。开工前和长时间任务后各跑一次。
 
-参数：
-- `engagement`
-- `timeoutMs` — 单次探测超时，默认 6000ms
-
-### `redteam_sessions`
-【每次决策前后都要看】一屏总览当前所有可复用入口：已上线的 WebShell、可用的内网隧道（含监听地址与可达网段）、凭据、访问会话，并给出在线/离线统计。打内网前先看这里，不要重复造轮子，也不要忘记已有的隧道。
-
-参数：
-- `engagement`
+**已停用**：不对历史 WebShell 或隧道发起 HTTP/TCP 连通性探测，也不回写在线状态。
 
 ## E. 攻击链与得分（全程都在写）
 
@@ -864,7 +765,7 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `limit` — 知识库条目上限，默认 200
 
 ### `redteam_poc_get`
-取一条知识库 POC/EXP 的**完整内容**（正文 + 用法 + 验证记录 + 落盘路径），可直接照用或改造成目标专用脚本。不传 id 时可用 code（redteam_poc_search 返回里的 code 字段）。
+仅返回知识库 POC/EXP 的元数据、CVE、来源、版本范围与验证状态；不向模型返回脚本、payload、原始请求或命令。不传 id 时可用 code（redteam_poc_search 返回里的 code 字段）。
 
 参数：
 - `id` — 知识库条目 id
@@ -891,7 +792,7 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `verified_note` — 便捷写法：直接传验证证据
 
 ### `redteam_poc_use`
-记一次知识库 POC/EXP 的复用（用在哪个靶标/目标）。复用次数高的条目会排前面，方便后来者优先选经过实战的武器。
+【已停用】当前没有经审查的 PoC/EXP 执行适配器；模型不能将参考条目标记为实战复用。
 
 参数：
 - `id`
@@ -1062,9 +963,9 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 参数：`engagement`（可选）、`file`（必填）、`kind`（可选）、`commit`（默认 false）、`max`（默认 5000，上限 20000）。
 
 ### `redteam_credential_check`
-对已记录或明确输入的凭据进行 TCP 连通性检查；mysql/redis 支持一次协议认证并返回错误诊断。会访问指定主机，须在允许的测试范围内使用。
+**已停用**：返回 `unsupported`，不会发起网络连接、协议认证或密码尝试。
 
-参数：`engagement`、`credential_id`；或 `host`、`port`、`username`、`password`、`database`、`kind`（mysql/redis/ssh/tcp）、`timeout`。
+参数：`engagement`。
 
 ### `redteam_score_suggest`
 只读对账已确认漏洞、证据、实际成果与计分规则；`can_score` 是待复核建议，不会自动生成 `score_hit`。
@@ -1131,7 +1032,7 @@ redteam_agent_slot acquire      占一个执行名额（≤3）
   exploit    → disabled / unsupported（当前无经过审查的执行适配器）
   internal   → disabled / unsupported（当前无经过审查的内网执行适配器）
 redteam_chain_add                仅用于人工核验后的历史记录；模拟/计划不得写成真实执行
-redteam_evidence_upgrade         claimed → observed（核实后才算拿到）
+redteam_evidence_upgrade         disabled / unsupported（模型不得自我升级证据置信度）
 redteam_score_report             出交付报告
 ```
 
