@@ -6,7 +6,9 @@ const updater = readFileSync(new URL('../scripts/update-desktop-fork.ps1', impor
 
 test('published zip has a checksum generated from exactly the uploaded file', () => {
   assert.match(workflow, /sha256sum "\$zip" > SHA256SUMS\.txt/)
-  assert.match(workflow, /gh release upload "\$tag" "\$zip" SHA256SUMS\.txt --clobber/)
+  assert.match(workflow, /gh release upload "\$tag" "\$zip" SHA256SUMS\.txt(?:\r?\n|$)/)
+  assert.doesNotMatch(workflow, /--clobber/)
+  assert.match(workflow, /if gh release view "\$tag" >\/dev\/null 2>&1; then/)
 })
 
 test('fork permits manual master dispatch or a version-matched release branch pinned to master', () => {
