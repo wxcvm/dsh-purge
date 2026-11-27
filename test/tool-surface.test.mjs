@@ -124,7 +124,7 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(isolatedPassive.ok, false)
   assert.match(isolatedPassive.error, /redteam:passive-recon/)
   const passiveAfterRead = JSON.parse(await passiveTool.execute(passiveRequest, passiveExec))
-  assert.equal(passiveAfterRead.status, 'unsupported-environment')
+  assert.equal(passiveAfterRead.toolStatus, 'unsupported-environment')
   assert.equal(passiveAfterRead.toolRuns[0].attempted, false)
 
   const scanEngagement = redteam.openEngagement('scan-fixture', ['192.0.2.10']).id
