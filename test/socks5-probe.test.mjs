@@ -111,6 +111,21 @@ test('probeSocks5Connect reports a SOCKS5 connect rejection', async () => {
   }
 })
 
+test('probeSocks5Connect bounds unexpected proxy response buffering', async t => {
+  const server = createServer(socket => socket.once('data', () => socket.write(Buffer.alloc(65, 0))))
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  t.after(() => new Promise(resolve => server.close(resolve)))
+  const result = await probeSocks5Connect(
+    parseLoopbackSocks5Listen(`127.0.0.1:${server.address().port}`),
+    '10.0.0.2', 443, 1000,
+  )
+  assert.equal(result.ok, false)
+  assert.equal(result.error, 'oversized_socks5_reply')
+})
+
 test('probeSocks5Connect rejects non-IPv4 targets and invalid timeouts', () => {
   const proxy = { host: '127.0.0.1', port: 1080 }
   assert.throws(() => probeSocks5Connect(proxy, 'example.com', 443, 1000), /IPv4/)
