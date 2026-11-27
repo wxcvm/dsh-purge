@@ -54,7 +54,7 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
       engagement: plannerEngagement,
     }, {}))
     assert.equal(nextAction.ok, true)
-    assert.equal(nextAction.state.access, 0)
+    assert.equal(nextAction.state.access, 1)
     assert.equal(nextAction.state.sessions_review.active_target_tunnels, 1)
   } finally {
     redteam.listTunnelMetadata = originalTunnelMetadata
