@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4d7d5168211fb38a";
+		const CLIENT_BUILD_ID = "cf8aba31e61b697b";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7924,6 +7924,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [state, setState] = React.useState({ loading: false, error: null, total: 0, items: [] })
       const [page, setPage] = React.useState(0)
       const pageSize = 100
+      const [qualityState, setQualityState] = React.useState({ loading: false, error: null, report: null })
+      React.useEffect(() => {
+        if (!eng || view !== 'quality') return undefined
+        let live = true
+        setQualityState({ loading: true, error: null, report: null })
+        api({ op: 'dataQuality', engagement: eng }).then((r) => {
+          if (!live) return
+          if (!r || r.ok === false) {
+            setQualityState({ loading: false, error: (r && r.error) || '数据质量检查失败', report: null })
+            return
+          }
+          setQualityState({ loading: false, error: null, report: r })
+        }, (e) => {
+          if (live) setQualityState({ loading: false, error: String((e && e.message) || e), report: null })
+        })
+        return () => { live = false }
+      }, [eng, view, refreshKey])
       React.useEffect(() => { setPage(0); setOpenId(null); setDetail(null) },
         [eng, cidr, qApplied, service, port, prov, testStatus, priority, scope, assetState, sort])
       const [domains, setDomains] = React.useState(null)
@@ -8090,6 +8107,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('button', { className: 'rt-btn', title: '重新拉取快照与当前视图数据', onClick: () => { if (onRefresh) onRefresh() } }, '刷新'),
         h('button', { className: 'rt-btn' + (view === 'list' ? ' rt-btn-primary' : ''), onClick: () => setView('list') }, '列表'),
         h('button', { className: 'rt-btn' + (view === 'timeline' ? ' rt-btn-primary' : ''), title: '按发现时间看资产（什么时候发现、哪天收了多少）', onClick: () => setView('timeline') }, '发现时间'),
+        h('button', { className: 'rt-btn' + (view === 'quality' ? ' rt-btn-primary' : ''), title: '只读检查资产、漏洞、证据与关联记录；不会自动修复', onClick: () => setView('quality') }, '数据质量'),
         h('button', { className: 'rt-btn' + (view === 'domain' ? ' rt-btn-primary' : ''), onClick: () => setView('domain') }, '域名'),
         h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'),
         h('button', { className: 'rt-btn' + (view === 'sensitive' ? ' rt-btn-primary' : ''), onClick: () => setView('sensitive') }, '敏感情报'))
@@ -8282,8 +8300,99 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : (!web.length ? h('div', { className: 'rt-empty' }, cidr ? '该 C 段下暂无 Web 资产' : '暂无 Web 资产（HTTP 探测后会写入 URL 与标题）') : null))
 
 
+      const qualityReport = qualityState.report
+      const qualityLabels = {
+        missingEvidence: '候选漏洞缺少证据',
+        confirmedMissingEvidence: '已确认/利用漏洞缺少证据',
+        emptyHttpEvidence: 'HTTP 请求与响应均为空',
+        unlinkedHttpEvidence: '未关联漏洞的 HTTP 证据',
+        confirmedWithoutHttpEvidence: '已确认漏洞缺少 HTTP 证据',
+        orphanVulnerabilityAssets: '漏洞关联资产不存在',
+        orphanHttpVulnerabilities: 'HTTP 证据关联漏洞不存在',
+        orphanHttpAssets: 'HTTP 证据关联资产不存在',
+        orphanScreenshotVulnerabilities: '截图关联漏洞不存在',
+        orphanScreenshotAssets: '截图关联资产不存在',
+        duplicateServiceGroups: '重复服务组',
+        duplicateServiceRows: '重复服务多余记录',
+        duplicateFingerprintGroups: '重复指纹组',
+        duplicateFingerprintRows: '重复指纹多余记录',
+        orphanPorts: '孤儿端口',
+        orphanServices: '孤儿服务',
+        orphanFingerprints: '孤儿指纹',
+        orphanAssetNames: '孤儿域名',
+      }
+      const qualityPreview = qualityReport && qualityReport.preview || {}
+      const duplicateServices = Array.isArray(qualityPreview.duplicateServices) ? qualityPreview.duplicateServices : []
+      const duplicateFingerprints = Array.isArray(qualityPreview.duplicateFingerprints) ? qualityPreview.duplicateFingerprints : []
+      const orphanRecords = qualityPreview.orphanRecords || {}
+      const qualityPane = h('div', { className: 'rt-pane', style: { flex: 1, minHeight: 0 } },
+        qualityState.error ? h('div', { className: 'rt-err' }, qualityState.error) : null,
+        qualityState.loading && !qualityReport ? h('div', { className: 'rt-empty' }, '正在进行本地只读审计…') : null,
+        qualityReport && qualityReport.available === false
+          ? h('div', { className: 'rt-empty' }, '当前靶标没有可读取的资产库') : null,
+        qualityReport && qualityReport.available !== false ? h('div', null,
+          h('div', { className: 'rt-card' },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+              h('h4', null, '本地数据质量审计'),
+              h('span', { className: 'rt-tag ' + (qualityReport.status === 'attention' ? 'rt-tag-warn' : 'rt-tag-live') },
+                qualityReport.status === 'attention' ? '需要人工核对' : '未发现元数据问题')),
+            h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', lineHeight: 1.6 } },
+              '只读检查已保存的元数据、证据完整性和关联关系；不验证漏洞真实性，不合并、不删除、不修复记录。'),
+            h('div', { className: 'rt-concl', style: { margin: '8px -10px -10px', borderBottom: 0 } },
+              h('span', { className: 'rt-concl-i' }, h('b', null, String((qualityReport.totals && qualityReport.totals.assets) || 0)), h('span', null, '资产')),
+              h('span', { className: 'rt-concl-i' }, h('b', null, String((qualityReport.totals && qualityReport.totals.vulnerabilities) || 0)), h('span', null, '漏洞')),
+              h('span', { className: 'rt-concl-i' }, h('b', null, String((qualityReport.totals && qualityReport.totals.httpEvidence) || 0)), h('span', null, 'HTTP 证据')),
+              h('span', { className: 'rt-concl-i' }, h('b', null, String((qualityReport.totals && qualityReport.totals.screenshots) || 0)), h('span', null, '截图')))),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '问题计数'),
+            (qualityReport.issues || []).length
+              ? qualityReport.issues.map((issue) => h('div', { key: issue.code, className: 'rt-kv' },
+                  h('b', null, qualityLabels[issue.code] || issue.code),
+                  h('span', { className: 'rt-mono' }, String(issue.count))))
+              : h('div', { className: 'rt-empty' }, '没有检测到元数据缺件或孤儿关联。')),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '重复服务预览（最多 20 组）'),
+            duplicateServices.length ? duplicateServices.map((item) => h('div', {
+              key: 'service-' + item.canonical_candidate_id, className: 'rt-kv',
+              style: { alignItems: 'flex-start', padding: '5px 0', borderBottom: '1px solid var(--dsw-alias-border-l1)' },
+            },
+              h('b', { style: { minWidth: 110 } }, [item.name, item.product, item.version].filter(Boolean).join(' ') || '未命名服务'),
+              h('span', null,
+                '端口记录 #' + item.port_id + ' · ' + item.record_count + ' 条（多余 ' + item.excess_rows + '）'
+                + ' · 候选记录 #' + item.canonical_candidate_id
+                + ' · 来源 ' + (item.provenance || '未知') + ' / ' + (item.tool || '未知工具')))
+            ) : h('div', { className: 'rt-empty' }, '没有重复服务组。')),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '重复指纹预览（最多 20 组）'),
+            duplicateFingerprints.length ? duplicateFingerprints.map((item) => h('div', {
+              key: 'fingerprint-' + item.canonical_candidate_id, className: 'rt-kv',
+              style: { alignItems: 'flex-start', padding: '5px 0', borderBottom: '1px solid var(--dsw-alias-border-l1)' },
+            },
+              h('b', { style: { minWidth: 110 } }, [item.vendor, item.product, item.version].filter(Boolean).join(' ') || item.category || '未分类指纹'),
+              h('span', null,
+                '资产 #' + item.asset_id + (item.port_id == null ? '' : ' · 端口 #' + item.port_id)
+                + ' · ' + item.record_count + ' 条（多余 ' + item.excess_rows + '）'
+                + ' · 候选记录 #' + item.canonical_candidate_id
+                + ' · 最高置信度 ' + (item.strongest_confidence ?? '未知')))
+            ) : h('div', { className: 'rt-empty' }, '没有重复指纹组。')),
+          h('div', { className: 'rt-card' },
+            h('h4', null, '孤儿关联预览（每类最多 20 条）'),
+            ...[
+              ['端口', orphanRecords.ports || [], (item) => '#' + item.id + ' · 资产 #' + item.asset_id + ' · ' + item.port + '/' + item.proto],
+              ['服务', orphanRecords.services || [], (item) => '#' + item.id + ' · 端口 #' + item.port_id + ' · ' + [item.name, item.product, item.version].filter(Boolean).join(' ')],
+              ['指纹', orphanRecords.fingerprints || [], (item) => '#' + item.id + ' · 资产 #' + item.asset_id + ' · 端口 ' + (item.port_id ?? '—') + ' · ' + [item.vendor, item.product, item.version].filter(Boolean).join(' ')],
+              ['域名', orphanRecords.assetNames || [], (item) => '#' + item.id + ' · 资产 #' + item.asset_id + ' · ' + item.name + ' (' + item.kind + ')'],
+            ].map(([label, items, describe]) => h('div', { key: label, style: { marginTop: 8 } },
+              h('div', { style: { fontWeight: 600, marginBottom: 4 } }, label + ' · ' + items.length),
+              items.length ? items.map((item) => h('div', { key: label + '-' + item.id, className: 'rt-kv' },
+                h('span', { className: 'rt-mono', style: { fontSize: 11 } }, describe(item)))
+              ) : h('div', { className: 'rt-foot' }, '无')))),
+          h('div', { className: 'rt-note' },
+            '安全边界：所有预览均为有限元数据样本，不包含原始指纹证据、凭据、HTTP 请求/响应或截图内容。当前版本只报告问题，不提供自动清理。')
+        ) : null)
       let pane = listPane
       if (view === 'testing') pane = h(TestingTab, { engagement: eng, refreshKey: refreshKey })
+      else if (view === 'quality') pane = qualityPane
       else if (view === 'domain') pane = domainPane
       else if (view === 'web') pane = webPane
       /* 发现时间视图自带滚动容器，直接放进 rt-main 的 flex 里 */
