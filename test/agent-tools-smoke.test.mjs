@@ -68,6 +68,13 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(campaignDenied.ok, false)
   assert.match(String(campaignDenied.error || ''), /授权范围|confirm/)
 
+  const invalidCampaignTarget = JSON.parse(await campaignTool.execute({
+    engagement: redteam.openEngagement('agent-smoke-invalid', ['10.0.0.0/24'], { bindCurrent: false }).id,
+    starting_host: '   ', confirm: true,
+  }, {}))
+  assert.equal(invalidCampaignTarget.ok, false, 'invalid targets must fail the scope gate')
+  assert.match(String(invalidCampaignTarget.error || ''), /目标校验失败/)
+
   // 4. confirm 后进入干运行，且明确 dry_run=true
   const scoped = redteam.openEngagement('agent-smoke-scoped', ['192.0.2.0/24'], { bindCurrent: false }).id
   const dry = JSON.parse(await chainTool.execute({
