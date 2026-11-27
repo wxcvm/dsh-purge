@@ -307,23 +307,10 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 示例：注入确认后 `redteam_armory_search(kind="dictionary", query="列名")` 拿列名字典继续拖库；打 WebLogic 前 `redteam_armory_search(query="weblogic 路径")` 拿专属目录字典。与 `redteam_cve_match` 串联：CVE 候选 → 按产品查 payload 与字典 → 实测记录回 `redteam_vuln_add`。
 
 ### `redteam_chain_plan`
-【离线规划】从资产指纹或手动输入生成**利用计划**：CVE 候选按 severity/无认证/版本适用性排序，每条展开为带占位符命令模板的 exploit 步骤，并按攻击类型（LFI/反序列化/SQLi/RCE…）联动武器库索引给 payload 与字典。**纯规划不执行**；`verified=false` 全程，不做"已利用"断言。
-
-参数：
-- `asset_id` — 资产 id（读取 SQLite 指纹/端口）或手动输入
-- `cve` / `product` / `port` / `limit` — 精确 CVE / 产品名 / 端口 / 候选数（默认 5）
-
-示例：`redteam_chain_plan(product="WebLogic", port=7001)` → 按 critical 无认证排前的候选步骤（ysoserial 构造 + T3 发送模板 + shiro/fastjson 各自的向量模板），每步带武器库路径。执行后每步 `redteam_chain_add(tool=命令原文, result=回显)` 落库，命中 `redteam_vuln_add(status=exploited)`。
+**已停用**：不生成利用步骤、命令模板、payload 或目标专用攻击计划。CVE/KEV 工具只返回公开漏洞元数据和候选线索。
 
 ### `redteam_chain_advance`
-【离线规划】推进**入侵链路**到下一阶段（recon→fingerprint→vuln_match→weaponize→exploit→post_exploit→lateral）：给出该阶段的结构化步骤建议；`fingerprint` 之后自动把观测喂给 vuln_match 生成计划。**阻断不终止**——无凭据/需交互/超范围/WAF 拦截时转为 blocked 步骤并给占位符工作流，链路保持可推进形态。
-
-参数：
-- `stage` — 当前所处阶段（推进到下一阶段）
-- `asset_id` / `product` / `port` — 观测输入
-- `blockers` — 已知阻断 `[{reason, detail}]`：`no-credentials / network-unreachable / waf-blocked / needs-interaction / version-mismatch / out-of-scope / tool-missing / evidence-missing`
-
-示例：`redteam_chain_advance(stage="fingerprint", product="Grafana", port=3000)` → 下一阶段 vuln_match 的候选计划；`stage="exploit", blockers=[{reason:"no-credentials"}]` → post_exploit 清单 + 无凭据阻断的占位符降级步骤。与 `redteam_attack_chain`（已发生步骤的五阶段计分视图）互补：advance 管"接下来做什么"，attack_chain 管"已经做到哪"。
+**已停用**：不推进 weaponize/exploit/post-exploit/lateral 阶段，不生成命令模板或占位符工作流。只读资产与漏洞状态查询仍可用。
 
 ### `redteam_data_quality`
 只读核对资产库记录的完整性：区分候选漏洞缺证据与已确认/利用记录缺证据，统计 HTTP 请求/响应为空，以及漏洞、HTTP 证据、截图中的资产/漏洞孤立引用。只返回汇总数量，不返回原始证据或凭据，不迁移数据库，也不把记录完整当成漏洞已验证。
@@ -432,21 +419,9 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 _模型写入的证据默认是 claimed/inferred；模型工具不能自行升级为 observed。只有独立核验流程产生的可审计证据才能进入已确认成果。_
 
 ### `redteam_vuln_add`
-记录一条漏洞发现（漏洞检测角色）。带 cve 时按 (asset_id, cve, target) 幂等更新。severity：critical|high|medium|low|info；status：candidate（待验证）|confirmed（已验证）|false-positive|exploited|fixed。必须附证据（请求/响应片段、复现命令、证据文件路径）。
+仅登记待核验的漏洞候选；工具强制写入 `status=candidate`、`verified=false`。不能通过此工具声明漏洞已确认、已利用或已取得权限。
 
-参数：
-- `engagement`
-- `asset_id` — 资产 id（来自 redteam_asset_query）
-- `cve` — CVE / CNVD 编号（无编号可省略）
-- `title` — 漏洞标题
-- `severity`
-- `status`
-- `target` — 受影响的目标，如 https://host:443/path 或 ip:port
-- `source` — 发现方式：nuclei / sqlmap / curl / manual …
-- `confidence` — 0–1
-- `evidence` — 证据：请求/响应摘要、命令、证据文件路径
-- `found_by_agent` — 发现角色，默认 vuln-scan
-- `gained` — 【重要】通过这个漏洞拿到了什么权限/成果，写得分口径的短标签，多项用顿号或逗号分隔，例如「服务器权限、内网隧道」「后台管理员账号」「数据库权限」
+参数：`engagement`、`asset_id`、`cve`、`title`、`severity`、`target`、`source`、`confidence`、脱敏 `evidence` 摘要、`found_by_agent`。
 
 ### `redteam_vuln_query`
 检索漏洞库：按严重级、状态、CVE、资产、C 段或关键词过滤。用于挑选待利用目标或核对误报。
@@ -471,17 +446,9 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 - `offset` — 从 0 开始分页，返回 nextOffset
 
 ### `redteam_vuln_update`
-更新漏洞状态/严重级/证据（例如验证后置为 confirmed、利用成功后置为 exploited、误报置为 false-positive）。
+仅允许修订候选记录的标题、严重度和脱敏线索；不接受状态、confidence 或 gained 更新，不能将候选改为 confirmed/exploited/fixed。
 
-参数：
-- `engagement`
-- `id` — 漏洞 id
-- `status`
-- `severity`
-- `evidence`
-- `confidence`
-- `gained` — 通过这个漏洞拿到了什么权限/成果（得分口径短标签，多项用顿号分隔）
-- `title`
+参数：`engagement`、`id`、`severity`、`evidence`、`title`。
 
 ### `redteam_http_evidence_add`
 保存一条 HTTP 证据：原始请求与响应。报告会把它渲染成可粘贴进 Burp Suite / Yakit 的原始报文，因此 request 必须是完整可重放的原始请求（含请求行、Host 等头部、必要时 body）。
@@ -500,18 +467,9 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 - `captured_by` — 采集角色
 
 ### `redteam_evidence_record`
-记录一条作战证据。核心纪律：confidence 必须如实填写——claimed（子智能体口头报告，禁止直接采信）/ observed（你亲自核实过）/ derived（从 observed 推理）/ inferred（推测，必须标注）。ev_id 由内容哈希生成，改一字就变，落库后可防篡改核对。相关技能：evidence-discipline。
+记录模型或子智能体提交的证据声明。模型工具强制将置信度限制为 `claimed` 或 `inferred`，默认 `claimed`；不会因为调用方传入 `observed` 或 `tool-output` 就提升可信度。哈希只保证记录内容可核对，不证明记录内容真实。
 
-参数：
-- `engagement`
-- `operation` — 操作名，如 "nmap_scan"、"webshell_established"、"sql_injection_confirmed"
-- `parameters` — 调用参数（JSON 对象，会参与哈希）
-- `result` — 规范化结果（JSON 对象，会参与哈希）
-- `confidence` — claimed | observed | derived | inferred，默认 observed
-- `authority` — tool-output | database-record | screenshot | request-replay | subagent-report | operator-input，默认 tool-output
-- `limitations` — 局限性说明，如 ["只扫了 Top1000 端口"]
-- `supporting_ev_ids` — 支撑这条证据的其他 ev_id
-- `source_agent` — 哪个子智能体产出的（claimed 时必填）
+参数：`engagement`、`operation`、`parameters`、`result`、`confidence`（最终仅 claimed/inferred）、`authority`、`limitations`、`supporting_ev_ids`、`source_agent`。
 
 ### `redteam_evidence_list`
 列出证据账本条目，可按 operation / confidence 过滤。汇报前先确认没有未升级的 claimed。
@@ -636,26 +594,7 @@ _每步都要写 tool（命令原文）与 result（回显），否则报告无�
 - `offset` — 从 0 开始分页
 
 ### `redteam_chain_add`
-记录一个攻击链步骤。**报告里「这一步怎么来的」完全靠这条记录**：账号密码怎么来的、冰蝎马怎么上的、隧道怎么搭的，都要在这里用 `tool`（实际命令原文）+ `detail`（为什么这么做、线索从哪来）+ `result`（实际回显/结果）写清楚。攻击链页面与报告按 seq 排序展示。
-
-参数：
-- `engagement`
-- `stage` — 动作类型（兼容字段）：recon 信息收集 | vuln 漏洞发现 | exploit 利用 | access 获得权限 | pivot 内网突破 | data 敏感数据 | other。**阶段归属用 stage_code**，这个字段只用于老数据兜底。
-- `title` — 一句话描述这一步做了什么，例如「通过后台模板上传点上传冰蝎马」「用 suo5 建 socks5 隧道」
-- `detail` — 为什么这么做、线索从哪来，例如「登录页泄露版本 Coremail XT 5.0 → 匹配 CVE-2023-xxxx → 后台模板管理可上传」
-- `tool` — 【报告复现的关键】**实际执行的命令原文**，例如 `nuclei -t CVE-2021-xxxx.yaml -u http://x`、`suo5-linux-amd64 -t http://x/shell.jsp -l 1080`、`sqlmap -u "http://x?id=1" --dump`。不写这条，报告里这一步就没法复现。
-- `result` — 【报告复现的关键】实际结果/回显摘要，例如 `uid=0(root) gid=0(root)`、「返回 200，含 1.2 万条用户数据」、「后台管理员 tomcat 登录成功」
-- `asset_id`
-- `vuln_id`
-- `access_id`
-- `evidence_ref` — 证据文件/会话引用，例如 runs/session-vnc.md
-- `recorded_by`
-- `point_code` — 【这一步拿了分就填】得分点 code（如 rce / webshell / boundary），服务端会自动记一次分并把步骤与得分互相挂上。**必须同时给 evidence，否则不会记分**（步骤照常入库）。
-- `stage_code` — 所属作战阶段（只有这 5 个合法值）：recon(信息收集) | internet(互联网资产权限) | boundary(边界突破·搭隧道) | internal(内网资产权限) | target(靶标系统权限)。写别的值（如外部工具常见的 external/foothold/tunnel/privilege）会被忽略并退回按 stage 兜底，步骤就不落在任何阶段。
-- `evidence` — 配合 point_code 使用：这一分拿到了什么（目标资产 + 账号/权限/数据量）——**不填就不记分**。
-- `self_created` — 配合 point_code 使用：这一步拿到的账号/权限是**自己注册/自建**的吗？是则 true（只留过程，不计分）
-- `target` — 配合 point_code 使用：目标资产
-- `seq` — 不填则自动追加到链尾
+**已停用**：模型不得把命令文本、计划步骤或子智能体自述写成真实攻击链执行记录。真实适配器只记录其自身可验证的执行结果；历史链路仅可脱敏只读查看。
 
 ### `redteam_chain`
 读取完整攻击链（按步骤顺序），用于汇报与检查链路是否闭合（入口 → 权限 → 内网突破）。
@@ -684,23 +623,7 @@ _每步都要写 tool（命令原文）与 result（回显），否则报告无�
 - `engagement`
 
 ### `redteam_score_hit`
-记录一次得分。得分规则已按《突破入侵类得分规则（合并版）》重构为 **25 项**（一、获取权限 21 项 + 二、突破网络边界 4 项，共 8 个类别），另有 8 条通用规则 G1–G8 横切全部条目。**记分前先用 `redteam_score_list` 读实际 code 与该条的上限/口径**，不要凭记忆写。 **证据只写结果**：目标资产 + 拿到了什么（账号/密码/权限/数据量），不要写取得过程与路径——过程由攻击得分链路的步骤负责。能指向"用哪个漏洞拿到的"时带上 vuln_id，报告会自动附上该漏洞的原始请求。 **多档条目用 `points` 指定本档分值**：《合并版》把同一项的多个档位并成一条（如「服务器主机权限」普通 10 / 管理员 50、「域名控制权限」一级 50 / 二级 20、「网络设备权限」普通 100 / 管理员 200）。记分时把 `points` 填成本次实际档位的分值；不填就用该条的主档默认值。**同一系统只按最高权限计一次**（G1）——先记了普通档、后来提权到管理员档，再记一条管理员档（points 填高档值），系统会自动顶掉普通档那条。 **红线一：账号类得分必须先实测能登录。** 拿到账号/口令后要用浏览器（browser-automation / kimi-webbridge）或等价会话实测登录成功、能交互访问页面，才记账号权限分——**只有凭据不算拿到账号**；登不进去的写进 redteam_asset_test 的 `test` 参数。 **红线二：自己注册的账号不算得分权限。** 自助注册、自己新建的用户/角色/后台账号、自己给自己开的权限都不算——演练得分针对**拿到别人已有的**账号与权限。这类用 self_created=true 记录（留过程），不计分、不计数、不进报告。 **红线三：注意该条的计分口径（G1/G3）。** 每条得分点自带口径：`同一系统只算最高权限一次`／`同一服务只算最高一条`／`整个目标只算一次`（突破网络边界）／`按台·卡·个累加`（终端、云节点、算力卡）。且每条有自己的**上限**（如服务器主机 600 分、Web 应用 2000 分、集权系统 4000 分），到上限后同条不再累计（G3）——返回里会用 warning 告诉你"已达上限/已被顶掉"，把它当**停止信号**，换别的条目或别的资产推进，不要在同一条上刷。 **数据成果单独计分（G2）**：邮件数据、业务数据、数据资产等按重要程度另行记录，不与权限分混算；evidence 必须写出**实际数据量**（如「导出 1,320,000 条用户数据」）。
-
-参数：
-- `engagement`
-- `code` — 得分点 code（或 point_id / point_name 任选其一）；先用 redteam_score_list 核对实际 code
-- `point_id`
-- `point_name`
-- `points` — 【多档条目必填】本次命中按哪一档计分（如服务器主机权限：普通权限填 10、管理员填 50；域名控制：一级 50、二级 20）。不填则用该条主档默认值。
-- `target` — 目标资产：URL / ip:port / 主机名（**带上端口**，服务/系统口径按它判定）
-- `asset_id` — 目标资产在库里的 id
-- `port` — 【建议填】这条得分落在哪个端口（口径判定按「资产 + 端口」；target 里已带端口时可不填）
-- `vuln_id` — 【建议填】用哪个漏洞拿到的分（报告据此附原始请求）
-- `step_id` — 对应的攻击链步骤 id（可选）
-- `evidence` — 【必填】结果：拿到的东西，例如「后台管理员 tomcat/Tomcat@2024（已实测浏览器可登录）」「数据库账号 root/xxx」「导出 132 万条用户数据」。多档条目请写明档位（如"管理员权限"）。
-- `self_created` — 【重要】这个账号/权限是不是**自己注册、自己创建**的？是则填 true —— 只作过程记录，不计分、不进报告。拿到别人已有的账号/权限不要填（默认 false）。
-- `note`
-- `recorded_by`
+**已停用**：模型不能仅凭文字声明记录权限、凭据、数据提取或边界突破得分。得分需由独立、可审计的核验流程确认。
 
 ### `redteam_score_point_save`
 新增或修改得分点（分值/名称/分类/说明/启用）。用户也会在界面上编辑；智能体只在必要时用（例如发现规则里还有未被记录的得分项）。带 id 为修改，不带 id 为新增。
