@@ -128,7 +128,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `include_environments` — 可选；只展示当前已发现的 WSL / Docker / SSH Kali 环境，不自动切换或执行远端任务。
 
 关键输出：
-- `skillRequirements[].key` — 必须逐个通过 `redteam_skill_read` 读取；缺失或正文冲突时停止。
+- `skillRequirements[].key` — 必须逐个通过 `redteam_skill_read` 完整读取；当前根会话读取状态会返回 `read` / `not-read`。Nmap/httpx 与被动侦察执行入口会强制核验 30 分钟内的读取记录；缺失、截断或过期时停止。
 - `executionPolicy=dedicated-adapter` — 只能使用返回的专用适配器。
 - `executionPolicy=manual-review-only` — 需要针对本次工具、目标和动作的明确确认；当前没有此类自动执行入口。
 - `executionPolicy=unmapped-manual-review` — 没有经过审查的 Skill/参数契约；不得执行。
@@ -247,6 +247,8 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 返回稳定 `key`、名称、描述与来源，另外用 `aboutsecurity_installed` 明确该外部技能库是否已找到。没有安装外部技能时仍能搜索内置技能。
 
 ### `redteam_skill_read`
+
+完整读取 `redteam:` Skill 后会记录当前根会话 30 分钟的执行前置凭证；被截断的正文不记为已读。Nmap/httpx 与 `redteam_passive_recon` 会在执行入口强制核验，缺少记录、换根会话或凭证过期时拒绝执行。重启后需重新读取。该凭证只证明当前会话读取过对应 Skill，不证明授权、环境可用或任务已执行。
 【离线只读】根据上一步的 `key` 读取技能 Markdown 正文；不会执行技能里面的命令，也不允许任意文件路径读取。查询结果里的 `key` 是唯一入口。
 
 参数：`key`（必填，如 `aboutsecurity:recon/passive-recon` 或 `redteam:web-injection`）、`max_chars`（默认 16000）。
