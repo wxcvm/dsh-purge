@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "800619d75575f496";
+		const CLIENT_BUILD_ID = "e1fa532de88f2583";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -11431,7 +11431,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [shodanFeedback, setShodanFeedback] = React.useState('')
       const [shodanTest, setShodanTest] = React.useState(null)
       const shodanDraftChanged = !!shodanKey.trim() || shodanClearKey ||
-        shodanBaseUrl.trim() !== (shodanConnection?.baseUrl || 'https://api.shodan.io')
+        shodanBaseUrl.trim() !== (shodanConnection?.baseUrl || 'https://api.shodan.io') ||
+        (shodanConnection?.credentialSource === 'legacy-plaintext' && shodanConnection?.vaultEnabled === true)
       React.useEffect(() => {
         let live = true
         api({ op: 'fofaConnectionGet' }).then(r => {
@@ -11822,12 +11823,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
               h('h4', { style: { margin: 0 } }, 'Shodan REST API'),
               h('span', { className: 'rt-tag' }, shodanTest?.ok ? '连接已验证'
-                : shodanConnection?.configured ? 'Key 已配置（待测试）' : 'Key 未配置'),
+                : shodanConnection?.credentialSource === 'encrypted-local-locked' ? 'Key 已加密但无法解锁'
+                  : shodanConnection?.credentialSource === 'encrypted-local' ? 'Key 已加密保存（待测试）'
+                    : shodanConnection?.credentialSource === 'legacy-plaintext' ? '旧版明文 Key（待迁移）'
+                      : shodanConnection?.configured ? 'Key 已配置（待测试）' : 'Key 未配置'),
               h('div', { className: 'rt-spacer' }),
               h('button', { className: 'rt-btn', onClick: () => setShodanSettings(v => !v) },
                 shodanSettings ? '收起设置' : '设置连接'),
               h('button', { className: 'rt-btn rt-btn-primary',
-                disabled: !shodanConnection?.configured || shodanDraftChanged, onClick: () => openQuick('shodan') }, '单 IP 查询')),
+                disabled: !shodanConnection?.configured || !!shodanConnection?.credentialError || shodanDraftChanged, onClick: () => openQuick('shodan') }, '单 IP 查询')),
             h('div', { className: 'rt-foot' },
               'Host API 仅支持单个 IP；读取已有被动主机数据，不会发起扫描；需要 Shodan Membership。InternetDB 仍可免费免 Key 使用。'),
             shodanSettings ? h('div', { style: { display: 'grid', gap: 9, marginTop: 12 } },
@@ -11846,6 +11850,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 shodanConnection.credentialSource === 'environment'
                   ? ' 清除并停用 SHODAN_API_KEY 环境变量回退'
                   : ' 清除已保存 API Key') : null,
+              h('div', { className: 'rt-foot' },
+                shodanConnection?.vaultEnabled
+                  ? '本机 API Key 使用 DSH_PURGE_SECRET_KEY 的 AES-256-GCM 加密保存；旧版明文配置会在保存设置时迁移。'
+                  : '尚未启用本地凭据加密；请先设置 DSH_PURGE_SECRET_KEY（64 位十六进制字符），新 Key 才能安全保存。也可通过进程环境变量临时提供 Key。'),
               h('div', { className: 'rt-foot' },
                 '支持官方 Shodan API 或实现相同 /api-info 与 /shodan/host/{ip} 协议的 HTTPS 网关。API Key 按官方协议放在请求参数中；自定义网关会收到 Key 和目标 IP，请只使用可信地址。测试只读取 /api-info，不查询主机；测试通过也不代表套餐已开通 Host API 权限。'),
               h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
