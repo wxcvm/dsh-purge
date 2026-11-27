@@ -1,9 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { listTaskToolProfiles, planTaskTools, verifyTaskTool } from '../lib/redteam/task-tool-plan.js'
+import { listTaskToolProfiles, planTaskTools, verifyTaskTool, TOOL_USE_CONTRACTS, toolUseContract } from '../lib/redteam/task-tool-plan.js'
+import { TOOL_CATALOG } from '../lib/redteam/platform-config.js'
 
 const workspace = (t) => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-task-tools-'))
@@ -126,4 +127,58 @@ test('task selection exposes dedicated execution support and keeps custom tools 
   assert.equal(plan.configuredCustomTools[0].taskFit, 'unclassified')
   assert.equal(plan.configuredCustomTools[0].executionSupported, false)
   assert.equal(plan.configuredCustomTools[0].executionStatus, 'not-supported')
+  assert.equal(plan.configuredCustomTools[0].executionPolicy, 'unmapped-manual-review')
+  assert.equal(plan.configuredCustomTools[0].automaticExecutionAllowed, false)
+})
+
+
+test('every built-in tool has an explicit reviewed contract and existing Skill references', () => {
+  const catalogIds = TOOL_CATALOG.map((tool) => tool.id).sort()
+  assert.deepEqual(Object.keys(TOOL_USE_CONTRACTS).sort(), catalogIds)
+  for (const id of catalogIds) {
+    const contract = toolUseContract(id)
+    assert.equal(contract.requiresScopeReview, true, id + ' must require scope review')
+    assert.equal(contract.automaticExecutionAllowed, false, id + ' must not auto-execute from planning')
+    assert.ok(['dedicated-adapter', 'skill-guided-host-tool', 'manual-review-only', 'unmapped-manual-review'].includes(contract.executionPolicy), id)
+    for (const skill of contract.skillRequirements) {
+      assert.match(skill.key, /^redteam:/)
+      assert.equal(skill.loadTool, 'redteam_skill_read')
+      assert.equal(skill.status, 'not-read')
+      assert.ok(existsSync(new URL('../skills/redteam/' + skill.name + '.md', import.meta.url)), id + ' -> ' + skill.key)
+    }
+  }
+})
+
+test('selected tools expose Skill read keys and explicit execution policy without granting execution', (t) => {
+  const root = workspace(t)
+  const httpx = fileAt(join(root, 'pd-httpx.exe'))
+  const webPlan = planTaskTools('web', {
+    root, config: configFor(root, { httpx }), env: { PATH: '' },
+  })
+  const selected = webPlan.candidates.find((item) => item.id === 'httpx')
+  assert.equal(webPlan.skillPlan.status, 'read-required')
+  assert.equal(webPlan.skillPlan.readTool, 'redteam_skill_read')
+  assert.deepEqual(selected.skillRequirements.map((item) => item.key), [
+    'redteam:recon-pipeline',
+    'redteam:web-fingerprint',
+  ])
+  assert.equal(selected.executionPolicy, 'dedicated-adapter')
+  assert.equal(selected.executionAdapter, 'redteam_scan_run')
+  assert.equal(selected.requiresScopeReview, true)
+  assert.equal(selected.automaticExecutionAllowed, false)
+
+  const fscan = fileAt(join(root, 'fscan.exe'))
+  const internalPlan = planTaskTools('internal', {
+    root, config: configFor(root, { fscan }), env: { PATH: '' },
+  })
+  const internal = internalPlan.candidates.find((item) => item.id === 'fscan')
+  assert.equal(internal.executionPolicy, 'manual-review-only')
+  assert.equal(internal.operatorConfirmationRequired, true)
+  assert.equal(internal.automaticExecutionAllowed, false)
+  assert.match(internal.policyNote, /禁止口令爆破/)
+
+  const unreviewed = toolUseContract('netexec')
+  assert.equal(unreviewed.executionPolicy, 'unmapped-manual-review')
+  assert.deepEqual(unreviewed.skillRequirements, [])
+  assert.equal(unreviewed.operatorConfirmationRequired, true)
 })
