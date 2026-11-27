@@ -117,4 +117,6 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.match(preset, /每个执行角色开始一个新的工具型任务前，必须调用一次 `redteam_tool_select`/)
   assert.match(preset, /Nmap \/ ProjectDiscovery httpx 单目标扫描必须走 `redteam_scan_run`/)
   assert.match(preset, /customTools/);
+  assert.match(preset, /不对全部工具逐项探测/);
+  assert.match(preset, /不在每个子智能体步骤重复预检/);
 })
