@@ -1,0 +1,407 @@
+[
+  {
+    "id": "fujiang:gray-market:oauth-redirect-uri",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/oauth-redirect-uri.md",
+    "metadata": {
+      "title": "OAuth redirect_uri 劫持 / state 缺失（账号接管）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.6",
+      "product": "自研三方登录（Google/微信/Telegram）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "oauth, redirect_uri, state, 登录, 接管, sso",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- redirect_uri 白名单精确匹配；强制 state 且一次性校验；code 绑定 PKCE。",
+    "reference_notes": "- OAuth 2.0 安全最佳实践；CWE-601。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/oauth-redirect-uri.md"
+  },
+  {
+    "id": "fujiang:gray-market:object-storage-datastore-exposure",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/object-storage-datastore-exposure.md",
+    "metadata": {
+      "title": "对象存储与数据存储裸露（OSS / S3 / MinIO / MySQL / MongoDB）",
+      "cve": "无（配置缺陷）",
+      "severity": "high",
+      "source_cvss": "8.6",
+      "product": "阿里云 OSS / 腾讯云 COS / AWS S3 / MinIO / MySQL / MongoDB",
+      "versions": "任意",
+      "ports": "80, 443, 9000, 3306, 27017",
+      "keywords": "oss, s3, bucket, minio, mongodb, mysql, 弱口令, 列举, kyc",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- Bucket 一律私有 + 预签名 URL（短有效期）；关闭匿名 List/Put；开启访问日志与异常告警。\n- MinIO 改默认口令并只对内；控制台与 API 分离端口。\n- MySQL/Mongo 只监听内网、强口令、最小权限账号；Mongo 开 `authorization: enabled`。",
+    "reference_notes": "- AWS S3 Block Public Access 文档；阿里云 OSS 权限与 ACL；MongoDB Security Checklist。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/object-storage-datastore-exposure.md"
+  },
+  {
+    "id": "fujiang:gray-market:operator-backend-weak-login",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/operator-backend-weak-login.md",
+    "metadata": {
+      "title": "运营后台弱口令 + 验证码复用（博彩站点最常见入口）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "自研运营/代理后台（包网系统）",
+      "versions": "任意",
+      "ports": "80, 443, 8080, 8443",
+      "keywords": "弱口令, 后台, 验证码复用, 运营商, 包网, 登录",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 验证码一次性 + 5 分钟过期；登录失败计数按账号+IP；后台限 IP 白名单。\n- 强制管理员口令强度 + 2FA。",
+    "reference_notes": "- OWASP WSTG-ATHN-01；常见包网后台口令样本。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/operator-backend-weak-login.md"
+  },
+  {
+    "id": "fujiang:gray-market:order-status-tamper",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/order-status-tamper.md",
+    "metadata": {
+      "title": "订单状态机篡改（未支付改成已支付 / 已取消再入账）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.3",
+      "product": "自研充值/订单系统（资金面）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "订单, 状态机, 篡改, 未支付, 充值, 资金",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 订单状态只由支付回调（验签）驱动；客户端接口禁止写状态；\n- 状态机校验合法迁移；对账核对第三方流水。",
+    "reference_notes": "- OWASP WSTG-BUSL-01；CWE-841。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/order-status-tamper.md"
+  },
+  {
+    "id": "fujiang:gray-market:origin-ip-leak-waf-bypass",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/origin-ip-leak-waf-bypass.md",
+    "metadata": {
+      "title": "源站 IP 泄露 → 绕过 WAF 直打（博彩站必看）",
+      "cve": "无（架构缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "任何套 CDN/WAF 的站点",
+      "versions": "任意",
+      "ports": "80, 443, 8080",
+      "keywords": "源站, cdn, waf, 绕过, 真实ip, 回源",
+      "verified": "false",
+      "sources": "公开资料整理（信息收集方法）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 源站只允许 CDN 回源 IP；禁止子域直连；邮件/面板走独立 IP。\n- 定期用第三方视角自查真实 IP 暴露面。",
+    "reference_notes": "- 公开信息收集方法（crt.sh / SecurityTrails / FOFA）。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/origin-ip-leak-waf-bypass.md"
+  },
+  {
+    "id": "fujiang:gray-market:panel-bt-1panel",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/panel-bt-1panel.md",
+    "metadata": {
+      "title": "宝塔 / 1Panel 面板弱口令与未授权（黑灰站最常见后台）",
+      "cve": "无（配置缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.2",
+      "product": "宝塔面板（BT-Panel）/ 1Panel / 小皮 phpstudy",
+      "versions": "任意",
+      "ports": "8888, 888, 8443, 2087, 9999",
+      "keywords": "宝塔, bt, 1panel, 面板, 弱口令, 未授权, 服务器",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 面板只监听内网/加 IP 白名单；强口令 + 两步验证；关闭 phpmyadmin 直连。",
+    "reference_notes": "- 宝塔/1Panel 官方安全建议。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/panel-bt-1panel.md"
+  },
+  {
+    "id": "fujiang:gray-market:password-reset-token-abuse",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/password-reset-token-abuse.md",
+    "metadata": {
+      "title": "密码重置 token 可预测 / 未绑定用户（任意用户改密）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "自研找回密码流程",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "reset, token, 找回密码, 任意用户, 越权",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- token 服务端随机（≥128 bit）+ 单次有效 + 10 分钟过期 + 与 uid 一起签名（HMAC）。\n- 重置接口以 token 解析出的 uid 为准，忽略请求体里的 uid。\n- 改密后强制下线所有会话并通知用户。",
+    "reference_notes": "- OWASP Forgot Password Cheat Sheet；CWE-640。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/password-reset-token-abuse.md"
+  },
+  {
+    "id": "fujiang:gray-market:payment-channel-swap",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/payment-channel-swap.md",
+    "metadata": {
+      "title": "支付通道 / 商户号篡改（充值进攻击者账户）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.4",
+      "product": "自研充值/支付路由（博彩包网）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "支付通道, 商户号, 充值, 路由, 篡改, 资金",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 通道与商户号只由服务端按产品配置选；请求体里的此类字段一律忽略。\n- 回调地址固定，签名校验金额/商户/订单号。",
+    "reference_notes": "- OWASP WSTG-BUSL-01；CWE-472。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/payment-channel-swap.md"
+  },
+  {
+    "id": "fujiang:gray-market:payment-notify-forgery",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/payment-notify-forgery.md",
+    "metadata": {
+      "title": "支付回调伪造与金额篡改（资金面）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "自研充值/代付回调（博彩、跑分、发卡站高发）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "notify, callback, 伪造回调, 金额篡改, 重放, 验签, 跑分",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 金额只信服务端订单表，回调里的 `amount` 仅作核对；不一致直接拒绝。\n- 强制验签（RSA2 / 商户密钥），回调来源 IP 白名单（支付宝/微信/银行出口段）。\n- 幂等：`orderNo` 唯一索引 + 状态机（pending→paid 只允许一次），重复回调直接返回成功但不入账。\n- 对账任务：每日与渠道流水比对，发现差额告警。",
+    "reference_notes": "- OWASP Top 10 A04（Insecure Design）；支付宝/微信支付回调验签文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/payment-notify-forgery.md"
+  },
+  {
+    "id": "fujiang:gray-market:promotion-abuse",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/promotion-abuse.md",
+    "metadata": {
+      "title": "活动 / 彩金 / 返水无限领取（幂等缺失）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "7.9",
+      "product": "促销活动与奖励接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "promotion, bonus, 彩金, 返水, 幂等, 并发领取, 活动滥用",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 领取幂等：`(user_id, promotion_id)` 唯一索引；并发用锁或 `INSERT ... ON DUPLICATE`。\n- 奖励金额与档位服务端计算，不接受客户端传值。\n- 活动规则引擎 + 风控（同设备/同 IP/同卡多次领取告警）。",
+    "reference_notes": "- OWASP A04 Insecure Design；CWE-799（Improper Control of Interaction Frequency）。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/promotion-abuse.md"
+  },
+  {
+    "id": "fujiang:gray-market:race-condition-balance",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/race-condition-balance.md",
+    "metadata": {
+      "title": "余额并发与负数（竞态 / 金额符号）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "自研钱包与投注接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "竞态, race condition, 并发提现, 负数, 金额校验, 幂等",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 幂等键（`requestId` 唯一索引）+ 分布式锁。\n- 余额操作走 DB 事务 `SELECT ... FOR UPDATE` 或乐观锁 `version`；扣减与建单同事务。\n- 金额服务端校验：正数、上限、两位小数；拒绝科学计数法与字符串类型。",
+    "reference_notes": "- OWASP WSTG-BUSL-04（竞态）；OWASP Top 10 A04 Insecure Design。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/race-condition-balance.md"
+  },
+  {
+    "id": "fujiang:gray-market:redis-session-forgery",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/redis-session-forgery.md",
+    "metadata": {
+      "title": "Redis 未授权 → 偷后台 session / token 直接进后台",
+      "cve": "无（配置缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "自研后台（session/token 存 Redis）",
+      "versions": "任意",
+      "ports": "6379",
+      "keywords": "redis, 未授权, session, token, 后台, 接管",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- Redis 加密码 + 只监听内网 + 禁危险命令（rename-command CONFIG \"\"）；\n- 登录态加签名/绑定 IP+UA，缩短 TTL。",
+    "reference_notes": "- Redis 安全基线；OWASP 会话管理。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/redis-session-forgery.md"
+  },
+  {
+    "id": "fujiang:gray-market:repo-config-backup-leak",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/repo-config-backup-leak.md",
+    "metadata": {
+      "title": "源码 / 备份 / 配置泄露",
+      "cve": "无（部署缺陷）",
+      "severity": "high",
+      "source_cvss": "7.5",
+      "product": "通用 Web（PHP/Java/Node 自研站）",
+      "versions": "任意",
+      "ports": "80, 443, 8080",
+      "keywords": ".git, .svn, env, backup, zip, sourcemap, swagger, 源码泄露",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 反代统一 deny：`\\.(git|svn|hg)(/|$)`、`\\.(zip|tar\\.gz|sql|bak|swp|old|save)$`、`\\.env`、`\\.map$`。\n- 备份文件放 webroot 之外；CI/CD 不把 `.env`、`.git`、sourcemap 部署到生产。\n- 定期做\"部署残留\"扫描（上面的路径表本身就是一份检查清单）。",
+    "reference_notes": "- OWASP WSTG-INFO-05（枚举 Web 服务器内容）；GitHack / git-dumper 项目文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/repo-config-backup-leak.md"
+  },
+  {
+    "id": "fujiang:gray-market:report-api-unauth",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/report-api-unauth.md",
+    "metadata": {
+      "title": "报表/财务接口未授权（全站流水与代理佣金）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.6",
+      "product": "包网/代理后台报表模块",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "report, finance, 报表, 流水, 佣金, 未授权",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 报表接口统一鉴权 + 行级过滤（只返回自己代理树）。\n- 导出走异步任务 + 权限校验 + 水印；大报表限速。\n- 审计：谁在什么时间导出了多少行。",
+    "reference_notes": "- OWASP API Security Top 10：API1 BOLA / API5 BFLA。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/report-api-unauth.md"
+  },
+  {
+    "id": "fujiang:gray-market:ruoyi-admin-unauth",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/ruoyi-admin-unauth.md",
+    "metadata": {
+      "title": "若依（RuoYi）系后台默认口令 / Druid / 定时任务 RCE",
+      "cve": "无（部署缺陷 + 实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "若依 RuoYi（及二开的包网/代理后台）",
+      "versions": "4.x / 3.x / 二开变体",
+      "ports": "80, 443, 8080, 9090",
+      "keywords": "ruoyi, 若依, druid, admin123, quartz, 定时任务, prod-api",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 改默认口令并强制复杂度；删除示例账号与演示菜单。\n- `druid` 监控加鉴权或直接下线（`spring.datasource.druid.stat-view-servlet.enabled=false`）。\n- `/prod-api` 只对内网/管理网；关闭 swagger；生产关 `tool/gen`。\n- 定时任务 `invokeTarget` 白名单（只允许已注册的 bean 方法），并对 `cron` 变更告警。",
+    "reference_notes": "- 若依官方安全公告与 issue；Druid StatViewServlet 文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/ruoyi-admin-unauth.md"
+  }
+]

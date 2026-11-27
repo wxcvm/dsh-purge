@@ -48,7 +48,7 @@ for (; j < body.length; j += 1) {
 	}
 }
 const applyParts = `function applyDrillParts() {
-      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth };
+      return { CSS: CSS, Panel: Panel, setUI: setUI, useUI: useUI, isFullWindow: isFullWindow, setDockWidth: setDockWidth, api: api, useTemporaryPrivacy: useTemporaryPrivacy, setTemporaryPrivacy: setTemporaryPrivacy };
     }
 `;
 body = body.slice(0, applyAt) + applyParts + body.slice(j);
@@ -70,7 +70,28 @@ if (!client.includes(BEGIN) || !client.includes(END)) {
 const beginAt = client.indexOf(BEGIN);
 const endAt = client.indexOf(END);
 if (beginAt < 0 || endAt < 0 || endAt < beginAt) throw new Error("drill markers out of order");
-const generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.length);
+let generated = client.slice(0, beginAt) + fragment + client.slice(endAt + END.length);
+// Keep the runtime panel and report projection generated from their own sources.
+const runtimeBegin = "/* __DSH_PURGE_RUNTIME_BEGIN__ */";
+const runtimeEnd = "/* __DSH_PURGE_RUNTIME_END__ */";
+const runtimeBody = readFileSync(join(root, "lib", "task-quality-report.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "thinking-experiment.js"), "utf8").replace(/^export /gm, "")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "runtime-panel.js"), "utf8")
+  + "\n" + readFileSync(join(root, "lib", "workspace", "http-status-panel.js"), "utf8").replace(/^export /gm, "");
+const runtimeAt = generated.indexOf(runtimeBegin), runtimeEndAt = generated.indexOf(runtimeEnd);
+if (runtimeAt < 0 || runtimeEndAt < runtimeAt) throw new Error("runtime panel markers missing");
+generated = generated.slice(0, runtimeAt) + runtimeBegin + "\n" + runtimeBody.replace(/\r\n/g, "\n")
+  + runtimeEnd + generated.slice(runtimeEndAt + runtimeEnd.length);
+// Normalize line endings so a Windows checkout does not change the build identity.
+// FNV-1a is an identity for stale UI detection, not a security signature.
+const buildMarker = /const CLIENT_BUILD_ID = "[^"]*";/;
+if (!buildMarker.test(generated)) throw new Error("client build marker missing");
+const canonical = generated.replace(/\r\n/g, "\n").replace(buildMarker, 'const CLIENT_BUILD_ID = "";');
+let buildHash = 0xcbf29ce484222325n;
+for (let i = 0; i < canonical.length; i++) {
+  buildHash = BigInt.asUintN(64, (buildHash ^ BigInt(canonical.charCodeAt(i))) * 0x100000001b3n);
+}
+generated = generated.replace(buildMarker, 'const CLIENT_BUILD_ID = "' + buildHash.toString(16).padStart(16, "0") + '";');
 if (process.argv.includes("--check")) {
   if (generated !== client) {
     console.error("client.js is stale; run node scripts/build-client.mjs and commit the generated client.js");

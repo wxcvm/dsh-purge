@@ -8,6 +8,7 @@ $bin = Join-Path $fixture 'bin'
 $oldPath = $env:PATH
 try {
   New-Item -ItemType Directory -Path (Join-Path $store 'lib\redteam') -Force | Out-Null
+  New-Item -ItemType Directory -Path (Join-Path $store 'lib\redteam\adapters') -Force | Out-Null
   New-Item -ItemType Directory -Path (Split-Path $plugin -Parent) -Force | Out-Null
   New-Item -ItemType Directory -Path $bin -Force | Out-Null
   New-Item -ItemType Junction -Path $plugin -Target $store | Out-Null
@@ -25,6 +26,9 @@ try {
   Set-Content -LiteralPath (Join-Path $plugin 'client.js') -Value 'old junction client' -NoNewline
   Set-Content -LiteralPath (Join-Path $plugin 'lib\redteam\ui.js') -Value 'old junction UI' -NoNewline
   Set-Content -LiteralPath (Join-Path $plugin 'lib\redteam\client.js') -Value 'old drill client' -NoNewline
+  foreach ($file in @('lib\redteam\tools.js','lib\redteam\task-context.js','lib\artex-knowledge.js','lib\redteam\adapters\wsl.js','lib\redteam\adapters\ssh-kali.js')) {
+    Set-Content -LiteralPath (Join-Path $plugin $file) -Value 'old integration module' -NoNewline
+  }
   Set-Content -LiteralPath (Join-Path $store 'sentinel.txt') -Value 'virtual store survives' -NoNewline
 
   & $updater -DshHome $fixture -CheckOnly

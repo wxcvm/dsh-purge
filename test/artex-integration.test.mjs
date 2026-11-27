@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readFileSync } from 'node:fs'
 import {
-  artexToolRoots, findArtexTool, inspectArtex, probeLocalArtex, ARTEX_SHARED_TOOLS,
+  artexToolRoots, findArtexTool, inspectArtex, probeLocalArtex, probeLocalArtexPrivacy, ARTEX_SHARED_TOOLS,
 } from '../lib/artex-integration.js'
 import { resolveTool } from '../lib/redteam/platform-config.js'
 
@@ -67,6 +67,23 @@ test('custom ARTEX_TOOL_DIRS are searched before managed binaries', (t) => {
   assert.ok(ARTEX_SHARED_TOOLS.includes('subfinder'))
 })
 
+test('optional ARTEX_HOME shares portable tools from data/tools and tools', (t) => {
+  const home = workspace(t)
+  const portable = join(home, 'ARTEX-portable')
+  const dataTool = put(join(portable, 'data', 'tools', 'katana', 'current', 'katana.exe'))
+  const fallbackTool = put(join(portable, 'tools', 'subfinder', '2.1.0', 'subfinder.exe'))
+  const env = { ARTEX_HOME: portable, PATH: '' }
+  assert.equal(findArtexTool('katana', { env, platform: 'win32' }), dataTool)
+  assert.equal(findArtexTool('subfinder', { env, platform: 'win32' }), fallbackTool)
+  const resolved = resolveTool('katana', {
+    root: join(home, 'dsh', 'redteam'),
+    config: { platform: 'windows', toolkitDir: join(home, 'empty'), binDirs: [], tools: {} },
+    env,
+  })
+  assert.equal(resolved.source, 'artex')
+  assert.equal(resolved.path, dataTool)
+})
+
 test('status separates live ARTEX from binary existence and never reports credentials', async (t) => {
   const home = workspace(t)
   const file = put(join(home, 'ARTEX', 'tools', 'dnsx', 'current', 'dnsx.exe'))
@@ -83,18 +100,22 @@ test('status separates live ARTEX from binary existence and never reports creden
   assert.equal(offline.toolCount, 1, 'installed tools remain reusable while service is stopped')
 })
 
-test('cleaning UI displays verified local ARTEX service and tool reuse without any auto-execute action', () => {
+test('ARTEX is mounted in the RedTeam Resources tab and uses the existing read-only bridge', () => {
   const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
   const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
-  assert.match(client, /function ArtexLinkSection\(\)/)
-  assert.match(client, /apiJson\("\/dsh-purge\/artex"\)/)
-  assert.match(client, /h\(ArtexLinkSection\)/)
-  assert.match(client, /DSH 已复用/)
+  assert.match(source, /function ArtexTab\(props\)/)
+  assert.match(source, /\['artex', 'ARTEX'\]/)
+  assert.match(source, /else if \(st\.tab === 'artex'\) body = h\(ArtexTab, \{ engagement: eng,/)
+  assert.match(source, /onGotoAsset: \(assetId\) =>/)
+  assert.match(source, /onGotoFindings: \(assetId\) =>/)
+  assert.match(client, /function ArtexTab\(props\)/)
+  assert.doesNotMatch(client, /function ArtexLinkSection\(\)/)
+  assert.match(client, /fetch\('\/dsh-purge\/artex', \{ method: 'GET' \}\)/)
   assert.match(server, /path: "\/dsh-purge\/artex"/)
-  assert.match(server, /const state = await inspectArtex\(\)/)
-  assert.match(server, /reused: resolveTool\(item\.id\)\.path === item\.path/)
+  assert.match(server, /const state = await inspectArtex\(\{ env: artexLocalEnv\(config\) \}\)/)
+  assert.match(server, /reused: resolveTool\(item\.id, \{ root, config \}\)\.path === item\.path/)
 })
-
 
 test('local health distinguishes verified ARTEX from authenticated or unrelated services', async () => {
   const examples = [
@@ -162,10 +183,166 @@ test('tool files without a responding service are shown installed/offline, not c
   assert.equal(status.toolCount, 1)
 })
 
-test('cleaning UI renders ARTEX candidate and offline states separately from verified online', () => {
-  const client = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
-  assert.match(client, /service_candidate: "本机 8787 有响应/)
-  assert.match(client, /installed_offline: "检测到 ARTEX 本机工具/)
-  assert.match(client, /status\.online \? h\("a"/)
-  assert.match(client, /文件尚未执行验证/)
+test('RedTeam ARTEX tab distinguishes unverified and offline service states', () => {
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  assert.match(source, /service_candidate: '8787 端口有响应/)
+  assert.match(source, /installed_offline: 'ARTEX 本机工具已发现/)
+  assert.match(source, /state && state\.online \? h\('a'/)
+  assert.match(source, /找到文件不代表可执行已验证/)
+})
+
+test('privacy console uses scoped ARTEX status without sharing administrator credentials', () => {
+  const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
+  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
+  const bundle = readFileSync(new URL('../client.js', import.meta.url), 'utf8')
+  assert.match(host, /const artex = await probeLocalArtex\(\)/)
+  assert.match(host, /state\.artex = \{/)
+  assert.match(host, /const artexPrivacy = await probeLocalArtexPrivacy\(\{ health: artex \}\)/)
+  assert.match(host, /\.\.\.artexPrivacy/)
+  assert.doesNotMatch(host, /state\.artex = await inspectArtex\(\)/)
+  for (const body of [source, bundle]) {
+    assert.match(body, /ARTEX 本机联动状态/)
+    assert.match(body, /setUI\(\{ tab: 'artex' \}\)/)
+    assert.match(body, /已读取实际 HTTP 监听范围/)
+    assert.match(body, /仅有启动配置，尚未观察实际绑定/)
+    assert.match(body, /ARTEX 公网可达性、宿主机端口映射与反向代理仍未检测/)
+  }
+})
+
+test('ARTEX privacy probe never sends a token without a confirmed health marker and opt-in config', async () => {
+  let calls = 0
+  const fetchFn = async () => { calls++; throw new Error('must not fetch') }
+  const env = { DSH_PURGE_ARTEX_PRIVACY_TOKEN: 'test-read-only-token' }
+  for (const state of ['absent', 'service_candidate', 'degraded']) {
+    const got = await probeLocalArtexPrivacy({ health: { state }, env, fetchFn })
+    assert.equal(got.privacyExposure, 'not_inspected')
+    assert.equal(got.publicReachability, 'not_tested')
+  }
+  const unconfigured = await probeLocalArtexPrivacy({
+    health: { state: 'detected' }, env: {}, fetchFn,
+  })
+  assert.equal(unconfigured.privacyExposure, 'not_configured')
+  assert.equal(calls, 0)
+})
+
+test('ARTEX scoped privacy probe distinguishes runtime observations from configured values', async () => {
+  const token = 'test-read-only-token-123456'
+  const env = { DSH_PURGE_ARTEX_PRIVACY_TOKEN: token }
+  for (const [source, expected] of [
+    ['runtime_listener', 'runtime_observed'],
+    ['configured', 'configured_only'],
+    ['not_inspected', 'not_inspected'],
+  ]) {
+    const got = await probeLocalArtexPrivacy({
+      health: { state: 'detected' }, env,
+      fetchFn: async (url, options) => {
+        assert.equal(url, 'http://127.0.0.1:8787/api/privacy/bridge-status')
+        assert.equal(options.method, 'GET')
+        assert.equal(options.redirect, 'manual')
+        assert.deepEqual(options.headers, { 'X-Artex-Privacy-Token': token })
+        return { status: 200, ok: true, json: async () => ({
+          service: 'artex', scope: 'loopback', binding_source: source,
+          public_reachability: 'not_tested', token, extra: 'do not forward',
+        }) }
+      },
+    })
+    assert.equal(got.privacyExposure, expected)
+    assert.equal(got.privacyHttpStatus, 200)
+    assert.equal(got.privacyScope, source === 'not_inspected' ? null : 'loopback')
+    assert.equal(got.publicReachability, 'not_tested')
+    assert.ok(!JSON.stringify(got).includes(token))
+    assert.ok(!JSON.stringify(got).includes('do not forward'))
+  }
+})
+
+test('ARTEX privacy probe fails without overstating scope or leaking errors', async () => {
+  const health = { state: 'detected' }
+  const env = { DSH_PURGE_ARTEX_PRIVACY_TOKEN: 'private-test-token' }
+  const examples = [
+    { status: 401, expected: 'auth_rejected' },
+    { status: 403, expected: 'auth_rejected' },
+    { status: 404, expected: 'unsupported' },
+    { status: 405, expected: 'unsupported' },
+    { status: 302, expected: 'unavailable' },
+    { status: 503, expected: 'unavailable' },
+    { status: 200, body: { service: 'other' }, expected: 'invalid_response' },
+    { status: 200, body: { service: 'artex', scope: 'loopback',
+      binding_source: 'runtime_listener', public_reachability: 'reachable' }, expected: 'invalid_response' },
+    { status: 200, body: { service: 'artex', scope: 'invented',
+      binding_source: 'runtime_listener', public_reachability: 'not_tested' }, expected: 'invalid_response' },
+  ]
+  for (const item of examples) {
+    const got = await probeLocalArtexPrivacy({ health, env, fetchFn: async () => ({
+      status: item.status, ok: item.status === 200, json: async () => item.body,
+    }) })
+    assert.equal(got.privacyExposure, item.expected)
+    assert.equal(got.privacyScope, null)
+    assert.equal(got.publicReachability, 'not_tested')
+    assert.ok(!JSON.stringify(got).includes(env.DSH_PURGE_ARTEX_PRIVACY_TOKEN))
+  }
+  const malformed = await probeLocalArtexPrivacy({ health, env, fetchFn: async () => ({
+    status: 200, ok: true, json: async () => { throw new Error('malformed private-test-token') },
+  }) })
+  assert.equal(malformed.privacyExposure, 'invalid_response')
+  const unreachable = await probeLocalArtexPrivacy({ health, env,
+    fetchFn: async () => { throw new Error('private-test-token') },
+  })
+  assert.equal(unreachable.privacyExposure, 'unavailable')
+  assert.ok(!JSON.stringify(unreachable).includes('private-test-token'))
+})
+
+test('Windows installer default and saved portable paths are recognized', (t) => {
+  const home = workspace(t)
+  const standard = put(join(home, 'Programs', 'ARTEX', 'tools', 'dnsx.exe'))
+  assert.equal(findArtexTool('dnsx', { env: { LOCALAPPDATA: home }, platform: 'win32' }), standard)
+  const portable = join(home, 'portable')
+  const tool = put(join(portable, 'tools', 'katana.exe'))
+  assert.equal(resolveTool('katana', { root: home, config: { platform: 'windows', env: { ARTEX_HOME: portable } }, env: { PATH: '' } }).path, tool)
+})
+
+test('ARTEX status uses an injected store, preserves custom root, and survives service reload', async () => {
+  const server = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const start = server.indexOf('function watchArtexStore(ctx)')
+  const end = server.indexOf('function installWebServer(ctx, cfg)', start)
+  assert.ok(start >= 0 && end > start)
+  const watch = new Function(server.slice(start, end) + '\nreturn watchArtexStore')()
+  let activate, cleanup
+  const ctx = new Proxy({
+    inject(keys, fn) { assert.deepEqual(keys, ['redteam']); activate = fn }
+  }, { get(target, key) {
+    if (key === 'redteam') throw Error('cannot get property "redteam" without inject')
+    return target[key]
+  } })
+  const getArtexStore = watch(ctx)
+  assert.equal(getArtexStore(), null)
+  const routeStart = server.indexOf('path: "/dsh-purge/artex",')
+  const handlerStart = server.indexOf('handler: ', routeStart) + 'handler: '.length
+  const handlerEnd = server.indexOf('\n        },\n      },', handlerStart)
+  assert.ok(routeStart >= 0 && handlerEnd > handlerStart)
+  const reads = []
+  const config = { env: {} }
+  let status, body
+  const handler = new Function('getArtexStore', 'loadPlatformConfig', 'artexLocalEnv', 'inspectArtex', 'resolveTool', 'sendJson',
+    'return (' + server.slice(handlerStart, handlerEnd) + '\n        })')(
+    getArtexStore, root => { reads.push(root); return config }, c => c.env,
+    async () => ({ ok: true, tools: [{ id: 'sample', path: '/custom/tool' }] }),
+    (id, opts) => { assert.equal(opts.root, reads.at(-1)); assert.equal(opts.config, config); return { path: '/custom/tool' } },
+    (res, code, value) => { status = code; body = value })
+  const request = { method: 'GET' }
+  await handler(request, {})
+  assert.equal(status, 503)
+  assert.equal(reads.length, 0)
+  activate({ redteam: { root: '/custom/profile' }, effect(fn) { cleanup = fn() } })
+  await handler(request, {})
+  assert.equal(status, 200)
+  assert.equal(body.tools[0].reused, true)
+  assert.deepEqual(reads, ['/custom/profile'])
+  cleanup()
+  await handler(request, {})
+  assert.equal(status, 503)
+  activate({ redteam: { root: '/new/profile' }, effect(fn) { cleanup = fn() } })
+  await handler(request, {})
+  assert.equal(status, 200)
+  assert.deepEqual(reads, ['/custom/profile', '/new/profile'])
+  cleanup()
 })
