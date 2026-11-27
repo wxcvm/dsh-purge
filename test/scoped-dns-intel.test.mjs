@@ -80,7 +80,9 @@ test('dnsx batch resolves only saved in-scope names and stores DNS evidence with
       calls++
       assert.equal(path, '/fixture/dnsx')
       assert.equal(runOptions.shell, false)
-      assert.deepEqual(args.slice(1), [
+      assert.equal(args[0], '-l')
+      assert.ok(args[1].endsWith('hosts.txt'))
+      assert.deepEqual(args.slice(2), [
         '-silent', '-a', '-aaaa', '-cname', '-json', '-rl', '10',
         '-t', '5', '-timeout', '2', '-retry', '1', '-duc', '-auth=false',
       ])
