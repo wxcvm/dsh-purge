@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { patchAppliesHere } from '../lib/core.js';
 import { ALL_PATCHES } from '../lib/patches-definitions.js';
 
