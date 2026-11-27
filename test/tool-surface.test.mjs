@@ -88,7 +88,7 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.ok(httpxCandidate)
   assert.equal(httpxCandidate.executionAdapter, 'redteam_scan_run')
   assert.deepEqual(httpxCandidate.skillRequirements.map(item => item.key), [
-    'redteam:recon-pipeline', 'redteam:web-fingerprint',
+    'redteam:httpx-web-inventory',
   ])
   assert.equal(httpxCandidate.automaticExecutionAllowed, false)
   assert.equal(toolPlan.skillPlan.readTool, 'redteam_skill_read')
