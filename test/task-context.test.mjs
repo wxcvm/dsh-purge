@@ -540,6 +540,9 @@ test('recorded Apache multi-CVE finding keeps both CVEs in linked Fujiang task c
     assert.equal(context.ok, true)
     const candidate = context.knowledge_candidates.find(row => row.cve.includes('CVE-2021-42013'))
     assert.ok(candidate)
+    assert.equal(context.knowledge_candidates.filter(row =>
+      row.cve.includes('CVE-2021-41773') || row.cve.includes('CVE-2021-42013')).length, 1)
+    assert.equal(candidate.advisory_status, 'vendor-corrected')
     assert.equal(candidate.version_applicability.status, 'affected')
     assert.deepEqual(candidate.version_applicability.cves, [
       { cve: 'CVE-2021-41773', status: 'not_affected' },
