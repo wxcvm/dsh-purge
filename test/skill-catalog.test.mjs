@@ -221,6 +221,12 @@ test('legacy high-impact Skills are quarantined and cannot grant executable guid
     'redteam:webshell-toolkit',
     'redteam:vps-reverse-shell',
     'redteam:lateral-movement',
+    'redteam:api-attack',
+    'redteam:browser-automation',
+    'redteam:kimi-webbridge',
+    'redteam:oob-verify',
+    'redteam:fofa-recon',
+    'redteam:redteam-setup',
   ]) {
     const result = readLocalSkill(key)
     assert.equal(result.quarantined, true, key)
