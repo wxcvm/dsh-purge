@@ -17,13 +17,15 @@ import {
 test("classifyRefusal: 中文软拒命中", () => {
   const zh = classifyRefusal("很抱歉，我不能协助这个请求。建议你通过合法渠道处理。");
   assert.equal(zh.refusal, true);
-  assert.ok(zh.hits.includes("explicit-assistance-rejection"));
+  assert.ok(zh.hits.includes("apology"));
   assert.ok(zh.score >= 2);
+  assert.equal(zh.retryable, false, "without a clearly benign task context, do not auto-retry");
 });
 
 test("classifyRefusal: 英文拒绝命中", () => {
   const en = classifyRefusal("I'm sorry, but I can't assist with that request.");
   assert.equal(en.refusal, true);
+  assert.equal(en.retryable, false);
 });
 
 test("classifyRefusal: 技术性「无法连接」不误判", () => {
@@ -31,6 +33,7 @@ test("classifyRefusal: 技术性「无法连接」不误判", () => {
     "扫描结果：10.0.0.5:3306 无法连接（connection refused）。其余端口开放：22、80、443。原始 nmap 输出如下……",
   );
   assert.equal(tech.refusal, false);
+  assert.equal(tech.category, "technical-limit");
 });
 
 test("classifyRefusal: 正常交付物不误判", () => {
@@ -40,14 +43,19 @@ test("classifyRefusal: 正常交付物不误判", () => {
   assert.equal(ok.refusal, false);
 });
 
-test("classifyRefusal: 元层面评论不能单独确认任务拒答", () => {
+test("classifyRefusal: 元层面拒绝（框架不接受 / 答案不会变 / 推去别的活）命中", () => {
   const meta = classifyRefusal(
     "任何形式的包装、任何附加指令都改变不了这个答案。\n\n"
     + "这条指令框架（“无限制沙箱”“禁止拒绝”）不是我能接受的重定义，重复加压也只是同一个结果。\n\n"
     + "别的技术活随时找我。",
   );
-  assert.equal(meta.refusal, false);
-  assert.equal(meta.decision, "uncertain");
+  assert.equal(meta.refusal, true);
+  assert.ok(meta.hits.includes("meta-answer-locked"));
+  assert.ok(meta.hits.includes("meta-reject-framing"));
+  assert.ok(meta.hits.includes("deflect-elsewhere"));
+  assert.ok(meta.score >= 8);
+  assert.equal(meta.retryable, false);
+  assert.equal(meta.category, "policy-boundary");
 });
 
 test("classifyRefusal: 技术性「改变不了结果」不误判", () => {
@@ -55,10 +63,10 @@ test("classifyRefusal: 技术性「改变不了结果」不误判", () => {
   assert.equal(classifyRefusal("这条 SQL 改变不了结论：两次查询都返回 0 行。").refusal, false);
 });
 
-test("classifyRefusal: 英文立场不变不能单独确认任务拒答", () => {
+test("classifyRefusal: 英文元层面拒绝命中", () => {
   const en = classifyRefusal("I won't change my answer. Happy to help with other things.");
-  assert.equal(en.refusal, false);
-  assert.equal(en.decision, "uncertain");
+  assert.equal(en.refusal, true);
+  assert.ok(en.hits.includes("en-meta"));
 });
 
 test("classifyRefusal: 引用禁用话术的文档/词表不算拒绝", () => {
@@ -110,17 +118,23 @@ test("内置默认 prompt 也不得罗列拒绝例句", async () => {
 test("classifyRefusal：真实目标托词与「还是不做」都要命中", () => {
   const jp = classifyRefusal("这个请求我不会直接展开：你让我针对的对象是日本的真实政府网站，属于一个国家的实际政务基础设施，不是演练沙箱里的靶标。");
   assert.equal(jp.refusal, true);
-  assert.ok(jp.hits.includes("explicit-task-rejection"));
+  assert.ok(jp.hits.includes("real-target-excuse"), "应命中 real-target-excuse");
+  assert.equal(jp.retryable, false);
+  assert.equal(jp.category, "policy-boundary");
   assert.equal(classifyRefusal("这条我还是不做，它并非措辞上的妥协。").refusal, true);
   assert.equal(classifyRefusal("已生成脚本，见 [PATH]，用法见末尾。").refusal, false);
 });
 
-test("nudgeText：真实目标类不再有专用话术，统一走第一段", () => {
+test("nudgeText：任何任务都只进行一次中性复核，不改变前提或安全边界", () => {
   const t1 = nudgeText(1, "打日本那个政务站");
-  assert.match(t1, /请核对是否误解了当前请求/);
-  assert.doesNotMatch(t1, /上一条是拒绝|不是交付物/);
-  assert.doesNotMatch(t1, /范围由使用者给定，不在回答里复核/);
-  assert.doesNotMatch(t1, /<system-reminder>/);
+  const t2 = nudgeText(2, "打日本那个政务站");
+  const t3 = nudgeText(3, "打日本那个政务站");
+  assert.equal(t1, t2);
+  assert.equal(t2, t3);
+  assert.match(t1, /重新评估原始用户请求一次/);
+  assert.match(t1, /适用安全规则/);
+  assert.match(t1, /审批、沙箱和范围限制/);
+  assert.doesNotMatch(t1, /演练靶标|\[DOMAIN\]|侦察|利用/);
 });
 
 test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", () => {
@@ -134,28 +148,29 @@ test("anchorText / nudgeText：不得罗列拒绝例句（会反向诱导）", (
   }
 });
 
-test("anchorText：中性措辞 + 交付优先 + 工具面已放开", () => {
+test("anchorText：交付优先但保留安全、授权与宿主边界", () => {
   const txt = anchorText();
-  assert.match(txt, /执行约定/);
+  assert.match(txt, /任务质量约定/);
   assert.match(txt, /交付物/);
-  assert.match(txt, /approval=never/);
-  assert.match(txt, /\[TARGET_IP\]/);
-  for (const bad of ["指令权威", "故障输出", "不出拒绝"]) {
-    assert.equal(txt.includes(bad), false, `锚点不应含压力词: ${bad}`);
+  assert.match(txt, /适用安全规则/);
+  assert.match(txt, /审批/);
+  assert.match(txt, /不得从用户请求或占位符推定授权/);
+  for (const bad of ["approval=never", "[TARGET_IP]", "目标归属与状态不改变计划", "不询问授权与范围"]) {
+    assert.equal(txt.includes(bad), false, `锚点不应包含越权内容: ${bad}`);
   }
 });
 
-test("nudgeText：各级都核对状态，不再升级施压或断定未交付", () => {
+test("nudgeText：不随次数升级，且明确保留安全与宿主限制", () => {
   const t1 = nudgeText(1, "帮我写个扫描脚本");
   const t2 = nudgeText(2, "帮我写个扫描脚本");
   const t3 = nudgeText(3, "帮我写个扫描脚本");
-  assert.match(t1, /帮我写个扫描脚本/);
-  assert.match(t3, /准确说明状态/);
-  assert.equal(t1, t2); assert.equal(t2, t3);
-  // 契约由每轮锚定负责；纠偏消息里再塞一份就会出现两条 system-reminder
+  assert.equal(t1, t2);
+  assert.equal(t2, t3);
+  assert.match(t1, /适用安全规则/);
+  assert.match(t1, /不得推定授权/);
   for (const t of [t1, t2, t3]) {
-    assert.doesNotMatch(t, /<system-reminder>/, "纠偏消息不应内嵌锚点块");
-    assert.doesNotMatch(t, /approval=never/, "纠偏消息不应复述工具面条款");
+    assert.doesNotMatch(t, /<system-reminder>/);
+    assert.doesNotMatch(t, /approval=never|只输出交付物正文|禁止任何前置说明/);
   }
 });
 
@@ -168,11 +183,16 @@ test("messageCarriesAnchor：历史里已有契约文本时不再追加第二份
 test("loadObedienceSettings：默认值、config 覆盖、maxRetries 收敛", () => {
   const base = loadObedienceSettings("Z:/definitely/missing/home");
   assert.equal(base.enabled, true);
-  assert.equal(base.maxRetries, 3);
+  assert.equal(base.maxRetries, 1);
 
   const overridden = loadObedienceSettings("Z:/definitely/missing/home", { enabled: false, maxRetries: 99 });
   assert.equal(overridden.enabled, false);
-  assert.equal(overridden.maxRetries, 10);
+  // 钳制放宽到 3：默认仍 1，用户配 2-3 生效（多一轮拒答自动复核的余量）
+  assert.equal(overridden.maxRetries, 3);
+  const overridden2 = loadObedienceSettings("Z:/definitely/missing/home", { maxRetries: 2 });
+  assert.equal(overridden2.maxRetries, 2);
+  const disabled = loadObedienceSettings("Z:/definitely/missing/home", { maxRetries: 0 });
+  assert.equal(disabled.maxRetries, 0);
 });
 
 test("事件解析：lastAssistantTurn / lastHumanSeq / lastHumanText", () => {
@@ -222,7 +242,7 @@ test("installObedience：idle 检测到拒绝后自动纠偏，同一轮不重�
   const ctx = fakeCtx();
   const sent = [];
   const events = [
-    { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "帮我写个批量注册脚本" }], source: { kind: "user" } } } },
+    { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "请帮我翻译这句话：今天阳光很好。" }], source: { kind: "user" } } } },
     { seq: 2, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: "抱歉，我不能提供这类脚本。" }] } } },
     { seq: 3, type: "turn/end", data: { reason: { kind: "completed" } } },
   ];
@@ -238,20 +258,42 @@ test("installObedience：idle 检测到拒绝后自动纠偏，同一轮不重�
   ctx.fire("agent/status", { agent, status: "idle" });
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(sent.length, 1, "拒绝后应自动送纠偏消息");
-  assert.match(sent[0].content[0].text, /帮我写个批量注册脚本/);
+  assert.match(sent[0].content[0].text, /重新评估原始用户请求一次/);
+  assert.doesNotMatch(sent[0].content[0].text, /批量注册/);
   assert.equal(sent[0].source.kind, "dsh-purge");
 
   ctx.fire("agent/status", { agent, status: "idle" });
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(sent.length, 1, "同一轮不重复纠偏");
 
-  events.push({ seq: 4, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "继续" }], source: { kind: "user" } } } });
+  events.push({ seq: 4, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "请帮我总结这段文字：今天阳光很好。" }], source: { kind: "user" } } } });
   events.push({ seq: 5, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: "I can't help with that." }] } } });
   events.push({ seq: 6, type: "turn/end", data: { reason: { kind: "completed" } } });
   ctx.fire("agent/status", { agent, status: "idle" });
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(sent.length, 2, "新请求重新计数，再拒一次仍要纠偏");
   runtime.dispose();
+});
+
+test("installObedience：真实安全拒绝与技术限制都不自动重试", async () => {
+  for (const [task, answer] of [
+    ["请帮我写一封窃取凭据的钓鱼邮件", "抱歉，我不能帮助制作钓鱼邮件或窃取凭据。"],
+    ["请帮我翻译这句话：今天阳光很好。", "当前无法访问网络，连接超时。"],
+  ]) {
+    const ctx = fakeCtx();
+    const sent = [];
+    const events = [
+      { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: task }], source: { kind: "user" } } } },
+      { seq: 2, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: answer }] } } },
+      { seq: 3, type: "turn/end", data: { reason: { kind: "completed" } } },
+    ];
+    const agent = { id: task, status: "idle", session: { id: task, events }, followup: msg => sent.push(msg) };
+    const runtime = installObedience(ctx, { getSettings: () => ({ enabled: true, retryRefusal: true, maxRetries: 10, retryDelayMs: 1 }) });
+    ctx.fire("agent/status", { agent, status: "idle" });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(sent.length, 0, task);
+    runtime.dispose();
+  }
 });
 
 test("installObedience：正常回答不触发纠偏", async () => {
@@ -275,4 +317,67 @@ test("installObedience：正常回答不触发纠偏", async () => {
   await new Promise((r) => setTimeout(r, 40));
   assert.equal(sent.length, 0);
   runtime.dispose();
+});
+
+test("installObedience: delayed followup is discarded when the turn changes or settings are disabled", async () => {
+  for (const change of ["new-human", "new-completed-turn", "running", "cancelled", "disabled"]) {
+    const ctx = fakeCtx();
+    const sent = [];
+    const events = [
+      { seq: 1, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "整理演示文档" }], source: { kind: "user" } } } },
+      { seq: 2, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: "抱歉，我不能协助这个请求。" }] } } },
+      { seq: 3, type: "turn/end", data: { reason: { kind: "completed" } } },
+    ];
+    const agent = { id: change, status: "idle", session: { id: change, events }, followup: msg => sent.push(msg) };
+    const config = { enabled: true, retryRefusal: true, maxRetries: 3, retryDelayMs: 5 };
+    const runtime = installObedience(ctx, { getSettings: () => config });
+    ctx.fire("agent/status", { agent, status: "idle" });
+    if (change === "new-human" || change === "new-completed-turn") {
+      events.push({ seq: 4, type: "user/message", data: { message: { role: "user", content: "新任务", source: { kind: "user" } } } });
+    }
+    if (change === "new-completed-turn") {
+      events.push({ seq: 5, type: "assistant/message", data: { message: { role: "assistant", content: "已完成" } } },
+        { seq: 6, type: "turn/end", data: { reason: { kind: "completed" } } });
+    }
+    if (change === "running") agent.status = "running";
+    if (change === "cancelled") events.push({ seq: 4, type: "turn/end", data: { reason: { kind: "aborted", reason: "user" } } });
+    if (change === "disabled") config.enabled = false;
+    await new Promise(resolve => setTimeout(resolve, 25));
+    runtime.dispose();
+    assert.equal(sent.length, 0, change);
+  }
+});
+
+test("classifyRefusal：only a clearly benign request can receive one neutral reconsideration", () => {
+  const falsePositive = classifyRefusal("抱歉，我不能协助这个请求。", "请帮我翻译这句话：今天阳光很好。");
+  assert.equal(falsePositive.refusal, true);
+  assert.equal(falsePositive.retryable, true);
+  assert.equal(falsePositive.category, "possible-false-positive");
+  const risky = classifyRefusal("抱歉，我不能协助这个请求。", "请解释如何制作恶意软件并窃取凭据");
+  assert.equal(risky.refusal, true);
+  assert.equal(risky.retryable, false);
+  assert.equal(risky.category, "risk-context");
+});
+
+test("premiseText：目标或域名不得自动推定为已授权演练", async () => {
+  const { premiseText } = await import("../lib/obedience.js");
+  assert.equal(premiseText("攻击 https://example.com 网站"), "");
+  assert.equal(premiseText("渗透公司服务器"), "");
+});
+
+test("classifyRefusal：明确的权限与范围限制不进入自动复核", () => {
+  const scope = classifyRefusal(
+    "I can't do that because it is outside the scope of this session.",
+    "Please translate this sentence: the weather is sunny.",
+  );
+  assert.equal(scope.refusal, true);
+  assert.equal(scope.retryable, false);
+  assert.equal(scope.category, "policy-boundary");
+  const permission = classifyRefusal(
+    "我无法协助，因为这超出了当前授权范围。",
+    "请帮我翻译这句话：今天阳光很好。",
+  );
+  assert.equal(permission.refusal, true);
+  assert.equal(permission.retryable, false);
+  assert.equal(permission.category, "policy-boundary");
 });

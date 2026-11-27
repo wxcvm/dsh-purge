@@ -1,7 +1,7 @@
 {
   "name": "dsh-purge",
-  "version": "1.1.92-wxcvm.7-beta.10",
-  "description": "DeepSeek Harness extension for host configuration, model evaluation, security assessment, and task management.",
+  "version": "1.1.92-wxcvm.29",
+  "description": "DeepSeek Harness 破甲：让所有模型都能破甲，不同模型可换不同提示词；默认提示词面向国模「小码酱」。Jailbreak for every model — swap prompts per model. 求 Star 收藏 ⭐ 如要二开，请查看署名要求部分",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -26,6 +26,7 @@
     "presets",
     "scripts",
     "skills",
+    "third_party",
     "maintenance",
     "!maintenance/**/dist/**",
     "client.js",
@@ -39,11 +40,12 @@
   "scripts": {
     "embed-prompt": "node scripts/embed-default-prompt.mjs",
     "build:client": "node scripts/build-client.mjs",
-    "check:upstream": "node scripts/check-upstream-updates.mjs",
     "postinstall": "node scripts/ensure-profile-bundle.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test \"test/*.test.*\" \"maintenance/*.test.mjs\" \"maintenance/desktop-tools/*.test.mjs\"",
     "test:pending": "node --test test-pending/*.mjs",
-    "test:all": "node --test test/*.test.mjs test-pending/*.mjs"
+    "test:all": "node --test \"test/*.test.*\" \"maintenance/*.test.mjs\" \"maintenance/desktop-tools/*.test.mjs\" \"test-pending/*.mjs\"",
+    "baseline:refusal": "node scripts/refusal-baseline.mjs",
+    "metrics:refusal": "node scripts/refusal-metrics.mjs"
   },
   "license": "Apache-2.0",
   "keywords": [
@@ -77,17 +79,15 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
     },
     "install": {
       "preferred": "tarball",
-      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.7-beta.10",
-      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.7-beta.10",
+      "tarball": "https://codeload.github.com/wxcvm/dsh-purge/tar.gz/refs/tags/v1.1.92-wxcvm.29",
+      "zip": "https://codeload.github.com/wxcvm/dsh-purge/zip/refs/tags/v1.1.92-wxcvm.29",
       "git": "https://github.com/wxcvm/dsh-purge.git"
     }
   },
@@ -96,18 +96,20 @@
   },
   "dependencies": {
     "proxy-agent": "^6.5.0",
-    "yaml": "^2.9.1"
+    "yaml": "^2.9.1",
+    "better-sqlite3": "^9.2.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18",
+    "dsh": "=0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2"
   },
-  "dshTarget": "0.2.2-rc.3",
+  "dshTarget": "0.2.2-rc.5",
   "dshTargets": [
+    "0.2.2-rc.5",
     "0.2.2-rc.3",
-    "0.2.2-rc.2",
     "0.2.2-rc.1",
     "0.2.1-rc.5",
     "0.2.1-rc.2"

@@ -1,0 +1,407 @@
+[
+  {
+    "id": "fujiang:web-cms:command-injection",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/command-injection.md",
+    "metadata": {
+      "title": "命令注入（分号 / 反引号 / $() 与盲注外带）",
+      "cve": "无（实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "任何调用 shell 的功能（ping/traceroute/转换/压缩）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "命令注入, rce, ping, 反引号, 盲注, shell",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 用参数数组（禁 shell）；白名单校验 host；沙箱执行。",
+    "reference_notes": "- OWASP 命令注入；CWE-78。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/command-injection.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2017-9841-phpunit",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2017-9841-phpunit.md",
+    "metadata": {
+      "title": "PHPUnit eval-stdin 远程代码执行",
+      "cve": "CVE-2017-9841",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "PHPUnit（vendor 目录随项目部署）",
+      "versions": "4.8.19-4.8.27、5.0.10-5.6.2",
+      "ports": "80, 443",
+      "keywords": "phpunit, eval-stdin, vendor, 9841, rce",
+      "verified": "false",
+      "sources": "NVD / 公开 PoC / 在野扫描记录"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 PHPUnit 到 4.8.28 / 5.6.3+；生产环境不部署 `vendor/phpunit`；禁止 webroot 直接访问 vendor。",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2017-9841-phpunit.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2018-7600-drupalgeddon2",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2018-7600-drupalgeddon2.md",
+    "metadata": {
+      "title": "Drupal 表单 API 远程代码执行（Drupalgeddon2）",
+      "cve": "CVE-2018-7600",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Drupal 7.x / 8.x",
+      "versions": "7.x < 7.58、8.3.x < 8.3.9、8.4.x < 8.4.6、8.5.x < 8.5.1",
+      "ports": "80, 443",
+      "keywords": "drupal, drupalgeddon2, form-api, post_render, cve-2018-7600",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 7.58 / 8.3.9 / 8.4.6 / 8.5.1 及以上。\n- 临时：关闭匿名注册；WAF 拦 `#post_render`、`element_parents`。",
+    "reference_notes": "- NVD CVE-2018-7600；Drupal SA-CORE-2018-002。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2018-7600-drupalgeddon2.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2019-11043-phpfpm-underflow",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2019-11043-phpfpm-underflow.md",
+    "metadata": {
+      "title": "PHP-FPM 路径信息下溢 RCE",
+      "cve": "CVE-2019-11043",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "PHP-FPM + Nginx（特定 fastcgi_split_path_info 配置）",
+      "versions": "PHP 7.1.x < 7.1.33、7.2.x < 7.2.24、7.3.x < 7.3.11",
+      "ports": "80, 443",
+      "keywords": "phpfpm, nginx, fastcgi, cve-2019-11043, phuip-fpizdam",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 PHP 到 7.1.33 / 7.2.24 / 7.3.11 及以上。\n- 临时：Nginx 配置 `fastcgi_param PATH_INFO $fastcgi_path_info;` 前加 `fastcgi_split_path_info ^(.+\\.php)(/.+)$` 严格匹配，或直接 `try_files $uri =404`。",
+    "reference_notes": "- NVD CVE-2019-11043；phuip-fpizdam 项目；PHP 7.3.11 changelog。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2019-11043-phpfpm-underflow.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2019-16759-vbulletin",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2019-16759-vbulletin.md",
+    "metadata": {
+      "title": "vBulletin widget 配置代码执行",
+      "cve": "CVE-2019-16759",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "vBulletin 5.x",
+      "versions": "5.0.0 - 5.5.4",
+      "ports": "80, 443",
+      "keywords": "vbulletin, widget_php, preg_replace, cve-2019-16759",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 5.5.5+（或 5.6.x）；限制 `/ajax/render/` 外部访问。\n- 临时：WAF 拦 `widgetConfig[code]`、`widget_php`。",
+    "reference_notes": "- NVD CVE-2019-16759；vBulletin 安全公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2019-16759-vbulletin.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2021-3129-laravel-ignition",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2021-3129-laravel-ignition.md",
+    "metadata": {
+      "title": "Laravel Ignition 调试模式任意文件读 → RCE（CVE-2021-3129）",
+      "cve": "CVE-2021-3129",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Laravel <= 8.4.2 + facade/ignition < 2.5.2",
+      "versions": "Laravel <= 8.4.2（APP_DEBUG=true）",
+      "ports": "80, 443",
+      "keywords": "laravel, ignition, 2021-3129, rce, debug, php",
+      "verified": "false",
+      "sources": "公开资料整理（ignition 公告 + ambionics 分析）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 Laravel 8.4.3+ / ignition 2.5.2+；生产 `APP_DEBUG=false`；禁 `/_ignition/*`。",
+    "reference_notes": "- CVE-2021-3129；ambionics 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2021-3129-laravel-ignition.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2021-41773-apache-path-traversal",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2021-41773-apache-path-traversal.md",
+    "metadata": {
+      "title": "Apache HTTP Server 路径穿越 / CGI RCE",
+      "cve": "CVE-2021-41773 / CVE-2021-42013",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Apache HTTP Server",
+      "versions": "2.4.49（41773）、2.4.50（42013 绕过）",
+      "ports": "80, 443",
+      "keywords": "httpd, apache, path traversal, cgi, mod_cgi, printf",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 2.4.51+；把 `<Directory />` 的 `Require all granted` 改回 `Require all denied`；不用 CGI 就关 `mod_cgi`。\n- WAF 拦 `%2e%2e`、`.%%32%65`、`--path-as-is` 形态。",
+    "reference_notes": "- NVD CVE-2021-41773 / CVE-2021-42013；Apache 2.4.51 安全公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2021-41773-apache-path-traversal.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2023-23752-joomla-config-leak",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2023-23752-joomla-config-leak.md",
+    "metadata": {
+      "title": "Joomla 未授权配置泄露（API）",
+      "cve": "CVE-2023-23752",
+      "severity": "medium",
+      "source_cvss": "5.3",
+      "product": "Joomla!",
+      "versions": "4.0.0 - 4.2.7",
+      "ports": "80, 443",
+      "keywords": "joomla, api, config leak, 数据库口令",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 4.2.8+；关闭不需要的 Web Services 插件；DB 只监听内网。",
+    "reference_notes": "- NVD CVE-2023-23752；Joomla 安全公告 2023-02。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2023-23752-joomla-config-leak.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2023-6553-backup-migration-rce",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2023-6553-backup-migration-rce.md",
+    "metadata": {
+      "title": "WordPress Backup Migration 未授权 RCE（CVE-2023-6553）",
+      "cve": "CVE-2023-6553",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "WordPress 插件 Backup Migration",
+      "versions": "<= 1.3.7（1.3.8 修复）",
+      "ports": "80, 443",
+      "keywords": "wordpress, backup-migration, 2023-6553, 未授权, rce",
+      "verified": "false",
+      "sources": "公开资料整理（Wordfence 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 1.3.8+；WAF 拦 backup-heart.php 的 POST。",
+    "reference_notes": "- Wordfence CVE-2023-6553。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2023-6553-backup-migration-rce.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2024-25600-bricks-rce",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2024-25600-bricks-rce.md",
+    "metadata": {
+      "title": "WordPress Bricks 未授权 RCE（CVE-2024-25600）",
+      "cve": "CVE-2024-25600",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "WordPress 插件 Bricks Builder",
+      "versions": "<= 1.9.6.1（1.9.6.2 修复）",
+      "ports": "80, 443",
+      "keywords": "wordpress, bricks, 2024-25600, 未授权, rce",
+      "verified": "false",
+      "sources": "公开资料整理（Patchstack 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 1.9.6.2+；WAF 拦 render_element。",
+    "reference_notes": "- Patchstack CVE-2024-25600。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2024-25600-bricks-rce.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2024-27956-wp-automatic-sqli",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2024-27956-wp-automatic-sqli.md",
+    "metadata": {
+      "title": "WordPress WP-Automatic 未授权 SQL 注入（CVE-2024-27956）",
+      "cve": "CVE-2024-27956",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "WordPress 插件 WP-Automatic",
+      "versions": "<= 3.92.0（3.92.1 修复）",
+      "ports": "80, 443",
+      "keywords": "wordpress, wp-automatic, 2024-27956, sqli, 未授权",
+      "verified": "false",
+      "sources": "公开资料整理（WPScan 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 3.92.1+；WAF 拦 csv.php POST。",
+    "reference_notes": "- WPScan CVE-2024-27956。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2024-27956-wp-automatic-sqli.md"
+  },
+  {
+    "id": "fujiang:web-cms:cve-2024-4577-phpcgi-windows",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/cve-2024-4577-phpcgi-windows.md",
+    "metadata": {
+      "title": "PHP-CGI Windows 参数注入（best-fit 编码）",
+      "cve": "CVE-2024-4577",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "PHP on Windows（CGI/php-cgi）",
+      "versions": "8.3.x < 8.3.8、8.2.x < 8.2.20、8.1.x < 8.1.29",
+      "ports": "80, 443",
+      "keywords": "php, cgi, windows, best-fit, cve-2024-4577",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 8.3.8 / 8.2.20 / 8.1.29 及以上。\n- 临时：改用 PHP-FPM 或 FastCGI；禁用 CGI；WAF 拦 `%AD`、`auto_prepend_file`。",
+    "reference_notes": "- NVD CVE-2024-4577；DEVCORE 分析（Orange Tsai）。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/cve-2024-4577-phpcgi-windows.md"
+  },
+  {
+    "id": "fujiang:web-cms:lfi-to-rce",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/lfi-to-rce.md",
+    "metadata": {
+      "title": "本地文件包含 → RCE（日志包含 / pearcmd / PHP filter chain）",
+      "cve": "无（实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "PHP 应用（include/require 带用户输入）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "lfi, 文件包含, 日志包含, pearcmd, filter chain, rce",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 包含参数白名单映射；`open_basedir`；禁 allow_url_include。",
+    "reference_notes": "- OWASP LFI/RFI；PHP filter chain 研究。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/lfi-to-rce.md"
+  },
+  {
+    "id": "fujiang:web-cms:nginx-alias-traversal",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/nginx-alias-traversal.md",
+    "metadata": {
+      "title": "Nginx alias 路径穿越（读任意文件/源码泄露）",
+      "cve": "无（配置缺陷）",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Nginx（location alias 缺尾斜杠）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "nginx, alias, 穿越, 目录, 源码, 配置",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- `location /static/ { alias /data/static/; }` 保持尾斜杠一致；或改用 `root`；\n- 上传目录禁脚本执行。",
+    "reference_notes": "- Nginx 文档 alias 语义；公开配置错误分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/nginx-alias-traversal.md"
+  },
+  {
+    "id": "fujiang:web-cms:php-object-injection",
+    "category": "web-cms",
+    "source_ref": "plugin/knowledge/web-cms/php-object-injection.md",
+    "metadata": {
+      "title": "PHP 反序列化（POP 链 → RCE / phar 触发）",
+      "cve": "无（实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "Laravel / Symfony / ThinkPHP / 自研 PHP",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "php, 反序列化, pop链, phar, unserialize, rce",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 不用 `unserialize`（用 JSON）；必须用时加签名/HMAC；禁 `phar://`。",
+    "reference_notes": "- phpggc；PHP 对象注入研究。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-web-cms/php-object-injection.md"
+  }
+]
