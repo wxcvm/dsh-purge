@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import YAML from "yaml";
 
 import { ensureProfileBodyInsert, profileHasPurgeBodyInsertAst, INSERT_BLOCK } from "../lib/profile-insert.js";
 
@@ -66,4 +67,40 @@ test("removeProfileBodyInsert 与 AST 判定对同一文件互相印证", async 
   assert.equal(removed.removed, 1);
   // 摘干净后，AST 判定必须为 false，确保"卸载→再装"不会死循环
   assert.equal(profileHasPurgeBodyInsertAst(read(dir) || ""), false);
+});
+
+
+test("official alpha.2 empty and nonempty flow overlays remain valid ordered patch lists", t => {
+  for (const [before, count] of [
+    ["# native description\n[]\n", 1],
+    ["# native description\n[{ id: existing, disabled: true }]\n", 2],
+  ]) {
+    const dir = mkProfile(before);
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    assert.equal(ensureProfileBodyInsert(dir).wrote, true);
+    const after = read(dir);
+    const list = YAML.parse(after);
+    assert.match(after, /# native description/);
+    assert.equal(list.length, count);
+    if (count > 1) assert.deepEqual(list[0], { id: "existing", disabled: true });
+    assert.equal(list.at(-1).insert[0].id, "dsh-purge");
+    assert.equal(ensureProfileBodyInsert(dir).wrote, false);
+    assert.equal(read(dir), after);
+  }
+});
+
+test("only the exact previously generated malformed empty overlay is repaired", t => {
+  const broken = "# native description\n[]\n\n" + INSERT_BLOCK;
+  for (const [before, repaired] of [[broken, true], [broken + "- id: extra\n", false],
+    ["unrelated: setting\n", false]]) {
+    const dir = mkProfile(before);
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const r = ensureProfileBodyInsert(dir);
+    assert.equal(r.wrote, repaired);
+    assert.equal(r.ok, repaired);
+    if (repaired) {
+      assert.equal(read(dir), "# native description\n" + INSERT_BLOCK);
+      assert.equal(YAML.parse(read(dir))[0].insert[0].id, "dsh-purge");
+    } else assert.equal(read(dir), before);
+  }
 });
