@@ -24,7 +24,7 @@ test('records positive and negative outcomes in the existing shared knowledge sc
   const serialized=JSON.stringify(stored)
   assert.doesNotMatch(serialized,/192\.0\.2\.9|2001:db8::1|private\.example|internal-node\.lan|NEVER_STORE|engagement-a/)
   assert.match(stored.summary,/\[host\]|\[url\]/)
-  assert.deepEqual(JSON.parse(stored.context_json), { environment_id: 'wsl:Ubuntu-24.04', transport: 'wsl', tool_id: 'nmap', attempted: true })
+  assert.deepEqual(JSON.parse(stored.context_json), { environment_id: 'wsl:[host]', transport: 'wsl', tool_id: 'nmap', attempted: true })
   const duplicate=recordExperience(db,'engagement-a',lesson)
   assert.equal(duplicate.recorded,false);assert.equal(duplicate.duplicate,true);assert.equal(duplicate.occurrences,1)
   const repeated=recordExperience(db,'engagement-b',{...lesson,evidence_ref:'scan:run-2'})
