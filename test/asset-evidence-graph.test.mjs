@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RedteamStore } from '../lib/redteam/store-core.js'
+import { dispatch, RedteamStore } from '../lib/redteam/store-core.js'
 
 test('asset graph includes aliases, services, fingerprints and stored relations without raw evidence', t => {
   const home = mkdtempSync(join(tmpdir(), 'purge-asset-graph-'))
@@ -81,4 +81,8 @@ test('asset graph includes aliases, services, fingerprints and stored relations 
   assert.ok(scoped.nodes.some(item => item.id === 'asset:' + first.id))
   assert.equal(scoped.nodes.some(item => item.id === 'asset:' + second.id), false)
   assert.equal(scoped.edges.some(edge => edge.relation === 'shares_cert'), false)
+  const bounded = dispatch(store, { op: 'graph', engagement: id, cidr: '192.0.2.0/24', maxNodes: 1 })
+  assert.equal(bounded.ok, false)
+  assert.match(bounded.error, /图谱节点过多/)
+  assert.ok(Array.isArray(bounded.segments))
 })
