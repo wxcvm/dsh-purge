@@ -164,7 +164,7 @@ test('SSH Kali httpx probe tries only catalogued Linux aliases', async (t) => {
         return done(Object.assign(new Error('remote command missing'), { code: 127 }), '', 'not found')
       }
       assert.equal(remote, 'pd-httpx -version')
-      done(null, 'httpx 1.6.0\\n', '')
+      done(null, 'httpx 1.6.0\n', '')
     },
   })
   assert.deepEqual(calls, ['httpx-toolkit -version', 'pd-httpx -version'])
