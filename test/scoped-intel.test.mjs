@@ -11,7 +11,7 @@ const store = (scope = [ip]) => ({
   listEngagements: () => [{ id: 'lab', scope }],
   activeEngagementId: () => 'lab',
 })
-const reply = body => ({ ok: true, json: async () => body })
+const reply = body => ({ ok: true, json: async () => body, text: async () => JSON.stringify(body) })
 
 test('InternetDB is passive and deduplicates ports without assuming transport', () => {
   const result = normalizeIntelHost('internetdb', {
