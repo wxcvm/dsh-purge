@@ -9,11 +9,14 @@ const end = client.indexOf("function SettingsRoot(", start);
 assert.ok(start > 0 && end > start, "ordinary prompt evidence exists in client");
 const context = vm.createContext({ h: (tag, props, ...children) => ({ tag, props, children }) });
 vm.runInContext(client.slice(start, end), context);
-const view = (report, unavailable = false) => context.PromptAssemblyEvidence({ report, unavailable });
+const scope = { scope: "session-attempt", sessionId: "selected-a" };
+const view = (report, unavailable = false, sessionId = "selected-a") =>
+  context.PromptAssemblyEvidence({ report, sessionId, unavailable });
 
 test("ordinary prompt evidence separates assembly observation and unverified network delivery", () => {
   const report = {
-    route: "router", stage: "assembled", delivery: "unexpected-success-claim",
+    ...scope, route: "router", stage: "assembled", delivery: "unexpected-success-claim",
+    requestBoundary: "stream-start-observed",
     at: "2026-11-20T19:22:58.000Z", routeId: "test-internal-rule",
   };
   const tree = view(report);
@@ -21,20 +24,23 @@ test("ordinary prompt evidence separates assembly observation and unverified net
   assert.equal(tree.children[0], "最近组装：已组装");
   assert.equal(tree.children[1].tag, "time");
   assert.equal(tree.children[1].props.dateTime, report.at);
-  assert.equal(tree.children[2].trim(), "· 模型投递：未验证");
-  assert.match(JSON.stringify(tree), /组装不等于模型收到/);
+  assert.equal(tree.children[2].trim(), "· 已观察请求起点");
+  assert.equal(tree.children[3].trim(), "· 模型投递：未验证");
+  assert.match(JSON.stringify(tree), /不代表当前草稿、请求最终正文或远端投递/);
   assert.doesNotMatch(JSON.stringify(tree), /unexpected-success-claim|test-internal-rule/);
 });
 
 test("disabled, missing, and foreign observations never pass for effective ordinary prompt settings", () => {
-  const ordinary = stage => view({ route: "router", stage, at: "invalid" });
+  const ordinary = stage => view({ ...scope, route: "router", stage, at: "invalid" });
   assert.equal(ordinary("no-candidate").children[0], "最近组装：本次没有候选内容");
   assert.match(ordinary("candidate-dropped").children[0], /未进入组装结果/);
   assert.match(ordinary("assembled-not-leading").children[0], /位置不符合预期/);
   assert.equal(ordinary("toString").children[0], "最近组装：结果未识别");
   assert.equal(ordinary("assembled").children[1], null);
-  assert.match(view(null).children[0], /尚未观测/);
-  assert.match(view({ route: "other-internal-route", stage: "assembled" }).children[0], /不是普通会话记录/);
+  assert.match(view(null).children[0], /未观测/);
+  assert.match(view({ route: "router", stage: "assembled" }).children[0], /未观测/);
+  assert.match(view({ ...scope, route: "router", stage: "assembled" }, false, "selected-b").children[0], /未观测/);
+  assert.match(ordinary("native-complete").children[0], /原生完整段/);
   assert.equal(view({ route: "router", stage: "assembled" }, true).children[0], "最近组装：暂时无法读取");
 });
 

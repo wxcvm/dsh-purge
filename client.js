@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4d7d5168211fb38a";
+		const CLIENT_BUILD_ID = "30160f94f5971e89";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -5000,15 +5000,15 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
                 setModelCatalog(Array.isArray(response.modelPromptCatalog)
                     ? response.modelPromptCatalog.filter(item => item && typeof item.id === "string"
                         && typeof item.text === "string") : null);
-                setRoutingDiag(response.lastAssembly || null);
                 setObservedTargets(Array.isArray(response.observedTargets) ? response.observedTargets : []);
                 setLoadError("");
                 const confirmed = pendingReadback.current;
                 pendingReadback.current = null;
                 if (confirmed?.profile) {
                     const submitted = confirmed.profile;
-                    const savedRevision = response.profiles.find(p => p.id === submitted.id)?.revision;
-                    setDrafts(current => {
+                    const saved = response.profiles.find(p => p.id === submitted.id);
+                    const savedRevision = saved?.revision;
+                    if (saved && (confirmed.revision === undefined || savedRevision === confirmed.revision)) setDrafts(current => {
                         const draft = current[submitted.id];
                         if (!draft) return current;
                         if (draft !== submitted) {
@@ -5060,7 +5060,11 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
                 return reload();
             };
             const refreshSettings = async () => {
-                if (await reload()) setNotice("已重新读取设置和本机记录。未提交的编辑仍保留。");
+                const selectedRevision = sessionRead.current;
+                if (await reload()) {
+                    if (sessionId && selectedRevision === sessionRead.current) await showLock(sessionId);
+                    setNotice("已重新读取设置和本机记录。未提交的编辑仍保留。");
+                }
             };
 			useEffect(() => { reload(); }, [reload]);
 			const perform = async (op, payload, savedDraft) => {
@@ -5074,10 +5078,19 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
                         if (op === "lock" || op === "unlock") setSessionLock(response.sessionLock);
                         if (op === "pause" || op === "resume") setSessionOverrides(response.sessionOverrides || {});
                     }
-                    if (op === "save" && savedDraft) pendingReadback.current = {
-                        profile: savedDraft,
-                        authoritative: Array.isArray(response.profiles) && Boolean(response.routingSettings),
-                    };
+                    if (op === "save" && savedDraft) {
+                        const receipt = response.saveReceipt;
+                        if (savedDraft.id !== "redteam" && Object.hasOwn(response, "saveReceipt") &&
+                            (receipt?.id !== savedDraft.id || typeof receipt.revision !== "string" ||
+                            !response.profiles?.some(p => p.id === receipt.id && p.revision === receipt.revision))) {
+                            setNotice("写入已返回，但没有匹配的保存回执；草稿已保留，请重新读取核对。");
+                            return;
+                        }
+                        pendingReadback.current = {
+                            profile: savedDraft, revision: receipt?.revision,
+                            authoritative: Array.isArray(response.profiles) && Boolean(response.routingSettings),
+                        };
+                    }
                     const savedMessage = op === "delete" ? "规则已删除" : op === "pause" ? "当前会话已暂停这条规则"
                         : op === "resume" ? "已恢复按规则自动选择" : "已保存";
                     const readBack = await readAfterWrite(response);
@@ -5172,7 +5185,13 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
 					if (!response?.ok) throw new Error(response?.error || "读取会话设置失败");
 					setSessionLock(response.sessionLock || null);
 					setSessionOverrides(response.sessionOverrides || {});
-				} catch (error) { if (request === sessionRead.current) setNotice(explainError(error)); }
+                    setRoutingDiag(response.sessionAssembly?.sessionId === id ? response.sessionAssembly : null);
+				} catch (error) {
+                    if (request === sessionRead.current) {
+                        setRoutingDiag(null);
+                        setNotice(explainError(error));
+                    }
+                }
 			};
             const changeSession = id => {
                 ++sessionRead.current;
@@ -5180,6 +5199,7 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
                 setSessionId(id);
                 setSessionLock(null);
                 setSessionOverrides({});
+                setRoutingDiag(null);
             };
 			const selectedSession = () => {
 				const id = currentSessionId(rewindSessions);
@@ -5356,7 +5376,7 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
                             || !Object.hasOwn(routingEdits, "upstreamSafeBackup"),
                             onClick: () => saveRouting(["upstreamSafeBackup"]) }, "保存副提示词方案"),
                         h("p", { className: "dshp-hint" }, "副方案资源是随包封装的只读默认提示词，不直接编辑加密资源。要编写自己的专属正文，请使用下面的全局或局部规则。"))),
-                h(PromptAssemblyEvidence, { report: routingDiag, unavailable: Boolean(loadError) }),
+                h(PromptAssemblyEvidence, { report: routingDiag, sessionId, unavailable: Boolean(loadError) }),
                 h("section", { className: "dshp-model-family-panel", style: panel, "aria-label": "模型专属提示词" },
                     h("h3", { style: { margin: "0 0 8px" } }, "模型专属提示词 · GPT / Claude / Gemini / GLM"),
                     h("p", { className: "dshp-hint" }, "内置适配依据每次请求的实际模型 / Provider 家族自动追加，开关默认关闭；不会修改主提示词正文。下面可查看内置内容，也可以为每个模型建立独立、可编辑的局部规则。"),
@@ -5612,27 +5632,30 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
                 ? "黑名单排除：" + describe("block") : "黑名单开启但未填条件");
         }
 
-		function PromptAssemblyEvidence({ report, unavailable }) {
+		function PromptAssemblyEvidence({ report, sessionId, unavailable }) {
 			const labels = {
 				assembled: "已组装",
 				"assembled-not-leading": "已组装，但插入位置不符合预期",
 				"candidate-dropped": "有候选内容，但未进入组装结果",
 				"no-candidate": "本次没有候选内容",
+                "native-complete": "原生完整段生效，普通规则未进入该段",
 			};
-			const ordinary = !unavailable && report?.route === "router";
+            const ordinary = !unavailable && Boolean(sessionId) && report?.sessionId === sessionId
+                && report.scope === "session-attempt" && report.route === "router";
 			const knownStage = ordinary && typeof report.stage === "string" && Object.hasOwn(labels, report.stage);
 			const assembly = unavailable ? "暂时无法读取"
 				: knownStage ? labels[report.stage]
 				: ordinary ? "结果未识别"
-				: report?.route ? "最近一条不是普通会话记录"
-				: "尚未观测到普通会话组装";
+                : sessionId ? "未观测到所选会话的本次组装" : "请选择会话查看组装证据";
 			const at = knownStage && typeof report.at === "string" ? Date.parse(report.at) : NaN;
 			const observed = Number.isFinite(at) ? new Date(at) : null;
 			return h("div", { className: "dshp-hint", role: "status", "aria-label": "普通提示词组装与投递" },
 				"最近组装：" + assembly,
 				observed ? h("time", { dateTime: observed.toISOString() }, "（" + observed.toLocaleString() + "）") : null,
+                ordinary && report.requestBoundary === "stream-start-observed"
+                    ? " · 已观察请求起点" : " · 请求起点：未观察",
 				" · 模型投递：未验证",
-				h("div", null, "这里只显示宿主最近的普通会话组装观察，不一定来自当前规则或会话；组装不等于模型收到。"));
+                h("div", null, "只显示所选会话最近请求的宿主观察；不代表当前草稿、请求最终正文或远端投递。"));
 		}
 
 		function SettingsRoot(props) {

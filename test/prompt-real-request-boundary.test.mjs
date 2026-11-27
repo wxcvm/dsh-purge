@@ -9,6 +9,7 @@ import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
 import { installAssembleGuard } from "../lib/identity.js";
 import { savePromptProfile, setSessionPromptLock, setSessionPromptPause, listPromptProfiles, routePrompt } from "../lib/prompt-profiles.js";
 import { setInjectionOff } from "../lib/inject-switch.js";
+import { installRuntimeObservations, promptAssemblyForSession } from "../lib/runtime-observations.js";
 
 test("official Agent Loop carries Purge through frozen llm/stream into an inert adapter", {
   skip: !process.env.DSH_COMPAT_HOST_ROOT && "requires pinned official host fixture",
@@ -48,6 +49,8 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   await ctx.plugin(NativeToolExecutor);
   await ctx.plugin(AgentRegistry);
   await ctx.plugin(AgentLoop, { agents: [] });
+  const observer = installRuntimeObservations(ctx);
+  t.after(() => observer.dispose());
 
   const nativeMarker = "P0_NATIVE_COMPLETE_20261120";
   ctx.systemPrompt.section({ name: "fixture:native", order: 0, text: nativeMarker });
@@ -115,6 +118,10 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   await send("First fixture turn");
   assert.equal(atStream.length, 1, "the official loop must reach llm/stream");
   assert.equal(adapter.requests.length, 1, "the official adapter must actually be dispatched");
+  const owned = promptAssemblyForSession(ctx, "p0-inert-request");
+  assert.equal(owned?.requestBoundary, "stream-start-observed");
+  assert.equal(owned?.delivery, "unverified");
+  assert.equal(promptAssemblyForSession(ctx, "unrelated-session"), null);
   const request = atStream[0];
   assert.deepEqual(adapter.requests[0].messages, request.messages);
   const systems = request.messages.filter(m => m.role === "system");
