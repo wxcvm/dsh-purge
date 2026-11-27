@@ -49,7 +49,7 @@ test('ARTEX absent provider is distinct from missing Docker/WSL and does not exe
   assert.equal(provider.state, 'absent')
   assert.equal(provider.toolCount, 0)
   const inventory = await discoverEnvironments({
-    env, platform: 'linux',
+    env, platform: 'linux', config: { kaliVm: {} },
     dockerExecFileFn: (_cmd, _args, _opts, done) => done(null, '', ''),
     execFileFn: () => { throw Error('WSL should not run on Linux') },
   })

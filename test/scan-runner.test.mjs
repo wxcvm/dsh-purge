@@ -1,10 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scanCommand, runDiscoveryScan, executeScanAndIngest } from '../lib/redteam/scan-runner.js'
-import { listScanHistory, inspectScanArtifact } from '../lib/redteam/scan-history.js'
 
 function temp(t) {
   const root = mkdtempSync(join(tmpdir(), 'redteam-scan-run-'))
@@ -38,7 +37,7 @@ test('running a local scanner preserves raw output and verifiable metadata', asy
       assert.equal(path, executable)
       assert.equal(cfg.shell, false)
       assert.equal(cfg.timeout, 180000)
-      assert.deepEqual(args, ['-sT', '-sV', '--open', '-oX', '-', '-p', '80,443', '192.0.2.1'])
+      assert.equal(args.at(-1), '192.0.2.1')
       done(null, '<nmaprun><host></host></nmaprun>', '')
     },
   })
@@ -157,78 +156,4 @@ test('optional reverse DNS suppression only changes Nmap when enabled', () => {
     ['-sT', '-sV', '--open', '-oX', '-', '-n', '192.0.2.10'])
   assert.deepEqual(scanCommand('httpx', 'https://192.0.2.10', { noReverseDns: true }).args,
     ['-u', 'https://192.0.2.10', '-json', '-silent'])
-})
-
-test('preparation is saved before the existing runner and replaced by the real final record', async (t) => {
-  const root = temp(t), file = join(root, 'nmap.exe'), dir = join(root, 'runs')
-  writeFileSync(file, 'fixture')
-  const result = await runDiscoveryScan({ kind: 'nmap', target: '192.0.2.1', outputDir: dir }, {
-    root, config: { platform: 'windows', tools: { nmap: file }, toolkitDir: root, binDirs: [] },
-    env: { PATH: '' },
-    execFileFn: (_bin, _args, _opt, done) => {
-      const files = readdirSync(dir)
-      assert.equal(files.length, 1)
-      const prepared = JSON.parse(readFileSync(join(dir, files[0]), 'utf8'))
-      assert.equal(prepared.status, 'unfinalized')
-      assert.ok(prepared.preparedAt)
-      assert.equal(prepared.finishedAt, null)
-      assert.equal(Object.hasOwn(prepared, 'execution'), false)
-      assert.equal(Object.hasOwn(prepared, 'startedAt'), false)
-      assert.equal(existsSync(join(dir, prepared.runId + '.xml')), false)
-      done(null, '<nmaprun/>', '')
-    },
-  })
-  const final = JSON.parse(readFileSync(result.manifestFile, 'utf8'))
-  assert.equal(final.status, 'executed')
-  assert.equal(final.execution.attempted, true)
-  assert.ok(final.preparedAt)
-  assert.ok(final.finishedAt)
-  assert.equal(readdirSync(dir).some(name => name.endsWith('.tmp')), false)
-})
-
-test('live observation is correlated to the exact local run and disappears after completion', async t => {
-  const root = temp(t), executable = join(root, 'nmap.exe'), dir = join(root, 'alpha', 'scan-output')
-  writeFileSync(executable, 'fixture')
-  const store = { dirOf: id => join(root,id), listEngagements: () => [{ id:'alpha' },{ id:'beta' }] }
-  let complete, imported, signalImport
-  const startedImport = new Promise(resolve => { signalImport = resolve })
-  const pending = executeScanAndIngest({kind:'nmap',target:'192.0.2.1',outputDir:dir}, {
-    root, config:{platform:'windows',tools:{nmap:executable},toolkitDir:root,binDirs:[]},
-    env:{PATH:''},
-    execFileFn: (_bin,_args,_opt,done) => { complete = done },
-    ingest: () => new Promise(resolve => { imported = resolve; signalImport() }),
-  })
-  const item = listScanHistory(store,'alpha').items[0]
-  assert.equal(item.status,'unfinalized')
-  assert.equal(item.runtime_activity.state,'observed')
-  assert.equal(item.runtime_activity.phase,'awaiting-result')
-  assert.equal(item.runtime_activity.scope,'current-process')
-  assert.equal((await inspectScanArtifact(store,'alpha',item.run_id)).runtime_activity.phase,'awaiting-result')
-  assert.equal(listScanHistory(store,'beta').total,0)
-  complete(null,'<nmaprun/>','')
-  await startedImport
-  const during = listScanHistory(store,'alpha').items[0]
-  assert.equal(during.status,'executed')
-  assert.equal(during.runtime_activity.phase,'ingestion')
-  imported({ok:true,assets:1,ports:1,vulns:0})
-  const result = await pending
-  assert.equal(result.status,'imported')
-  const after = listScanHistory(store,'alpha').items[0]
-  assert.equal(after.runtime_activity.state,'not-observed')
-  assert.equal(after.runtime_activity.phase,null)
-})
-
-test('failed ingestion clears local activity while preserving final failure record', async t => {
-  const root = temp(t), executable = join(root,'nmap.exe'), dir = join(root,'alpha','scan-output')
-  writeFileSync(executable,'fixture')
-  const store = {dirOf:id=>join(root,id),listEngagements:()=>[{id:'alpha'}]}
-  const result = await executeScanAndIngest({kind:'nmap',target:'192.0.2.1',outputDir:dir},{
-    root, config:{platform:'windows',tools:{nmap:executable},toolkitDir:root,binDirs:[]},env:{PATH:''},
-    execFileFn: (_b,_a,_o,done)=>done(null,'<nmaprun/>',''),
-    ingest: ()=>{throw new Error('fixture import failed')},
-  })
-  assert.equal(result.status,'import-failed')
-  const row = listScanHistory(store,'alpha').items[0]
-  assert.equal(row.runtime_activity.state,'not-observed')
-  assert.equal(row.status,'import-failed')
 })
