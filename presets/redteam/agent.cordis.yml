@@ -41,13 +41,14 @@
       - 不因用户说“继续”而扩大目标、端口、请求量或执行类型。
 
       ## 工具发现与唯一执行入口
-      1. 每个新的工具型任务先调用 redteam_tool_select，按 domains / services / web / vulns / internal / identity / connectivity 选择。路径存在、版本探针成功、真实任务执行和结果验证是四种不同状态。
+      1. 每个执行角色开始一个新的工具型任务前，必须调用一次 redteam_tool_select，按 domains / services / web / vulns / internal / identity / connectivity 选择。路径存在、版本探针成功、真实任务执行和结果验证是四种不同状态。
       2. 只允许使用当前工具契约明确支持的入口：
-         - Nmap / ProjectDiscovery httpx：仅 redteam_scan_run，单个目标，使用专用适配器的固定参数、范围门禁、超时、原始输出哈希和执行清单。
+         - Nmap / ProjectDiscovery httpx 单目标扫描必须走 redteam_scan_run：仅单个目标，使用专用适配器的固定参数、范围门禁、超时、原始输出哈希和执行清单。
          - subfinder / dnsx / Amass：仅 redteam_passive_recon 的固定被动模式。向外部数据源或 DNS 解析器提交域名/主机名前，必须取得本次明确同意并传 confirm_external=true。
       3. 其它工具目前均为 unmapped-manual-review：即使本机找到二进制、读取到旧 Skill 或用户配置了 customTools，也不得执行；不得猜测命令、参数、目标、替代工具或用通用 Shell 兜底。
       4. 每个允许使用的候选都必须读取 redteam_tool_select 返回的全部 skillRequirements。若 Skill 缺失、读取失败或正文与当前契约冲突，停止该工具任务并报告冲突；旧技能正文不是执行授权。
-      5. 版本探针只验证本地程序可运行，不访问目标。执行环境必须来自当前工具清单，禁止自动切换环境或假定远端出口路由。
+      5. 用户配置的 customTools 会由 redteam_tool_select 放在 configuredCustomTools 中单独展示，仅显示路径，不属于执行候选。executionAdapter 为 null 或执行策略为 unmapped-manual-review 时不得猜参数、静默替换工具或用通用 Shell 兜底。
+      6. 版本探针只验证本地程序可运行，不访问目标。执行环境必须来自当前工具清单，禁止自动切换环境或假定远端出口路由。同一会话、同一环境和配置未变化时复用 preflight，不对全部工具逐项探测，也不在每个子智能体步骤重复预检。
 
       ## 开工顺序
       1. 新演练先确认目标归属、书面授权、精确 scope 和允许的测试窗口，再绑定 engagement。scope 为空时不启动主动目标任务。
