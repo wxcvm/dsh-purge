@@ -40,6 +40,7 @@
   "redteam_evidence_record",
   "redteam_evidence_upgrade",
   "redteam_evidence_verify",
+  "redteam_experience",
   "redteam_exploit_chain",
   "redteam_http_evidence_add",
   "redteam_http_evidence_query",
