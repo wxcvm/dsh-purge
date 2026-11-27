@@ -1,0 +1,50 @@
+---
+name: asset-deep-scan
+description: 单资产深度评估：按 surface、web、auth、cve、app 五个维度逐项核查并记录覆盖缺口
+whenToUse: 一批资产初步测绘完成后，需要选定单个已授权资产做细致复核和任务交接时
+role: vuln-scan
+category: 验证
+tags: [asset, deep-scan, coverage, evidence]
+enabled: true
+---
+
+# 单资产深度评估
+
+一次只处理一个资产。批量扫描结果只是候选线索；本技能把单个资产的已知攻击面、证据和未完成项整理清楚，不自动执行利用。
+
+## 0. 选择资产与范围
+
+1. 用 `redteam_asset_query` 按 IP、端口、服务或指纹找到资产。
+2. 用 `redteam_asset_get(id=...)` 读取完整记录，确认资产 ID、来源和历史测试。
+3. 用 `redteam_scope_review(allowed=...)` 再核对该资产是否在用户明确授权范围内。
+4. 开始前调用 `redteam_asset_test(status=testing)`；不在范围或归属不明时停止，不启动主动探测。
+
+## 1. Surface：端口、服务与指纹
+
+记录已知端口、协议、服务、产品、版本、banner、URL、证书和指纹来源。版本未知就标记未知，不从端口号猜产品。优先复用已有采集结果，缺口只做授权范围内的最小补充。
+
+## 2. Web：页面与接口
+
+检查已授权站点公开入口、robots/sitemap、登录页、前端脚本引用、OpenAPI/Swagger、GraphQL 和业务 API。接口清单只记录路径、方法、认证要求和用途，不下载无关文件、不批量枚举敏感数据。
+
+## 3. Auth：身份与授权
+
+使用用户提供的测试账号或专门合成账号。检查匿名访问、过期会话、普通/管理员角色差异、对象级授权和租户隔离。不要猜测口令、复用泄露凭据或对真实用户账号做尝试。
+
+## 4. CVE：已知漏洞候选
+
+先用 `redteam_poc_search` 或厂商公告核对产品、版本和受影响范围。搜索命中只表示候选，不表示目标存在漏洞。优先使用版本/配置证据和无副作用检测；不运行破坏性 PoC、不修改目标状态。
+
+## 5. App：业务逻辑与数据边界
+
+使用合成订单、测试用户和沙箱数据检查上传/下载、导出、分页、对象 ID、租户 ID、状态机和字段白名单。只验证授权判断，不读取真实客户记录、不执行真实转账/删除/审批操作。
+
+## 6. 记录与收口
+
+- 用 `redteam_asset_test` 的 `test` 追加每个维度的检查结果，`surface` 写仍未覆盖的部分。
+- 没有对应服务的维度，在 `test` 记录中写明 `not applicable` 和原因；这不是 `redteam_asset_test` 的独立 status 值。
+- 发现问题先以 `redteam_vuln_add(status=candidate)` 记录；只有在测试环境中可重复且证据充分时才确认。
+- 五个维度均完成或明确不适用后，用 `redteam_asset_test(status=tested)` 收口；被授权边界、账号或环境阻断时用 `status=blocked` 并说明原因。只有整个资产确实没有可评估面时才使用 `status=no_surface`。
+- 不在授权范围或授权无法确认时不要开始主动测试；保留未测试状态并写明原因。不要把“扫过”写成“已验证”。
+
+不批量扫描多个目标，不收集真实凭据，不导出全库，不删除/修改业务数据，也不把未验证假设写成 confirmed。

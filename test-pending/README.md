@@ -15,19 +15,4 @@ npm run test:all          # 正式套件 + pending 一起跑
 
 ## 现在还剩什么
 
-只剩 `workflow-coordination.mjs`。它按 ChatGPT 版（`破/dsh-purge` 1.1.71-redteam.1）的
-**57 个工具**和那一版的 `redteam_agent_slot` 语义写成；本仓库现在是 **76 个工具**
-（含后加的 `redteam_data_quality` 等），`redteam_agent_slot` 用的是「label + 时间戳」键、
-`used = max(注册表运行数, 预留数)`，另有探测不到宿主时的退化态字段差异。
-硬让它变绿就得回退现在的工具行为，所以留作规格参考，不进 CI。
-
-其余三份（`agent-status` / `store-query` / `prompt-compat`）已经落地并搬进正式套件：
-
-| 原用例 | 现在的落点 |
-|---|---|
-| `agent-status.mjs` | 实现 `lib/redteam/agent-status.js`；测试 `test/agent-status.test.mjs` |
-| `store-query.mjs` | store 侧 `dataQuality` 算子 + 分页校验；测试 `test/store-query.test.mjs` |
-| `prompt-compat.mjs` | `lib/identity.js` 装配契约（不多造 `tools`、`interpolate:false` 逐字保留、装配失败原样冒泡）；测试 `test/prompt-compat.test.mjs` |
-
-要收编 `workflow-coordination.mjs`，得先决定：`redteam_agent_slot` 是否切到「key + runId」
-语义。这会改工具契约，需要同步更新 `docs/drill-tools-reference.md` 与红队预设里的调用说明。
+`workflow-coordination.mjs` 正在对照现有宿主事件、共享预留账本和工具分页契约完成验收。旧的 57 工具数量断言改为当前正式工具清单；分页保留现有 200 条限制，不回退生产契约。新增稳定任务 key 的幂等申请与未知容量显示，保留旧的自动生成 key。双端验收通过前仍作为非阻塞专项。

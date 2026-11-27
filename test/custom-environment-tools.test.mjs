@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  loadPlatformConfig, savePlatformConfig, resolveTool, resolveAllTools, platformSummary,
+  loadPlatformConfig, savePlatformConfig, resolveTool, resolveAllTools, platformSummary, TOOL_CATALOG,
 } from '../lib/redteam/platform-config.js'
 import { probeInstalledTool } from '../lib/redteam/tool-health.js'
 
@@ -50,4 +50,56 @@ test('blank extra-tool rows can be omitted; probe does not execute custom binary
   assert.equal(resolveAllTools({ root }).length, 24)
   savePlatformConfig({ customTools: [] }, root)
   assert.equal(resolveAllTools({ root }).length, 23)
+})
+
+
+test('bulk tool discovery preserves precedence and refreshes directory snapshots between reads', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-tool-snapshot-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const toolkit = join(root, 'toolkit')
+  const pathDir = join(root, 'path')
+  mkdirSync(toolkit)
+  mkdirSync(pathDir)
+  const configured = Object.fromEntries(TOOL_CATALOG.filter(tool => tool.id !== 'nmap').map(tool => [tool.id, join(root, 'missing-' + tool.id)]))
+  savePlatformConfig({ toolkitDir: toolkit, tools: configured }, root)
+  const fallback = join(pathDir, 'nmap')
+  const preferred = join(toolkit, 'nmap')
+  writeFileSync(fallback, 'fixture')
+  const options = { root, env: { PATH: pathDir, HOME: root } }
+  const find = () => resolveAllTools(options).find(tool => tool.id === 'nmap')
+  assert.equal(find().path, fallback)
+  writeFileSync(preferred, 'fixture')
+  assert.equal(find().path, preferred)
+  const summary = platformSummary(root)
+  assert.equal(summary.tools.found, summary.adapt.found)
+  assert.equal(summary.tools.items.find(tool => tool.id === 'nmap').path, preferred)
+  rmSync(preferred)
+  assert.equal(find().path, fallback)
+})
+
+test('configured directories are not reported as tool files, but remain saved for correction', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'redteam-tool-path-type-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const dir = join(root, 'not-a-tool')
+  mkdirSync(dir)
+  savePlatformConfig({
+    tools: { nmap: dir },
+    customTools: [{ name: 'Directory', path: dir }],
+  }, root)
+  for (const id of ['nmap', 'custom:0']) {
+    const tool = resolveTool(id, { root })
+    assert.equal(tool.path, null)
+    assert.equal(tool.source, 'missing')
+    assert.equal(tool.configured, dir)
+  }
+  const summary = platformSummary(root)
+  assert.equal(summary.tools.items.find(tool => tool.id === 'nmap').path, null)
+  assert.equal(summary.tools.items.find(tool => tool.id === 'custom:0').path, null)
+  assert.equal(loadPlatformConfig(root).tools.nmap, dir)
+  assert.equal(loadPlatformConfig(root).customTools[0].path, dir)
+  const file = join(dir, 'tool.exe')
+  writeFileSync(file, 'fixture')
+  savePlatformConfig({ tools: { nmap: file }, customTools: [{ name: 'Tool', path: file }] }, root)
+  assert.equal(resolveTool('nmap', { root }).path, file)
+  assert.equal(resolveTool('custom:0', { root }).path, file)
 })
