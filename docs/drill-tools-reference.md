@@ -597,13 +597,13 @@ _每步都要写 tool（命令原文）与 result（回显），否则报告无�
 **已停用**：模型不得把命令文本、计划步骤或子智能体自述写成真实攻击链执行记录。真实适配器只记录其自身可验证的执行结果；历史链路仅可脱敏只读查看。
 
 ### `redteam_chain`
-读取完整攻击链（按步骤顺序），用于汇报与检查链路是否闭合（入口 → 权限 → 内网突破）。
+脱敏读取历史链路元数据（步骤 ID、阶段、标题、证据引用）；不返回命令、原始结果或自由文本详情。
 
 参数：
 - `engagement`
 
 ### `redteam_attack_chain`
-攻击链：按攻击面位置串起来的五个阶段 —— ① 信息收集（互联网侧）→ ② 互联网资产权限 → ③ 边界突破（搭隧道）→ ④ 内网资产权限 → ⑤ 靶标权限。返回每阶段的阶段目标、**实际拿到多少分与累计分**、涉及资产、以及边界突破阶段的真实隧道。开工时看它明确"现在在第几阶段、下一步该打哪一阶段"，汇报时按阶段给结论。
+只读展示历史评分阶段汇总；隧道仅显示脱敏分类与状态，不返回监听地址、可达网段或入口命令。得分记录需经独立核验流程确认。开工时看它明确"现在在第几阶段、下一步该打哪一阶段"，汇报时按阶段给结论。
 
 参数：
 - `engagement`
@@ -954,7 +954,7 @@ redteam_agent_slot acquire      占一个执行名额（≤3）
   vuln-scan  → vuln_add → http_evidence_add（原始请求/响应）
   exploit    → disabled / unsupported（当前无经过审查的执行适配器）
   internal   → disabled / unsupported（当前无经过审查的内网执行适配器）
-redteam_chain_add                仅用于人工核验后的历史记录；模拟/计划不得写成真实执行
+redteam_chain_add                disabled / unsupported（模型不得写入执行链）
 redteam_evidence_upgrade         disabled / unsupported（模型不得自我升级证据置信度）
 redteam_score_report             出交付报告
 ```
