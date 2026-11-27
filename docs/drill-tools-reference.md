@@ -1051,6 +1051,21 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 参数：`engagement`、`before`（必填，原样传入上次 `redteam_next_action` 的 `focus.before` JSON 字符串）、`task_key`（可选）。
 
+### `redteam_l7_probe`
+【应用层服务探针】对单个主机的指定端口做 L7 判定，**专治 TUN 类代理造成的端口伪造**。
+
+启用 FlClash / Mihomo 等 TUN 后，隧道对任意 TCP 连接回伪造 SYN-ACK，实测出现过 `nmap --top-ports 1000` 报 **1000/1000 open、延迟 0.75ms**，连 `1.1.1.1:1`、`example.com:12345` 这类必然关闭的端口也判 open —— 此时 TCP 层 STATE 没有鉴别力。
+
+伪造的 accept 无法完成应用层交互，所以本工具靠交互判定：先被动等 banner（SSH / FTP / SMTP / POP3 / IMAP / MySQL），无 banner 再发一次极小的 HTTP GET 与 TLS ClientHello。
+
+- `verdict=REAL_SERVICE`：确实有服务，附 `service` 与 `evidence`（banner 或响应首行）
+- `verdict=FAKE_OR_SILENT`：连接"成功"但无任何应用层响应 —— TUN 环境下假 open 的典型特征，**不要当成开放端口写进结论**
+- `verdict=UNREACHABLE`：连接未建立
+
+只做被动读与一次探测请求，不发送凭据、不尝试登录、不执行目标侧命令。走与扫描同一套范围门禁。
+
+参数：`engagement`、`host`（必填，单个 IP 或域名）、`ports`（数组，不传则用内置高价值端口清单）、`proxy`（可选 `socks5://127.0.0.1:7890`，不传则直连）、`concurrency`（默认 4，上限 16）、`confirm`。
+
 ### `redteam_exploit_chain`
 【作战智能体】对一个已知漏洞执行完整利用链编排：Nday POC 利用 → 失败自动降级密码喷洒 → 权限提升 → C2 植入 → 持久化。把此前各自独立的 `exploit-executor` / `password-spray` / `privesc-engine` / `c2-manager` / `post-exploit` 串成一条链路。
 
