@@ -161,6 +161,17 @@ test('reviewed tool names match source declarations and actual registrations', a
   const scanAfterRead = JSON.parse(await scanTool.execute(scanRequest, scanExec))
   assert.equal(scanAfterRead.status, 'unsupported-environment')
   assert.equal(scanAfterRead.execution.attempted, false)
+  const nextActionTool = registered.get('redteam_next_action')
+  const tunnelOnlyEngagement = redteam.openEngagement('next-action-tunnel-only', [], { bindCurrent: false }).id
+  redteam.addTunnel(tunnelOnlyEngagement, {
+    kind: 'socks5', listen: '127.0.0.1:1080', reach: '192.0.2.0/24',
+    entry_kind: 'target-outbound', status: 'active',
+  })
+  const tunnelOnlyPlan = JSON.parse(await nextActionTool.execute({ engagement: tunnelOnlyEngagement }, {}))
+  assert.equal(tunnelOnlyPlan.state.access, 0)
+  assert.ok(tunnelOnlyPlan.actions.some(action => action.action === '复核历史通道的证据缺口'),
+    'active historical tunnel with no access record should produce a read-only evidence-gap task')
+
   const quality = registered.get('redteam_data_quality')
   const read = JSON.parse(await quality.execute({ engagement: 'fixture' }, {}))
   assert.deepEqual(read, {
