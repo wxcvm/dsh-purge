@@ -695,3 +695,49 @@ test('unavailable task snapshot is not reported as context loss', () => {
   assert.equal(row.taskContinuity.status, 'insufficient-evidence');
   assert.equal(row.taskContinuity.response, 'unavailable');
 });
+
+test('out-of-order committed records attach once after replacement, without rewinding the new request', () => {
+  const o = createRuntimeObservations();
+  const old = agent('s');
+  o.event(old.session, { seq: 1, type: 'request/header', data: { header: { config: { provider: 'original' } } } });
+  start(o, old); end(o, old, 0);
+  o.agentDisposed({ agent: old });
+  const replacement = { id: 's', session: old.session };
+  o.event(old.session, { seq: 4, type: 'request/header', data: { header: { config: { provider: 'new' } } } });
+  o.event(old.session, { seq: 5, type: 'compaction/end', data: {} });
+  start(o, replacement, 's:2');
+  const message = { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1,
+    interrupted: true, usage: { totalTokens: 9 }, message: { source: { model: 'received-model' } },
+    stream: [{ chunk: { type: 'finish', reason: { kind: 'aborted', failure: { message: 'PRIVATE' } } } }],
+  } };
+  o.event(old.session, { ...message, type: 'assistant/attempt' });
+  assert.equal(o.snapshot().items[1].durableArrival, 'not-observed', 'wrong committed event type stays unmatched');
+  o.event(old.session, message);
+  o.event(old.session, { ...message, data: { ...message.data, usage: { totalTokens: 999 }, interrupted: false } });
+  const [active, previous] = o.snapshot().items;
+  assert.equal(active.provider, 'new');
+  assert.equal(active.durableArrival, 'not-observed');
+  assert.equal(active.finishObserved, false);
+  assert.equal(previous.provider, 'original');
+  assert.equal(previous.model, 'received-model');
+  assert.equal(previous.durableArrival, 'exact-late');
+  assert.equal(previous.finish, 'aborted');
+  assert.equal(previous.usage.totalTokens, 9, 'duplicate must not replace the accepted evidence');
+  assert.equal(previous.interrupted, true);
+  assert.equal(previous.compactionSeqAtResponse, null);
+  assert.equal(previous.taskContextAtResponse, 'not-observed');
+  assert.equal(previous.firstTextMs, null);
+  assert.doesNotMatch(JSON.stringify(o.snapshot()), /PRIVATE/);
+});
+
+test('identical visible session IDs and commit sequences do not cross live session objects', () => {
+  const o = createRuntimeObservations(), a = agent('same-display'), b = agent('same-display');
+  start(o, a); end(o, a, 0);
+  start(o, b); end(o, b, 0);
+  o.event(a.session, { seq: 4, type: 'turn/end', data: { turn: 1, reason: { kind: 'aborted' } } });
+  o.event(a.session, { seq: 3, type: 'assistant/message', data: { turn: 1, step: 1, usage: { totalTokens: 7 } } });
+  const [second, first] = o.snapshot().items;
+  assert.equal(second.durableArrival, 'not-observed');
+  assert.equal(first.durableArrival, 'exact-late');
+  assert.equal(first.usage.totalTokens, 7);
+});
