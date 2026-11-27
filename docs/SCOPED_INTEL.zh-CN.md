@@ -4,7 +4,7 @@
 
 1. 在当前项目登记自有或获授权的 IP/CIDR 范围。
 2. 输入单个 IP，勾选同意将 IP 发送给所选平台，默认免费 InternetDB。
-3. 可选 Shodan REST，需在服务端进程环境设置 SHODAN_API_KEY（不通过客户端传输）。
+3. 可选 Shodan REST：在服务端的「Shodan REST API → 设置连接」中配置 Key。新 Key 使用 DSH_PURGE_SECRET_KEY（64 位十六进制字符）通过 AES-256-GCM 加密保存在本机 platform-secrets.json；旧版 config.json 明文 Key 会在启用密钥库后保存设置时自动迁移。也支持进程环境变量 SHODAN_API_KEY；清除 Key 时会停用该环境变量回退。Key 不通过浏览器传输。
 4. 默认仅预览；选择导入才写入现有 SQLite 资产库。所有历史线索（包括未提供传输协议的 InternetDB 端口）作为被动观察保存，不写入实时端口表或漏洞表，也不覆盖已有资产状态。重复的同源结果只刷新采集时间。历史第三方记录不是实时确认或漏洞证据。
 5. 点击「读取本地情报历史」可按 IP 离线查看最近 100 条记录，无需 Key 或网络访问。
 6. API 失败单独显示，不阻塞其他来源，也不影响原有本地检索或 FOFA 专项技能。
