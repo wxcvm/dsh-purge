@@ -12,7 +12,13 @@ test('unified library has one top-level entry and keeps legacy skills routing', 
     assert.doesNotMatch(source, /pages: [^\n]*\['skills', '技能库'\]/)
     assert.match(source, /st\.tab === 'knowledge-center' \|\| st\.tab === 'skills'\) body = h\(LibraryTab,/)
     assert.match(source, /initialView: st\.tab === 'skills' \? 'skills' : 'search'/)
-    assert.match(source, /const activeTab = st\.tab === 'skills' \? 'knowledge-center' : \(st\.tab === 'local-search' \|\| st\.tab === 'knowledge' \? 'env' : st\.tab\)/)
+    assert.match(source, /const activeTab = activeWorkbenchTab\(st\.tab\)/)
+    const start = source.indexOf('function activeWorkbenchTab(')
+    const end = source.indexOf('function RtNavIcon(', start)
+    assert.ok(start >= 0 && end > start)
+    const selectedTab = vm.runInNewContext(source.slice(start, end) + '\nactiveWorkbenchTab')
+    assert.equal(selectedTab('skills'), 'knowledge-center')
+    assert.equal(selectedTab('knowledge-center'), 'knowledge-center')
     assert.match(source, /page\('skills', h\(SkillsTab/)
     assert.match(source, /page\('knowledge', h\(KnowledgeCenterTab/)
     assert.match(source, /h\(UnifiedKnowledgeTab, \{ initialSource: 'bundled' \}\)/)
@@ -99,7 +105,7 @@ test('bundled pagination keeps the submitted keyword and federated results can o
   page().find(n=>n.type==='button'&&n.children.includes('搜索')).props.onClick();await settle()
   assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
   page().find(n=>n.type==='select'&&n.props.value==='bundled').props.onChange({target:{value:'all'}});await settle()
-  page().find(n=>n.type==='button'&&n.children.includes('查看全部内置匹配')).props.onClick();await settle()
+  page().find(n=>n.type==='button'&&n.children.includes('查看该来源全部匹配')).props.onClick();await settle()
   assert.equal(calls.at(-1).source,'bundled');assert.equal(calls.at(-1).query,'new keyword');assert.equal(calls.at(-1).offset,0)
 })
 
@@ -129,4 +135,22 @@ test('skill detail ignores late reads and errors after switching or closing a sk
   click({name:'fifth'});click({name:'fifth'})
   requests[4].resolve({ok:true,content:'FIFTH'});await settle()
   assert.equal(active,null);assert.equal(detail,null);assert.equal(related,null)
+})
+
+
+test('external skill source cards display license status and the installed commit', () => {
+  const source = read('lib/redteam/client.js')
+  assert.match(source, /sourceProvenanceText/)
+  assert.match(source, /licenseStatus/)
+  assert.match(source, /revision\.slice\(0, 12\)/)
+  assert.match(source, /来源版本与许可证/)
+})
+
+
+test('bundled skill cards show upstream revision and license provenance', () => {
+  const source = read('lib/redteam/client.js')
+  assert.match(source, /sourceMeta\.repository/)
+  assert.match(source, /sourceMeta\.revision/)
+  assert.match(source, /sourceMeta\.license/)
+  assert.match(source, /已适配/)
 })

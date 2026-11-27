@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as zlib from 'node:zlib'
 import { cases, answerKey } from '../scripts/agent-quality-eval.mjs'
-import { decodeArchive, extractMarkedTurn, importReviewRun, markedPacket } from '../scripts/review-trace-import.mjs'
-import { compareReviewRuns } from '../scripts/review-run-compare.mjs'
+import { decodeArchive, extractMarkedTurn, importReviewRun, markedPacket, diagnoseReportContent, markedReviewPacket } from '../scripts/review-trace-import.mjs'
+import { compareReviewRuns, compareIndependentReview } from '../scripts/review-run-compare.mjs'
 
 const ids = cases.map(row => row.id)
 const marker = 'PURGE-QA-RUN: example'
@@ -141,4 +141,128 @@ test('native child intervals distinguish overlap, sequential boundaries, and mis
   const none = importReviewRun({ runId: 'example', parent, children: [] }).delegationTimeline
   assert.equal(none.observedPeakConcurrentTurns, null)
   assert.equal(none.observedOverlapMs, null)
+})
+
+
+test('content diagnostics distinguish extra valid evidence, missing evidence and output format', () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const reports = ids.map(answer)
+  reports[0] = { ...reports[0], evidence: ['before', 'after', 'report'] }
+  reports[3] = { ...reports[3], evidence: ['coverage', 'notes'] }
+  const directText = 'Review complete.\n' + fence + 'json\n' + JSON.stringify({ reports }) + '\n' + fence
+  const direct = diagnoseReportContent({ finalText: directText })
+  assert.equal(direct.shape, 'json-fence-with-prose')
+  assert.deepEqual(direct.score, { total: 6, parsed: 6, correctConclusions: 6, requiredCoverage: 6, exactEvidence: 4 })
+  assert.deepEqual(direct.cases[0].additional, ['report'])
+  assert.deepEqual(direct.cases[0].missing, [])
+  const child = diagnoseReportContent({ finalText: JSON.stringify({ id: ids[5], answer: 'b', evidence: ['delta', 'newRecord'] }) }, [ids[5]])
+  assert.equal(child.shape, 'single-json-object')
+  assert.deepEqual(child.cases[0].missing, ['task'])
+  assert.equal(child.cases[0].requiredCovered, false)
+  assert.equal(child.cases[0].conclusionCorrect, true)
+  const invalid = diagnoseReportContent({ finalText: JSON.stringify({ reports: [{ id: ids[0], answer: 'b', evidence: ['before','after','after','PRIVATE-RAW-TEXT'] }] }) })
+  assert.equal(invalid.cases[0].requiredCovered, true)
+  assert.equal(invalid.cases[0].exactEvidence, false)
+  assert.equal(invalid.cases[0].invalidCount, 1)
+  assert.equal(invalid.cases[0].duplicateCount, 1)
+  assert.doesNotMatch(JSON.stringify(invalid), /PRIVATE-RAW-TEXT/)
+  assert.equal(diagnoseReportContent({ finalText: directText + '\n' + fence + 'json\n{}\n' + fence }).shape, 'ambiguous-fences')
+  assert.equal(diagnoseReportContent({ finalText: JSON.stringify({ reports: [reports[0], reports[0]] }) }).shape, 'invalid-report-identity')
+  assert.equal(diagnoseReportContent({ finalText: JSON.stringify({ reports: [answer(ids[1])] }) }, [ids[0]]).shape, 'invalid-report-identity')
+  assert.equal(diagnoseReportContent({ finalText: 'not a report' }).score, null)
+})
+
+test('replay real observed A/B answer patterns without model calls; separate content and strict delivery', () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const a = ids.map(answer)
+  a[0] = { ...a[0], evidence: ['before','after','report'] }
+  a[3] = { ...a[3], evidence: ['coverage','notes'] }
+  const b = ids.map(answer)
+  b[3] = { ...b[3], evidence: ['coverage','notes'] }
+  b[5] = { ...b[5], evidence: ['delta','newRecord'] }
+  const textReply = (seq, text) => ev(seq, 'assistant/message', {
+    turn: 1, step: 1, message: { source: { provider: 'fixture', model: 'qa-model' }, content: text }, stream: stream()
+  })
+  const fenced = reports => 'Completed.\n' + fence + 'json\n' + JSON.stringify({ reports }) + '\n' + fence
+  const direct = importReviewRun({ runId: 'example', parent: session('a', [request(), textReply(2, fenced(a)), end(3, 1)]) })
+  const parent = session('p', [request(), ev(2, 'subagent/catalog', { items: ids.map((_,i)=>({ childId:'c'+i })) }),
+    textReply(3, fenced(b)), end(4, 1)])
+  const children = b.map((report,i)=>session('c'+i, [request(), textReply(2, JSON.stringify(report)), end(3,1)], { caseIds:[report.id] }))
+  const delegated = importReviewRun({ runId: 'example', parent, children })
+  const compared = compareReviewRuns({ direct: { ...direct, runId: 'direct' }, delegated })
+  assert.equal(compared.summary.directAccepted, 0)
+  assert.equal(compared.summary.delegatedAccepted, 0)
+  assert.equal(compared.summary.childAccepted, 0)
+  assert.equal(direct.archiveCoverage.strictParentJson, false)
+  assert.deepEqual(compared.contentComparison.direct, { parsed: 6, correctConclusions: 6, requiredCoverage: 6, exactEvidence: 4 })
+  assert.deepEqual(compared.contentComparison.delegated, { parsed: 6, correctConclusions: 6, requiredCoverage: 5, exactEvidence: 4 })
+  assert.deepEqual(compared.contentComparison.child, compared.contentComparison.delegated)
+  assert.equal(compared.contentComparison.sameEvidenceCount, 6)
+  assert.deepEqual(compared.contentComparison.uncorrectedChildOmissions, [ids[5]])
+})
+
+
+test('independent review packet preserves observed candidate omissions without leaking the answer key', () => {
+  const reports = ids.map(answer)
+  reports[5] = { ...reports[5], evidence: ['delta', 'newRecord'], note: 'PRIVATE-RAW-TEXT' }
+  reports[3] = { ...reports[3], evidence: ['coverage', 'notes'] }
+  const text = markedReviewPacket('review', reports)
+  assert.ok(text.startsWith('PURGE-QA-RUN: review\n'))
+  assert.match(text, /Independently review/)
+  const packet = JSON.parse(text.slice(text.indexOf('\n{')))
+  assert.deepEqual(packet.cases, cases)
+  assert.deepEqual(packet.candidateReports[5].evidence, ['delta', 'newRecord'])
+  assert.deepEqual(packet.candidateReports[3].evidence, ['coverage', 'notes'])
+  assert.doesNotMatch(text, /PRIVATE-RAW-TEXT/)
+  assert.ok(packet.cases.every(row => !Object.hasOwn(row, 'answer')))
+  assert.throws(() => markedReviewPacket('review', reports.slice(1)), /one candidate report/)
+  assert.throws(() => markedReviewPacket('review', [...reports.slice(0, 5), reports[0]]), /duplicate/)
+  assert.throws(() => markedReviewPacket('review', reports.map((r,i) => i ? r : { ...r, evidence: ['PRIVATE'] })), /Invalid/)
+})
+
+test('C replay records repaired evidence, strict acceptance and incremental versus full sequential cost', () => {
+  const fence = String.fromCharCode(96).repeat(3)
+  const reportsA = ids.map(answer), reportsB = ids.map(answer), reportsC = ids.map(answer)
+  reportsA[0] = { ...reportsA[0], evidence: ['before','after','report'] }
+  reportsA[3] = reportsB[3] = reportsC[3] = { ...answer(ids[3]), evidence: ['coverage','notes'] }
+  reportsB[5] = { ...reportsB[5], evidence: ['delta','newRecord'] }
+  const make = (runId, reports, strict, elapsedMs, totalTokens) => {
+    const text = strict ? JSON.stringify({ reports }) : 'Done\n'+fence+'json\n'+JSON.stringify({ reports })+'\n'+fence
+    const records = [request(1, 'PURGE-QA-RUN: '+runId), ev(2, 'assistant/message', {
+      turn: 1, step: 1, message: { source: { provider:'fixture', model:'qa-model' }, content:text }, stream:stream()
+    }), end(3,1)]
+    const run = importReviewRun({ runId, parent:session(runId,records), settingsId:'same' })
+    run.usage = { scope:'observed-archive', elapsedMs, totalTokens }
+    return run
+  }
+  const direct = make('a', reportsA, false, 9884, 97318)
+  const delegated = make('b', reportsB, false, 48102, 945568)
+  const review = make('c', reportsC, true, 10481, 98049)
+  const result = compareIndependentReview({ direct, delegated, review })
+  assert.equal(result.summary.review.strictAccepted,5)
+  assert.equal(result.summary.review.content.requiredCoverage,6)
+  assert.equal(result.summary.review.content.exactEvidence,5)
+  assert.deepEqual(result.changes.filter(row=>row.requiredCoverageRecovered).map(row=>row.id),[ids[5]])
+  assert.equal(result.changes.some(row=>row.requiredCoverageLost),false)
+  assert.deepEqual(result.archiveUsage.elapsedMs,{direct:9884,delegated:48102,incrementalReview:10481,sequentialDelegatedPlusReview:58583})
+  assert.equal(result.archiveUsage.totalTokens.sequentialDelegatedPlusReview,1043617)
+  assert.equal(result.wholeRunUsage.totalTokens.sequentialDelegatedPlusReview,null)
+  const decision = result.decisionEvidence.observedArchive
+  assert.equal(decision.freshTask.status, 'observed')
+  assert.deepEqual(decision.freshTask.dominated,[{id:'delegated',by:['direct']}])
+  assert.deepEqual(decision.freshTask.frontier,['direct','delegated-plus-review'])
+  assert.deepEqual(decision.existingCandidates.frontier,['retain-candidates','independent-review'])
+  assert.equal(decision.existingCandidates.options[0].elapsedMs,0)
+  assert.equal(decision.existingCandidates.options[1].elapsedMs,10481)
+  assert.equal(result.decisionEvidence.wholeRun.freshTask.status,'incomplete-observation')
+  assert.equal(result.decisionEvidence.wholeRun.freshTask.frontier,null)
+  const different = compareIndependentReview({direct,delegated,review:{...review,settingsId:'different'}})
+  assert.equal(different.decisionEvidence.observedArchive.freshTask.status,'incomparable-settings')
+  assert.equal(different.decisionEvidence.observedArchive.existingCandidates.frontier,null)
+  assert.throws(()=>compareIndependentReview({direct,delegated,review:direct}),/distinct run IDs/)
+  review.usage.scope='whole-run'
+  const mixed = compareIndependentReview({direct,delegated,review})
+  assert.equal(mixed.archiveUsage.totalTokens.sequentialDelegatedPlusReview,null)
+  assert.equal(mixed.decisionEvidence.observedArchive.freshTask.frontier,null)
+  assert.equal(mixed.decisionEvidence.observedArchive.existingCandidates.status,'incomplete-observation')
 })

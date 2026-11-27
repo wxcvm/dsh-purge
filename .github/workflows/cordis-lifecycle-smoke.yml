@@ -1,0 +1,97 @@
+name: Isolated Cordis Lifecycle
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/cordis-lifecycle-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        cordis: ['4.1.0', '4.2.0-alpha.1']
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.3'
+      - name: Install exact official dependency in a disposable directory
+        shell: bash
+        env:
+          CORDIS_VERSION: ${{ matrix.cordis }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cordis-smoke"
+          cd "$RUNNER_TEMP/cordis-smoke"
+          npm init -y
+          npm install --save-exact --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/ "@deepseek-ai/cordis@$CORDIS_VERSION"
+          node --version
+          npm ls @deepseek-ai/cordis
+      - name: Test ordinary plugin resource cleanup
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/cordis-smoke"
+          cat > lifecycle.test.mjs <<'EOF'
+          import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import { setTimeout as delay } from 'node:timers/promises';
+          import { Context } from '@deepseek-ai/cordis';
+
+          test('repeated plugin unload releases resources and listeners', { timeout: 10000 }, async () => {
+            const root = new Context();
+            let active = 0, calls = 0, disposed = 0;
+            const plugin = ctx => {
+              ctx.on('example/check', () => { calls++; });
+              ctx.effect(() => {
+                active++;
+                const timer = setInterval(() => {}, 1000);
+                return async () => {
+                  clearInterval(timer);
+                  await delay(5);
+                  active--;
+                  disposed++;
+                };
+              });
+            };
+            try {
+              for (let cycle = 1; cycle <= 3; cycle++) {
+                const fiber = await root.plugin(plugin);
+                assert.equal(active, 1);
+                root.emit('example/check');
+                assert.equal(calls, cycle);
+                await fiber.dispose();
+                assert.equal(active, 0);
+                assert.equal(disposed, cycle);
+                root.emit('example/check');
+                assert.equal(calls, cycle);
+              }
+            } finally {
+              await root.fiber.dispose();
+            }
+          });
+
+          test('parent disposal releases its child plugin', { timeout: 10000 }, async () => {
+            const root = new Context();
+            let active = false;
+            try {
+              const parent = await root.plugin(async ctx => {
+                await ctx.plugin(child => {
+                  child.effect(() => {
+                    active = true;
+                    return () => { active = false; };
+                  });
+                });
+              });
+              assert.equal(active, true);
+              await parent.dispose();
+              assert.equal(active, false);
+            } finally {
+              await root.fiber.dispose();
+            }
+          });
+          EOF
+          node --test lifecycle.test.mjs

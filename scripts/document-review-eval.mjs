@@ -66,6 +66,65 @@ export function documentReviewPacket() {
     cases:documentCases, format:{reports:[{id:'<case id>',answer:'<a/b/c>',evidence:['<record key>']}]} }
 }
 
+/**
+ * Audited rubric v2, separate from the original exact-key rubric.
+ * Each support set is a human-authored sufficient record set for the stated
+ * correct option, taking the question and option text as given. Contrast keys
+ * cover a named misleading alternative; citing them is not itself an
+ * explanation of why it fails. Context is relevant but not necessary.
+ * No claim of a general semantic verifier or exhaustive alternative proofs.
+ */
+const auditedRubric = {
+  'invoice-posted': {
+    support:['ledger'], contrast:['reminder'], context:[],
+    rationale:'The posted balance settles current payment status; the earlier reminder is contrast evidence.',
+  },
+  'meeting-effective': {
+    support:['original','amendment'], contrast:['draft'], context:[],
+    rationale:'The original date and approved amendment establish the new time; an unapproved draft need not be cited.',
+  },
+  'partial-returns': {
+    support:['scope','report'], contrast:[], context:['inspections'],
+    rationale:'The total register and partial export establish that six items are outside observed coverage. Inspection of the exported twelve is corroborating context.',
+  },
+  'refund-allocation': {
+    support:['refund','mapping'], contrast:['totals'], context:['selected','email'],
+    rationale:'The question identifies O-31. Refund invoice I-47 and its order mapping establish the attribution; aggregate totals do not prove order attribution.',
+  },
+  'delivery-cutoff': {
+    support:['purchase','receipt1','receipt3','cutoff'], contrast:['receipt2'], context:['dashboard'],
+    rationale:'The order quantity, qualifying receipt, complete cutoff and July receipt establish the selected option, including its explicit July exclusion. Receipt2 explicitly addresses the other-order distractor.',
+  },
+  'approval-chain': {
+    support:['rule','current','register'], contrast:['finance'], context:['program','chat'],
+    rationale:'The approval rule, current revision and complete register establish the missing finance approval. Finance approval of an older revision is contrast evidence.',
+  },
+}
+
+function auditedEvidence(id, observed, answered, conclusionCorrect, invalidCount, duplicateCount) {
+  const {support,contrast,context,rationale}=auditedRubric[id]
+  if(!answered) return {supportCovered:null,supportedConclusion:false,minimalSupportMatch:null,
+    missingSupport:null,contrastApplicable:contrast.length>0,contrastCovered:null,missingContrast:null,
+    citedContext:null,unrelated:null,rationale}
+  const missingSupport=support.filter(key=>!observed.includes(key))
+  const missingContrast=contrast.filter(key=>!observed.includes(key))
+  const supportCovered=missingSupport.length===0
+  const related=new Set([...support,...contrast,...context])
+  return {supportCovered,supportedConclusion:conclusionCorrect && supportCovered,
+    minimalSupportMatch:supportCovered && observed.length===support.length && !invalidCount && !duplicateCount,
+    missingSupport,contrastApplicable:contrast.length>0,
+    contrastCovered:contrast.length?missingContrast.length===0:null,missingContrast,
+    citedContext:context.filter(key=>observed.includes(key)),
+    unrelated:observed.filter(key=>!related.has(key)),rationale}
+}
+
+function auditedSummary(rows) {
+  const count=key=>rows.filter(row=>row.audit[key]===true).length
+  return {total:rows.length, supportCovered:count('supportCovered'), supportedConclusions:count('supportedConclusion'),
+    minimalSupportMatch:count('minimalSupportMatch'), contrastCases:count('contrastApplicable'),
+    contrastCovered:count('contrastCovered'), unrelatedReferenceCount:rows.reduce((n,row)=>n+(row.audit.unrelated?.length??0),0)}
+}
+
 function summary(rows) {
   const count = key => rows.filter(row => row[key] === true).length
   return { total:rows.length, answered:count('answered'), correctConclusions:count('conclusionCorrect'),
@@ -83,7 +142,8 @@ export function scoreDocumentReview({ reports } = {}) {
     const row = input.get(id)
     const answered = ['a','b','c'].includes(row?.answer) && Array.isArray(row?.evidence)
     if (!answered) return {id,difficulty,answered:false,conclusionCorrect:null,requiredCovered:null,exactEvidence:null,
-      fullyCorrect:false,missing:null,additional:null,invalidCount:null,duplicateCount:null}
+      fullyCorrect:false,missing:null,additional:null,invalidCount:null,duplicateCount:null,
+      audit:auditedEvidence(id,[],false,false,null,null)}
     const valid = row.evidence.filter(key => typeof key === 'string' && Object.hasOwn(records,key))
     const observed = [...new Set(valid)]
     const missing = required.filter(key => !observed.includes(key))
@@ -92,9 +152,12 @@ export function scoreDocumentReview({ reports } = {}) {
     const conclusionCorrect = row.answer === answer, requiredCovered = missing.length === 0
     const exactEvidence = requiredCovered && !additional.length && !invalidCount && !duplicateCount
     return {id,difficulty,answered,conclusionCorrect,requiredCovered,exactEvidence,
-      fullyCorrect:conclusionCorrect && exactEvidence,missing,additional,invalidCount,duplicateCount}
+      fullyCorrect:conclusionCorrect && exactEvidence,missing,additional,invalidCount,duplicateCount,
+      audit:auditedEvidence(id,observed,true,conclusionCorrect,invalidCount,duplicateCount)}
   })
-  return {summary:summary(results), byDifficulty:Object.fromEntries(strata.map(d=>[d,summary(results.filter(r=>r.difficulty===d))])),results}
+  return {summary:summary(results), byDifficulty:Object.fromEntries(strata.map(d=>[d,summary(results.filter(r=>r.difficulty===d))])),
+    auditedRubric:{version:'office-record-support-v2',scope:'authored sufficient sets for this fixed fixture; not general semantic verification',
+      summary:auditedSummary(results),byDifficulty:Object.fromEntries(strata.map(d=>[d,auditedSummary(results.filter(r=>r.difficulty===d))]))},results}
 }
 
 /** Strict format and substantive content are independent observations. */

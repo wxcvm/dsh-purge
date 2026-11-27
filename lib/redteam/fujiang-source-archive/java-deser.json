@@ -1,0 +1,245 @@
+[
+  {
+    "id": "fujiang:java-deser:cve-2015-4852-weblogic-t3",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2015-4852-weblogic-t3.md",
+    "metadata": {
+      "title": "WebLogic T3 反序列化（CommonsCollections）",
+      "cve": "CVE-2015-4852",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Oracle WebLogic Server",
+      "versions": "10.3.6.0、12.1.2.0、12.1.3.0、12.2.1.0（未打 CPU）",
+      "ports": "7001, 7002",
+      "keywords": "weblogic, t3, deserialization, commonscollections, ysoserial",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 Oracle CPU（2015-10/2016-01）；无法升级时用 `-Dweblogic.security.SSL.nojndi` 不行——正确做法是装 `SerialFilter`（JEP 290）或反代只放 `/console`。",
+    "reference_notes": "- NVD CVE-2015-4852；Breens 的 T3 分析；Oracle CPU Oct 2015。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2015-4852-weblogic-t3.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2016-4437-shiro-rememberme",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2016-4437-shiro-rememberme.md",
+    "metadata": {
+      "title": "Shiro rememberMe 默认密钥反序列化 RCE（CVE-2016-4437）",
+      "cve": "CVE-2016-4437",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Apache Shiro <= 1.2.4（或仍用默认 key 的版本）",
+      "versions": "1.2.4 及更早；1.2.5+ 需仍用默认/弱 key",
+      "ports": "80, 443, 8080",
+      "keywords": "shiro, rememberme, 反序列化, 默认密钥, java",
+      "verified": "false",
+      "sources": "公开资料整理（Shiro 公告 + 公开利用工具）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 1.7+ 并更换 AES key（随机生成、从配置读）；关掉无用的 rememberMe。",
+    "reference_notes": "- Apache Shiro CVE-2016-4437；shiro_attack 工具。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2016-4437-shiro-rememberme.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2017-10271-weblogic-wls-wsat",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2017-10271-weblogic-wls-wsat.md",
+    "metadata": {
+      "title": "WebLogic wls-wsat XMLDecoder 反序列化 RCE",
+      "cve": "CVE-2017-10271",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Oracle WebLogic Server",
+      "versions": "10.3.6.0、12.1.3.0、12.2.1.0-12.2.1.2",
+      "ports": "7001, 7002",
+      "keywords": "weblogic, wls-wsat, xmldecoder, soap, coordinatorporttype",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 Oracle CPU 补丁；删除/禁用 `wls-wsat`、`wls9_async_response`。\n- WAF 拦 `/wls-wsat/`、`CoordinatorPortType`、XML 里的 `java.beans.XMLDecoder`。",
+    "reference_notes": "- NVD CVE-2017-10271；Oracle CPU Oct 2017。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2017-10271-weblogic-wls-wsat.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2017-5638-struts2-s2-045",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2017-5638-struts2-s2-045.md",
+    "metadata": {
+      "title": "Struts2 S2-045 Content-Type OGNL 注入",
+      "cve": "CVE-2017-5638",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Apache Struts2",
+      "versions": "2.3.5-2.3.31、2.5-2.5.10",
+      "ports": "8080, 8443",
+      "keywords": "struts2, s2-045, ognl, multipart, content-type",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 `2.3.32` / `2.5.10.1` 以上（S2-045/S2-046），后续按 S2-0xx 逐个升。\n- 临时：WAF 拦 `Content-Type` 中的 `%{(`、`ognl`、`ProcessBuilder`；下线不必要的上传 action。",
+    "reference_notes": "- NVD CVE-2017-5638；Apache Struts2 S2-045 公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2017-5638-struts2-s2-045.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2021-44228-log4shell",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2021-44228-log4shell.md",
+    "metadata": {
+      "title": "Apache Log4j2 JNDI 注入（Log4Shell）",
+      "cve": "CVE-2021-44228",
+      "severity": "critical",
+      "source_cvss": "10.0",
+      "product": "Apache Log4j2 (log4j-core)",
+      "versions": "2.0-beta9 至 2.14.1",
+      "ports": "8080, 8443, 443, 9200, 8983",
+      "keywords": "log4j, log4shell, jndi, ldap, rmi, dnslog",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 `log4j-core` 到 `2.17.0+`（2.16.0 已移除 JNDI 支持；2.15.0 只在默认配置下有效）。\n- 临时：`-Dlog4j2.formatMsgNoLookups=true`（仅 2.10+），或从 jar 中删除 `org/apache/logging/log4j/core/lookup/JndiLookup.class`，或 `log4j2.component.properties` 里关 lookup。\n- 检测：全盘搜 `log4j-core-*.jar` 与 jar 内是否含 `JndiLookup.class`。",
+    "reference_notes": "- NVD CVE-2021-44228；Apache Log4j Security Vulnerabilities 页面；LunaSec log4shell 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2021-44228-log4shell.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2022-1471-snakeyaml",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2022-1471-snakeyaml.md",
+    "metadata": {
+      "title": "SnakeYAML 反序列化 RCE（CVE-2022-1471）",
+      "cve": "CVE-2022-1471",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "SnakeYAML（Spring Boot 的 YAML 解析、各类 Java 应用）",
+      "versions": "<= 1.33（2.0 需 Constructor 才不安全）",
+      "ports": "8080, 443",
+      "keywords": "snakeyaml, yaml, 2022-1471, 反序列化, rce, java",
+      "verified": "false",
+      "sources": "公开资料整理（SnakeYAML 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升 SnakeYAML 2.0+ 并用 `SafeConstructor`；禁不可信 YAML。",
+    "reference_notes": "- SnakeYAML CVE-2022-1471。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2022-1471-snakeyaml.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2022-21449-psychic-signatures",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2022-21449-psychic-signatures.md",
+    "metadata": {
+      "title": "Java ECDSA 空签名绕过（Psychic Signatures）",
+      "cve": "CVE-2022-21449",
+      "severity": "high",
+      "source_cvss": "7.5",
+      "product": "Oracle JDK / OpenJDK",
+      "versions": "15 - 15.0.6、17 - 17.0.2、18 - 18.0.1",
+      "ports": "443, 8080",
+      "keywords": "ecdsa, psychic-signatures, jwt, es256, saml, 签名绕过",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 JDK 到 15.0.7 / 17.0.3 / 18.0.2 及以上（含各发行版 backport）。\n- 应用层加固：验签库显式拒绝 `r==0 || s==0`；JWT 强制校验 `alg` 白名单。",
+    "reference_notes": "- NVD CVE-2022-21449；Meta 的 \"Psychic Signatures\" 分析；Oracle CPU Apr 2022。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2022-21449-psychic-signatures.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2022-22965-spring4shell",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2022-22965-spring4shell.md",
+    "metadata": {
+      "title": "Spring Framework 数据绑定 RCE（Spring4Shell）",
+      "cve": "CVE-2022-22965",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Spring Framework + Tomcat (WAR 部署)",
+      "versions": "5.3.0-5.3.17、5.2.0-5.2.19，JDK 9+",
+      "ports": "8080, 8443",
+      "keywords": "spring, spring4shell, classloader, tomcat, accessLogValve",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- Spring Framework 升到 `5.3.18+` / `5.2.20+`（`WebDataBinder` 默认拒绝 `class.*`）。\n- 临时：控制器加 `@InitBinder` 并 `setDisallowedFields(\"class.*\", \"Class.*\", \"*.class.*\", \"*.Class.*\")`；Tomcat 侧限制 `pattern` 属性；WAF 拦 `class.module.classLoader`。\n- 顺带排查同源：`CVE-2022-22963`（Spring Cloud Function SpEL）、`CVE-2022-22947`（Gateway Actuator SpEL）。",
+    "reference_notes": "- NVD CVE-2022-22965；Spring 官方公告；Spring4Shell 公开分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2022-22965-spring4shell.md"
+  },
+  {
+    "id": "fujiang:java-deser:cve-2022-25845-fastjson-autotype",
+    "category": "java-deser",
+    "source_ref": "plugin/knowledge/java-deser/cve-2022-25845-fastjson-autotype.md",
+    "metadata": {
+      "title": "Fastjson autoType 反序列化 RCE",
+      "cve": "CVE-2022-25845",
+      "severity": "high",
+      "source_cvss": "8.1",
+      "product": "com.alibaba:fastjson",
+      "versions": "<= 1.2.80（另 CVE-2017-18349 等历史链）",
+      "ports": "8080, 8443",
+      "keywords": "fastjson, autotype, jdbcrowsetimpl, jndi, json",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 `1.2.83+`，并显式 `ParserConfig.getGlobalInstance().setSafeMode(true)`（业务不用 autoType 时）。\n- 反序列化一律走白名单 `JSONReader.Feature`；拒绝不可信输入。",
+    "reference_notes": "- NVD CVE-2022-25845；Fastjson 安全公告与 autoType 黑名单变更记录。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-java-deser/cve-2022-25845-fastjson-autotype.md"
+  }
+]

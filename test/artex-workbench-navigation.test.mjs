@@ -103,3 +103,100 @@ test('platform refresh retains unsaved selection while recording persisted confi
     assert.match(code, /if \(revision === sourceRevision.current\) \{\s+sourceDirty.current = false/)
   }
 })
+
+test('confirmed ARTEX exposes a direct link to its Purge intelligence tab in source and bundle', () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const start = src.indexOf("h('h4', { style: { margin: 0 } }, 'ARTEX 联合工作台 · 本机联动')")
+    const end = src.indexOf("error ? h('p', { className: 'rt-err'", start)
+    assert.ok(start >= 0 && end > start, path)
+    const toolbar = src.slice(start, end)
+    assert.match(toolbar, /state && state\.online \? h\('a'/)
+    assert.match(toolbar, /http:\/\/127\.0\.0\.1:8787\/function\/sync\?tab=purge-intel/)
+    assert.match(toolbar, /打开 ARTEX 情报同步/)
+    assert.match(toolbar, /打开 ARTEX'/)
+  }
+})
+
+test('changing or reloading ARTEX pairing invalidates stale company overview', () => {
+  for (const path of ['../lib/redteam/client.js', '../client.js']) {
+    const src = readFileSync(new URL(path, import.meta.url), 'utf8')
+    const panelStart = src.indexOf('function ArtexIntelPanel(props)')
+    const panelEnd = src.indexOf('function ArtexProjectOverview(props)', panelStart)
+    const parentStart = src.indexOf('function ArtexTab(props)')
+    assert.ok(panelStart >= 0 && panelEnd > panelStart && parentStart >= 0)
+    const panel = src.slice(panelStart, panelEnd)
+    const parent = src.slice(parentStart)
+    assert.match(panel, /setConfig\(r\); setPairToken\(''\); setPairCompany[^\n]*\n\s*props\.onPairingChange\?\.\(\)/)
+    assert.match(panel, /const reload = \(\) => \{\s*props\.onPairingChange\?\.\(\)/)
+    assert.match(parent, /onPairingChange: \(\) => setPairingRevision\(v => v \+ 1\)/)
+    assert.match(parent, /key: \(props\.engagement \|\| 'none'\) \+ ':' \+ pairingRevision/)
+  }
+})
+
+function readinessViews(file) {
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+  const helper = (name, next) => {
+    const start = source.indexOf('function ' + name + '(')
+    const end = source.indexOf('function ' + next + '(', start)
+    assert.ok(start >= 0 && end > start, name + ' must exist in ' + file)
+    const h = (tag, props, ...children) => ({ tag, props, children })
+    return new Function('h', source.slice(start, end) + '\nreturn ' + name)(h)
+  }
+  return { local: helper('ArtexLocalReadiness', 'ArtexTab'), pairing: helper('ArtexIntelPairingStatus', 'ArtexIntelPanel') }
+}
+
+function readinessText(tree) {
+  if (typeof tree === 'string') return tree
+  if (Array.isArray(tree)) return tree.map(readinessText).join(' ')
+  return tree ? readinessText(tree.children) : ''
+}
+
+test('ARTEX readiness distinguishes health, zero files, path adoption and untested execution', () => {
+  for (const file of ['../lib/redteam/client.js', '../client.js']) {
+    const { local } = readinessViews(file)
+    const confirmed = { state: 'detected', online: true, version: '0.6.0', httpStatus: 200, tools: [] }
+    const zero = readinessText(local({ state: confirmed }))
+    assert.match(zero, /ARTEX 本机服务已确认 · 0.6.0 · HTTP 200/)
+    assert.match(zero, /本机工具文件 已发现 0 个/)
+    assert.match(zero, /DSH 路径采用 采用 0 个 ARTEX 路径/)
+    assert.match(zero, /工具执行验证 未检查/)
+    assert.match(zero, /不影响服务身份判断/)
+    const found = readinessText(local({ state: { ...confirmed, tools: [
+      { id: 'sample-1', reused: true, path: 'secret-path' },
+      { id: 'sample-2', reused: false },
+    ] }, busy: true }))
+    assert.match(found, /下方为上次结果/)
+    assert.match(found, /本机工具文件 已发现 2 个/)
+    assert.match(found, /DSH 路径采用 采用 1 个 ARTEX 路径/)
+    assert.doesNotMatch(found, /secret-path/)
+    const incomplete = readinessText(local({ state: { ...confirmed, tools: undefined } }))
+    assert.match(incomplete, /本机工具文件 未取得清单/)
+    assert.match(incomplete, /DSH 路径采用 未确认/)
+    assert.doesNotMatch(incomplete, /0 个/)
+    const candidate = readinessText(local({ state: { state: 'service_candidate', httpStatus: 200, tools: [] } }))
+    assert.match(candidate, /尚未确认是 ARTEX · HTTP 200/)
+    assert.doesNotMatch(candidate, /本机服务已确认/)
+    assert.match(readinessText(local({ failed: true })), /读取失败，状态未知/)
+    assert.match(readinessText(local({ busy: true })), /正在检测/)
+    assert.match(readinessText(local({})), /尚未检测/)
+  }
+})
+
+test('ARTEX pairing says unconfigured only after the configuration reports it', () => {
+  for (const file of ['../lib/redteam/client.js', '../client.js']) {
+    const { pairing } = readinessViews(file)
+    const failed = readinessText(pairing({ failed: true }))
+    assert.match(failed, /配置读取失败/)
+    assert.doesNotMatch(failed, /未配置/)
+    assert.match(readinessText(pairing({ loading: true })), /读取中/)
+    const unconfigured = readinessText(pairing({ config: { configured: false } }))
+    assert.match(unconfigured, /未配置独立情报令牌或公司 ID/)
+    assert.match(unconfigured, /不影响本机服务检测/)
+    const configured = { configured: true, companyId: 12 }
+    assert.match(readinessText(pairing({ config: configured })), /公司 #12 · 本机配置已记录/)
+    assert.match(readinessText(pairing({ config: configured })), /尚未检测两端配对/)
+    assert.doesNotMatch(readinessText(pairing({ config: configured, pairing: { ok: true } })), /尚未检测两端配对/)
+    assert.match(readinessText(pairing({})), /尚未读取配对配置/)
+  }
+})

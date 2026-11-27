@@ -1,0 +1,299 @@
+[
+  {
+    "id": "fujiang:linux-priv:cve-2021-3156-baron-samedit",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2021-3156-baron-samedit.md",
+    "metadata": {
+      "title": "Baron Samedit（sudo 堆溢出提权）",
+      "cve": "CVE-2021-3156",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "sudo",
+      "versions": "1.8.2 - 1.8.31p2、1.9.0 - 1.9.5p1",
+      "ports": "本地",
+      "keywords": "sudo, baron-samedit, sudoedit, heap-overflow, cve-2021-3156",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 sudo 到 1.9.5p2 及以上；`sudo -V` 复核。",
+    "reference_notes": "- NVD CVE-2021-3156；Qualys 分析；blasty PoC。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2021-3156-baron-samedit.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2021-3493-ubuntu-overlayfs",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2021-3493-ubuntu-overlayfs.md",
+    "metadata": {
+      "title": "Ubuntu overlayfs 本地提权（2021）",
+      "cve": "CVE-2021-3493",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Ubuntu Linux kernel（overlayfs）",
+      "versions": "Ubuntu 14.04 - 20.10（2021-04 前内核）",
+      "ports": "本地",
+      "keywords": "ubuntu, overlayfs, 3493, userns, setuid",
+      "verified": "false",
+      "sources": "NVD / Ubuntu USN / 公开 PoC"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 Ubuntu 内核（USN-4910-1 等）；`kernel.unprivileged_userns_clone=0`。",
+    "reference_notes": "- NVD CVE-2021-3493；Ubuntu USN-4910-1。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2021-3493-ubuntu-overlayfs.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2021-4034-pwnkit",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2021-4034-pwnkit.md",
+    "metadata": {
+      "title": "PwnKit（polkit pkexec 本地提权）",
+      "cve": "CVE-2021-4034",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "polkit (pkexec)",
+      "versions": "2009 - 2021（几乎所有发行版默认安装）",
+      "ports": "本地",
+      "keywords": "pwnkit, pkexec, polkit, suid, cve-2021-4034",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 polkit 到修复版本（Ubuntu 20.04: `policykit-1 0.105-26ubuntu1.2`+ 等）。\n- 无法升级：`chmod 0755 /usr/bin/pkexec` 去掉 SUID（会削弱桌面授权功能）。",
+    "reference_notes": "- NVD CVE-2021-4034；Qualys 分析；berdav PoC。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2021-4034-pwnkit.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2022-0185-fs-context-overflow",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2022-0185-fs-context-overflow.md",
+    "metadata": {
+      "title": "fs_context 堆溢出提权（legacy_parse_param）",
+      "cve": "CVE-2022-0185",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Linux kernel",
+      "versions": "5.4 - 5.16.1（含多数发行版 LTS）",
+      "ports": "本地",
+      "keywords": "fs_context, heap overflow, unshare, userns, cap_sys_admin",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 5.16.2+ 或对应发行版内核；临时 `sysctl kernel.unprivileged_userns_clone=0`。",
+    "reference_notes": "- NVD CVE-2022-0185；Crusaders of Rust 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2022-0185-fs-context-overflow.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2022-0847-dirtypipe",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2022-0847-dirtypipe.md",
+    "metadata": {
+      "title": "Dirty Pipe（页缓存写覆盖提权）",
+      "cve": "CVE-2022-0847",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Linux kernel",
+      "versions": "5.8 - 5.16.11、5.15.25、5.10.102 之前",
+      "ports": "本地",
+      "keywords": "dirtypipe, page-cache, splice, cve-2022-0847",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级内核到 5.16.11 / 5.15.25 / 5.10.102 及以上。",
+    "reference_notes": "- NVD CVE-2022-0847；Max Kellermann 原文分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2022-0847-dirtypipe.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2023-0386-overlayfs",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2023-0386-overlayfs.md",
+    "metadata": {
+      "title": "overlayfs copy-up 权限绕过提权",
+      "cve": "CVE-2023-0386",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Linux kernel overlayfs",
+      "versions": "5.11 - 6.2（Ubuntu 22.04、Debian 12 等）",
+      "ports": "本地",
+      "keywords": "overlayfs, copy-up, setuid, unshare, cve-2023-0386",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级内核；临时关闭 unprivileged userns（`kernel.unprivileged_userns_clone=0`）。",
+    "reference_notes": "- NVD CVE-2023-0386；xkaneiki PoC 与 writeup。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2023-0386-overlayfs.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2023-22809-sudo-edit",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2023-22809-sudo-edit.md",
+    "metadata": {
+      "title": "sudoedit 环境变量注入提权（EDITOR 带 --）",
+      "cve": "CVE-2023-22809",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "sudo",
+      "versions": "1.8.0 - 1.9.12p1",
+      "ports": "本地",
+      "keywords": "sudo, sudoedit, editor, 22809, 提权",
+      "verified": "false",
+      "sources": "NVD / sudo 公告 / Synacktiv 分析"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 sudo 到 1.9.12p2+；sudoers 里尽量不给 `sudoedit` 通配权限。",
+    "reference_notes": "- NVD CVE-2023-22809；Synacktiv 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2023-22809-sudo-edit.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2023-2640-gameoverlay",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2023-2640-gameoverlay.md",
+    "metadata": {
+      "title": "Ubuntu overlayfs 权限提升（GameOver(lay)）",
+      "cve": "CVE-2023-2640 / CVE-2023-32629",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Ubuntu Linux kernel（overlayfs）",
+      "versions": "Ubuntu 22.04（5.15/5.19）、23.04（6.2）等未打版",
+      "ports": "本地",
+      "keywords": "ubuntu, overlayfs, gameoverlay, xattr, setuid, 提权",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 Ubuntu 内核（2023-07 的 `linux-image` 更新，Ubuntu 会回滚该 xattr 放行）。\n- 临时：`sysctl kernel.unprivileged_userns_clone=0`；禁用 overlayfs（容器宿主慎用）。",
+    "reference_notes": "- NVD CVE-2023-2640、CVE-2023-32629；Wiz 的 GameOver(lay) 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2023-2640-gameoverlay.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2023-32233-nftables",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2023-32233-nftables.md",
+    "metadata": {
+      "title": "nf_tables 释放后重用提权（2023）",
+      "cve": "CVE-2023-32233",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Linux kernel（netfilter nf_tables）",
+      "versions": "<= 6.3.1（多数发行版 2023-05 前内核）",
+      "ports": "本地",
+      "keywords": "nftables, netfilter, uaf, 32233, unshare",
+      "verified": "false",
+      "sources": "NVD / 公开分析 / PoC 仓库"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级内核到 6.3.2+ / 发行版补丁；`kernel.unprivileged_userns_clone=0`。",
+    "reference_notes": "",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2023-32233-nftables.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2024-0582-io-uring-uaf",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2024-0582-io-uring-uaf.md",
+    "metadata": {
+      "title": "Linux io_uring 本地提权（CVE-2024-0582）",
+      "cve": "CVE-2024-0582",
+      "severity": "high",
+      "source_cvss": "8.8",
+      "product": "Linux 内核 io_uring（IORING_OP_FIXED_FILES）",
+      "versions": "6.4 - 6.6.4（6.6.5 / 6.7 修复）",
+      "ports": "-",
+      "keywords": "linux, io_uring, 2024-0582, uaf, 本地提权",
+      "verified": "false",
+      "sources": "公开资料整理（内核补丁 + 公开 exp）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升 6.6.5+；`kernel.io_uring_disabled=2`；容器禁 io_uring。",
+    "reference_notes": "- 内核 6.6.5 修复提交。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2024-0582-io-uring-uaf.md"
+  },
+  {
+    "id": "fujiang:linux-priv:cve-2024-1086-nftables",
+    "category": "linux-priv",
+    "source_ref": "plugin/knowledge/linux-priv/cve-2024-1086-nftables.md",
+    "metadata": {
+      "title": "nf_tables 释放后重用提权",
+      "cve": "CVE-2024-1086",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Linux kernel netfilter",
+      "versions": "5.14 - 6.6（多数发行版 2024-01 前内核）",
+      "ports": "本地",
+      "keywords": "nftables, netfilter, uaf, unshare, cve-2024-1086",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级内核到修复版本（各发行版 2024-01 后的内核）。\n- 临时：`kernel.unprivileged_userns_clone=0`（Debian/Ubuntu）或 `user.max_user_namespaces=0`。",
+    "reference_notes": "- NVD CVE-2024-1086；Notselwyn 的分析与 PoC。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-linux-priv/cve-2024-1086-nftables.md"
+  }
+]
