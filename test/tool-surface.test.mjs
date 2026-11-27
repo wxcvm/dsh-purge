@@ -79,6 +79,20 @@ test('reviewed tool names match source declarations and actual registrations', a
   }
   apply(ctx)
   assert.deepEqual([...registered.keys()].sort(), expected)
+
+  const selector = registered.get('redteam_tool_select')
+  const toolPlan = JSON.parse(await selector.execute({
+    task: 'web', include_environments: false,
+  }, {}))
+  const httpxCandidate = toolPlan.candidates.find(item => item.id === 'httpx')
+  assert.ok(httpxCandidate)
+  assert.equal(httpxCandidate.executionAdapter, 'redteam_scan_run')
+  assert.deepEqual(httpxCandidate.skillRequirements.map(item => item.key), [
+    'redteam:recon-pipeline', 'redteam:web-fingerprint',
+  ])
+  assert.equal(httpxCandidate.automaticExecutionAllowed, false)
+  assert.equal(toolPlan.skillPlan.readTool, 'redteam_skill_read')
+  assert.equal(toolPlan.executionGuard.scopeReviewTool, 'redteam_scope_review')
   const quality = registered.get('redteam_data_quality')
   const read = JSON.parse(await quality.execute({ engagement: 'fixture' }, {}))
   assert.deepEqual(read, {
