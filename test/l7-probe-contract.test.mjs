@@ -43,7 +43,7 @@ test('TUN L7 probe requires a read Skill, explicit per-call confirmation, one sc
   const skillRead = registered.get('redteam_skill_read')
   assert.ok(l7)
   assert.ok(skillRead)
-  const exec = { sessionId: 'l7-probe-contract-root' }
+  const exec = { agent: { session: { id: 'l7-probe-contract-root' } } }
   const scoped = redteam.openEngagement('l7-scoped', ['192.0.2.0/24'], { bindCurrent: false }).id
   const call = async (engagement, args) => JSON.parse(await l7.execute({ engagement, ...args }, exec))
 
