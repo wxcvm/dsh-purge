@@ -206,6 +206,20 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(approvedSkill.quarantined, false)
   assert.equal(approvedSkill.skillReadReceipt, 'recorded-for-current-root-session')
 
+  const knowledgeGetTool = registered.get('redteam_knowledge_get')
+  const quarantinedKnowledge = JSON.parse(await knowledgeGetTool.execute({
+    source: 'redteam', id: 'redteam:credential-attack',
+  }, {}))
+  assert.equal(quarantinedKnowledge.contentTrust, 'quarantined')
+  assert.equal(quarantinedKnowledge.executionPolicy, 'quarantined-reference-only')
+  assert.equal(quarantinedKnowledge.executable, false)
+  assert.doesNotMatch(quarantinedKnowledge.item.body, /hydra|password.spray|weak.password/i)
+  const referenceKnowledge = JSON.parse(await knowledgeGetTool.execute({
+    source: 'redteam', id: 'redteam:business-security-controls',
+  }, {}))
+  assert.equal(referenceKnowledge.contentTrust, 'reference-only')
+  assert.equal(referenceKnowledge.executable, false)
+
   // 1. 两个工具确实注册了
   assert.ok(registered.has('redteam_exploit_chain'), 'redteam_exploit_chain must be registered')
   assert.ok(registered.has('redteam_internal_campaign'), 'redteam_internal_campaign must be registered')
