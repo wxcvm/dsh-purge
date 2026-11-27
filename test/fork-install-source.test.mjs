@@ -43,7 +43,7 @@ const UPSTREAM_README_BLOBS = Object.freeze({
 })
 
 function gitBlobSha(content) {
-  const bytes = Buffer.from(content, 'utf8')
+  const bytes = Buffer.from(String(content).replace(/\r\n/g, '\n'), 'utf8')
   return createHash('sha1').update('blob ' + bytes.length + '\0').update(bytes).digest('hex')
 }
 
