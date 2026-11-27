@@ -150,3 +150,24 @@ test('both browser client surfaces have visible Kali configuration and operation
   assert.match(host, /if \(op === 'kaliVmInspect'\) return inspectKaliVm/)
   assert.match(host, /if \(op === 'kaliVmToolProbe'\) return observedProbe\(probeKaliVmTool/)
 })
+
+test('SSH Kali httpx probe tries only catalogued Linux aliases', async (t) => {
+  const root = workspace(t)
+  savePlatformConfig({ kaliVm: vm }, root)
+  const calls = []
+  const result = await probeKaliVmTool('httpx', {
+    root,
+    execFileFn: (_binary, args, _opts, done) => {
+      const remote = args.at(-1)
+      calls.push(remote)
+      if (remote === 'httpx-toolkit -version') {
+        return done(Object.assign(new Error('remote command missing'), { code: 127 }), '', 'not found')
+      }
+      assert.equal(remote, 'pd-httpx -version')
+      done(null, 'httpx 1.6.0\\n', '')
+    },
+  })
+  assert.deepEqual(calls, ['httpx-toolkit -version', 'pd-httpx -version'])
+  assert.equal(result.status, 'probe_verified')
+  assert.equal(result.binary, 'pd-httpx')
+})
