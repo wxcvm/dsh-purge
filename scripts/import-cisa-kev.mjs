@@ -26,7 +26,7 @@ export function normalizeCisaKevPayload(payload, options = {}) {
   }
   const catalogVersion = clean(payload.catalogVersion)
   const dateReleased = clean(payload.dateReleased)
-  const mirrorCommit = clean(options.sourceCatalogCommit)
+  const mirrorCommit = clean(options?.sourceCatalogCommit)
   if (mirrorCommit && !/^[\da-f]{40}$/i.test(mirrorCommit)) {
     throw new Error('CISA mirror commit must be a 40-character hexadecimal SHA')
   }
