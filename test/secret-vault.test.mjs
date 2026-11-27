@@ -118,3 +118,40 @@ test('operator key must have exactly 64 hexadecimal characters without trailing 
   }
   assert.equal(new SecretVault(KEY.toUpperCase()).enabled, true)
 })
+
+
+test('model-facing metadata views never decrypt or expose credential, WebShell or tunnel secrets', (t) => {
+  const { root, store, track } = fixture(t, KEY)
+  const id = store.openEngagement('metadata-only').id
+  store.addCredential(id, { host: 'asset.example', username: 'operator', secret_value: 'metadata-secret-marker' })
+  store.addWebshell(id, { url: 'https://private.example/shell', pass_key: 'webshell-secret-marker', shell_type: 'behinder' })
+  store.addTunnel(id, {
+    kind: 'socks5', listen: '127.0.0.1:1080', reach: '10.0.0.0/8',
+    entry: 'https://private.example/shell', command: 'sensitive-tunnel-command',
+  })
+
+  const credential = store.listCredentialMetadata(id)[0]
+  const webshell = store.listWebshellMetadata(id)[0]
+  const tunnel = store.listTunnelMetadata(id)[0]
+  const summary = store.sessionMetadataSummary(id)
+  for (const item of [credential, webshell, tunnel, summary]) {
+    const serialized = JSON.stringify(item)
+    assert.equal(serialized.includes('metadata-secret-marker'), false)
+    assert.equal(serialized.includes('webshell-secret-marker'), false)
+    assert.equal(serialized.includes('sensitive-tunnel-command'), false)
+  }
+  assert.equal(Object.hasOwn(credential, 'secret_value'), false)
+  assert.equal(credential.secret_present, true)
+  assert.equal(Object.hasOwn(webshell, 'pass_key'), false)
+  assert.equal(Object.hasOwn(webshell, 'url'), false)
+  assert.equal(webshell.secret_present, true)
+  assert.equal(Object.hasOwn(tunnel, 'command'), false)
+  assert.equal(Object.hasOwn(tunnel, 'listen'), false)
+  assert.equal(Object.hasOwn(tunnel, 'reach'), false)
+  assert.equal(tunnel.command_present, true)
+
+  store.close()
+  const noKey = track(new RedteamStore(root))
+  assert.equal(noKey.listCredentialMetadata(id)[0].secret_present, true)
+  assert.equal(noKey.sessionMetadataSummary(id).totals.credentials, 1)
+})
