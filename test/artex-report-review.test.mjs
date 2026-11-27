@@ -235,3 +235,21 @@ test('ARTEX report availability and all native triage states remain distinct', (
   assert.equal(out.review_queue[3].report_available, true);
   assert.equal(out.independently_confirmed_by_dsh, 0);
 });
+
+test('an ARTEX report distinguishes declared source IDs and refuses mixed-source merges', () => {
+  const a = '0123456789abcdef0123456789abcdef'
+  const b = 'fedcba9876543210fedcba9876543210'
+  const file = structuredClone(sample)
+  assert.equal(reviewArtexSarif(file).source_id, null)
+  file.runs[0].properties = { artexSourceId: a.toUpperCase() }
+  assert.equal(reviewArtexSarif(file).source_id, a)
+  const other = structuredClone(file.runs[0])
+  other.properties.artexSourceId = b
+  file.runs.push(other)
+  assert.throws(() => reviewArtexSarif(file), /不同或未声明/)
+  delete file.runs[1].properties
+  assert.throws(() => reviewArtexSarif(file), /不同或未声明/)
+  file.runs.pop()
+  file.runs[0].properties.artexSourceId = 'not-an-id'
+  assert.throws(() => reviewArtexSarif(file), /来源标识无效/)
+})
