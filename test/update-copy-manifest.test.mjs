@@ -18,7 +18,7 @@ test('self-update copies every declared package payload root',()=>{
   assert(names.includes('package.json'));
 });
 
-test('ZIP overlay retains runtime imports from scripts and shipped preset resources',async()=>{
+test('ZIP overlay retains runtime imports, preset resources and third-party notices',async()=>{
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'purge-overlay-'));
   try{
     const src=path.join(temp,'src'),dst=path.join(temp,'dst');
@@ -28,6 +28,9 @@ test('ZIP overlay retains runtime imports from scripts and shipped preset resour
       'scripts/vps-admin-check.mjs':'export const check = true;',
       'presets/redteam/preset.yml':'name: example',
       'skills/example.md':'example',
+      'skills/redteam/source-manifest.json':'{}',
+      'third_party/CallMeGuLab-dsh-purge-safe/LICENSE':'upstream license',
+      'third_party/CallMeGuLab-dsh-purge-safe/NOTICE':'upstream notice',
       'maintenance/example.txt':'example',
       'NOTICE':'example',
     };

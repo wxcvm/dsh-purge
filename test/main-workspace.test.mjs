@@ -16,7 +16,7 @@ test('Purge uses the native main panel and matching global sidebar entry', () =>
 })
 
 test('the main page reuses real clean and redteam components instead of a mockup', () => {
-  assert.match(client, /page === "clean" \? h\(SettingsRoot, \{ t, workspace: true \}\) : h\(__dshPurgeDrill\.Panel, \{ embedded: true \}\)/)
+  assert.match(client, /page === "clean" \? h\(SettingsRoot, \{ t, workspace: true \}\)\s*: h\(__dshPurgeDrill\.Panel, \{ embedded: true, onOpenReportSession, maskReportOrigin \}\)/)
   assert.match(client, /"data-workspace": page === "clean" \? "clean" : "redteam"/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
   assert.match(client, /showPurgeWorkspace\("drill"\)/)
@@ -35,7 +35,7 @@ test('native clean workspace has separate navigation without discarding edits', 
   assert.match(client, /const \[section, setSection\] = useState\("overview"\)/)
   assert.match(client, /"aria-label": "清洗台功能导航"/)
   assert.match(client, /"aria-current": section === item.id \? "page" : undefined/)
-  assert.match(client, /className: "dshp-clean-pane", hidden: section === "rules"/)
+  assert.match(client, /hidden: section === "rules" \|\| \(section === "prompt" && !redteamExpanded\)/)
   assert.match(client, /className: "dshp-clean-pane", hidden: section !== "rules"/)
   assert.match(client, /h\(PurgifySection, null\)/)
   assert.match(client, /h\(RulesSection, null\)/)
@@ -44,8 +44,8 @@ test('native clean workspace has separate navigation without discarding edits', 
 })
 
 test('clean pages reuse one state owner and keep hidden editors mounted', () => {
-  assert.match(client, /h\(PurgifySection, \{ section \}\)/)
-  assert.match(client, /function PurgifySection\(\{ section \} = \{\}\)/)
+  assert.match(client, /h\(PurgifySection, \{ section, onNavigate: navigate \}\)/)
+  assert.match(client, /function PurgifySection\(\{ section, onNavigate \} = \{\}\)/)
   for (const id of ['overview', 'patches', 'prompt', 'maintenance', 'rules']) {
     assert.ok(client.includes('{ id: "' + id + '", title:'))
   }

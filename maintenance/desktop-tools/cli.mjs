@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { MAX_INPUT_BYTES, validateRecords, renderReport, replayRecords } from './records.mjs';
+import { MAX_INPUT_BYTES, validateRecords, renderReport, replayRecords, resumeRecords } from './records.mjs';
 import { listTemplates, getTemplate } from './catalog.mjs';
 import { localSkillIndex } from './skills.mjs';
 async function readInput() {
@@ -18,9 +18,10 @@ async function main([action, option, ...extra]) {
   if(action==='catalog' && option===undefined)return listTemplates();
   if(action==='template' && option!==undefined)return getTemplate(option);
   if(action==='validate' && option===undefined)return validateRecords(await readInput());
-  if(action==='replay' && option===undefined)return {records:replayRecords(await readInput())};
+  if(action==='replay' && option===undefined){const json=await readInput();return {records:replayRecords(json),resume:resumeRecords(json)};}
+  if(action==='resume' && option===undefined)return resumeRecords(await readInput());
   if(action==='report' && (option==='markdown'||option==='json'))return renderReport(await readInput(),option);
-  throw new Error('Usage: skills ABSOLUTE_DIR | catalog | template ID | validate | replay | report markdown|json (records via stdin)');
+  throw new Error('Usage: skills ABSOLUTE_DIR | catalog | template ID | validate | replay | resume | report markdown|json (records via stdin)');
 }
 try {
   const result=await main(process.argv.slice(2));

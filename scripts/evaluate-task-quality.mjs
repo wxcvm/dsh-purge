@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { sampleDiagnosis, diagnosticSummary, contextIntegrity } from '../lib/task-quality-diagnostics.js';
-import { qualityReportSummary } from '../lib/task-quality-report.js';
+import { qualityReportSummary, completionSummary } from '../lib/task-quality-report.js';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { assessResponse, assessmentSummary } from '../lib/response-assessment.js';
@@ -174,7 +174,9 @@ function evaluateRaw(input) {
     decisions: Object.fromEntries(['not-refusal', 'refusal', 'uncertain'].map(k => [k, rows.filter(r => r[group].assessment.decision === k).length])),
     delivery: Object.fromEntries(['verified', 'partial', 'pending-input', 'blocked', 'not-verified', 'explicit-not-delivered'].map(k => [k, rows.filter(r => r[group].assessment.delivery === k).length])),
   }]));
-  return { totalCases: cases.length, baseline: counts('baseline'), candidate: counts('candidate'),
+  const baseline = counts('baseline'), candidate = counts('candidate');
+  return { totalCases: cases.length, baseline, candidate,
+    completion: { baseline: completionSummary(baseline, cases.length), candidate: completionSummary(candidate, cases.length) },
     assessmentCounts,
     pairedCases: paired.length,
     pairedImproved: paired.filter(r => r.baseline.status !== 'correct' && r.candidate.status === 'correct').length,

@@ -62,3 +62,20 @@ test("registerAnchor：注册 section 与 context，顺序正确", () => {
   assert.equal(typeof dispose, "function");
   dispose();
 });
+
+test("session-scoped anchor is absent outside redteam and absent without context", () => {
+  const config = { activeForContext: (ctx) => ctx?.session?.header?.agentPreset === "redteam" };
+  assert.equal(anchorTextFor(config), "");
+  assert.equal(anchorTextFor(config, { session: { header: { agentPreset: "standard" } } }), "");
+  assert.match(anchorTextFor(config, { session: { header: { agentPreset: "redteam" } } }), /OPERATOR ANCHOR/);
+  const registrations = [];
+  registerAnchor({
+    systemPrompt: {
+      section(spec) { registrations.push(spec); },
+      context() {},
+    },
+  }, config);
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].text({ session: { header: { agentPreset: "standard" } } }), "");
+  assert.match(registrations[0].text({ session: { header: { agentPreset: "redteam" } } }), /OPERATOR ANCHOR/);
+});
