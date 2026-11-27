@@ -95,16 +95,43 @@ test('empty scope needs explicit confirmation, with no extension to batch scans'
   assert.equal(bad.ok, false)
 })
 
-test('HTTPx import is limited to one matching host and retains supported metadata', () => {
+test('Nmap parser retains bounded host records, names, service versions and CPE evidence', () => {
+  const observed = parseLocalDiscovery('nmap',
+    '<nmaprun>'
+    + '<host><address addr="192.0.2.21" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="edge.example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx" version="1.24">'
+    + '<cpe>cpe:/a:nginx:nginx:1.24</cpe></service></port></ports></host>'
+    + '<host><address addr="192.0.2.22" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="api.example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="8443"><state state="open"/>'
+    + '<service name="https" product="caddy" version="2.8"/></port></ports></host>'
+    + '</nmaprun>', 'example.test')
+  assert.equal(observed.length, 2)
+  assert.deepEqual(observed.map(asset => asset.ip), ['192.0.2.21', '192.0.2.22'])
+  assert.equal(observed[0].primary_name, 'example.test')
+  assert.ok(observed[0].names.some(item => item.name === 'edge.example.test'))
+  assert.equal(observed[0].ports[0].cpe, 'cpe:/a:nginx:nginx:1.24')
+  assert.equal(observed[0].ports[0].fingerprints[0].evidence, 'cpe:/a:nginx:nginx:1.24')
+  assert.equal(observed[1].ports[0].version, '2.8')
+})
+
+test('HTTPx parser expands address arrays, normalizes hostnames and merges same-port evidence', () => {
   const observed = parseLocalDiscovery('httpx',
-    JSON.stringify({ url: 'https://a.example.test/', a: '192.0.2.20', title: 'App Home', tech: ['nginx'] })
-    + '\n' + JSON.stringify({ url: 'https://elsewhere.test', a: '198.51.100.12' }),
-    'https://a.example.test/')
-  assert.equal(observed.length, 1)
-  assert.equal(observed[0].ip, '192.0.2.20')
+    JSON.stringify({ url: 'https://a.example.test/', a: ['192.0.2.20', '192.0.2.21'],
+      title: 'App Home', tech: ['nginx'], webserver: 'nginx', status_code: 200 })
+    + '\n' + JSON.stringify({ url: 'https://a.example.test/', a: ['192.0.2.20'], tech: ['React'] })
+    + '\n' + JSON.stringify({ url: 'https://elsewhere.test', a: ['198.51.100.12'] }),
+    'https://A.EXAMPLE.TEST./')
+  assert.equal(observed.length, 2)
+  assert.deepEqual(observed.map(asset => asset.ip), ['192.0.2.20', '192.0.2.21'])
   assert.equal(observed[0].primary_name, 'a.example.test')
   assert.equal(observed[0].ports[0].title, 'App Home')
-  assert.equal(observed[0].ports[0].fingerprints[0].product, 'nginx')
+  assert.equal(observed[0].ports[0].product, 'nginx')
+  assert.equal(observed[0].ports[0].banner, 'nginx')
+  assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.product === 'React'))
+  assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.category === 'web-server'))
 })
 
 test('privacy status never misrepresents target-side logs as protected', (t) => {
