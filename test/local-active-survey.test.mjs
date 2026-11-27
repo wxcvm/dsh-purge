@@ -138,10 +138,13 @@ test('Nmap parser retains bounded host records, names, service versions and CPE 
 
 test('HTTPx parser expands address arrays, normalizes hostnames and merges same-port evidence', () => {
   const observed = parseLocalDiscovery('httpx',
-    JSON.stringify({ url: 'https://a.example.test/', a: ['192.0.2.20', '192.0.2.21'],
-      title: 'App Home', tech: ['nginx'], webserver: 'nginx', status_code: 200 })
-    + '\n' + JSON.stringify({ url: 'https://a.example.test/', a: ['192.0.2.20'], tech: ['React'] })
-    + '\n' + JSON.stringify({ url: 'https://elsewhere.test', a: ['198.51.100.12'] }),
+    JSON.stringify({ url: 'https://a.example.test/', ip: '192.0.2.20',
+      a: ['192.0.2.20', '192.0.2.21'], title: 'App Home',
+      tech: ['nginx'], webserver: 'nginx', status_code: 200 })
+    + '\n' + JSON.stringify({ url: 'https://a.example.test/', ip: '192.0.2.20',
+      a: ['192.0.2.20'], tech: ['React'] })
+    + '\n' + JSON.stringify({ url: 'https://elsewhere.test', ip: '198.51.100.12',
+      a: ['198.51.100.12'] }),
     'https://A.EXAMPLE.TEST./')
   assert.equal(observed.length, 2)
   assert.deepEqual(observed.map(asset => asset.ip), ['192.0.2.20', '192.0.2.21'])
@@ -151,6 +154,9 @@ test('HTTPx parser expands address arrays, normalizes hostnames and merges same-
   assert.equal(observed[0].ports[0].banner, 'nginx')
   assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.product === 'React'))
   assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.category === 'web-server'))
+  assert.equal(observed[0].state, 'live')
+  assert.equal(observed[1].state, 'unknown', 'DNS-only addresses must not inherit another IP response status')
+  assert.equal(observed[1].ports.length, 0, 'service evidence belongs only to the connected IP')
 })
 
 test('HTTPx parser bounds expanded address arrays', () => {
