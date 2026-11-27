@@ -20,6 +20,9 @@ test('internal 角色提示词引用 redteam_internal_campaign', () => {
   const prompt = DEFAULT_PROMPTS.internal
   assert.match(prompt, /redteam_internal_campaign/)
   assert.match(prompt, /dry_run/)
+  assert.match(prompt, /status=simulated/)
+  assert.match(prompt, /status=unsupported/)
+  assert.match(prompt, /redteam_tool_select/)
   assert.match(prompt, /redteam_asset_add|redteam_access_add/,
     '必须强调内网成果要自己落库')
   // 工具不自动套代理，这点必须讲清楚，否则会误以为传了 tunnel_listen 就走隧道
