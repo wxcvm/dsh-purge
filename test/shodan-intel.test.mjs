@@ -1,9 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { savePlatformConfig, loadPlatformConfig } from '../lib/redteam/platform-config.js'
+import { saveCensysPat, loadCensysPat } from '../lib/redteam/platform-secret-store.js'
 import { dispatchAsync } from '../lib/redteam/store-core.js'
 import {
   DEFAULT_SHODAN_API_URL, normalizeShodanBaseUrl, loadShodanConnection,
@@ -12,11 +13,14 @@ import {
 import { runScopedIntelLookup } from '../lib/redteam/scoped-intel.js'
 
 const ip = '192.0.2.10'
-function fixture(t) {
+const TEST_SECRET_KEY = '0123456789abcdef'.repeat(4)
+function fixture(t, secretKey = TEST_SECRET_KEY) {
   const oldKey = process.env.SHODAN_API_KEY
   const oldUrl = process.env.SHODAN_BASE_URL
+  const oldSecretKey = process.env.DSH_PURGE_SECRET_KEY
   delete process.env.SHODAN_API_KEY
   delete process.env.SHODAN_BASE_URL
+  process.env.DSH_PURGE_SECRET_KEY = secretKey
   const root = mkdtempSync(join(tmpdir(), 'purge-shodan-'))
   t.after(() => {
     rmSync(root, { recursive: true, force: true })
@@ -24,6 +28,8 @@ function fixture(t) {
     else process.env.SHODAN_API_KEY = oldKey
     if (oldUrl === undefined) delete process.env.SHODAN_BASE_URL
     else process.env.SHODAN_BASE_URL = oldUrl
+    if (oldSecretKey === undefined) delete process.env.DSH_PURGE_SECRET_KEY
+    else process.env.DSH_PURGE_SECRET_KEY = oldSecretKey
   })
   return { root }
 }
@@ -56,13 +62,67 @@ test('legacy environment key remains usable; saved key is write-only and clear d
   assert.equal(saved.configured, true)
   assert.equal(saved.credentialSource, 'config')
   assert.equal(JSON.stringify(saved).includes('new-private-key'), false)
-  assert.equal(loadPlatformConfig(root).env.SHODAN_API_KEY, 'new-private-key')
+  assert.equal(loadPlatformConfig(root).env.SHODAN_API_KEY, '')
+  const stored = JSON.parse(readFileSync(join(root, 'platform-secrets.json'), 'utf8'))
+  assert.match(stored.shodanApiKey, /^dshp:vault:v1:/)
+  assert.equal(stored.shodanApiKey.includes('new-private-key'), false)
+  assert.equal(shodanConnectionGet(root).credentialSource, 'encrypted-local')
+  assert.equal(shodanConnectionGet(root).protectedAtRest, true)
   assert.throws(() => shodanConnectionSave(root, { baseUrl: 'https://relay.example' }), /同时提供/)
   const cleared = shodanConnectionSave(root, { clearKey: true })
   assert.equal(cleared.configured, false)
   assert.equal(cleared.credentialSource, 'none')
   assert.equal(loadPlatformConfig(root).env.SHODAN_API_KEY_DISABLED, 'true')
   assert.equal(loadShodanConnection(root).key, '')
+})
+
+test('legacy config Key migrates to encrypted local storage without remaining in config.json', t => {
+  const { root } = fixture(t)
+  savePlatformConfig({ env: { SHODAN_API_KEY: 'legacy-config-key' } }, root)
+  assert.equal(shodanConnectionGet(root).credentialSource, 'legacy-plaintext')
+  const migrated = shodanConnectionSave(root, {})
+  assert.equal(migrated.credentialSource, 'encrypted-local')
+  assert.equal(migrated.protectedAtRest, true)
+  assert.equal(loadShodanConnection(root).key, 'legacy-config-key')
+  assert.equal(loadPlatformConfig(root).env.SHODAN_API_KEY, '')
+  const raw = readFileSync(join(root, 'platform-secrets.json'), 'utf8')
+  assert.ok(!raw.includes('legacy-config-key'))
+})
+
+test('new API Keys are never saved in plaintext when the local vault is unavailable', t => {
+  const { root } = fixture(t, '')
+  assert.throws(() => shodanConnectionSave(root, { key: 'private-key' }), /DSH_PURGE_SECRET_KEY/)
+  assert.equal(loadPlatformConfig(root).env.SHODAN_API_KEY, '')
+  assert.equal(shodanConnectionGet(root).configured, false)
+})
+
+test('locked encrypted Key fails closed without environment fallback and can still be cleared', async t => {
+  const { root } = fixture(t)
+  shodanConnectionSave(root, { key: 'private-key' })
+  process.env.DSH_PURGE_SECRET_KEY = 'f'.repeat(64)
+  process.env.SHODAN_API_KEY = 'fallback-key'
+  const locked = shodanConnectionGet(root)
+  assert.equal(locked.configured, true)
+  assert.equal(locked.credentialSource, 'encrypted-local-locked')
+  assert.ok(locked.credentialError)
+  let calls = 0
+  const lookup = await shodanHostLookup(root, ip, { fetch: async () => { calls++; return new Response('{}') } })
+  assert.equal(lookup.ok, false)
+  assert.equal(calls, 0)
+  const cleared = shodanConnectionSave(root, { clearKey: true })
+  assert.equal(cleared.configured, false)
+  assert.equal(cleared.credentialSource, 'none')
+})
+
+test('Shodan and Censys secrets share the encrypted file without overwriting each other', t => {
+  const { root } = fixture(t)
+  saveCensysPat('censys-private-pat', root)
+  shodanConnectionSave(root, { key: 'shodan-private-key' })
+  assert.equal(loadCensysPat(root), 'censys-private-pat')
+  assert.equal(loadShodanConnection(root).key, 'shodan-private-key')
+  const raw = readFileSync(join(root, 'platform-secrets.json'), 'utf8')
+  assert.ok(!raw.includes('censys-private-pat'))
+  assert.ok(!raw.includes('shodan-private-key'))
 })
 
 test('connection test checks only /api-info and returns plan and credit counters without key', async t => {
