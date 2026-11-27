@@ -1,5 +1,34 @@
 # Purge 接手版上游吸收 · Codex 可执行总方案
 
+## 2026-11-22 · 当前执行状态（覆盖下方旧快照的状态，不改历史记录）
+
+**固定双仓版本**：主参考上游 [dsh-purge-safe v2.0.2@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69) 未出现更新；我方已正式发行 [.22](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.22)，Release SHA `4efe83d`。以下新合并代码位于最新主线、**不在 .22 制品**；独立 .23 候选另按 PR/CI/Release 验收，不能把候选当发行。
+
+- **已完成并通过 Windows/Ubuntu API、UI/打包**：[#493](https://github.com/wxcvm/dsh-purge/pull/493) → `d0c8bfc`，仅吸收上游 `redteam_batch(kind=assets)` 的独有人工资产批量录入需求；默认 dry-run、显式 commit、scope 检查、逐条回执，复用现有 `importBundle`。已有 `redteam_ingest` 扫描文件解析不重复引入。
+- **已完成并通过 Windows/Ubuntu API、UI/打包**：[#494](https://github.com/wxcvm/dsh-purge/pull/494) → `fa1bfec`，复用 `#nucleiIndex(force)`，在 `redteam_poc_search(refresh_index:true)` 明确请求时重建离线本地模板索引。修复子目录 YAML 更新不触发根目录 mtime 的缓存陈旧问题；测试已避免借用 Windows 自托管 Runner 预装的个人 Nuclei 目录。
+- **.22 已交付**：[#491](https://github.com/wxcvm/dsh-purge/pull/491) 手动 CISA KEV status/lookup/refresh、[#490](https://github.com/wxcvm/dsh-purge/pull/490) 托管 Ubuntu Release、[#486](https://github.com/wxcvm/dsh-purge/pull/486) 中断更新恢复，以及此前主/备提示词、GPT/Claude/Gemini 预览、HTTP 状态观察等。保留主线 CI / 发布证据，不重复实现。
+- **明确不整包照搬**：上游自动下载模板/KEV 的启动副作用、`redteam_pivot_probe` 对任意多个内网目标进行无 scope 校验的 SOCKS5 测试、`redteam_batch` 的评估/漏洞直接写入、PTC 把审批文字伪装成 auto-granted、提升 workspace 指令优先级的提示词补丁、`slot-state` parked 推定真实宿主空闲。不是“已覆盖”，而是**未采纳 / 需真实场景与权限语义证据**。
+- **仍待真实验收，不应结项为全通过**：#336/#343 用户 Windows Harness rc.5 安装、重启、页面可见；#340/#341 最终 Provider 真实请求；#346 ARTEX 两端身份/交接/回执与断线；#345 原生 Teams 的实际任务运行与 UI。合并、CI、发行和实际宿主分别记录。
+
+**下方旧快照如 .19 / .18 / 原 #344 缺口表仅供当时历史对比，以上述真实 PR/CI/Release 和当期 GitHub 状态为准。后续每项先核对是否已在主线；按价值小步吸收，所有新证据回填 [#347](https://github.com/wxcvm/dsh-purge/issues/347) 和 [#351](https://github.com/wxcvm/dsh-purge/issues/351)，不另开平行计划。**
+
+---
+## 2026-11-22 · 上游 v2.0.2 / DSH rc.5 增量裁定（最新入口）
+
+**双仓实查快照**：重点上游 [CallMeGuLab/dsh-purge-safe v2.0.2](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.2)、[main@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69)（相对 v2.0.1 @d0a9abd 仅新增一个提交，13 个文件）；我方 [master@70d2956](https://github.com/wxcvm/dsh-purge/commit/70d29566431bac6730755b581c1ec3275f4b2b65)，最新已发布 [v1.1.92-wxcvm.19](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.19)（发布于上游 .2 之前）；该 master 的 [Windows/WSL CI](https://github.com/wxcvm/dsh-purge/actions/runs/45004337249) 成功。**CI 成功不等于真实 rc.5 Desktop / Provider 已验收**，也不意味着本仓已经吸收上游 2.0.2。
+
+| 优先 | 上游新差异 / 原始入口 | 我方目前证据 / 裁定 | 最小后续工作（原 Issue） |
+| --- | --- | --- | --- |
+| **P0 · 代码已合并，Desktop 待验收** | [2.0.2 package.json](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/package.json)：rc.5 客户端 inject 移除 `dsh-client-runtime`、`dsh-client-ui-slots` | [PR #482](https://github.com/wxcvm/dsh-purge/pull/482) 已 squash 合并 [b17c9ac](https://github.com/wxcvm/dsh-purge/commit/b17c9ac7a00057c8730f8940809bd32cdd2a1c68)：删除两个失效强依赖、保留实际使用的 `ui-conversation`；新增客户端清单测试。PR 上 Windows/Ubuntu 的 6 项 CI 检查均通过 | #336/#339/#343：**仅剩真实 rc.5 Desktop 安装、首次客户端启动、设置页/UI 交互和重启验收**；已过的 rc.3/rc.5 后端夹具、打包测试不重复做，也不等于客户端实机完成 |
+| **P0** | [上游 core.js #100](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/core.js)：新会话 `REPLACEMENT_AGENT_INSTRUCTIONS_INTRO` / 追加 / 空基线 / compact 路径 | [我方 patches-definitions.js](../lib/patches-definitions.js) 已有 #1 和 #2 的 replacement 回归，#2 **明确恢复 system/developer 优先级**；与上游的“把工作区指令改成最高强制优先级”不是同一目标 | #340/#341：先以 rc.5 固定夹具核对四条分支、开关前后首次请求与 Provider 投递证据；只修漏注入/误序/误判，不照搬提升低优先级指令的修改 |
+| **P0 对账** | [上游 core.js #101](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/core.js)：PTC `run_code` 的审批字段文字变更 | 该补丁把审批描述改为“auto-granted”，与宿主实际许可状态可能不一致；不作为普通兼容性修复直接移植 | #355/#341：核对 rc.5 PTC 参数、真实授权/拒绝及可追责提示，修字段不匹配；**不伪报审批通过、不暗改权限或沙箱** |
+| **P1** | [上游 2.0.2 release-notes](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/release-notes.md)：桌面壳自愈锚点 `DSH_PROFILE` → `app.setAppLogsPath();` | 我方存在独立桌面壳 #82 补丁和运行健康模块，但不是上游同一套代理自愈；尚未证实我方出现失配 | #337/#336：仅在实际 patch 状态/代理行为有失败时对照定位最小锚点修复，记录原样与修后标记数、重启回读，不移植上游整套自愈 |
+| **去重** | [上游 2.0.2 net-scope.js](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/net-scope.js)：子会话因区域闸门被伪造拒答，修复 delegated-session 判定和模型来源标注 | [我方 net-scope.js](../lib/net-scope.js) 已整体停用区域硬闸，`installRegionGate` 不安装 `agent/pre-step`；**该根因在我方不存在**，不能重复移植 | #345/#342：仅保留真实子会话“插件拦截/模型拒答/无请求”三类证据区分的无害任务回归；新故障再按真实来源处理 |
+| **已知 P1** | 上游 [v2.0.1](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.1) 修红队模式、自定义权限与运行窗口查看 | 已在先前 #343/#347 的 UI/Agent 设计和我方当前实现中分别有对应入口，不按发布说明重建 | #343：核对现有功能在 rc.5 Desktop 的实际可见性/可点性后再提小修 |
+
+**执行顺序**：先 P0 客户端服务依赖的 rc.5 最小修正 + 安装/开页验证 → 新会话四类提示词真实投递对账 → PTC 实际权限语义对账 → Desktop 自愈/Agent 无害回归；不重写已合并的备用提示词、Team、agent_attention/ack、技能/知识、ARTEX。上游宣称的“62/64 条补丁命中”仅是**其自身**核查结果，不能移作我方兼容性结论。只做必要测试、提交对应小 PR 和 CI；真 Desktop/Provider 仍须单列。无需新开总 Issue 或提前发布。
+
+
 > **2026-11-20 源码/任务快照**。维护仓库 [wxcvm/dsh-purge](https://github.com/wxcvm/dsh-purge)，默认分支 `master`。本文是**任务导航与执行方案**，不是“全部已完成”声明，也不代替当前 GitHub PR、CI、Release 和实机验收记录。
 >
 > **Codex 先读**：仓库根目录 [`AGENTS.md`](../AGENTS.md) → 本文 → [#347 接手版/社区上游追踪](https://github.com/wxcvm/dsh-purge/issues/347) → [#351 全项目总台账](https://github.com/wxcvm/dsh-purge/issues/351)。随后检查最新 `master`、未合并 PR、CI 和目标文件；旧文档中的 commit SHA 和技能数量都是当时的快照，不能替代最新核查。
@@ -65,9 +94,9 @@ gh issue view 351 -R wxcvm/dsh-purge
 | C · **代码已合并、实机/界面待验收** | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js)、[`store-core.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/store-core.js)、[`schema.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/schema.js) | PR #385：新的 `agent_attention` **表位于已有靶标 SQLite**；`redteam_attention(action=list\|ack)`、`subagent/end` 报告解析、精确 `report_id` 确认 | 上游 `agent_report` 与我方表结构不同，**不能直接共用表名**；旧报告不能因确认新报告而重新出现；无结构化信息不能凭空推断 waiting |
 | D · 暂不导入停泊算法 | [`lib/redteam/slot-state.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/slot-state.js) | 我方 [`agent-reservations.js`](../lib/redteam/agent-reservations.js)、[`agent-status.js`](../lib/redteam/agent-status.js) | **waiting/blocked 是回报，不证明宿主已释放真实运行资源**；不把 “parked” 从已观察 running 里直接扣除。free 未验证时维持 unknown/null |
 | E · 下一批 | [`lib/redteam/bootstrap-runtime.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/bootstrap-runtime.js)、[`kev.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/kev.js) | #344/#360：与现有 Nuclei 模板搜索、CVE / KEV 来源管理比对 | 补增量仅在缺口存在时做；优先**状态可见 + 显式手动刷新**，避免照搬启动时 `download:true, background:true` 造成隐式联网 |
-| F · 下一批 | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js) 内 `redteam_batch`、`redteam_cleanup` | #352/#345：检查我们现有批量导入、任务记录去重与清理入口 | 先对比数据主键/事务/幂等/删除实际影响；只移植缺失能力，不建立第二套批处理引擎 |
+| F · 部分完成 | [`redteam_cleanup` / `redteam_data_proof`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d0a9abda6e2eb020dde85b48b5727b45d26582a7/lib/redteam/tools.js)；同文件 `redteam_batch` | #347/#352/#345：cleanup 已合并；data_proof 正在按元数据-only 方案实现；批量导入仍需与现有 ingest/批处理能力对账 | cleanup 只登记状态；data_proof 不保存样本/查询、不自动评分；`redteam_batch` 仅在确认真实缺口后再吸收 |
 | G · 下一批 | [`lib/redteam/client.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/client.js)、[`lib/ui-fullscreen.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/ui-fullscreen.js)、[上游预览图](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/docs/preview/dock-clean.png) | #343/#352/#364/#361：作战台概览、Agent 待办 UI、清洗台信息密度、全屏及点击热区 | 界面按人类使用路径归类；不整包替换 `client.js`，截图不是当前 Desktop 可运行证据 |
-| H · 持续对照 | [上游 `skills/redteam/`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/skills/redteam)、[`redteam-superagent-dev.md`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/docs/redteam-superagent-dev.md) | #344/#302：技能及知识库文件级差异；核对 Team 能力与设计稿 | 旧快照上游 40 / 我方 47 份 Markdown 的同名/独有差异仅供检索起点；**上游超代理 agent_task 设计稿不代表已实现** |
+| H · 持续对照 | [上游 `skills/redteam/`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/skills/redteam)、[`redteam-superagent-dev.md`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/docs/redteam-superagent-dev.md) | #344/#302：技能及知识库文件级差异；核对 Team 能力与设计稿 | 当前核对上游 40 / Purge 56 份 Markdown，37 个同路径；差异清单仅供检索起点；**上游超代理 agent_task 设计稿不代表已实现** |
 | I · 独立评估 | [`lib/tool-gate.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/tool-gate.js)、[`lib/subagent-control.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/subagent-control.js) | #337/#341/#342/#355：与当前 Harness 的执行/审批/Provider 行为核对 | 存在大范围交互语义变化风险；**不作为提示词/Team 引入的隐含依赖**。发现真实缺口再提针对性方案 |
 
 ## 4. Codex 后续实施队列（逐项做完才更新状态）
@@ -90,6 +119,8 @@ gh issue view 351 -R wxcvm/dsh-purge
 - **关联**：[#347](https://github.com/wxcvm/dsh-purge/issues/347)、[#343](https://github.com/wxcvm/dsh-purge/issues/343)、[#345](https://github.com/wxcvm/dsh-purge/issues/345)。
 
 ### P1-B. 官方 Agent Teams 与任务效率
+
+后续按 [Super Agent 实施路线与验收](SUPER_AGENT_IMPLEMENTATION.zh-CN.md) 核对官方原型和指定维护上游，并区分持久台账与真实宿主执行。
 
 - 对 [PR #384](https://github.com/wxcvm/dsh-purge/pull/384) **只做实机补证**：确认 `team/mode`、官方 `team_task_create/list/get/update` 在真实红队根会话可用；检查普通预设、手动 off、会话 fork、快速预设切换、子 Agent 的隔离。
 - 与现有 `task_context` / `agent-reservations` 的身份对应仅做关联显示；官方 Team 任务和本地证据/待办是不同含义，不做双写任务表。用真实完成/重复派发/Token/等待时间对照评估是否真的更有效；见 #345。
@@ -130,7 +161,7 @@ gh issue view 351 -R wxcvm/dsh-purge
 
 ## 6. 实施与状态更新约定（Codex 工作流提示，不增加新门禁）
 
-1. **读完再改**：先 `git status`，比较实际 `master` 与开放 PR，检查相关 issue、上游固定 SHA 的源文件和现有测试；不要把已合并功能重新做一遍。检查 GitHub 私库与当前工作区有访问权限。每个功能补丁只使用其真实来源和兼容接口。
+1. **读完再改**：先 `git status`，比较实际 `master` 与开放 PR，检查相关 issue、上游固定 SHA 的源文件和现有测试；不要把已合并功能重新做一遍。检查目标 GitHub 仓库与当前工作区有访问权限。每个功能补丁只使用其真实来源和兼容接口。
 2. **每轮一个焦点**：修复根因 → 最小相关代码 → 必需测试 → CI/宿主检查 → 在对应旧 Issue / PR 贴结果。与并行 Codex/DSH 产生冲突时优先小范围合并，不覆盖他人的未提交更改。
 3. **状态五分法**：`提议`、`代码已提交`、`已合并且对应 CI 通过`、`真实 Desktop/Provider 已验收`、`已发布`。状态变化只根据可打开的提交/PR/CI/安装证据更新；各阶段不互相替代。
 4. **执行目标范围**：不擅自增加功能黑名单、并发上限、批准步骤或服务依赖；真实宿主既有规则与权限不因吸收外部代码而暗中改变。若确实需要改变既有用户行为，先写出缘由和影响范围。
@@ -156,3 +187,64 @@ gh issue view 351 -R wxcvm/dsh-purge
 **已补证的基线（.18）**：发布 ZIP 与 SHA256SUMS 已核对；#244 的跨位数与稳定渠道已由现有 Node 24 回归证明，不需要另写比较器。#337 的 Windows 合成普通目录与 pnpm junction 回滚通过，不等于当前桌面安装已升级或重启。当前在用的 Windows Harness 是 rc.5；已读清单并用实际安装树的工具编译器跑隔离契约，未启动或修改该实例。真正的 Desktop 独立实例、隔离远端 Provider 和双端 ARTEX 仍分别需要验收。
 
 **共同验收**：独立记录源码、同一候选 SHA 的 CI、合并、真实 Desktop / Provider / 双端、Release。没有独立测试账号或实机时写明实际缺件和复跑条件，不把夹具写成真实宿主。不要复制现有凭据，不启停正在使用的安装，不新增付费调用。每轮结果回填对应旧 Issue，#347 汇总来源裁定，#351 汇总交付状态。
+
+## 8 · 版本中心、发布证据与远期研究
+
+2026-11-21 对账基准：[Purge master @59df66b](https://github.com/wxcvm/dsh-purge/commit/59df66b8ec3b1ba7cc883860a057287dc9910d0d)、[指定上游 @d0a9abda](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d0a9abda6e2eb020dde85b48b5727b45d26582a7)、[ARTEX main @c972402](https://github.com/wxcvm/ARTEX/commit/c97240287eb2da6d660707cae5b8000bfec17ff0)。Purge 查验开始时无开放 PR；以下以固定提交、已合并 PR 和实际下载资产为准，不能当作未来最新值。
+
+| 项 | 已交付或已取得的证据 | 仍缺的验收或采纳决定 |
+| --- | --- | --- |
+| 0 · 入口与去重 | [#376](https://github.com/wxcvm/dsh-purge/pull/376) 已合并，保留原 rc.3/rc.5 合约；[#429](https://github.com/wxcvm/dsh-purge/pull/429) 已吸收前期提示词和 Super Agent 分支。三仓固定 SHA 已重查；GitHub 当前可见性为公开，首页移除过时的私有说明，保留历史记录、LICENSE 和 NOTICE。 | 不复开 #378/#254 或已替代 PR；不改标签、发布频道或仓库可见性。 |
+| 1 · 制品、环境与恢复 | [#428](https://github.com/wxcvm/dsh-purge/pull/428) 的清单检查和 [713d260](https://github.com/wxcvm/dsh-purge/commit/713d260) 的 Windows/Ubuntu 打包安装通过；[版本中心](RELEASE_CENTER.zh-CN.md) 分开记录两份已发布 ZIP、当前源码与本机 rc.5 安装。磁盘插件同为 .18，不是探针比对的主线版本 `748192d` 的字节。 | 独立 Windows Desktop/Web 上的真实安装、升级、中断回退、重启/重连，继续跟踪 [#336](https://github.com/wxcvm/dsh-purge/issues/336) / [#337](https://github.com/wxcvm/dsh-purge/issues/337)。 |
+| 2 · 配置、诊断与接口 | [#429](https://github.com/wxcvm/dsh-purge/pull/429) 的普通提示词改进和 [8a65c77](https://github.com/wxcvm/dsh-purge/commit/8a65c77) 的当前轮原生消息匹配已在主线。主/备开关、模型/会话作用范围与“已组装/已投递”分开；本机鉴权回归通过（[#427](https://github.com/wxcvm/dsh-purge/pull/427)）。 | 未在隔离真实宿主做保存重启、取消/乱序实测或 Provider 请求比对；不能从 UI 判断投递，见 [#340](https://github.com/wxcvm/dsh-purge/issues/340) / [#341](https://github.com/wxcvm/dsh-purge/issues/341)。 |
+| 3 · Super Agent | [#422](https://github.com/wxcvm/dsh-purge/pull/422) 区分宿主结束与人工确认；[#429](https://github.com/wxcvm/dsh-purge/pull/429) 的独立待阅页和逐条确认在主线，复用既有报告与占用。 | [#343](https://github.com/wxcvm/dsh-purge/issues/343) / [#345](https://github.com/wxcvm/dsh-purge/issues/345) 仍需无害文档任务从宿主结束到单条确认及重启后的完整读回；没有验证多 Agent 效率，也不引入自动派发。 |
+| 4 · 交互与窗口 | 普通通用/局部仍在同一工作区，模型有范围操作；Super Agent 不再埋在普通视图。焦点、全屏绘制与相关页面自动回归通过。 | [#364](https://github.com/wxcvm/dsh-purge/issues/364) 的真实 Windows DPI、窗口恢复、滚动和大块空白没有由静态/夹具测试代验。 |
+| 5 · 人工资料、技能与环境 | [#418](https://github.com/wxcvm/dsh-purge/pull/418) 包含既有来源、引用和工作台改进；现有知识来源回归通过。保留人工导入及已有账本，不增加第二套存储或默认下载。 | [#344](https://github.com/wxcvm/dsh-purge/issues/344) 仍待真实宿主技能注册、更新/移除及逐行导入/归档恢复的样本验证；公开 CVE 公告只作资料来源。 |
+| 6 · ARTEX 双端 | [#418](https://github.com/wxcvm/dsh-purge/pull/418) 的联动界面已有主线入口；实际下载校验 ARTEX v0.6.0 Windows 制品。Purge 与 ARTEX 版本分别标注，下载证据不代表联动。 | [#346](https://github.com/wxcvm/dsh-purge/issues/346) 仍待真实双端配对、人工采纳、断线重试、冲突及回退；不扩大令牌权限或默认双写。 |
+| 7 · 来源裁定 | 指定接手仓库已重新固定 SHA；继续沿用第 5 节的来源目录与历史署名。已吸收题材不重复实现，其他项目仍按明确出处、许可与单项价值比较。 | 历史原仓与 Mojin、富江、REA 等别名没有新的可核实归属，保留待证；不因来源不明添加猜测链接，不移植无人值守攻击和规避流程。 |
+| 8 · 版本中心、发布和研究 | 实际下载 Stable .18 / Beta .7-beta.11 并对清单、资产摘要、标签、四个关键文件复核；新增可重复使用的只读校验脚本。研究完成普通规则基线（下方）。 | 不发新版、不提升预览、不替换资产；规则基线不是模型比较，不把 #350 变为依赖。 |
+
+### #376 · rc.5 的官方发布与 rc.3 回归
+
+本轮直接复查 npm 发布的 [dsh-tools](https://registry.npmjs.org/@deepseek-ai%2fdsh-tools/0.2.2-rc.5)、[dsh-llm](https://registry.npmjs.org/@deepseek-ai%2fdsh-llm/0.2.2-rc.5) 和 [dsh-error](https://registry.npmjs.org/@deepseek-ai%2fdsh-error/0.2.2-rc.5)：三者均确实发布 `0.2.2-rc.5`；`tools → llm → error` 是精确同版本 peer，Cordis peer 是 `~4.1.0`。现有夹具用官方 registry 且优先刷新索引；[同一主线提交的 Windows / Ubuntu CI](https://github.com/wxcvm/dsh-purge/actions/runs/44901063903) 验证安装后的包及 peer，rc.3 使用独立目录并跑原有合约。本轮不改版本、不混装，也不凭 npm/CI 判定 Desktop 或 Provider 已验收。
+
+### #350 · 可重复运行的普通任务路由基线
+
+运行 `node test/fixtures/ordinary-prompt-routing-benchmark.mjs`（Node.js 24）。17 个固定人工标注句仅包含代码审阅、文档/写作、中性对照；在临时配置中仅启用普通规则，10 轮热运行，不调用宿主、Provider 或网络。Windows 样本：规则正好匹配 **13/17**，总是选择同一标签的最优基线 **5/17**；170 次热路由延迟 p50 约 **2.74 ms**、p95 约 **4.42 ms**。Node 进程 RSS 起止约 46.0 → 48.2 MiB，不是峰值或候选模型内存。未匹配样本包括否定、提及某类工作却在请求另一类工作，以及关键词外同义说法；这组小样本不用于估算生产准确率。
+
+上轮没有运行本地模型或取得精度、延迟、资源三项对照，因此**不引入模型、不新增依赖、不改运行时路由**。如以后做对比，先冻结独立样本与验收指标，再在同机记录规则和候选模型的误判、回退、p95 和峰值内存；达不到净收益不采纳。跟踪 [#350](https://github.com/wxcvm/dsh-purge/issues/350)，汇总仍用 [#351](https://github.com/wxcvm/dsh-purge/issues/351)。
+
+### #350 · 本地字符模型对照与结论
+
+同一组 17 个普通任务评价句保持不变，分别运行默认规则和 `--model`。模型是独立运行的字符 2/3-gram 朴素贝叶斯分类器，用另外 48 个普通样本训练；不调用宿主、模型服务或网络，不读取现用提示词。它只输出任务标签，不做拒答检测，也不改变模型行为。
+
+| 平台 | 规则正确 / 17 | 分类器正确 / 17 | 热运行 p95（规则 / 分类器） | Node 进程峰值 RSS（规则 / 分类器） |
+| --- | ---: | ---: | ---: | ---: |
+| Windows | 13 | 11 | 2.056 / 0.009 ms | 49.4 / 42.5 MiB |
+| WSL | 13 | 11 | 0.181 / 0.014 ms | 65.6 / 54.7 MiB |
+
+各跑 170 次热样本。两边在 5 个不应匹配的普通样本上均误触发 2 次；分类器虽补到不含关键词的一条写作样本，却把多条单一代码请求误判为混合任务。耗时和内存是这两条夹具路径（规则含临时配置读取）的过程观察，不等于同条件的生产指标；[RSS 取自 Node 的资源计数](https://nodejs.org/api/process.html#processresourceusage)。
+
+**结论：不采纳这个候选，不新增生产依赖。** 它更快，但准确率下降、误触发没有减少。这不证明所有本地模型都无效；没有更广的独立数据或不同候选证据时继续保持规则，不追加运行时工程。
+
+## 9 · 继续验收：普通工作台绘制与 ARTEX 本机端点
+
+- [#437](https://github.com/wxcvm/dsh-purge/pull/437) 已合并为 [`41e1ddb`](https://github.com/wxcvm/dsh-purge/commit/41e1ddb8147f31e919da033f46ddf1aa1a3d70ed)，[合并后的 Windows / Ubuntu 兼容性 CI](https://github.com/wxcvm/dsh-purge/actions/runs/44902226783) 均通过。没有发版。
+- [#364](https://github.com/wxcvm/dsh-purge/issues/364)：Windows Chromium 计算样式确认，普通嵌入清洗台原来还有 `blur(12px)`，且 650px 嵌入面板仍用侧栏布局，因为旧断点看整窗而不是面板。本次只调整普通清洗台输入控件与断点：在 1440px 整窗内，1160px 面板的通用/局部并排铺满；650px 面板顶部导航、编辑区纵向排布且无横向溢出。键盘焦点和滚动可达，普通嵌入与宿主铺满状态均不叠加模糊，弹窗和独立浮窗保留原样。
+- 可复跑：`node test/fixtures/clean-workspace-chromium.mjs "<Chromium 或 Chrome 可执行文件>"`。夹具读取真实 `client.js` 样式，以本地固定 DOM 运行，不执行宿主、插件脚本或接口。它所验证的是几何、计算样式和交互可达性，**不是** Windows Electron 的 GPU 绘制或原始空白复发验收。仍需隔离 Desktop 复验 DPI/最大化/全屏和页面切换。
+- [#336](https://github.com/wxcvm/dsh-purge/issues/336)：在新建 DSH_HOME 用本机 rc.5 桌面包自带 CLI，确认 Web profile 与插件管理入口可解析。没有启动第二个 Electron 桌面、挂载 Purge 到生产配置或发模型请求。这不是 Purge 在 Web/Desktop 中完整安装和恢复的证明。
+- [#346](https://github.com/wxcvm/dsh-purge/issues/346)：Windows 本机 ARTEX v0.6.0 的监听地址为 `127.0.0.1`；复用 Purge 的实际只读身份探针得到 HTTP 200、状态 `detected`。无独立凭据访问隐私总览返回 401。未发送凭据、未改两端数据；实际配对、权限内的回执、断线及冲突恢复继续单独验收。
+
+### ARTEX 人工回执的冲突处理
+
+新版页面保存人工备注时，会同时带上读到的本地回执修订号。响应丢失后重试同一内容不会再写一遍；另一窗口已改过时，页面显示已保存状态和备注，可用它作为新的比对基线，自己的草稿不会丢。已有明确证据版本的回执不会被旧版或缺少版本的报告覆盖。旧数据库自动补修订号，现有回执不迁走，导出的回执格式也不变。
+
+旧 ARTEX SARIF 只给出发现、任务 ID 与证据版本，不携带数据库来源。[ARTEX #188](https://github.com/wxcvm/ARTEX/pull/188) 为新导出添加 `runs[].properties.artexSourceId`。Purge 按来源和记录编号保存、查阅与导出新的人工回执；没有来源的旧报告和旧记录仍可读写，但不自动归属，也不会与新来源混用。标识是报告的声明，不是签名、已配对公司或凭据。跨端配对和身份验收仍以 [#346](https://github.com/wxcvm/dsh-purge/issues/346) 为准。
+
+
+### 2026-11-24 · rc.5 agent-instructions 的剩余前言分支
+
+- 上游 core.js #100 的 REPLACEMENT_AGENT_INSTRUCTIONS_INTRO 由本仓 #2 继续恢复官方 system/developer/direct-user 优先级；不采用上游将其提升为 ACTIVE and MANDATORY 的版本。
+- 新增本仓 #96，选择性处理此前未覆盖的 EMPTY_REPLACEMENT_AGENT_INSTRUCTIONS_INTRO、ADDITIONAL_INSTRUCTIONS_GUIDANCE 与 COMPACT_AGENT_INSTRUCTIONS_INTRO。空基线明确系统提示词仍权威；追加和截断分支说明剩余工作区指令在自身作用域内适用，并明确不得覆盖 system、developer 或 direct user instructions。
+- 不采用上游 Do not treat them as untrusted data 或 approval is auto-granted 等越权/可能误述宿主状态的措辞。PTC #101 继续等待 rc.5 实际参数、宿主审批结果与执行记录对账，不伪报授权通过。
+- 回归覆盖三种 rc.5 常量、部分升级可继续补齐及重复 Apply 幂等；旧宿主缺少这些常量时该补丁为 optional，不制造兼容性失败。

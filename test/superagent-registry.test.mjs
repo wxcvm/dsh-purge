@@ -19,6 +19,7 @@ function fixture() {
     getWorkItem: RedteamStore.prototype.getWorkItem,
     createWorkItem: RedteamStore.prototype.createWorkItem,
     assignWorkItem: RedteamStore.prototype.assignWorkItem,
+    reportWorkItem: RedteamStore.prototype.reportWorkItem,
     observeWorkItemEnd: RedteamStore.prototype.observeWorkItemEnd }
   for (let i = 0; i < ids.length; i++) {
     store.assignWorkItem('one', { task_id: ids[i], session_id: names[i], run_id: 'run-' + i })
@@ -126,5 +127,62 @@ test('modern catalog lookup gaps preserve unknown SuperAgent reconciliation', as
     assert.equal(result.items.find(item => item.task_key === 'ended').registry_activity.state, 'exact-run-end-observed')
     assert.equal(disposed, 1)
     assert.equal(store.getWorkItem('one', result.items[0].id).status, 'running')
+  } finally { db.close() }
+})
+
+test('detail opts into a fresh registry read for one assignment; plain reads do not query the host', async () => {
+  const { store, db, ids } = fixture()
+  const read = task_id => ({ op: 'workItemGet', engagement: 'one', task_id, include_registry: true })
+  let calls = 0
+  const live = async () => { calls++; return registry }
+  try {
+    assert.equal(await handleWorkItemReview(store, { ...read(ids[0]), include_registry: false }, live), undefined)
+    assert.equal((await handleWorkItemReview(store, read(999), live)).ok, false)
+    assert.equal(calls, 0)
+    const active = await handleWorkItemReview(store, read(ids[0]), live)
+    assert.equal(active.item.registry_activity.state, 'session-active-observed')
+    assert.equal(active.item.registry_activity.parent_session, 'root-1')
+    assert.equal(active.item.registry_activity.exact_run_verified, false)
+    assert.equal(calls, 1)
+    const closed = await handleWorkItemReview(store, read(ids[1]), live)
+    assert.equal(closed.item.registry_activity.state, 'exact-run-end-observed')
+    assert.equal(calls, 1, 'persisted exact end does not require a live host read')
+    assert.equal(store.getWorkItem('one', ids[1]).status, 'running', 'read does not settle')
+  } finally { db.close() }
+})
+
+test('detail never applies an older registry read to a rebind, including same-session retries', async () => {
+  const { store, db, ids } = fixture()
+  let finishRead
+  try {
+    const task_id = ids[0]
+    const response = handleWorkItemReview(store,
+      { op: 'workItemGet', engagement: 'one', task_id, include_registry: true },
+      () => new Promise(resolve => { finishRead = resolve }))
+    store.reportWorkItem('one', { task_id, session_id: 'active', run_id: 'run-0', status: 'blocked',
+      summary: 'Need draft attachment', host_checked: true })
+    store.assignWorkItem('one', { task_id, session_id: 'active', run_id: 'run-2' })
+    finishRead(registry)
+    const result = await response
+    assert.equal(result.item.assignment.run_id, 'run-2')
+    assert.equal(result.item.registry_activity.state, 'unknown')
+    assert.equal(result.item.history[1].run_id, 'run-0')
+  } finally { db.close() }
+})
+
+test('exact end arriving during a detail read outranks same-session activity without settling', async () => {
+  const { store, db, ids } = fixture()
+  let finishRead
+  try {
+    const response = handleWorkItemReview(store,
+      { op: 'workItemGet', engagement: 'one', task_id: ids[0], include_registry: true },
+      () => new Promise(resolve => { finishRead = resolve }))
+    store.observeWorkItemEnd('one', { session_id: 'active', run_id: 'run-0', stop_reason: 'completed' })
+    finishRead(registry)
+    const result = await response
+    assert.equal(result.item.status, 'running')
+    assert.equal(result.item.registry_activity.state, 'exact-run-end-observed')
+    assert.equal(result.item.history[0].host_stop_reason, 'completed')
+    assert.equal(result.item.history[0].finished_at, null)
   } finally { db.close() }
 })

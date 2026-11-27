@@ -123,7 +123,7 @@ test('manual close and filtered pages do not misrepresent incomplete work as don
 test('existing dispatch routes use the selected engagement and preserve no-selection errors', () => {
   const db = memory()
   const methods = [
-    'createWorkItem', 'assignWorkItem', 'reportWorkItem', 'closeWorkItem',
+    'createWorkItem', 'assignWorkItem', 'reportWorkItem', 'closeWorkItem', 'requestWorkItemChanges',
     'getWorkItem', 'listWorkItems', 'workRecoveryCandidates',
   ]
   const store = {
@@ -153,6 +153,53 @@ test('existing dispatch routes use the selected engagement and preserve no-selec
   } finally { db.close() }
 })
 
+test('review feedback survives reopening, a second attempt, and final acceptance', t => {
+  const dir = mkdtempSync(join(tmpdir(), 'purge-work-review-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = join(dir, 'work.db')
+  const methods = ['requestWorkItemChanges', 'closeWorkItem', 'getWorkItem']
+  const store = { activeEngagementId: () => 'docs', db: () => db,
+    ...Object.fromEntries(methods.map(name => [name, RedteamStore.prototype[name]])) }
+  let db = new DatabaseSync(file)
+  try {
+    db.exec(DDL)
+    const id = create(db).item.id
+    assign(db, id)
+    const first = report(db, id, 'ready', 'child', 'run-1', 'Checked the headings')
+    const req = { op: 'workItemRequestChanges', engagement: 'docs', task_id: id,
+      expected_revision: first.item.revision, reason: 'Please add the appendix' }
+    assert.equal(dispatch(store, { ...req, expected_revision: undefined }).ok, false)
+    assert.equal(dispatch({ ...store, activeEngagementId: () => null }, { ...req, engagement: undefined }).ok, false)
+    const returned = dispatch(store, req)
+    assert.equal(returned.returned, true)
+    assert.equal(returned.item.status, 'waiting')
+    assert.equal(returned.item.attempt, 1)
+    assert.equal(returned.item.assignment.status, 'ready')
+    assert.equal(returned.item.assignment.summary, 'Checked the headings')
+    assert.equal(returned.item.assignment.review_feedback, req.reason)
+    assert.ok(returned.item.assignment.review_returned_at)
+    assert.equal(dispatch(store, req).returned, false)
+    assert.equal(getWorkItem(db, id).history.length, 1, 'review feedback cannot create a new run')
+    db.close()
+
+    db = new DatabaseSync(file)
+    migrate(db)
+    const pending = getWorkItem(db, id)
+    assert.equal(pending.status, 'waiting')
+    assert.equal(pending.history[0].review_feedback, req.reason)
+    assign(db, id, 'child', 'run-2')
+    assert.equal(getWorkItem(db, id).history[1].review_feedback, req.reason)
+    const second = report(db, id, 'ready', 'child', 'run-2', 'Checked the headings and added the appendix')
+    assert.equal(dispatch(store, req).returned, false, 'the first review cannot return the new attempt')
+    const close = { op: 'workItemClose', engagement: 'docs', task_id: id, outcome: 'done', reason: 'Accepted the corrected result' }
+    assert.equal(dispatch(store, { ...close, expected_revision: first.item.revision }).closed, false)
+    assert.equal(getWorkItem(db, id).status, 'ready')
+    assert.equal(dispatch(store, { ...close, expected_revision: second.item.revision }).closed, true)
+    assert.deepEqual(getWorkItem(db, id).history.map(run => [run.run_id, run.review_feedback]),
+      [['run-2', null], ['run-1', req.reason]])
+  } finally { if (db.isOpen) db.close() }
+})
+
 test('unobserved run requires explicit operator attestation; observed exact end does not', () => {
   const db = memory()
   try {
@@ -163,12 +210,14 @@ test('unobserved run requires explicit operator attestation; observed exact end 
     assert.throws(() => reportWorkItem(db, request), /operator host check/)
     assert.equal(getWorkItem(db, taskId).status, 'running')
     assert.equal(reportWorkItem(db, { ...request, host_checked: true }).recorded, true)
+    assert.equal(getWorkItem(db, taskId).assignment.settlement_basis, 'operator-attestation')
 
     const observedId = create(db, 'observed-run').item.id
     assign(db, observedId, 'ended-child', 'run-2')
     observeWorkItemEnd(db, { session_id: 'ended-child', run_id: 'run-2', stop_reason: 'completed' })
     assert.equal(reportWorkItem(db, { task_id: observedId, session_id: 'ended-child',
       run_id: 'run-2', status: 'ready', summary: 'Host event observed' }).recorded, true)
+    assert.equal(getWorkItem(db, observedId).assignment.settlement_basis, 'host-end-observed')
   } finally { db.close() }
 })
 
@@ -215,6 +264,8 @@ test('a delayed host end can annotate history but cannot override the new attemp
     assert.equal(current.status, 'running')
     assert.equal(current.needs_host_check, true)
     assert.equal(current.history[1].host_stop_reason, 'aborted')
+    assert.equal(current.history[1].settlement_basis, 'operator-attestation')
+    assert.equal(current.history[0].settlement_basis, null)
     assert.equal(current.history[0].host_end_at, null)
     assert.equal(workRecoveryCandidates(db).total, 1)
   } finally { db.close() }
@@ -277,9 +328,14 @@ test('old work assignment tables gain observational columns without losing exist
     const columns = db.prepare('PRAGMA table_info(agent_work_assignment)').all().map(x => x.name)
     assert.ok(columns.includes('host_end_at'))
     assert.ok(columns.includes('host_stop_reason'))
+    assert.ok(columns.includes('review_feedback'))
+    assert.ok(columns.includes('review_returned_at'))
+    assert.ok(columns.includes('settlement_basis'))
     const old = db.prepare('SELECT * FROM agent_work_assignment WHERE id = 17').get()
     assert.equal(old.session_id, 'old-session')
     assert.equal(old.run_id, 'old-run')
     assert.equal(old.host_end_at, null)
+    assert.equal(old.review_feedback, null)
+    assert.equal(old.settlement_basis, null)
   } finally { db.close() }
 })
