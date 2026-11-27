@@ -1,10 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
-import { normalizeDnsName, runScopedDnsLookup } from '../lib/redteam/scoped-dns-intel.js'
+import { normalizeDnsName, runScopedDnsLookup, runScopedDnsBatch } from '../lib/redteam/scoped-dns-intel.js'
 
 const host = 'lab.example.test'
 const resolver = {
@@ -52,4 +52,92 @@ test('partial DNS failure retains successful results', async () => {
   assert.equal(r.ok, true)
   assert.deepEqual(r.errors, [{ type: 'AAAA', code: 'ENODATA' }])
   assert.equal(r.records.length, 2)
+})
+
+
+function addSubdomainSnapshot(store, engagement) {
+  store.db(engagement).prepare('INSERT INTO subdomain_intel_snapshot(name,value,collected_at) VALUES(?,?,?)')
+    .run('example.test', JSON.stringify({ names: [
+      { name: 'a.example.test', sources: ['subfinder'] },
+      { name: 'b.example.test', sources: ['crt.sh'] },
+    ] }), '2026-11-27T00:00:00.000Z')
+}
+
+test('dnsx batch resolves only saved in-scope names and stores DNS evidence without creating assets', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'scoped-dnsx-batch-'))
+  const store = new RedteamStore(root)
+  t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
+  const { id } = store.openEngagement('lab', ['*.example.test'])
+  addSubdomainSnapshot(store, id)
+  let calls = 0
+  const options = {
+    root, interfaces: () => ({}), dnsServers: ['192.0.2.53'],
+    resolveTool: toolId => {
+      assert.equal(toolId, 'dnsx')
+      return { path: '/fixture/dnsx' }
+    },
+    execFileFn: (path, args, runOptions, done) => {
+      calls++
+      assert.equal(path, '/fixture/dnsx')
+      assert.equal(runOptions.shell, false)
+      assert.equal(args[0], '-l')
+      assert.ok(args[1].endsWith('hosts.txt'))
+      assert.equal(args[2], '-r')
+      assert.equal(args[3], '192.0.2.53')
+      assert.deepEqual(args.slice(4), [
+        '-silent', '-a', '-aaaa', '-cname', '-json', '-rl', '10',
+        '-t', '5', '-timeout', '2', '-retry', '1', '-duc', '-auth=false',
+      ])
+      const input = readFileSync(args[1], 'utf8').trim().split(/\r?\n/)
+      assert.deepEqual(input, ['a.example.test', 'b.example.test'])
+      done(null, [
+        JSON.stringify({ host: 'a.example.test', a: ['192.0.2.10'], aaaa: ['2001:db8::10'],
+          cname: ['alias.example.test'], ttl: 60 }),
+        JSON.stringify({ host: 'b.example.test', a: ['192.0.2.11'], cname: ['outside.test'], ttl: 30 }),
+      ].join('\n') + '\n', '')
+    },
+  }
+  await assert.rejects(runScopedDnsBatch(store, { engagement: id, target: 'example.test' }, options))
+  assert.equal(calls, 0)
+  const result = await runScopedDnsBatch(store, {
+    engagement: id, target: 'example.test', confirmExternal: true, commit: true,
+  }, options)
+  assert.equal(calls, 1)
+  assert.equal(result.ok, true)
+  assert.equal(result.status, 'completed')
+  assert.equal(result.names, 2)
+  assert.equal(result.resolved, 2)
+  assert.equal(result.records, 4)
+  assert.equal(result.excludedCname, 1)
+  assert.equal(result.imported.saved, 2)
+  assert.equal(result.toolRun.toolId, 'dnsx')
+  assert.equal(result.toolRun.attempted, true)
+  assert.equal(result.toolRun.environmentId, 'local')
+  assert.equal(store.db(id).prepare('SELECT COUNT(*) AS n FROM dns_intel_snapshot').get().n, 2)
+  assert.equal(store.db(id).prepare('SELECT COUNT(*) AS n FROM asset').get().n, 0)
+  assert.equal(store.db(id).prepare('SELECT COUNT(*) AS n FROM port').get().n, 0)
+})
+
+test('dnsx batch refuses TUN/fake-IP and unsupported environments before execution', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'scoped-dnsx-guard-'))
+  const store = new RedteamStore(root)
+  t.after(() => { store.close(); rmSync(root, { recursive: true, force: true }) })
+  const { id } = store.openEngagement('lab', ['*.example.test'])
+  addSubdomainSnapshot(store, id)
+  let calls = 0
+  const base = {
+    root, resolveTool: () => ({ path: '/fixture/dnsx' }),
+    execFileFn: () => { calls++; throw Error('dnsx must not execute') },
+  }
+  const tunneled = await runScopedDnsBatch(store, {
+    engagement: id, target: 'example.test', confirmExternal: true,
+  }, { ...base, interfaces: () => ({ FlClash: [{ address: '198.18.0.1', family: 'IPv4' }] }) })
+  assert.equal(tunneled.status, 'tunnel-detected')
+  assert.equal(tunneled.attempted, false)
+  const remote = await runScopedDnsBatch(store, {
+    engagement: id, target: 'example.test', confirmExternal: true, environmentId: 'wsl:Ubuntu-24.04',
+  }, { ...base, interfaces: () => ({}) })
+  assert.equal(remote.status, 'unsupported-environment')
+  assert.equal(remote.attempted, false)
+  assert.equal(calls, 0)
 })

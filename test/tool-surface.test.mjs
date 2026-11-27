@@ -79,6 +79,99 @@ test('reviewed tool names match source declarations and actual registrations', a
   }
   apply(ctx)
   assert.deepEqual([...registered.keys()].sort(), expected)
+
+  const selector = registered.get('redteam_tool_select')
+  const toolPlan = JSON.parse(await selector.execute({
+    task: 'web', include_environments: false,
+  }, {}))
+  const httpxCandidate = toolPlan.candidates.find(item => item.id === 'httpx')
+  assert.ok(httpxCandidate)
+  assert.equal(httpxCandidate.executionAdapter, 'redteam_scan_run')
+  assert.deepEqual(httpxCandidate.skillRequirements.map(item => item.key), [
+    'redteam:httpx-web-inventory',
+  ])
+  assert.equal(httpxCandidate.automaticExecutionAllowed, false)
+  assert.equal(toolPlan.skillPlan.readTool, 'redteam_skill_read')
+  assert.equal(toolPlan.executionGuard.scopeReviewTool, 'redteam_scope_review')
+  const passiveEngagement = redteam.openEngagement('passive-fixture', ['*.example.test']).id
+  const passiveTool = registered.get('redteam_passive_recon')
+  assert.ok(passiveTool)
+  const passivePreview = JSON.parse(await passiveTool.execute({
+    action: 'subdomains', engagement: passiveEngagement, target: 'example.test',
+  }, {}))
+  assert.equal(passivePreview.ok, true)
+  assert.equal(passivePreview.toolStatus, 'not-requested')
+  assert.equal(passivePreview.amassStatus, 'not-requested')
+  assert.equal(passivePreview.names.length, 0)
+  redteam.db(passiveEngagement).prepare(
+    'INSERT INTO dns_intel_snapshot(name,value,collected_at) VALUES(?,?,?)',
+  ).run('www.example.test', JSON.stringify({
+    records: [{ type: 'A', value: '192.0.2.33', source: 'dnsx' }], errors: [],
+  }), '2026-11-27T00:00:00.000Z')
+  const dnsHistory = JSON.parse(await passiveTool.execute({
+    action: 'dns-history', engagement: passiveEngagement, target: 'www.example.test',
+  }, {}))
+  assert.equal(dnsHistory.ok, true)
+  assert.equal(dnsHistory.target, 'www.example.test')
+  assert.equal(dnsHistory.items.length, 1)
+  assert.equal(dnsHistory.items[0].records[0].value, '192.0.2.33')
+  const skillReader = registered.get('redteam_skill_read')
+  const passiveExec = { agent: { session: { id: 'passive-session' } } }
+  const passiveRequest = {
+    action: 'subdomains', engagement: passiveEngagement, target: 'example.test',
+    use_subfinder: true, confirm_external: true, environment_id: 'not-a-real-environment',
+  }
+  const blockedPassive = JSON.parse(await passiveTool.execute(passiveRequest, passiveExec))
+  assert.equal(blockedPassive.ok, false)
+  assert.match(blockedPassive.error, /redteam:passive-recon/)
+  const passiveSkill = JSON.parse(await skillReader.execute({ key: 'redteam:passive-recon' }, passiveExec))
+  assert.equal(passiveSkill.skillReadReceipt, 'recorded-for-current-root-session')
+  const passivePlanAfterRead = JSON.parse(await registered.get('redteam_tool_select').execute({
+    task: 'domains',
+  }, passiveExec))
+  assert.equal(passivePlanAfterRead.candidates.find(item => item.id === 'subfinder')
+    .skillRequirements[0].status, 'read')
+  const otherSession = { agent: { session: { id: 'another-session' } } }
+  const isolatedPassive = JSON.parse(await passiveTool.execute(passiveRequest, otherSession))
+  assert.equal(isolatedPassive.ok, false)
+  assert.match(isolatedPassive.error, /redteam:passive-recon/)
+  const passiveAfterRead = JSON.parse(await passiveTool.execute(passiveRequest, passiveExec))
+  assert.equal(passiveAfterRead.toolStatus, 'unsupported-environment')
+  assert.equal(passiveAfterRead.toolRuns[0].attempted, false)
+
+  const scanEngagement = redteam.openEngagement('scan-fixture', ['192.0.2.10']).id
+  const scanTool = registered.get('redteam_scan_run')
+  const scanExec = { agent: { session: { id: 'scan-session' } } }
+  const scanRequest = {
+    engagement: scanEngagement, kind: 'nmap', target: '192.0.2.10',
+    environment_id: 'not-a-real-environment', commit: false,
+  }
+  const blockedScan = JSON.parse(await scanTool.execute(scanRequest, scanExec))
+  assert.equal(blockedScan.ok, false)
+  assert.match(blockedScan.error, /redteam:nmap-service-inventory/)
+  const nmapSkill = JSON.parse(await skillReader.execute({
+    key: 'redteam:nmap-service-inventory',
+  }, scanExec))
+  assert.equal(nmapSkill.skillReadReceipt, 'recorded-for-current-root-session')
+  const scanPlanAfterRead = JSON.parse(await registered.get('redteam_tool_select').execute({
+    task: 'services',
+  }, scanExec))
+  assert.equal(scanPlanAfterRead.candidates.find(item => item.id === 'nmap')
+    .skillRequirements[0].status, 'read')
+  const scanAfterRead = JSON.parse(await scanTool.execute(scanRequest, scanExec))
+  assert.equal(scanAfterRead.status, 'unsupported-environment')
+  assert.equal(scanAfterRead.execution.attempted, false)
+  const nextActionTool = registered.get('redteam_next_action')
+  const tunnelOnlyEngagement = redteam.openEngagement('next-action-tunnel-only', [], { bindCurrent: false }).id
+  redteam.addTunnel(tunnelOnlyEngagement, {
+    kind: 'socks5', listen: '127.0.0.1:1080', reach: '192.0.2.0/24',
+    entry_kind: 'target-outbound', status: 'active',
+  })
+  const tunnelOnlyPlan = JSON.parse(await nextActionTool.execute({ engagement: tunnelOnlyEngagement }, {}))
+  assert.equal(tunnelOnlyPlan.state.access, 0)
+  assert.ok(tunnelOnlyPlan.actions.some(action => action.action === '复核历史通道的证据缺口'),
+    'active historical tunnel with no access record should produce a read-only evidence-gap task')
+
   const quality = registered.get('redteam_data_quality')
   const read = JSON.parse(await quality.execute({ engagement: 'fixture' }, {}))
   assert.deepEqual(read, {

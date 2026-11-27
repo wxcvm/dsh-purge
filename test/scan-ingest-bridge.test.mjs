@@ -45,9 +45,18 @@ test('scan ingestion connects scanner format to the existing asset store', async
   assert.equal(result.ports, 1)
   assert.equal(imports[0].bundle.assets[0].ports[0].port, 443)
   assert.equal(imports[0].bundle.scan.argv[0], 'nmap')
-  const bad = JSON.parse(await registry.get('redteam_scan_run').execute({
+  const scanTool = registry.get('redteam_scan_run')
+  assert.equal(scanTool.parameters.environment_id.type, 'string')
+  assert.match(scanTool.description, /WSL、Docker、SSH Kali/)
+  const skillReader = registry.get('redteam_skill_read')
+  const scanExec = { agent: { session: { id: 'scan-ingest-session' } } }
+  const skill = JSON.parse(await skillReader.execute({
+    key: 'redteam:nmap-service-inventory',
+  }, scanExec))
+  assert.equal(skill.skillReadReceipt, 'recorded-for-current-root-session')
+  const bad = JSON.parse(await scanTool.execute({
     engagement: '../escape', kind: 'nmap', target: '192.0.2.8',
-  }, {}))
+  }, scanExec))
   assert.equal(bad.ok, false)
   assert.match(bad.error, /engagement not found/)
 })

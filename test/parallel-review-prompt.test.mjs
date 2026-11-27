@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const planner = readFileSync(new URL('../lib/redteam/store-core.js', import.meta.url), 'utf8')
+const planner = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8')
 const preset = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8')
 const runtime = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
 

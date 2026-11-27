@@ -115,15 +115,22 @@ wsl.exe --distribution <已列出的发行版名> --exec <内置工具名> <固�
 
 `artex:local` 的 `kind=binary-source`、`executionEnvironmentId=local`；不列为第 5 个可执行环境。发现一个文件只返回 `located`，`online=null`、`capabilityVerified=false`、`executionStatus=not-run`，独立于 ARTEX 服务在线与否。既有本机工具查找仍以显式路径、工具箱、binDirs 和 PATH 为优先，ARTEX 依然是最后的本地回退来源。
 
-## 已有本机扫描执行记录的环境来源
+## 已有扫描执行记录的环境来源
 
-`redteam_scan_run` 通过现有的本机 `runDiscoveryScan` 执行 Nmap/httpx 时，已有的扫描 manifest 现在会额外记录 `execution`：
+`redteam_scan_run` 仍只支持 Nmap 与 ProjectDiscovery httpx 单目标任务，但现在可通过 `environment_id` 显式选择执行位置：
 
-`executionId` 为同一运行 ID，`environmentId=local`，`toolId` 为 Nmap/httpx，`binarySource` 为工具文件实际来源（包括 ARTEX 回退时的 `artex`）。记录是否真正向进程执行器发起调用及进程原始结果（完成、失败、超时、空输出），与之后是否成功解析/导入是两件不同的事。
+- `local`：当前 DSH 宿主，省略时默认使用；
+- `wsl:<发行版名>`：当前 Windows 已安装的 WSL 发行版；
+- `docker:<容器 ID>`：当前 Docker context 中仍在运行的容器；
+- `ssh:kali-vm`：配置并通过严格主机密钥检查、发行版身份检查的 Kali SSH 主机。
 
-「作战 → 扫描记录」展开详情，以及 `redteam_scan_history` 返回的数据，都会直接沿用这份真实 manifest；不另外建日志数据库、不伪造旧记录。旧 manifest 没有 `execution` 时显示来源未知。该字段不会因读取工具清单、环境发现或运行版本探针而写入。
+远端 ID 必须来自当前环境清单/工具选择结果；不会因为本机工具缺失而自动切换。每次远端任务启动前都会重新发现所选环境并验证对应工具版本：WSL 可能因显式任务而启动已停止的发行版；Docker 必须仍在运行容器列表中；SSH 必须通过 `StrictHostKeyChecking=yes`、公钥认证和 Kali 身份检查。版本探针失败时不发起目标任务。
 
-当前这只覆盖真正通过 **本机** Nmap/httpx 执行器运行的任务；WSL、SSH Kali、Docker 仍只接入了发现和显式版本命令。不能把远端工具版本检测统计成已经做过目标扫描。
+扫描 manifest 的 `execution` 记录包含同一运行 ID、`environmentId`、`transport`、`toolId`、工具来源、实际执行器调用标志和原始进程结果（完成、失败、超时、空输出）。这与之后是否成功解析/导入是两件不同的事。所有环境仍复用单目标授权范围门禁、参数化 argv（不使用 shell）、超时限制和现有 `redteam_ingest` 入库路径。
+
+「作战 → 扫描记录」展开详情，以及 `redteam_scan_history` 返回的数据，都会沿用这份真实 manifest；不另外建日志数据库、不伪造旧记录。旧 manifest 没有 `execution` 时显示来源未知。该字段不会因读取工具清单、环境发现或运行版本探针而写入。
+
+这不是通用远程 Shell：目前只开放 Nmap/httpx 两种固定参数构造器，不接受用户自定义命令、可执行文件或任意 argv。其他工具仍需匹配 Skill 与宿主明确支持的调用接口；工具路径或版本探针成功不代表目标任务已经执行。
 
 
 ## 一次性跨环境状态诊断（不执行工具）

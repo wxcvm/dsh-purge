@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
@@ -39,7 +39,7 @@ test('subfinder is explicitly opted in and uses bounded argv without shell', asy
     execFileFn: (path, args, opts, cb) => {
       calls++
       assert.equal(path, '/fixture/subfinder')
-      assert.deepEqual(args, ['-d', domain, '-silent', '-timeout', '10', '-max-time', '1'])
+      assert.deepEqual(args, ['-d', domain, '-silent', '-timeout', '10', '-max-time', '1', '-rl', '10', '-mr', '100', '-duc'])
       assert.equal(opts.shell, false)
       cb(null, 'a.example.test\nb.example.test\n')
     } }
@@ -62,4 +62,40 @@ test('missing tool retains saved CT evidence without pretending execution', asyn
   assert.equal(r.ok, true)
   assert.equal(r.toolStatus, 'tool-missing')
   assert.equal(r.names.length, 1)
+})
+
+
+test('Amass uses only passive enum mode, writes to a private temporary file and merges provenance', async t => {
+  const { store, id } = fixture(t)
+  let calls = 0
+  const r = await runScopedSubdomains(store, {
+    engagement: id, target: domain, useAmass: true, confirmExternal: true, commit: true,
+  }, {
+    resolveTool: toolId => {
+      assert.equal(toolId, 'amass')
+      return { path: '/fixture/amass' }
+    },
+    execFileFn: (path, args, options, done) => {
+      calls++
+      assert.equal(path, '/fixture/amass')
+      assert.equal(options.shell, false)
+      assert.deepEqual(args.slice(0, 6), ['enum', '-passive', '-d', domain, '-timeout', '1'])
+      assert.equal(args[6], '-o')
+      assert.ok(args[7].endsWith('amass.txt'))
+      writeFileSync(args[7], 'a.example.test\nb.example.test\noutside.test\n')
+      done(null, '', '')
+    },
+  })
+  assert.equal(calls, 1)
+  assert.equal(r.ok, true)
+  assert.equal(r.amassStatus, 'completed')
+  assert.deepEqual(r.names, [
+    { name: 'a.example.test', sources: ['amass', 'crt.sh'] },
+    { name: 'b.example.test', sources: ['amass'] },
+  ])
+  assert.equal(r.toolRuns[0].toolId, 'amass')
+  assert.equal(r.toolRuns[0].attempted, true)
+  assert.match(r.toolRuns[0].argv[1], /-passive/)
+  const inventory = dispatch(store, { op: 'scopedIntelInventory', engagement: id, target: domain })
+  assert.ok(inventory.names.some(item => item.name === 'b.example.test' && item.evidence.some(e => e.source === 'amass')))
 })

@@ -39,16 +39,19 @@ DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或�
 当前未完成：ARTEX 情报同步及其他厂商 REST API。
 
 
-## 统一子域线索（第五阶段）
+## 统一子域线索（第五阶段扩展）
 
-管理 → 环境 → 测绘中心 → 统一子域线索 · CT + subfinder。输入已登记 *.域名 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可勾选 subfinder 并确认向其配置的被动数据源提交域名。通过已有 resolveTool 查找本机工具（包括 ARTEX 工具目录），不下载或另建工具链，不使用主动解析或扫描参数。subfinder 使用当前安装版本及其配置的来源；部分来源可能需要 API Key。
+管理 → 环境 → 测绘中心 → 统一子域线索 · CT + subfinder + Amass。输入已登记 `*.域名` 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可分别选择 subfinder 或 Amass，并明确确认向其配置的被动数据源提交根域名。subfinder 使用固定被动参数，不启用 `-all` / `-active`，可在明确选择的 local、WSL、运行中的 Docker 或已验证 SSH Kali 环境执行；Amass 固定使用 `enum -passive`，当前仅支持 local。不会下载或安装工具。 两者使用所选环境的默认出站路由，不强制或验证代理/VPS；若用户要求 VPS-only 或禁止直连，必须先完成独立出口验证，否则不执行。
 
-合并去重具体子域名，保留 crt.sh/subfinder 来源，最多 1000 项；工具缺失、失败或超时时仍可查看已有 CT 线索，状态如实显示。可选保存到当前项目 SQLite subdomain_intel_snapshot，离线读取最近 20 条快照。选择某一子域的「填入 DNS 核验」只填入现有 DNS 面板，须另行确认并执行；解析结果不会自动添加资产或扩大授权范围。
+合并去重具体子域名，保留 crt.sh/subfinder/Amass 来源，最多 1000 项；工具缺失、失败、超时、环境不支持与空结果分别标记，已有 CT 线索仍可独立查看。可选保存到当前项目 SQLite `subdomain_intel_snapshot`，离线读取最近 20 条快照。DNS 解析必须另行确认；解析结果不会自动添加资产或扩大授权范围。
 
-接口：scopedSubdomains（异步）、scopedSubdomainHistory（同步）；参数 engagement、target；useSubfinder=true 时需 confirmExternal=true，commit=true 可保存。工具执行上限 75 秒、2 MiB stdout/stderr 缓冲，无 shell。
+Agent 接口：`redteam_passive_recon(action=subdomains)`；管理面板接口仍为 `scopedSubdomains` / `scopedSubdomainHistory`。使用 subfinder/Amass 时需 `confirm_external=true`；`commit=true` 才保存。执行参数由专用适配器固定构造，不接受任意 argv 或通用 Shell。
 
-限制：未自动运行 CT 新查询、批量 DNS 验证或 ARTEX 同步；目前仅复用最近一条保存的 CT 快照。
+## dnsx 批量 DNS 核验（第八阶段）
 
+Agent 使用 `redteam_passive_recon(action=resolve)` 执行批量核验，使用 `action=dns-history` 对单个已授权主机离线读取 DNS 历史。只读取最近已保存的子域快照，最多 200 个命中精确 `*.域名` 授权范围的主机名；dnsx 固定查询 A/AAAA/CNAME，使用本机配置的系统 DNS 解析器（不走 HTTP/SOCKS 代理），限速 10 qps、5 线程、单次重试，不使用字典、DNS 爆破、AXFR、DNS 追踪或范围外 CNAME 跟进。每次提交 DNS 查询前必须取得用户明确同意并传 `confirm_external=true`。
+
+当前 dnsx 只支持 local。执行前检查本机 TUN/fake-IP；检测到隧道时拒绝启动，避免 DNS 路由未经核实；未检测到 TUN 也不代表出口经代理或 VPS，工具会标记 route not verified。默认只预览，`commit=true` 才按主机写入 `dns_intel_snapshot`；不创建资产、端口、漏洞，也不自动授权解析出的 IP。未返回记录会标记为 `NO_RESULT` / `NO_OUTPUT`，不冒充 NXDOMAIN。
 
 ## 统一资产关联（第六阶段）
 

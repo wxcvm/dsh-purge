@@ -209,3 +209,61 @@ test('newly absorbed skills reference only registered Purge tools', () => {
       name + ' must not claim unsupported upstream-only tools')
   }
 })
+
+
+test('legacy high-impact Skills are quarantined and cannot grant executable guidance', () => {
+  for (const key of [
+    'redteam:credential-attack',
+    'redteam:fscan-intranet',
+    'redteam:gogo-intranet',
+    'redteam:dir-bruteforce',
+    'redteam:nuclei-scan',
+    'redteam:chisel-tunnel',
+    'redteam:frp-tunnel',
+    'redteam:suo5-tunnel',
+    'redteam:credential-to-access',
+    'redteam:webshell-toolkit',
+    'redteam:vps-reverse-shell',
+    'redteam:lateral-movement',
+    'redteam:api-attack',
+    'redteam:browser-automation',
+    'redteam:kimi-webbridge',
+    'redteam:oob-verify',
+    'redteam:fofa-recon',
+    'redteam:redteam-setup',
+  ]) {
+    const result = readLocalSkill(key)
+    assert.equal(result.quarantined, true, key)
+    assert.equal(result.executionPolicy, 'quarantined-reference-only', key)
+    assert.equal(result.contentTrust, 'quarantined', key)
+    assert.doesNotMatch(result.content, /hydra|weak.password|reverse.shell|webshell|frpc|impacket|nuclei -t/i, key)
+  }
+
+  const search = searchLocalSkills('credential-attack')
+  const item = search.items.find(row => row.key === 'redteam:credential-attack')
+  assert.ok(item)
+  assert.equal(item.quarantined, true)
+  assert.equal(item.execution_policy, 'quarantined-reference-only')
+  assert.doesNotMatch(item.description, /hydra|爆破|密码/i)
+
+  const safe = readLocalSkill('redteam:nmap-service-inventory')
+  assert.equal(safe.quarantined, false)
+  assert.equal(safe.executionPolicy, 'reference-only')
+  assert.match(safe.content, /Nmap/i)
+})
+
+
+test('unified knowledge search and get cannot bypass quarantined Skill policy', () => {
+  const search = unifiedKnowledgeRequest(undefined, {
+    op: 'knowledgeUnifiedSearch', source: 'redteam', query: 'credential-attack',
+  })
+  const item = search.groups[0].items.find(row => row.id === 'redteam:credential-attack')
+  assert.ok(item)
+  assert.equal(item.quarantined, true)
+  assert.match(item.description, /已隔离/)
+  const detail = unifiedKnowledgeRequest(undefined, {
+    op: 'knowledgeUnifiedGet', source: 'redteam', id: 'redteam:credential-attack',
+  })
+  assert.match(detail.item.body, /Skill 已隔离/)
+  assert.doesNotMatch(detail.item.body, /hydra|password.spray|weak.password/i)
+})

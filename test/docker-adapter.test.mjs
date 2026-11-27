@@ -184,3 +184,19 @@ test('WSL and Docker discovery are started concurrently without touching contain
   assert.equal(result.providers.docker.state, 'listed')
   assert.equal(result.environments.length, 2)
 })
+
+test('Docker httpx probe falls through catalogued binary aliases', async () => {
+  const calls = []
+  const result = await probeDockerTool(containerId, 'httpx', {
+    execFileFn: (_command, args, _opts, done) => {
+      calls.push(args)
+      if (args[0] === 'ps') return done(null, sample, '')
+      if (args[2] === 'httpx-toolkit') return done(Object.assign(new Error('not found'), { code: 127 }), '', 'not found')
+      assert.deepEqual(args, ['exec', containerId, 'pd-httpx', '-version'])
+      done(null, 'httpx 1.6.0\n', '')
+    },
+  })
+  assert.equal(calls.length, 3)
+  assert.equal(result.status, 'probe_verified')
+  assert.equal(result.binary, 'pd-httpx')
+})

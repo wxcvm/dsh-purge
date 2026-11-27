@@ -54,7 +54,7 @@ test('redteam preset parses and preserves the complete persona prefix', () => {
   assert.deepEqual(doc.errors.map(error => error.message), []);
   const prefix = doc.getIn([0, 'config', 'prefix']);
   assert.equal(typeof prefix, 'string');
-  for (const heading of ['## 任务批次与推进闭环', '## 武器库优先', '## 六个角色', '## 会话隔离', '## 子智能体回报的核对']) {
+  for (const heading of ['## 工具发现与唯一执行入口', '## 任务批次与推进闭环', '## 六个角色', '## 会话隔离', '## 子智能体回报的核对']) {
     assert.ok(prefix.includes(heading), 'persona prefix must contain ' + heading);
   }
 });
