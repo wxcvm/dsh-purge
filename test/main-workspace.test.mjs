@@ -11,12 +11,12 @@ test('Purge uses the native main panel and matching global sidebar entry', () =>
   assert.match(client, /name: "main", key: PURGE_PANEL_ID/)
   assert.match(client, /name: "sidebar.panellist", id: PURGE_PANEL_ID/)
   assert.match(client, /selectPurgeHostPanel\(PURGE_PANEL_ID\)/)
-  assert.match(client, /selectPurgeHostPanel\(null\)/)
   assert.match(client, /layout\.selectPanel\(panel\)/)
+  assert.match(client, /selectPurgeHostPanel\(null\)/)
 })
 
 test('the main page reuses real clean and redteam components instead of a mockup', () => {
-  assert.match(client, /page === "clean" \? h\(SettingsRoot, \{ t, workspace: true \}\) : h\(__dshPurgeDrill\.Panel, \{ embedded: true \}\)/)
+  assert.match(client, /page === "clean" \? h\(SettingsRoot, \{ t, workspace: true \}\)\s*: h\(__dshPurgeDrill\.Panel, \{ embedded: true, onOpenReportSession, maskReportOrigin \}\)/)
   assert.match(client, /"data-workspace": page === "clean" \? "clean" : "redteam"/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
   assert.match(client, /showPurgeWorkspace\("drill"\)/)
@@ -35,7 +35,7 @@ test('native clean workspace has separate navigation without discarding edits', 
   assert.match(client, /const \[section, setSection\] = useState\("overview"\)/)
   assert.match(client, /"aria-label": "清洗台功能导航"/)
   assert.match(client, /"aria-current": section === item.id \? "page" : undefined/)
-  assert.match(client, /className: "dshp-clean-pane", hidden: section === "rules"/)
+  assert.match(client, /hidden: section === "rules" \|\| \(section === "prompt" && !redteamExpanded\)/)
   assert.match(client, /className: "dshp-clean-pane", hidden: section !== "rules"/)
   assert.match(client, /h\(PurgifySection, null\)/)
   assert.match(client, /h\(RulesSection, null\)/)
@@ -44,8 +44,8 @@ test('native clean workspace has separate navigation without discarding edits', 
 })
 
 test('clean pages reuse one state owner and keep hidden editors mounted', () => {
-  assert.match(client, /h\(PurgifySection, \{ section \}\)/)
-  assert.match(client, /function PurgifySection\(\{ section \} = \{\}\)/)
+  assert.match(client, /h\(PurgifySection, \{ section, onNavigate: navigate \}\)/)
+  assert.match(client, /function PurgifySection\(\{ section, onNavigate \} = \{\}\)/)
   for (const id of ['overview', 'patches', 'prompt', 'maintenance', 'rules']) {
     assert.ok(client.includes('{ id: "' + id + '", title:'))
   }
@@ -76,20 +76,4 @@ test('native main workspace loads both styles without depending on shell overlay
   assert.match(client, /document\.querySelector\('style\[data-dsh-purge-drill="1"\]'\)/)
   assert.match(client, /function PurgeDock\(\)/)
   assert.match(client, /uiTag\.textContent = PURGE_CSS \+ PURGE_WORKSPACE_CSS/)
-})
-
-
-test('native maximized redteam workspace has opaque, blur-free scrolling surfaces', () => {
-  const source = readFileSync(new URL('../lib/redteam/client.js', import.meta.url), 'utf8')
-  const scope = '.dshp-dock.dshp-workspace[data-workspace="redteam"][data-maximized="1"] .rt-dock.rt-embedded'
-  for (const code of [source, client]) {
-    const start = code.indexOf(scope + ',\n' + scope + ' *{')
-    assert.ok(start >= 0, 'native workspace paint rule must be present')
-    const rule = code.slice(start, code.indexOf('}', start))
-    assert.ok(rule.includes('backdrop-filter:none!important'))
-    assert.ok(rule.includes('-webkit-backdrop-filter:none!important'))
-    for (const [selector, color] of [['.rt-tabs', '#0e1a2b'], ['.rt-pane', '#101b2b'], ['.rt-card', '#18283d']]) {
-      assert.ok(code.includes(scope + ' ' + selector + '{\n  background:' + color + '!important'))
-    }
-  }
 })

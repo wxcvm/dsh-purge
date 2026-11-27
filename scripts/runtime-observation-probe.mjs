@@ -8,7 +8,7 @@ export function apply(ctx, config) {
   const observer = installRuntimeObservations(ctx);
   let frames = { start: 0, chunk: 0, end: 0 }, sequence = [], maxSequence = 80;
   const add = name => { if (sequence.length < maxSequence) sequence.push(name); };
-  const save = () => writeFileSync(config.output, JSON.stringify({ scope: 'runtime-observer-only-not-full-purge-comparison', frames, sequence, ...observer.snapshot() }, null, 2));
+  const save = () => writeFileSync(config.output, JSON.stringify({ scope: 'runtime-observer-only-not-full-purge-comparison', frames, sequence, ...observer.snapshot({ limit: 200 }) }, null, 2));
   ctx.on('agent/assistant-stream', ({ frame }) => { if (Object.hasOwn(frames, frame?.type)) frames[frame.type]++; add('stream/' + frame?.type); }, { global: true });
   ctx.on('session/event', (_session, event) => {
     if (['request/header', 'request/context', 'assistant/message', 'assistant/attempt', 'turn/end'].includes(event?.type)) add(event.type);

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Super Agent · 文档工作台预览</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<main>
+  <h1>Super Agent · 文档工作台预览</h1>
+  <p>独立 Windows 本地预览。检查 Markdown 是否包含一级标题和附录标题，不调用 Harness 或模型。文档本身离线检查；GitHub 证据由你主动读取。</p>
+  <p id="build"></p>
+  <div class="layout">
+    <section>
+      <h2>任务</h2>
+      <button id="new">新建文档任务</button>
+      <ul id="tasks" aria-label="文档任务"></ul>
+      <div class="actions" aria-label="任务翻页">
+        <button id="newer" type="button" disabled>较新</button>
+        <span id="taskPage" aria-live="polite"></span>
+        <button id="older" type="button" disabled>更早</button>
+      </div>
+    </section>
+    <div>
+      <section id="detail" hidden>
+        <h2 id="taskTitle"></h2>
+        <p id="taskStatus" aria-live="polite"></p>
+        <ol id="steps" aria-label="当前文档检查" hidden></ol>
+        <p id="recoveryNote" hidden></p>
+        <form id="interruption" hidden>
+          <label for="interruptionReason">中断依据（不会自动重跑）</label>
+          <input id="interruptionReason" required maxlength="1000">
+          <div class="actions"><button type="submit">标记本次运行中断</button></div>
+        </form>
+        <h3>运行历史</h3>
+        <ol id="history"></ol>
+        <details id="handoff" hidden>
+          <summary>交接到 ARTEX</summary>
+          <p>下载已验收结果的 Markdown，在 ARTEX 知识文档里手动上传到你选的任务。这里不会自动上传。</p>
+          <p><a id="handoffDownload">下载交接文件</a> · SHA-256：<code id="handoffDigest"></code></p>
+          <form id="handoffVerify">
+            <label for="handoffText">粘贴从 ARTEX 读回的 Markdown 正文</label>
+            <textarea id="handoffText" rows="4" required maxlength="50000"></textarea>
+            <button type="submit">比较正文</button>
+            <p id="handoffResult" role="status"></p>
+          </form>
+        </details>
+        <form id="github" hidden>
+          <h3>关联 GitHub 交付证据（可选）</h3>
+          <label for="githubPR">公开 GitHub PR 链接</label>
+          <input id="githubPR" type="url" required placeholder="https://github.com/owner/repo/pull/123">
+          <label for="githubIssue">公开 Issue 链接（可选）</label>
+          <input id="githubIssue" type="url">
+          <label for="githubSHA">核对完整 SHA（可选；留空则读取当前 PR 提交）</label>
+          <input id="githubSHA" maxlength="40" autocomplete="off">
+          <div class="actions"><button type="submit">读取并保存该提交的 CI</button></div>
+          <p><small>只发送公开仓库标识，不发送正文、任务内容或凭据；不会修改 GitHub。</small></p>
+        </form>
+        <form id="review" hidden>
+          <label for="feedback">验收结论或补充要求</label>
+          <input id="feedback" required maxlength="1000">
+          <div class="actions"><button type="submit" value="accept">确认完成</button><button type="submit" value="changes">要求补充</button></div>
+        </form>
+      </section>
+      <section id="input">
+        <h2 id="editorTitle">提交文档</h2>
+        <form id="run">
+          <label for="title">任务标题</label>
+          <input id="title" required maxlength="160">
+          <label for="text">Markdown 正文（不写入数据库）</label>
+          <textarea id="text" rows="8" required maxlength="40000"></textarea>
+          <div class="actions"><button type="submit">运行检查</button><button type="button" id="sample">填入示例</button></div>
+        </form>
+      </section>
+      <p id="message" role="status"></p>
+    </div>
+  </div>
+</main>
+</body>
+</html>
