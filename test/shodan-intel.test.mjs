@@ -54,13 +54,14 @@ test('Shodan-compatible HTTPS roots accept optional gateway path and reject unsa
 test('legacy environment key remains usable; saved key is write-only and clear disables env fallback', t => {
   const { root } = fixture(t)
   process.env.SHODAN_API_KEY = 'legacy-environment-key'
-  assert.deepEqual(loadShodanConnection(root), {
-    key: 'legacy-environment-key', baseUrl: DEFAULT_SHODAN_API_URL, credentialSource: 'environment',
-  })
+  const environmentConnection = loadShodanConnection(root)
+  assert.equal(environmentConnection.key, 'legacy-environment-key')
+  assert.equal(environmentConnection.baseUrl, DEFAULT_SHODAN_API_URL)
+  assert.equal(environmentConnection.credentialSource, 'environment')
   assert.equal(shodanConnectionGet(root).configured, true)
   const saved = shodanConnectionSave(root, { key: 'new-private-key' })
   assert.equal(saved.configured, true)
-  assert.equal(saved.credentialSource, 'config')
+  assert.equal(saved.credentialSource, 'encrypted-local')
   assert.equal(JSON.stringify(saved).includes('new-private-key'), false)
   assert.equal(loadPlatformConfig(root).env.SHODAN_API_KEY, '')
   const stored = JSON.parse(readFileSync(join(root, 'platform-secrets.json'), 'utf8'))
