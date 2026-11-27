@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
 import { taskContext } from '../lib/redteam/task-context.js'
+import { getBundledKnowledge } from '../lib/redteam/knowledge-bundled.js'
 
 function fixture(path = ':memory:', initialize = true) {
   const db = new DatabaseSync(path)
@@ -123,7 +124,7 @@ test('asset task context automatically includes offline CVE candidates without m
     assert.ok(hit)
     assert.equal(hit.verified, false)
     assert.equal(hit.status, 'candidate')
-    assert.ok(hit.source_url.includes('FJNB5/fujiang-pojia'))
+    assert.ok(hit.source_url.startsWith('https://github.com/FJNB5/fujiang-pojia/blob/'))
     assert.equal(Array.isArray(context.related_skills), true)
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
     assert.equal(JSON.stringify(context).includes('NEVER_EXPOSE'), false)
@@ -313,4 +314,245 @@ test('stored testing progress survives database reopen without claiming current 
     if (opened) opened.db.close()
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+
+test('task context excludes candidates outside a structured fixed-version range', () => {
+  const { db, store } = fixture()
+  try {
+    const original = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = original(engagement, id)
+      return asset && id === 5 ? {
+        ...asset,
+        ports: [{ port: 3000, state: 'open', product: 'Grafana', version: '8.2.7' }],
+        fingerprints: [{ product: 'Grafana', version: '8.2.7' }],
+      } : asset
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.equal(context.knowledge_candidates.some(row => row.cve.includes('CVE-2021-43798')), false)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+  } finally { db.close() }
+})
+
+
+test('product-related skills are suggested even when no CVE candidate matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: 'REST API inventory service',
+        ports: [{ port: 8080, proto: 'tcp', state: 'open', service: 'http', product: 'Inventory API', version: '1.0' }],
+        fingerprints: [],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.equal(context.knowledge_candidates.length, 0)
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+  } finally {
+    db.close()
+  }
+})
+
+test('business security controls are suggested from observed workflow evidence without CVE matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, proto: 'tcp', state: 'open', service: 'https' }],
+        fingerprints: [],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.equal(context.knowledge_candidates.length, 0)
+    const skill = context.related_skills.find(item => item.key === 'redteam:business-security-controls')
+    assert.ok(skill)
+    assert.match(skill.description, /多租户隔离/)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+  } finally {
+    db.close()
+  }
+})
+
+test('generic infrastructure observations do not receive business-workflow skill hints', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: 'SSH and DNS service availability',
+        ports: [{ port: 22, proto: 'tcp', state: 'open', service: 'ssh' }, { port: 53, proto: 'udp', state: 'open', service: 'dns' }],
+        fingerprints: [],
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.ok(!context.related_skills.some(item => item.key === 'redteam:business-security-controls'))
+  } finally {
+    db.close()
+  }
+})
+
+
+test('orphan vulnerability title can supply API and authorization context for skill hints', () => {
+  const { db, store } = fixture()
+  try {
+    db.prepare('UPDATE vuln SET title = ? WHERE id = 13').run('API 对象级授权边界')
+    const context = taskContext(store, 'lab', 'vuln #13')
+    assert.equal(context.asset_link_status, 'missing')
+    assert.equal(context.knowledge_candidates.length, 0)
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:business-security-controls'))
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+  } finally {
+    db.close()
+  }
+})
+
+test('business controls remain in the bounded skill hints alongside product and API matches', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const row = getAsset(engagement, id)
+      return row && { ...row,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, proto: 'tcp', state: 'open', service: 'https', product: 'Inventory API' }],
+        fingerprints: [],
+      }
+    }
+    const context = taskContext(store, 'lab', 'asset #5')
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:business-security-controls'))
+    assert.ok(context.related_skills.some(skill => skill.key === 'redteam:api-attack'))
+    assert.ok(context.related_skills.length <= 5)
+  } finally {
+    db.close()
+  }
+})
+
+
+test('task context links a product candidate to the actual bundled reference and excludes fixed versions', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    let version = '8.2.5'
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        ports: [{ port: 3000, state: 'open', product: 'Grafana', version }],
+        fingerprints: [{ product: 'Grafana', version }],
+      }
+    }
+    const id = 'fujiang:cloud-container:cve-2021-43798-grafana-file-read'
+    const context = taskContext(store, 'lab', 'asset #5')
+    const row = context.bundled_knowledge.items.find(item => item.id === id)
+    assert.ok(row)
+    assert.deepEqual(row.reference, { source: 'bundled', id })
+    assert.equal(row.match_reason, 'asset-product-candidate')
+    assert.equal(row.verified, false)
+    assert.ok(row.advisory_url.startsWith('https://'))
+    assert.notEqual(row.source_url, row.advisory_url)
+    assert.equal(row.version_applicability.status, 'affected')
+    assert.equal(row.body, undefined)
+    assert.match(getBundledKnowledge(row.reference.id).body, /修复与缓解/)
+    version = '8.2.7'
+    const patched = taskContext(store, 'lab', 'asset #5')
+    assert.ok(!patched.bundled_knowledge.items.some(item => item.id === id))
+    assert.ok(!patched.knowledge_candidates.some(item => item.cve.includes('CVE-2021-43798')))
+    db.exec("UPDATE vuln SET cve = 'CVE-2021-43798' WHERE id = 11")
+    const explicit = taskContext(store, 'lab', 'vuln #11')
+    const reference = explicit.bundled_knowledge.items.find(item => item.id === id)
+    assert.ok(reference)
+    assert.equal(reference.match_reason, 'exact-cve')
+    assert.equal(reference.version_applicability.status, 'not_affected')
+    assert.equal(explicit.knowledge_candidates.length, 0)
+  } finally { db.close() }
+})
+
+test('task context recommends specific business references without a CVE or external knowledge service', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset,
+        test_surface: '订单 API 支付回调与租户隔离',
+        ports: [{ port: 443, state: 'open', service: 'https' }],
+        fingerprints: [],
+      }
+    }
+    const before = db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n
+    const result = taskContext(store, 'lab', 'asset #5')
+    const ids = result.bundled_knowledge.items.map(row => row.id)
+    assert.ok(ids.includes('fujiang:gray-market:payment-notify-forgery'))
+    assert.ok(ids.includes('fujiang:gray-market:multi-tenant-cross-site'))
+    assert.equal(result.knowledge_candidates.length, 0)
+    assert.ok(result.bundled_knowledge.items.every(row => row.match_reason === 'business-context' && row.verified === false && !Object.hasOwn(row, 'body')))
+    assert.equal(new Set(ids).size, ids.length)
+    assert.ok(result.bundled_knowledge.items.length <= 5)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vuln').get().n, before)
+    db.prepare('UPDATE vuln SET title = ? WHERE id = 13').run('API 对象级授权边界')
+    const orphan = taskContext(store, 'lab', 'vuln #13')
+    assert.ok(orphan.bundled_knowledge.items.some(row => row.id === 'fujiang:gray-market:api-idor-bola'))
+  } finally { db.close() }
+})
+
+test('hostnames and closed-port labels do not supply bundled task references', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && { ...asset, primary_name: 'grafana.payment-callback.example.test',
+        test_surface: 'SSH and DNS service availability', test_notes: '',
+        ports: [{ port: 3000, state: 'closed', product: 'Grafana' }, { port: 22, state: 'open', service: 'ssh' }],
+        fingerprints: [],
+      }
+    }
+    assert.deepEqual(taskContext(store, 'lab', 'asset #5').bundled_knowledge.items, [])
+  } finally { db.close() }
+})
+
+test('recorded Apache multi-CVE finding keeps both CVEs in linked Fujiang task context', () => {
+  const { db, store } = fixture()
+  try {
+    const getAsset = store.getAsset.bind(store)
+    store.getAsset = (engagement, id) => {
+      const asset = getAsset(engagement, id)
+      return asset && {
+        ...asset,
+        ports: [{ port: 80, state: 'open', product: 'Apache HTTP Server', version: '2.4.50' }],
+        fingerprints: [{ product: 'Apache HTTP Server', version: '2.4.50' }],
+      }
+    }
+    db.prepare('UPDATE vuln SET cve = ?, title = ? WHERE id = 11').run(
+      'CVE-2021-41773、CVE-2021-42013', 'Apache HTTP Server 历史版本核对',
+    )
+    const context = taskContext(store, 'lab', 'vuln #11')
+    assert.equal(context.ok, true)
+    const candidate = context.knowledge_candidates.find(row => row.cve.includes('CVE-2021-42013'))
+    assert.ok(candidate)
+    assert.equal(candidate.version_applicability.status, 'affected')
+    assert.deepEqual(candidate.version_applicability.cves, [
+      { cve: 'CVE-2021-41773', status: 'not_affected' },
+      { cve: 'CVE-2021-42013', status: 'affected' },
+    ])
+    const reference = context.bundled_knowledge.items.find(row =>
+      row.id === 'fujiang:web-cms:cve-2021-41773-apache-path-traversal')
+    assert.ok(reference)
+    assert.deepEqual(reference.reference, { source: 'bundled', id: reference.id })
+    assert.equal(reference.match_reason, 'exact-cve')
+    assert.ok(reference.advisory_url.startsWith('https://'))
+    assert.equal(reference.verified, false)
+    assert.equal(reference.body, undefined)
+    assert.match(getBundledKnowledge(reference.id).body, /修复与缓解/)
+  } finally { db.close() }
 })

@@ -220,3 +220,36 @@ test('ARTEX report review route and embedded resource tab are both connected', (
   assert.match(embedded, /formatArtexReviewAssets/)
   assert.match(embedded, /refs: sourceRefs/)
 })
+
+
+test('ARTEX report availability and all native triage states remain distinct', () => {
+  const statuses = ['resolved', 'risk_accepted', 'ignored', 'duplicate', 'in_progress', 'confirmed', 'pending'];
+  const input = structuredClone(sample);
+  input.runs[0].results = statuses.map((status, i) => ({ properties: {
+    findingId: i + 1, status, severity: 'high', reportAvailable: i === 0 ? true : i === 1 ? false : undefined,
+  }}));
+  const out = reviewArtexSarif(input);
+  assert.deepEqual(out.report_availability, { available: 1, absent: 1, unknown: 5 });
+  assert.deepEqual(out.items.slice(0, 3).map(x => x.report_available), [true, false, null]);
+  assert.deepEqual(out.review_queue.map(x => x.reported_status), ['in_progress', 'pending', 'confirmed', 'resolved', 'risk_accepted', 'ignored', 'duplicate']);
+  assert.equal(out.review_queue[3].report_available, true);
+  assert.equal(out.independently_confirmed_by_dsh, 0);
+});
+
+test('an ARTEX report distinguishes declared source IDs and refuses mixed-source merges', () => {
+  const a = '0123456789abcdef0123456789abcdef'
+  const b = 'fedcba9876543210fedcba9876543210'
+  const file = structuredClone(sample)
+  assert.equal(reviewArtexSarif(file).source_id, null)
+  file.runs[0].properties = { artexSourceId: a.toUpperCase() }
+  assert.equal(reviewArtexSarif(file).source_id, a)
+  const other = structuredClone(file.runs[0])
+  other.properties.artexSourceId = b
+  file.runs.push(other)
+  assert.throws(() => reviewArtexSarif(file), /不同或未声明/)
+  delete file.runs[1].properties
+  assert.throws(() => reviewArtexSarif(file), /不同或未声明/)
+  file.runs.pop()
+  file.runs[0].properties.artexSourceId = 'not-an-id'
+  assert.throws(() => reviewArtexSarif(file), /来源标识无效/)
+})

@@ -1,6 +1,6 @@
 # PURGE · 中文工作台
 
-中文首页已迁移至 [README.md](README.md)，作为本私有仓库的默认首页。
+中文首页已迁移至 [README.md](README.md)，作为本仓库的默认首页。
 
 - [版本中心](https://github.com/wxcvm/dsh-purge/releases)
 - [构建记录](https://github.com/wxcvm/dsh-purge/actions)
