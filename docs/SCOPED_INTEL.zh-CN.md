@@ -41,17 +41,17 @@ DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或�
 
 ## 统一子域线索（第五阶段扩展）
 
-管理 → 环境 → 测绘中心 → 统一子域线索 · CT + subfinder + Amass。输入已登记 \`*.域名\` 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可分别选择 subfinder 或 Amass，并明确确认向其配置的被动数据源提交根域名。subfinder 使用固定被动参数，不启用 \`-all\` / \`-active\`，可在明确选择的 local、WSL、运行中的 Docker 或已验证 SSH Kali 环境执行；Amass 固定使用 \`enum -passive\`，当前仅支持 local。不会下载或安装工具。
+管理 → 环境 → 测绘中心 → 统一子域线索 · CT + subfinder + Amass。输入已登记 `*.域名` 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可分别选择 subfinder 或 Amass，并明确确认向其配置的被动数据源提交根域名。subfinder 使用固定被动参数，不启用 `-all` / `-active`，可在明确选择的 local、WSL、运行中的 Docker 或已验证 SSH Kali 环境执行；Amass 固定使用 `enum -passive`，当前仅支持 local。不会下载或安装工具。
 
-合并去重具体子域名，保留 crt.sh/subfinder/Amass 来源，最多 1000 项；工具缺失、失败、超时、环境不支持与空结果分别标记，已有 CT 线索仍可独立查看。可选保存到当前项目 SQLite \`subdomain_intel_snapshot\`，离线读取最近 20 条快照。DNS 解析必须另行确认；解析结果不会自动添加资产或扩大授权范围。
+合并去重具体子域名，保留 crt.sh/subfinder/Amass 来源，最多 1000 项；工具缺失、失败、超时、环境不支持与空结果分别标记，已有 CT 线索仍可独立查看。可选保存到当前项目 SQLite `subdomain_intel_snapshot`，离线读取最近 20 条快照。DNS 解析必须另行确认；解析结果不会自动添加资产或扩大授权范围。
 
-Agent 接口：\`redteam_passive_recon(action=subdomains)\`；管理面板接口仍为 \`scopedSubdomains\` / \`scopedSubdomainHistory\`。使用 subfinder/Amass 时需 \`confirm_external=true\`；\`commit=true\` 才保存。执行参数由专用适配器固定构造，不接受任意 argv 或通用 Shell。
+Agent 接口：`redteam_passive_recon(action=subdomains)`；管理面板接口仍为 `scopedSubdomains` / `scopedSubdomainHistory`。使用 subfinder/Amass 时需 `confirm_external=true`；`commit=true` 才保存。执行参数由专用适配器固定构造，不接受任意 argv 或通用 Shell。
 
 ## dnsx 批量 DNS 核验（第八阶段）
 
-Agent 使用 \`redteam_passive_recon(action=resolve)\`。只读取最近已保存的子域快照，最多 200 个命中精确 \`*.域名\` 授权范围的主机名；dnsx 固定查询 A/AAAA/CNAME，限速 10 qps、5 线程、单次重试，不使用字典、DNS 爆破、AXFR、DNS 追踪或范围外 CNAME 跟进。每次提交 DNS 查询前必须取得用户明确同意并传 \`confirm_external=true\`。
+Agent 使用 `redteam_passive_recon(action=resolve)`。只读取最近已保存的子域快照，最多 200 个命中精确 `*.域名` 授权范围的主机名；dnsx 固定查询 A/AAAA/CNAME，限速 10 qps、5 线程、单次重试，不使用字典、DNS 爆破、AXFR、DNS 追踪或范围外 CNAME 跟进。每次提交 DNS 查询前必须取得用户明确同意并传 `confirm_external=true`。
 
-当前 dnsx 只支持 local。执行前检查本机 TUN/fake-IP；检测到隧道时拒绝启动，避免 DNS 路由未经核实。默认只预览，\`commit=true\` 才按主机写入 \`dns_intel_snapshot\`；不创建资产、端口、漏洞，也不自动授权解析出的 IP。未返回记录会标记为 \`NO_RESULT\` / \`NO_OUTPUT\`，不冒充 NXDOMAIN。
+当前 dnsx 只支持 local。执行前检查本机 TUN/fake-IP；检测到隧道时拒绝启动，避免 DNS 路由未经核实。默认只预览，`commit=true` 才按主机写入 `dns_intel_snapshot`；不创建资产、端口、漏洞，也不自动授权解析出的 IP。未返回记录会标记为 `NO_RESULT` / `NO_OUTPUT`，不冒充 NXDOMAIN。
 
 ## 统一资产关联（第六阶段）
 
