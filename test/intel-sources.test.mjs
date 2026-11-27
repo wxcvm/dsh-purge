@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { INTEL_SOURCES, normalizeIntelSources } from '../lib/redteam/intel-sources.js'
+import { INTEL_SOURCES, normalizeIntelSources, describeIntelSourceStatus } from '../lib/redteam/intel-sources.js'
 import { loadPlatformConfig, savePlatformConfig, platformSummary,
   DEFAULT_INTEL_SURVEY_PREFERENCES, normalizeIntelSurveyPreferences } from '../lib/redteam/platform-config.js'
 import { dispatch } from '../lib/redteam/store-core.js'
@@ -16,6 +16,12 @@ test('internet asset search sources have distinct official browser entries and h
   assert.equal(INTEL_SOURCES.find((x) => x.id === 'shodan').mode, 'scoped-api')
   assert.equal(INTEL_SOURCES.find((x) => x.id === 'censys').mode, 'scoped-api')
   assert.match(INTEL_SOURCES.find((x) => x.id === 'censys').details, /1 credit/)
+  assert.match(INTEL_SOURCES.find((x) => x.id === 'shodan').details, /Shodan Membership/)
+  const shodanStatus = describeIntelSourceStatus({ env: { SHODAN_API_KEY: 'private-shodan-key' } }, {})
+  assert.match(shodanStatus.shodan.label, /Key 已配置/)
+  assert.equal(JSON.stringify(shodanStatus).includes('private-shodan-key'), false)
+  assert.match(describeIntelSourceStatus({ env: { SHODAN_API_KEY_DISABLED: 'true' } },
+    { SHODAN_API_KEY: 'legacy-key' }).shodan.label, /Key 未配置/)
   for (const src of INTEL_SOURCES.filter((x) => !['local', 'fofa', 'shodan', 'censys'].includes(x.id))) {
     assert.equal(src.mode, 'website-only')
     assert.ok(src.url.startsWith('https://'))
@@ -62,6 +68,10 @@ test('workbench shows four keyless operations and FOFA without unused provider c
     assert.match(view, /fofaConnectionSave/)
     assert.match(view, /fofaConnectionTest/)
     assert.match(view, /fofaSearch/)
+    assert.match(view, /shodanConnectionGet/)
+    assert.match(view, /shodanConnectionSave/)
+    assert.match(view, /shodanConnectionTest/)
+    assert.match(view, /Shodan REST API/)
     assert.match(view, /scopedIntelLookup/)
     assert.match(view, /scopedCtLookup/)
     assert.match(view, /scopedDnsLookup/)
