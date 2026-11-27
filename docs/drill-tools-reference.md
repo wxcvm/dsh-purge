@@ -1059,11 +1059,14 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 参数：`engagement`、`vuln_id`（提供时自动读取 CVE/组件/严重级与目标）、`target`、`port`、`service`（http/https/ssh/smb/winrm/db）、`os`（windows/linux）、`strategy`（`auto` 默认，按严重级与服务选择；或 `nday-first` / `spray-first` / `stealth`）、`dry_run`（默认 true）、`deploy_c2`、`persist`、`users`、`passwords`、`confirm`。
 
 ### `redteam_internal_campaign`
-【作战智能体】内网渗透编排：通过已有隧道做 内网侦察 → 资产风险排序 → 横向移动 → 权限提升 → 数据获取 → 防溯源。三种模式：`recon-first`（先摸清再按风险排序打）、`speed-run`（并行扩张）、`stealth`（低速串行，避免 IDS/防火墙告警）。
+【模拟占位工具】当前只返回明确标记的内网作战阶段计划。底层 `InternalRecon` / `LateralExecutor` 仍含测试夹具和未实现方法，不能把其中的模拟主机、端口、凭据或成功状态当作真实发现。
 
-**`dry_run` 默认 `true`**，真实执行需显式 `dry_run: false`。内网 IP 属私网：登记了 scope 就必须落在范围内，未登记则要求显式 `confirm: true`。没有可用隧道就没有内网前提，先用 `redteam_tunnel_list` 确认 `status=active` 的隧道。内网成果需 `redteam_asset_add`（自动 `scope=internal`）+ `redteam_access_add` 落库才算数。
+- `dry_run` 默认 `true`：返回 `status=simulated`、`success=null` 和计划阶段；不访问目标、不连接隧道、不写入资产或作战成果。
+- 显式 `dry_run: false`：返回 `status=unsupported`；真实执行适配器尚未实现，因此会拒绝启动。
+- 内网范围校验仍在工具入口执行；登记了 scope 就必须命中，未登记则需要显式 `confirm: true`。通过范围校验不代表工具已经具备执行能力。
+- 只有在真实执行适配器、隧道路由和逐项证据校验完成后，才可以恢复实际执行语义。
 
-参数：`engagement`、`starting_host`（必填，已控内网立足点 IP）、`tunnel_listen`（如 `socks5://127.0.0.1:1080`，仅作提示，本工具不自动套代理）、`username`、`password`、`cred_type`（local/domain/admin）、`mode`、`target_network`、`exfiltrate`、`max_parallel`、`dry_run`、`confirm`。
+参数仍为兼容保留：`engagement`、`starting_host`、`tunnel_listen`、`username`、`password`、`cred_type`、`mode`、`target_network`、`exfiltrate`、`max_parallel`、`dry_run`、`confirm`。当前占位实现不会使用凭据、隧道监听地址或目标网段执行操作。
 
 ## 典型调用链
 
