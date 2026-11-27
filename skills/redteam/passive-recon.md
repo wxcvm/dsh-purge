@@ -15,6 +15,8 @@ enabled: true
 - `action=subdomains` 默认只读取已经保存的 CT 快照；不会在本工具中实时查询 crt.sh。
 - 选择 subfinder 或 Amass 时，根域名会提交给该工具当前配置的被动数据源；选择 dnsx 时，已保存主机名会提交给本机系统 DNS 解析器。
 - 每次新的外部查询都必须先向用户说明查询对象、数据接收方和网络路径限制，取得本次明确同意，并通过 `redteam_passive_recon` 的 `confirm_external=true`。
+- subfinder/Amass 使用所选环境的默认出站路由，适配器不强制也不验证代理/VPS；结果标记 `networkRoute.status=not-verified`。如果用户要求 VPS-only 或禁止意外直连，必须先完成独立出口路由验证；未验证前不得运行，不能把 `confirm_external` 当成路由验证。
+- dnsx 使用本机系统 DNS 解析器且不走 HTTP/SOCKS 代理；TUN 检测通过也不证明 DNS 流量经过 VPS。用户要求 VPS-only DNS 时同样先停止，等待专门的 DNS 出口验证能力。
 - 不得把先前会话的同意、历史配置或“用户说继续”当作本次外部查询同意。
 
 ## 固定能力边界
