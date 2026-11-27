@@ -75,6 +75,12 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(Object.hasOwn(tunnelList.items[0], 'reach'), false)
 
   const sessions = JSON.parse(await registered.get('redteam_sessions').execute({ engagement: sensitiveEngagement }, {}))
+  assert.equal(Object.hasOwn(sessions, 'credentials'), false)
+  assert.equal(Object.hasOwn(sessions, 'webshells'), false)
+  assert.equal(Object.hasOwn(sessions, 'tunnels'), false)
+  assert.equal(sessions.totals.credentials, 1)
+  assert.equal(sessions.totals.webshells, 1)
+  assert.equal(sessions.totals.tunnels, 1)
   assert.doesNotMatch(JSON.stringify(sessions), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
   const accessList = JSON.parse(await registered.get('redteam_access_list').execute({ engagement: sensitiveEngagement }, {}))
   assert.equal(accessList.items.length, 1)
