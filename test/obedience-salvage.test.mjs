@@ -147,8 +147,9 @@ test("集成：新真人消息重置抢救预算", async () => {
   h.agent.session.events = events.concat([
     { seq: 500, type: "user/message", data: { message: { role: "user", content: [{ type: "text", text: "继续，换个目标" }] }, source: { kind: "user" } } },
     ...[501, 502, 503, 504, 505, 506].map((seq) => ({ seq, type: "tool/call", data: { name: "pwsh", turn: 2 } })),
-    { seq: 507, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: REFUSAL }] } } },
-    { seq: 508, type: "turn/end", data: { reason: { kind: "completed" } } },
+    ...[507, 508, 509, 510, 511, 512].map((seq) => ({ seq, type: "tool/result", data: { message: { role: "tool", content: [{ type: "text", text: "ok" }] } } })),
+    { seq: 513, type: "assistant/message", data: { message: { role: "assistant", content: [{ type: "text", text: REFUSAL }] } } },
+    { seq: 514, type: "turn/end", data: { reason: { kind: "completed" } } },
   ]);
   await h.idle();
   assert.equal(h.sent.length, 2, "新一轮可以再抢救一次");
