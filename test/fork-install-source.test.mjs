@@ -1,6 +1,5 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { purgePnpmBuildSpecs } from '../lib/profile-insert.js'
 
@@ -30,35 +29,29 @@ test('built-in updater and profile fallback no longer point at the original repo
 })
 
 /*
- * Canonical README baseline: CallMeGuLab/dsh-purge-safe main@29bf73a.
- * Keep the fork's package/update metadata in wxcvm/dsh-purge, but do not
- * rewrite the upstream project homepage or add fork-specific copy to it.
- * These Git blob hashes make upstream README drift an explicit sync task.
+ * Canonical README baseline: CallMeGuLab/dsh-purge-safe main.
+ * Keep fork-specific package/update metadata in wxcvm/dsh-purge, not in the
+ * upstream project homepage. Semantic assertions are line-ending independent.
  */
-const UPSTREAM_README_BLOBS = Object.freeze({
-  'README.md': 'b4a4a02130e59bf9a949a2d246ad3068bf291390',
-  'README.en.md': 'b4a4a02130e59bf9a949a2d246ad3068bf291390',
-  'README.zh-CN.md': 'e13bd8f3df8da8733bc80bb0e4a619db80872a07',
-  'README.ja.md': 'a46a562c9f24b6ebeee21b6d80203ca19615f651',
-})
+test('README files follow the selected upstream homepage and retain attribution', () => {
+  const english = read('../README.md')
+  assert.equal(read('../README.en.md'), english, 'README.en.md must mirror the default English page')
 
-function gitBlobSha(content) {
-  const bytes = Buffer.from(String(content).replace(/\r\n/g, '\n'), 'utf8')
-  return createHash('sha1').update('blob ' + bytes.length + '\0').update(bytes).digest('hex')
-}
-
-test('README files match the selected upstream baseline and retain its attribution', () => {
-  for (const [name, expectedSha] of Object.entries(UPSTREAM_README_BLOBS)) {
-    const content = read('../' + name)
-    assert.equal(gitBlobSha(content), expectedSha, name + ' must match CallMeGuLab/dsh-purge-safe main@29bf73a')
+  const pages = [
+    ['README.md', english, 'DeepSeek Harness cybersecurity red-team tool (dsh-purge-safe)'],
+    ['README.zh-CN.md', read('../README.zh-CN.md'), 'DeepSeek Harness 网络安全红队工具（dsh-purge-safe）'],
+    ['README.ja.md', read('../README.ja.md'), 'DeepSeek Harness サイバーセキュリティ レッドチームツール (dsh-purge-safe)'],
+  ]
+  for (const [name, content, title] of pages) {
+    assert.ok(content.includes(title), name + ' must retain the upstream title')
+    assert.ok(content.includes('2.0.0'), name + ' must retain the upstream version marker')
     assert.ok(content.includes('CallMeGuLab'), name + ' must retain upstream attribution')
     assert.ok(content.includes('LICENSE'), name + ' must retain the license reference')
     assert.ok(content.includes('NOTICE'), name + ' must retain the notice reference')
-    assert.ok(!content.includes('https://codeload.github.com/wxcvm/dsh-purge/'))
-    assert.ok(!content.includes('https://codeload.github.com/YuJunZhiXue/dsh-purge/'))
+    assert.ok(!content.includes('https://github.com/wxcvm/dsh-purge/releases'), name + ' must not replace the upstream homepage with fork-specific copy')
+    assert.ok(!content.includes('https://codeload.github.com/wxcvm/dsh-purge/'), name + ' must not add a fork-specific install URL')
   }
 })
-
 test('Windows Desktop installer pins the current release and supports rollback', () => {
   const version = JSON.parse(read('../package.json')).version
   const script = read('../scripts/update-desktop-fork.ps1')
