@@ -33,7 +33,7 @@ test('task selection respects task-specific priority instead of rewarding versio
   assert.equal(plan.selected.id, 'nmap', 'prefer a reviewed adapter over a higher-ranked but unmapped binary')
   assert.equal(plan.candidates.find((item) => item.id === 'fscan').executionPolicy, 'unmapped-manual-review')
   assert.equal(plan.selected.verification, 'not-run')
-  assert.equal(plan.selected.canProbe, false)
+  assert.equal(plan.selected.canProbe, true)
   assert.ok(plan.candidates.find((c) => c.id === 'nmap').canProbe)
   assert.ok(plan.candidates.find((c) => c.id === 'nmap').detected)
   assert.ok(plan.candidates.every((c) => c.verification === 'not-run'))
