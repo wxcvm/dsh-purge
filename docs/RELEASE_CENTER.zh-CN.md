@@ -2,9 +2,47 @@
 
 [返回工作台](../README.md) · [Releases](https://github.com/wxcvm/dsh-purge/releases) · [Actions](https://github.com/wxcvm/dsh-purge/actions) · [开发进度](DEVELOPMENT_STATUS.zh-CN.md)
 
+## 预览候选已发布 · 2026-11-25
+
+- **版本**：[v1.1.92-wxcvm.26-rc.1](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.26-rc.1)，GitHub Pre-release 已发布；PR [#582](https://github.com/wxcvm/dsh-purge/pull/582) 合并提交 [75adae0](https://github.com/wxcvm/dsh-purge/commit/75adae0ff166962549754e382addcb14a1a0d57a)，轻量标签指向同一提交。
+- **实际资产**：ZIP `dsh-purge-1.1.92-wxcvm.26-rc.1.zip`，4,645,975 字节，GitHub asset digest `sha256:f50e83d34fae1b510c0a98a6de91d622f2a6ac38daec0fc9484efa5af8466a9e`；`SHA256SUMS.txt` 101 字节，GitHub asset digest `sha256:273fd63f97dcdef8a2cfd325ed65bc6be1a2c50002fe629339c9c6565b6bc172`。两项状态均为 uploaded；本次未独立下载 ZIP 并二次核对清单文本。
+- **候选 CI**：PR 精确 HEAD `93ba651e` 的 [Local Compatibility #45605673045](https://github.com/wxcvm/dsh-purge/actions/runs/45605673045) 与 [Hosted Packed Install #45605673164](https://github.com/wxcvm/dsh-purge/actions/runs/45605673164) 均 Windows/Ubuntu 双绿，包含真实 npm pack 与全新临时 `DSH_HOME` 安装。
+- **UI 变更 CI**：PR [#581](https://github.com/wxcvm/dsh-purge/pull/581) 精确 HEAD `d39835a` 的 [Hosted UI #45603955570](https://github.com/wxcvm/dsh-purge/actions/runs/45603955570) 与 [Compatibility #45603955553](https://github.com/wxcvm/dsh-purge/actions/runs/45603955553) 均通过。
+- **主线 push CI**：[#45606197244](https://github.com/wxcvm/dsh-purge/actions/runs/45606197244) 在记录时仍在执行（Ubuntu 已启动、Windows 排队），不计为通过。
+- **历史版本清理**：本次用户执行的清理已移除旧 GitHub Release 与下载资产；旧 tag/源码仍保留。此前 `.25-rc.1` 标签保留但没有 Release；此前 Stable `.24` 的历史发布记录也不代表当前仍可下载。当前可下载候选为本节 `.26-rc.1`。
+- **更新渠道**：这是 Pre-release，当前 Stable 更新器不会自动推送 RC；试用请从上方 Release 页面直接下载 ZIP，并按随附校验文件核对。
+- **实机边界**：真实 Windows Harness Desktop 原位升级、重启后实际加载、Provider 请求送达、旧安装历史权限迁移/回退和跨页设置持久化仍需单独验收（#336/#337/#550/#361/#364）。自动化夹具不替代实机证据。
+
+## 预览候选状态更正 · 2026-11-25
+
+- **源码候选**：`1.1.92-wxcvm.25-rc.1`，PR [#579](https://github.com/wxcvm/dsh-purge/pull/579) 已合并至 [02b5dda](https://github.com/wxcvm/dsh-purge/commit/02b5ddaa4615be856b495d12e677a41bee1860bf)。
+- **候选 CI**：精确 PR HEAD `ec25b7b` 的 [Local Compatibility #45596734798](https://github.com/wxcvm/dsh-purge/actions/runs/45596734798) 和 [Hosted Packed Install #45596734598](https://github.com/wxcvm/dsh-purge/actions/runs/45596734598) 双平台通过。夹具结果不等于实机验证。
+- **交付未确认**：[Release #45597543792](https://github.com/wxcvm/dsh-purge/actions/runs/45597543792) 最新记录为 failure；Release API 返回 404。撤回此前关于已发布、资产已上传和可下载的断言，不将其列为可用版本。
+- **主线 CI**：[Local Compatibility #45597309768](https://github.com/wxcvm/dsh-purge/actions/runs/45597309768) 已取消，不计为通过。
+- **实机边界**：真实 Windows Harness 官方升级、重启及迁移状态仍需独立验收；只读磁盘信息不证明运行时加载。
+
+## 当前 Release 对账 · 2026-11-25
+
+- **最新正式版**：[v1.1.92-wxcvm.24](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.24)，2026-11-23 04:41 UTC 发布；轻量标签直接指向 [1932650](https://github.com/wxcvm/dsh-purge/commit/193265068b424ecc4f714533e14e9b4032b25d9e)，与 [Release 工作流 #45113300467](https://github.com/wxcvm/dsh-purge/actions/runs/45113300467) 的成功记录一致。
+- **资产元数据**：ZIP `dsh-purge-1.1.92-wxcvm.24.zip`，4,535,118 字节，GitHub digest `sha256:250bbe89d37de76c8209b5c155dfed49a08cecc4cf4a917b855a332289564cdf`；`SHA256SUMS.txt`，96 字节，digest `sha256:1faa29d8caec847af30ca3cd96ac865ad960d54fce3068d72e6c2d3937523a68`；两项均为 uploaded。本次未独立下载资产并校验清单文本。
+- **同 SHA 主线兼容性**：[工作流 #45113275075](https://github.com/wxcvm/dsh-purge/actions/runs/45113275075) 的 Windows 和 Ubuntu 两项均为 cancelled，不计为通过。发布工作流成功不能代替兼容性或实机验收。
+- **源码与发布分离**：本次核对的 master [b053a55](https://github.com/wxcvm/dsh-purge/commit/b053a5507cca355b2bdf4900f1f37f7da6d59131) 包含之后合并的 #520 敏感配置导出保护；不能将此修复归入已发布 .24。当前仓库为公开。
+- **实机验收**：未在本次核查中执行 Desktop 或 Web 安装、重启、界面验证及回退。下方 .20 及更早记录均为历史快照。
+
+## 2026-11-22 · Stable .20 正式交付
+
+- **实际发布**：[v1.1.92-wxcvm.20](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.20)，独立轻量标签指向 [`8fa76dda23a59984040c3af61a7134616c51d168`](https://github.com/wxcvm/dsh-purge/commit/8fa76dda23a59984040c3af61a7134616c51d168)，与发布工作流的 `head_sha` 一致；`.19` 等旧标签和资产未覆盖。
+- **同提交主线 CI**：[Local Compatibility #45006809228](https://github.com/wxcvm/dsh-purge/actions/runs/45006809228) Windows/Ubuntu 两项通过；候选 [#485](https://github.com/wxcvm/dsh-purge/pull/485) 的 Windows/Ubuntu API 合约及双平台真实打包安装检查均通过；[Release #45007055483](https://github.com/wxcvm/dsh-purge/actions/runs/45007055483) completed/success。
+- **GitHub 实际上传资产**：`dsh-purge-1.1.92-wxcvm.20.zip` 大小 **4,471,904 字节**，GitHub 资产 `digest` 为 `sha256:e06595448d5cd45b7d70dea9c2a4794178f06fd5bc86dd0a635be4d8571d89fe`；`SHA256SUMS.txt` 大小 96 字节，资产自身 `digest` 为 `sha256:c4960e3bfb0dcfd0387f3c4dfc2ae35ad6cf4e397f6c9a96932e0ac12022e7f4`。本轮通过 GitHub Release API 验证两个资产处于 `uploaded`，并核对标签、工作流同一提交；**没有宣称已独立下载并校验 ZIP 内容及 SHA256SUMS 的文本**。安装前请仍使用对应版本的校验文件核验本地下载。
+- **本轮解决的交付缺口**：`.19` 资产没有 [#470](https://github.com/wxcvm/dsh-purge/pull/470) 的 Harness rc.5 Desktop Cookie 兼容和 [#482](https://github.com/wxcvm/dsh-purge/pull/482) 的旧客户端依赖修复；`.20` 新标签已打包这些主线代码，并合入 #484 的 Super Agent 刷新改善。具体改动见本版发行说明。
+- **真实验收仍未完成**：用户当前 Windows Harness Desktop 从 `.19` 升级到 `.20`、关闭并重开后实际加载代码、作战台 `cross-origin request rejected` 是否解除、提示词页单独的 `local-only` 错误、首次 Provider 请求、后续回退与 ARTEX 双端联动仍须独立留证。CI 成功、上传成功、源码有修复均不等于这些运行时目标已通过。记录归 #336/#338/#340/#343。
+
+> 下方是较早的历史快照，请勿把当时的 `.18` 或 `.19` 描述当作今日最新 Release。
+
+
 > 本页为维护快照，不是自动更新接口。实际可下载版本、文件及校验值以对应 Release 为准。
 
-## 当前 Release 查询快照 · 2026-11-21
+## 历史 Release 查询快照 · 2026-11-21
 
 | 渠道 | 版本 / 固定提交 | 实际核验 |
 | --- | --- | --- |
@@ -66,7 +104,7 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 
 ### 2026-11-21 · DSH_HOME 共享 pnpm 目录对账规则
 
-仓库中的 profile 安装脚本和 Windows junction 回退夹具均说明：`node_modules/dsh-purge` 可以是 junction，不能以“不是本 profile .pnpm 目录”推断损坏。新增的只读校验将同一 DSH_HOME 的**共享 profile 虚拟存储**列为第二个受信任布局，但仅在真实路径严格匹配 `profiles/node_modules/.pnpm/dsh-purge@*/node_modules/dsh-purge`，并且各级都是实体目录（而非再次跳转的链接）后才读取其**固定的五个插件代码文件和 package.json**。版本相等不代表代码相等；必须逐文件判定 `identical/different/missing`。共享目录下其他包、非标准文件夹、外部目录、断开的链接、嵌套逃逸和私人开发链接仍拒绝读取。整个过程不显示任何用户路径/正文/源码哈希，不进行安装或重启。
+仓库中的 profile 安装脚本和 Windows junction 回退夹具均说明：`node_modules/dsh-purge` 可以是 junction，不能以“不是本 profile .pnpm 目录”推断损坏。新增的只读校验将同一 DSH_HOME 的**共享 profile 虚拟存储**列为第二个受信任布局，但仅在真实路径严格匹配 `profiles/node_modules/.pnpm/dsh-purge@*/node_modules/dsh-purge`，并且各级都是实体目录（而非再次跳转的链接）后才读取其**固定的插件代码文件和 package.json**。版本相等不代表代码相等；必须逐文件判定 `identical/different/missing`。共享目录下其他包、非标准文件夹、外部目录、断开的链接、嵌套逃逸和私人开发链接仍拒绝读取。整个过程不显示任何用户路径/正文/源码哈希，不进行安装或重启。
 
 这个只读结果仍只代表 **Runner 磁盘上**的版本，不代表已运行 Desktop 的插件模块、Provider HTTP 内容或用户点击开关后的行为已验证。
 
@@ -79,7 +117,7 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 如果 Windows Runner 自动探针继续显示 `linked-uninspected / inside-dsh-home-untrusted`，这**不能证明插件安装失败**。不要把所有 DSH_HOME 内的未知目录直接加入自动白名单。仓库现在提供仅由操作者主动触发的只读核验：
 
 1. 打开 [Local Compatibility (Windows + WSL)](https://github.com/wxcvm/dsh-purge/actions/workflows/compatibility.yml)，选择 **Run workflow**，选择正式 `master`，勾选 **inspect_home_plugin_link**。默认不勾选，PR 与普通主线 push 绝不启用。
-2. Windows Runner 将只在该项**明确开启**时，沿当前 desktop profile 的 `node_modules/dsh-purge` 已存在的链接，检查目标是否为 `DSH_HOME` 内的**实体目录**，且 `package.json` 必须声明 `name: dsh-purge`。仅读取这一包固定的五个代码文件进行源码逐字节比对；任何离开包目录的文件/目录 symlink 都拒绝哈希。外部于 DSH_HOME 的目标始终拒绝读取。
+2. Windows Runner 将只在该项**明确开启**时，沿当前 desktop profile 的 `node_modules/dsh-purge` 已存在的链接，检查目标是否为 `DSH_HOME` 内的**实体目录**，且 `package.json` 必须声明 `name: dsh-purge`。仅读取这一包固定的代码文件进行源码逐字节比对；任何离开包目录的文件/目录 symlink 都拒绝哈希。外部于 DSH_HOME 的目标始终拒绝读取。
 3. 结果依旧仅列公开版本号、固定文件相对名及 `identical/different/missing` 状态，**不包含**真实路径、个人配置、聊天记录、Prompt 正文、源文件字节或哈希值。也可在自己控制的 Windows 终端显式执行 `node scripts/inspect-windows-desktop-evidence.mjs --inspect-home-plugin-link`，脚本本身不写配置。
 
 此选项授予的只是**读取 DSH_HOME 内链接所指插件代码文件**的临时权限，并非同意更新、重启 Desktop、清洗宿主、运行 Provider 或向云端发送本地私密数据。无论勾选与否，`runtimeLoadVerified` 仍为 `false`：插件磁盘字节一致不等于当前 Electron 进程已经加载该代码。#336 的真实 GUI 与 Provider 请求验收继续独立进行。
@@ -87,6 +125,12 @@ node scripts/verify-release-artifact.mjs --tag v1.1.92-wxcvm.18 `
 ## 如何区分同版本的不同提交
 
 「检查更新」仍按发布版本判断是否有可更新版本，不会因为同版本的分支提交变化就写入安装或请求重启。版本列表同时显示提交短号；本机记录只与实际对应的提交核对。当版本号相同但提交不同，界面单独说明差异；记录缺失时明确显示未核实。即使提交记录一致，也必须从宿主状态总览确认实际加载的前端构建和后端，不能从版本号或安装记录推出已加载。
+
+### Harness Desktop 已打开，但页面提示 cross-origin request rejected
+
+先区分官方 Harness 宿主版本、Purge 已安装版本、发布标签与当前源码。已发布的 [Purge .19](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.19) 标签对应提交 `ef10e66`，早于 [#470](https://github.com/wxcvm/dsh-purge/pull/470) 对官方 Harness `0.2.2-rc.5` Desktop 请求转发的兼容修复。因此重新安装同一份 .19 或仅重启它不会获得修复；主线上 `package.json` 仍可能同样显示 .19。
+
+现有 Windows 只读探针也逐项比较请求路由、桥接鉴权和来源校验三个固定文件（`lib/redteam/ui.js`、`lib/redteam/bridge-auth.js`、`lib/redteam/bridge-origin.js`）。即使 `client.js` 和版本号完全一致，也能发现后端桥接代码不同。若已安装文件与包含 #470 的可信候选一致，仍需在实际 Desktop 完成正常退出重开，从宿主页面复查；不能从磁盘匹配推断页面恢复。不要为排障放开来源校验、复制会话凭据或使用其他宿主代验。
 
 ## 后续发布预检
 

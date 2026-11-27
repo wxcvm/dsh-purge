@@ -2,6 +2,12 @@ name: Windows Local Runner Smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      inspect_desktop:
+        description: 'Opt in to read-only official Desktop version inventory (no paths or credentials)'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -18,6 +24,38 @@ jobs:
           Write-Host "OS: $env:RUNNER_OS"
           Write-Host "Architecture: $env:RUNNER_ARCH"
           git --version
+      - name: Inspect official Desktop version (read-only)
+        if: ${{ inputs.inspect_desktop && github.ref == 'refs/heads/master' }}
+        shell: pwsh
+        run: |
+          $roots = @(
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          )
+          $apps = @(Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -eq 'DeepSeek Harness' })
+          $versions = @($apps | ForEach-Object {
+            $v = [string]$_.DisplayVersion
+            if ($v -match '^\d+\.\d+\.\d+') { $v } else { 'unknown' }
+          } | Sort-Object -Unique)
+          if ($versions.Count -eq 0) {
+            Write-Host 'Desktop registration: not found in accessible uninstall registry'
+          } else {
+            Write-Host ('Desktop registered version(s): ' + ($versions -join ', '))
+          }
+
+          $processes = @(Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue)
+          Write-Host ('Matching Desktop process count: ' + $processes.Count)
+          $runningVersions = @($processes | ForEach-Object {
+            try {
+              $v = [string]$_.FileVersionInfo.ProductVersion
+              if ($v -match '^\d+\.\d+\.\d+') { $v } else { 'unknown' }
+            } catch { 'unknown' }
+          } | Sort-Object -Unique)
+          if ($runningVersions.Count -gt 0) {
+            Write-Host ('Matching process product version(s): ' + ($runningVersions -join ', '))
+          }
       - uses: actions/setup-node@v4
         with:
           node-version: '24'

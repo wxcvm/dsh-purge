@@ -16,6 +16,7 @@ const repository = fileURLToPath(new URL('../', import.meta.url));
 const CHECK_FILES = Object.freeze([
   'lib/index.js', 'lib/prompt-profiles.js', 'lib/response-context.js',
   'lib/prompt-assembly-router.js', 'client.js',
+  'lib/redteam/ui.js', 'lib/redteam/bridge-auth.js', 'lib/redteam/bridge-origin.js',
 ]);
 const PROFILES = Object.freeze(['desktop', 'web', 'default']);
 
@@ -39,6 +40,14 @@ function version(value) {
 function digest(file) {
   try { return createHash('sha256').update(fs.readFileSync(file)).digest('hex'); }
   catch { return null; }
+}
+// A fixed generated identifier can be compared with the UI status page.
+// It describes disk contents only, not the running renderer.
+function diskRendererBuildId(file) {
+  try {
+    if (!regularFile(file)) return null;
+    return fs.readFileSync(file, 'utf8').match(/const CLIENT_BUILD_ID = "([0-9a-f]{16})";/)?.[1] || null;
+  } catch { return null; }
 }
 function inside(root, target) {
   if (!root || !target) return false;
@@ -127,12 +136,27 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
     profile: name, installation: 'absent', version: null,
     profileBundleRegistered: null, cordisInsertPresent: null,
     linkTargetScope: null, sourceBytesEqual: null, sourceFileComparison: {},
+    rendererBuildIdOnDisk: null,
   };
+  const homeReal = realDirectory(home);
+  const profileReal = realDirectory(dir);
+  if (!profileReal) return output;
+  if (!homeReal || !inside(homeReal, profileReal)) {
+    output.installation = 'linked-uninspected';
+    output.linkTargetScope = 'profile-directory-untrusted';
+    return output;
+  }
   const manifest = safeJson(path.join(dir, 'package.json'));
   const bundles = manifest?.dsh?.profile?.bundles;
   if (Array.isArray(bundles)) output.profileBundleRegistered = bundles.includes('dsh-purge');
   // Presence only: do not print, parse or upload the user's cordis.patch.yml.
   output.cordisInsertPresent = regularFile(path.join(dir, 'cordis.patch.yml'));
+  const modulesReal = realDirectory(path.join(dir, 'node_modules'));
+  if (modulesReal && !inside(profileReal, modulesReal)) {
+    output.installation = 'linked-uninspected';
+    output.linkTargetScope = 'profile-modules-untrusted';
+    return output;
+  }
   let installedRoot = '';
   try {
     const stat = fs.lstatSync(installed);
@@ -175,6 +199,8 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
   if (!['present-pnpm-link', 'present-operator-home-link'].includes(output.installation))
     output.installation = 'present';
   output.version = version(pkg.version);
+  const client = path.join(installed, 'client.js');
+  if (confinedFile(client, installedRoot)) output.rendererBuildIdOnDisk = diskRendererBuildId(client);
   for (const rel of CHECK_FILES) {
     const source = path.join(root, rel);
     const target = path.join(installed, rel);
@@ -187,17 +213,78 @@ function profileEvidence(home, name, root, { inspectHomeLinkedPlugin = false } =
     .every(s => s === 'identical');
   return output;
 }
+// An empty or malformed PowerShell result is unavailable, not zero processes.
+export function parseDesktopProcessCount(result) {
+  const raw = String(result?.stdout ?? '').trim();
+  if (result?.status !== 0 || result?.error || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : null;
+}
 function processEvidence() {
-  if (process.platform !== 'win32') return { observed: null, reason: 'not-windows' };
+  if (process.platform !== 'win32') return { observed: null, reason: 'not-windows', loadedPluginVerified: false };
   const expr = "(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(DeepSeek[ -]Harness|Dsh[ -]Next)$' } | Measure-Object).Count";
   try {
     const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', expr],
       { encoding: 'utf8', timeout: 8000, windowsHide: true });
-    const n = Number(String(result.stdout || '').trim());
-    if (result.status === 0 && Number.isSafeInteger(n) && n >= 0)
+    const n = parseDesktopProcessCount(result);
+    if (n !== null)
       return { observed: n > 0, processCount: n, loadedPluginVerified: false };
   } catch {}
   return { observed: null, reason: 'process-query-unavailable', loadedPluginVerified: false };
+}
+
+// Official 0.2.3-alpha.2 runtime requirement; disk metadata only.
+// https://github.com/deepseek-ai/deepseek-harness/blob/4b399c39a6d1479cd84ca591b4d7c88e24d38a96/docs/upgrade-guide/v0.2.3-alpha.1/node-24-22-3/guide.zh.md
+// Classify fixed runtime paths without traversing redirected directories.
+function runtimeFileState(resources, rel) {
+  const parts = ['runtime', ...rel.split('/')];
+  let current = resources;
+  for (let i = 0; i < parts.length; i++) {
+    current = path.join(current, parts[i]);
+    try {
+      const st = fs.lstatSync(current);
+      if (st.isSymbolicLink()) return 'unverified';
+      if (i < parts.length - 1) {
+        if (!st.isDirectory()) return 'missing';
+      } else {
+        return st.isFile() && st.size > 0 ? 'present' : 'missing';
+      }
+    } catch (error) {
+      return error?.code === 'ENOENT' || error?.code === 'ENOTDIR'
+        ? 'missing' : 'unverified';
+    }
+  }
+  return 'unverified';
+}
+
+function alpha2NodeEvidence(resources, desktopVersion) {
+  const result = {
+    nodeVersionOnDisk: null,
+    runtimeManifestValid: null,
+    alpha2NodeRequirement: desktopVersion === '0.2.3-alpha.2' ? '^24.22.3 || >=26.13.1' : null,
+    alpha2NodeRequirementMet: null,
+  };
+  const runtime = path.join(resources, 'runtime');
+  const manifestState = runtimeFileState(resources, 'versions.json');
+  const manifest = manifestState === 'present' ? safeJson(path.join(runtime, 'versions.json')) : null;
+  if (manifestState === 'present') {
+    result.runtimeManifestValid = Boolean(manifest &&
+      ['node', 'pnpm'].every(key => typeof manifest[key] === 'string' && manifest[key].trim().length > 0));
+  } else if (manifestState === 'missing') {
+    result.runtimeManifestValid = false;
+  }
+  const match = typeof manifest?.node === 'string' && manifest.node.length <= 64
+    ? /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(manifest.node) : null;
+  if (!match) return result;
+  const [major, minor, patch] = match.slice(1).map(Number);
+  if (![major, minor, patch].every(Number.isSafeInteger)) return result;
+  result.nodeVersionOnDisk = [major, minor, patch].join('.');
+  if (result.alpha2NodeRequirement !== null) {
+    result.alpha2NodeRequirementMet =
+      (major === 24 && (minor > 22 || (minor === 22 && patch >= 3))) ||
+      (major === 26 && (minor > 13 || (minor === 13 && patch >= 1))) || major > 26;
+  }
+  return result;
 }
 
 export function inspectReadOnlyDesktopEvidence({
@@ -213,10 +300,13 @@ export function inspectReadOnlyDesktopEvidence({
     writes: false, remoteRequests: false, runtimeLoadVerified: false,
     warning: 'Runner disk/process evidence cannot prove the running Desktop loaded this plugin, performed a restart, or delivered a Provider request.',
     candidate: { version: version(candidate?.version),
+      rendererBuildIdOnDisk: diskRendererBuildId(path.join(root, 'client.js')),
       commit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || '') ? process.env.GITHUB_SHA : null },
     desktop: {
       executableFound: false, manifestValid: false, version: null, layout: 'unknown',
-      unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
+      unpackedManifestValid: null, unpackedVersionMismatch: null, runtimeFilesComplete: null, missingRuntimeFiles: [],
+      nodeVersionOnDisk: null, runtimeManifestValid: null, alpha2NodeRequirement: null, alpha2NodeRequirementMet: null,
+      unverifiedRuntimeFiles: [],
     },
     process: probeProcesses ? processEvidence() : { observed: null, reason: 'not-requested', loadedPluginVerified: false },
     profiles: PROFILES.map(p => profileEvidence(home, p, root, { inspectHomeLinkedPlugin })),
@@ -228,20 +318,40 @@ export function inspectReadOnlyDesktopEvidence({
   if (!selected || !regularFile(selected)) return evidence;
   evidence.desktop.executableFound = true;
   const resources = path.join(path.dirname(selected), 'resources');
+  // A damaged or redirected app directory is still a competing disk entry.
+  // Report its presence without following links or treating it as a clean install.
+  if (!ordinaryDirectory(resources)) return evidence;
+  const archive = path.join(resources, 'app.asar');
+  const app = path.join(resources, 'app');
+  const entryPresent = file => {
+    try { fs.lstatSync(file); return true; }
+    catch (error) { return error?.code === 'ENOENT' ? false : null; }
+  };
+  const sealed = entryPresent(archive);
+  const unpackedPresent = entryPresent(app);
+  evidence.desktop.layout = sealed === null || unpackedPresent === null ? 'unknown'
+    : sealed ? (unpackedPresent ? 'sealed-and-unpacked' : 'sealed')
+    : unpackedPresent ? 'unpacked' : 'unknown';
+  const unpacked = ordinaryDirectory(app) ? safeJson(path.join(app, 'package.json')) : null;
+  evidence.desktop.unpackedManifestValid = unpackedPresent === true
+    ? unpacked?.name === '@deepseek-ai/dsh-desktop' && Boolean(version(unpacked.version))
+    : null;
+  // Never open an invalid archive entry, or fall back through an untrusted app directory.
+  if (sealed === null || unpackedPresent === null || (sealed && !regularFile(archive))
+      || (!sealed && !evidence.desktop.unpackedManifestValid)) return evidence;
   let pkg;
-  try { pkg = readDesktopManifest(resources); } catch { return evidence; }
+  try { pkg = sealed ? readDesktopManifest(resources) : unpacked; } catch { return evidence; }
   if (pkg?.name !== '@deepseek-ai/dsh-desktop' || !version(pkg.version)) return evidence;
   evidence.desktop.manifestValid = true;
   evidence.desktop.version = version(pkg.version);
-  const sealed = regularFile(path.join(resources, 'app.asar'));
-  const unpacked = safeJson(path.join(resources, 'app', 'package.json'));
-  evidence.desktop.layout = sealed ? (unpacked ? 'sealed-and-unpacked' : 'sealed')
-    : unpacked ? 'unpacked' : 'unknown';
-  evidence.desktop.unpackedVersionMismatch = unpacked?.name === pkg.name
-    && Boolean(version(unpacked.version)) ? unpacked.version !== pkg.version : null;
-  const missing = RUNTIME_FILES.filter(rel => !regularFile(path.join(resources, 'runtime', rel)));
-  evidence.desktop.missingRuntimeFiles = missing;
-  evidence.desktop.runtimeFilesComplete = missing.length === 0;
+  evidence.desktop.unpackedVersionMismatch = evidence.desktop.unpackedManifestValid
+    ? unpacked.version !== pkg.version : null;
+  const runtimeStates = RUNTIME_FILES.map(rel => [rel, runtimeFileState(resources, rel)]);
+  evidence.desktop.missingRuntimeFiles = runtimeStates.filter(([, state]) => state === 'missing').map(([rel]) => rel);
+  evidence.desktop.unverifiedRuntimeFiles = runtimeStates.filter(([, state]) => state === 'unverified').map(([rel]) => rel);
+  evidence.desktop.runtimeFilesComplete = evidence.desktop.missingRuntimeFiles.length > 0 ? false
+    : evidence.desktop.unverifiedRuntimeFiles.length > 0 ? null : true;
+  Object.assign(evidence.desktop, alpha2NodeEvidence(resources, evidence.desktop.version));
   return evidence;
 }
 

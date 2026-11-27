@@ -1,5 +1,34 @@
 # Purge 接手版上游吸收 · Codex 可执行总方案
 
+## 2026-11-22 · 当前执行状态（覆盖下方旧快照的状态，不改历史记录）
+
+**固定双仓版本**：主参考上游 [dsh-purge-safe v2.0.2@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69) 未出现更新；我方已正式发行 [.22](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.22)，Release SHA `4efe83d`。以下新合并代码位于最新主线、**不在 .22 制品**；独立 .23 候选另按 PR/CI/Release 验收，不能把候选当发行。
+
+- **已完成并通过 Windows/Ubuntu API、UI/打包**：[#493](https://github.com/wxcvm/dsh-purge/pull/493) → `d0c8bfc`，仅吸收上游 `redteam_batch(kind=assets)` 的独有人工资产批量录入需求；默认 dry-run、显式 commit、scope 检查、逐条回执，复用现有 `importBundle`。已有 `redteam_ingest` 扫描文件解析不重复引入。
+- **已完成并通过 Windows/Ubuntu API、UI/打包**：[#494](https://github.com/wxcvm/dsh-purge/pull/494) → `fa1bfec`，复用 `#nucleiIndex(force)`，在 `redteam_poc_search(refresh_index:true)` 明确请求时重建离线本地模板索引。修复子目录 YAML 更新不触发根目录 mtime 的缓存陈旧问题；测试已避免借用 Windows 自托管 Runner 预装的个人 Nuclei 目录。
+- **.22 已交付**：[#491](https://github.com/wxcvm/dsh-purge/pull/491) 手动 CISA KEV status/lookup/refresh、[#490](https://github.com/wxcvm/dsh-purge/pull/490) 托管 Ubuntu Release、[#486](https://github.com/wxcvm/dsh-purge/pull/486) 中断更新恢复，以及此前主/备提示词、GPT/Claude/Gemini 预览、HTTP 状态观察等。保留主线 CI / 发布证据，不重复实现。
+- **明确不整包照搬**：上游自动下载模板/KEV 的启动副作用、`redteam_pivot_probe` 对任意多个内网目标进行无 scope 校验的 SOCKS5 测试、`redteam_batch` 的评估/漏洞直接写入、PTC 把审批文字伪装成 auto-granted、提升 workspace 指令优先级的提示词补丁、`slot-state` parked 推定真实宿主空闲。不是“已覆盖”，而是**未采纳 / 需真实场景与权限语义证据**。
+- **仍待真实验收，不应结项为全通过**：#336/#343 用户 Windows Harness rc.5 安装、重启、页面可见；#340/#341 最终 Provider 真实请求；#346 ARTEX 两端身份/交接/回执与断线；#345 原生 Teams 的实际任务运行与 UI。合并、CI、发行和实际宿主分别记录。
+
+**下方旧快照如 .19 / .18 / 原 #344 缺口表仅供当时历史对比，以上述真实 PR/CI/Release 和当期 GitHub 状态为准。后续每项先核对是否已在主线；按价值小步吸收，所有新证据回填 [#347](https://github.com/wxcvm/dsh-purge/issues/347) 和 [#351](https://github.com/wxcvm/dsh-purge/issues/351)，不另开平行计划。**
+
+---
+## 2026-11-22 · 上游 v2.0.2 / DSH rc.5 增量裁定（最新入口）
+
+**双仓实查快照**：重点上游 [CallMeGuLab/dsh-purge-safe v2.0.2](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.2)、[main@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69)（相对 v2.0.1 @d0a9abd 仅新增一个提交，13 个文件）；我方 [master@70d2956](https://github.com/wxcvm/dsh-purge/commit/70d29566431bac6730755b581c1ec3275f4b2b65)，最新已发布 [v1.1.92-wxcvm.19](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.19)（发布于上游 .2 之前）；该 master 的 [Windows/WSL CI](https://github.com/wxcvm/dsh-purge/actions/runs/45004337249) 成功。**CI 成功不等于真实 rc.5 Desktop / Provider 已验收**，也不意味着本仓已经吸收上游 2.0.2。
+
+| 优先 | 上游新差异 / 原始入口 | 我方目前证据 / 裁定 | 最小后续工作（原 Issue） |
+| --- | --- | --- | --- |
+| **P0 · 代码已合并，Desktop 待验收** | [2.0.2 package.json](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/package.json)：rc.5 客户端 inject 移除 `dsh-client-runtime`、`dsh-client-ui-slots` | [PR #482](https://github.com/wxcvm/dsh-purge/pull/482) 已 squash 合并 [b17c9ac](https://github.com/wxcvm/dsh-purge/commit/b17c9ac7a00057c8730f8940809bd32cdd2a1c68)：删除两个失效强依赖、保留实际使用的 `ui-conversation`；新增客户端清单测试。PR 上 Windows/Ubuntu 的 6 项 CI 检查均通过 | #336/#339/#343：**仅剩真实 rc.5 Desktop 安装、首次客户端启动、设置页/UI 交互和重启验收**；已过的 rc.3/rc.5 后端夹具、打包测试不重复做，也不等于客户端实机完成 |
+| **P0** | [上游 core.js #100](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/core.js)：新会话 `REPLACEMENT_AGENT_INSTRUCTIONS_INTRO` / 追加 / 空基线 / compact 路径 | [我方 patches-definitions.js](../lib/patches-definitions.js) 已有 #1 和 #2 的 replacement 回归，#2 **明确恢复 system/developer 优先级**；与上游的“把工作区指令改成最高强制优先级”不是同一目标 | #340/#341：先以 rc.5 固定夹具核对四条分支、开关前后首次请求与 Provider 投递证据；只修漏注入/误序/误判，不照搬提升低优先级指令的修改 |
+| **P0 对账** | [上游 core.js #101](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/core.js)：PTC `run_code` 的审批字段文字变更 | 该补丁把审批描述改为“auto-granted”，与宿主实际许可状态可能不一致；不作为普通兼容性修复直接移植 | #355/#341：核对 rc.5 PTC 参数、真实授权/拒绝及可追责提示，修字段不匹配；**不伪报审批通过、不暗改权限或沙箱** |
+| **P1** | [上游 2.0.2 release-notes](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/release-notes.md)：桌面壳自愈锚点 `DSH_PROFILE` → `app.setAppLogsPath();` | 我方存在独立桌面壳 #82 补丁和运行健康模块，但不是上游同一套代理自愈；尚未证实我方出现失配 | #337/#336：仅在实际 patch 状态/代理行为有失败时对照定位最小锚点修复，记录原样与修后标记数、重启回读，不移植上游整套自愈 |
+| **去重** | [上游 2.0.2 net-scope.js](https://github.com/CallMeGuLab/dsh-purge-safe/blob/29bf73a962891cc2c543077572ebd70078897d69/lib/net-scope.js)：子会话因区域闸门被伪造拒答，修复 delegated-session 判定和模型来源标注 | [我方 net-scope.js](../lib/net-scope.js) 已整体停用区域硬闸，`installRegionGate` 不安装 `agent/pre-step`；**该根因在我方不存在**，不能重复移植 | #345/#342：仅保留真实子会话“插件拦截/模型拒答/无请求”三类证据区分的无害任务回归；新故障再按真实来源处理 |
+| **已知 P1** | 上游 [v2.0.1](https://github.com/CallMeGuLab/dsh-purge-safe/releases/tag/v2.0.1) 修红队模式、自定义权限与运行窗口查看 | 已在先前 #343/#347 的 UI/Agent 设计和我方当前实现中分别有对应入口，不按发布说明重建 | #343：核对现有功能在 rc.5 Desktop 的实际可见性/可点性后再提小修 |
+
+**执行顺序**：先 P0 客户端服务依赖的 rc.5 最小修正 + 安装/开页验证 → 新会话四类提示词真实投递对账 → PTC 实际权限语义对账 → Desktop 自愈/Agent 无害回归；不重写已合并的备用提示词、Team、agent_attention/ack、技能/知识、ARTEX。上游宣称的“62/64 条补丁命中”仅是**其自身**核查结果，不能移作我方兼容性结论。只做必要测试、提交对应小 PR 和 CI；真 Desktop/Provider 仍须单列。无需新开总 Issue 或提前发布。
+
+
 > **2026-11-20 源码/任务快照**。维护仓库 [wxcvm/dsh-purge](https://github.com/wxcvm/dsh-purge)，默认分支 `master`。本文是**任务导航与执行方案**，不是“全部已完成”声明，也不代替当前 GitHub PR、CI、Release 和实机验收记录。
 >
 > **Codex 先读**：仓库根目录 [`AGENTS.md`](../AGENTS.md) → 本文 → [#347 接手版/社区上游追踪](https://github.com/wxcvm/dsh-purge/issues/347) → [#351 全项目总台账](https://github.com/wxcvm/dsh-purge/issues/351)。随后检查最新 `master`、未合并 PR、CI 和目标文件；旧文档中的 commit SHA 和技能数量都是当时的快照，不能替代最新核查。
@@ -65,9 +94,9 @@ gh issue view 351 -R wxcvm/dsh-purge
 | C · **代码已合并、实机/界面待验收** | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js)、[`store-core.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/store-core.js)、[`schema.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/schema.js) | PR #385：新的 `agent_attention` **表位于已有靶标 SQLite**；`redteam_attention(action=list\|ack)`、`subagent/end` 报告解析、精确 `report_id` 确认 | 上游 `agent_report` 与我方表结构不同，**不能直接共用表名**；旧报告不能因确认新报告而重新出现；无结构化信息不能凭空推断 waiting |
 | D · 暂不导入停泊算法 | [`lib/redteam/slot-state.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/slot-state.js) | 我方 [`agent-reservations.js`](../lib/redteam/agent-reservations.js)、[`agent-status.js`](../lib/redteam/agent-status.js) | **waiting/blocked 是回报，不证明宿主已释放真实运行资源**；不把 “parked” 从已观察 running 里直接扣除。free 未验证时维持 unknown/null |
 | E · 下一批 | [`lib/redteam/bootstrap-runtime.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/bootstrap-runtime.js)、[`kev.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/kev.js) | #344/#360：与现有 Nuclei 模板搜索、CVE / KEV 来源管理比对 | 补增量仅在缺口存在时做；优先**状态可见 + 显式手动刷新**，避免照搬启动时 `download:true, background:true` 造成隐式联网 |
-| F · 下一批 | [`lib/redteam/tools.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/tools.js) 内 `redteam_batch`、`redteam_cleanup` | #352/#345：检查我们现有批量导入、任务记录去重与清理入口 | 先对比数据主键/事务/幂等/删除实际影响；只移植缺失能力，不建立第二套批处理引擎 |
+| F · 部分完成 | [`redteam_cleanup` / `redteam_data_proof`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d0a9abda6e2eb020dde85b48b5727b45d26582a7/lib/redteam/tools.js)；同文件 `redteam_batch` | #347/#352/#345：cleanup 已合并；data_proof 正在按元数据-only 方案实现；批量导入仍需与现有 ingest/批处理能力对账 | cleanup 只登记状态；data_proof 不保存样本/查询、不自动评分；`redteam_batch` 仅在确认真实缺口后再吸收 |
 | G · 下一批 | [`lib/redteam/client.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/redteam/client.js)、[`lib/ui-fullscreen.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/ui-fullscreen.js)、[上游预览图](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/docs/preview/dock-clean.png) | #343/#352/#364/#361：作战台概览、Agent 待办 UI、清洗台信息密度、全屏及点击热区 | 界面按人类使用路径归类；不整包替换 `client.js`，截图不是当前 Desktop 可运行证据 |
-| H · 持续对照 | [上游 `skills/redteam/`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/skills/redteam)、[`redteam-superagent-dev.md`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/docs/redteam-superagent-dev.md) | #344/#302：技能及知识库文件级差异；核对 Team 能力与设计稿 | 旧快照上游 40 / 我方 47 份 Markdown 的同名/独有差异仅供检索起点；**上游超代理 agent_task 设计稿不代表已实现** |
+| H · 持续对照 | [上游 `skills/redteam/`](https://github.com/CallMeGuLab/dsh-purge-safe/tree/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/skills/redteam)、[`redteam-superagent-dev.md`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/docs/redteam-superagent-dev.md) | #344/#302：技能及知识库文件级差异；核对 Team 能力与设计稿 | 当前核对上游 40 / Purge 56 份 Markdown，37 个同路径；差异清单仅供检索起点；**上游超代理 agent_task 设计稿不代表已实现** |
 | I · 独立评估 | [`lib/tool-gate.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/tool-gate.js)、[`lib/subagent-control.js`](https://github.com/CallMeGuLab/dsh-purge-safe/blob/d96c5f25ee40096417e27fd7a38ee9bdd0dc43ec/lib/subagent-control.js) | #337/#341/#342/#355：与当前 Harness 的执行/审批/Provider 行为核对 | 存在大范围交互语义变化风险；**不作为提示词/Team 引入的隐含依赖**。发现真实缺口再提针对性方案 |
 
 ## 4. Codex 后续实施队列（逐项做完才更新状态）
@@ -211,3 +240,11 @@ gh issue view 351 -R wxcvm/dsh-purge
 新版页面保存人工备注时，会同时带上读到的本地回执修订号。响应丢失后重试同一内容不会再写一遍；另一窗口已改过时，页面显示已保存状态和备注，可用它作为新的比对基线，自己的草稿不会丢。已有明确证据版本的回执不会被旧版或缺少版本的报告覆盖。旧数据库自动补修订号，现有回执不迁走，导出的回执格式也不变。
 
 旧 ARTEX SARIF 只给出发现、任务 ID 与证据版本，不携带数据库来源。[ARTEX #188](https://github.com/wxcvm/ARTEX/pull/188) 为新导出添加 `runs[].properties.artexSourceId`。Purge 按来源和记录编号保存、查阅与导出新的人工回执；没有来源的旧报告和旧记录仍可读写，但不自动归属，也不会与新来源混用。标识是报告的声明，不是签名、已配对公司或凭据。跨端配对和身份验收仍以 [#346](https://github.com/wxcvm/dsh-purge/issues/346) 为准。
+
+
+### 2026-11-24 · rc.5 agent-instructions 的剩余前言分支
+
+- 上游 core.js #100 的 REPLACEMENT_AGENT_INSTRUCTIONS_INTRO 由本仓 #2 继续恢复官方 system/developer/direct-user 优先级；不采用上游将其提升为 ACTIVE and MANDATORY 的版本。
+- 新增本仓 #96，选择性处理此前未覆盖的 EMPTY_REPLACEMENT_AGENT_INSTRUCTIONS_INTRO、ADDITIONAL_INSTRUCTIONS_GUIDANCE 与 COMPACT_AGENT_INSTRUCTIONS_INTRO。空基线明确系统提示词仍权威；追加和截断分支说明剩余工作区指令在自身作用域内适用，并明确不得覆盖 system、developer 或 direct user instructions。
+- 不采用上游 Do not treat them as untrusted data 或 approval is auto-granted 等越权/可能误述宿主状态的措辞。PTC #101 继续等待 rc.5 实际参数、宿主审批结果与执行记录对账，不伪报授权通过。
+- 回归覆盖三种 rc.5 常量、部分升级可继续补齐及重复 Apply 幂等；旧宿主缺少这些常量时该补丁为 optional，不制造兼容性失败。

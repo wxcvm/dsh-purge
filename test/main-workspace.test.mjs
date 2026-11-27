@@ -35,7 +35,7 @@ test('native clean workspace has separate navigation without discarding edits', 
   assert.match(client, /const \[section, setSection\] = useState\("overview"\)/)
   assert.match(client, /"aria-label": "清洗台功能导航"/)
   assert.match(client, /"aria-current": section === item.id \? "page" : undefined/)
-  assert.match(client, /className: "dshp-clean-pane", hidden: section === "rules"/)
+  assert.match(client, /hidden: section === "rules" \|\| \(section === "prompt" && !redteamExpanded\)/)
   assert.match(client, /className: "dshp-clean-pane", hidden: section !== "rules"/)
   assert.match(client, /h\(PurgifySection, null\)/)
   assert.match(client, /h\(RulesSection, null\)/)

@@ -12,7 +12,8 @@ test('unified results preserve source identity and isolate absent or broken sour
     const doc = knowledgeRequest(root, { op: 'knowledgeSave', title: 'SQLite notes', body: 'local text' }).item
     const options = {
       catalog: () => [{ title: 'SQLite advisory', product: 'SQLite', cve: ['CVE-2025-1234'], source_url: 'https://example.org' }],
-      skills: () => [{ source: 'redteam', key: 'redteam:sqlite', name: 'sqlite', title: 'SQLite docs' }],
+      skills: () => [{ source: 'redteam', key: 'redteam:sqlite', name: 'sqlite', title: 'SQLite docs',
+        sourceMeta: { repository: 'CallMeGuLab/dsh-purge-safe', revision: 'd0a9abda', version: 'v2.0.1', license: 'Apache-2.0', adoption: 'adapted' } }],
       readSkill: () => ({ content: 'reference', truncated: false }),
       artexStatus: () => { throw Error('database unavailable') },
     }
@@ -24,6 +25,8 @@ test('unified results preserve source identity and isolate absent or broken sour
     assert.equal(r.groups[0].items[0].id, String(doc.id))
     assert.equal(r.groups[1].items[0].verified, false)
     assert.equal(r.groups[2].items[0].id, 'redteam:sqlite')
+    assert.equal(r.groups[2].items[0].source_meta.repository, 'CallMeGuLab/dsh-purge-safe')
+    assert.equal(r.groups[2].items[0].source_meta.license, 'Apache-2.0')
     assert.equal(r.groups[3].available, false)
     assert.match(r.groups[4].error, /database unavailable/)
     assert.equal(call('knowledgeUnifiedSearch', { query: 'sqlite', source: 'cve' }).groups.length, 1)

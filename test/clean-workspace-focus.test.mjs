@@ -34,6 +34,7 @@ function workspace() {
     PromptProfilesSection: Symbol('PromptProfilesSection'),
     RulesSection: Symbol('RulesSection'),
     RuntimeObservationsSection: Symbol('RuntimeObservationsSection'),
+    HttpStatusObservationPanel: Symbol('HttpStatusObservationPanel'),
   }
   const SettingsRoot = new Function(...Object.keys(scope),
     'let translate;\n' + client.slice(start, end) + '\nreturn SettingsRoot;')(...Object.values(scope))
@@ -79,13 +80,20 @@ test('clean workspace keeps keyboard focus on a visible destination after a cont
   root.button('Provider 与运行记录').props.onClick()
   root.render()
   assert.deepEqual(root.focused, [], 'a visible toggle keeps its normal button focus')
+  root.button('HTTP 响应观察').props.onClick()
+  root.render()
+  assert.equal(root.page('HttpStatusObservationPanel').props.active, true)
+  assert.equal(root.page('RuntimeObservationsSection').props.active, false)
+  root.page('HttpStatusObservationPanel').props.onNavigate('runtime')
+  root.render()
+  assert.deepEqual(root.focused.pop(), { tag: 'button', label: 'Provider 与运行记录' })
   root.sidebar()[2].props.onClick()
   root.render()
   assert.deepEqual(root.focused.pop(), { tag: 'h2', label: '提示词管理' })
   root.page('PromptProfilesSection').props.onRedteam()
   root.render()
-  assert.equal(root.button('红队专用提示词').props['aria-pressed'], true)
-  assert.deepEqual(root.focused.pop(), { tag: 'button', label: '红队专用提示词' })
+  assert.equal(root.button('收起红队专用提示词').props['aria-expanded'], true)
+  assert.deepEqual(root.focused.pop(), { tag: 'button', label: '收起红队专用提示词' })
   root.render()
   assert.deepEqual(root.focused, [], 'ordinary re-render does not steal focus')
 })

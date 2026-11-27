@@ -75,4 +75,6 @@ node scripts/verify-stock-harness-teams.mjs <npm-install-dir> <team-llm.mjs>
 
 探针验证官方版本、CLI npm integrity、夹具 SHA-256，另建临时 HOME、DSH_HOME 与工作目录；不传递现用账号、模型密钥、日志正文或 Purge 配置。临时 profile 只将模型输出替换为上游固定夹具；真正的队友和任务状态由原生 Harness 执行。实际从持久会话日志验收：4 份会话（root、工作流子会话和两位队友）、2 个已完成的 Team 任务、2 条队友消息，前置任务完成早于依赖任务认领。脚本输出计数与证据目录，不把暂存目录当作正式安装。
 
-现用机器的 headless 配置只读检查中，含 Purge 字样的内容甚至出现在默认配置转储中；不足以作为干净官方对照，未就地执行模型。上述官方发布包的通过说明原生 Team 运行契约，**未验收当前 Desktop、Purge 联动或真实 Provider**。
+同一次运行以只读方式观察真正的 `subagent/start` 与 `subagent/end`。测试夹具代替人工预先绑定任务，不加载 Purge 插件或注册工具；生产会话绑定、结束观察、SQLite 台账及工作台状态投影则使用现有代码。宿主退出后重新打开 SQLite：3 个精确运行的结束事件持久化并投影为「等待结算」，同会话下另外 3 个不同运行未被更新，没有任务被自动结算。
+
+现用机器的 headless 配置只读检查中，含 Purge 字样的内容甚至出现在默认配置转储中；不足以作为干净官方对照，未就地执行模型。这里验收的是官方宿主与 Purge 台账代码的事件契约，**未验收当前 Desktop、完整 Purge 插件联动或真实 Provider**。

@@ -136,3 +136,21 @@ test('skill detail ignores late reads and errors after switching or closing a sk
   requests[4].resolve({ok:true,content:'FIFTH'});await settle()
   assert.equal(active,null);assert.equal(detail,null);assert.equal(related,null)
 })
+
+
+test('external skill source cards display license status and the installed commit', () => {
+  const source = read('lib/redteam/client.js')
+  assert.match(source, /sourceProvenanceText/)
+  assert.match(source, /licenseStatus/)
+  assert.match(source, /revision\.slice\(0, 12\)/)
+  assert.match(source, /来源版本与许可证/)
+})
+
+
+test('bundled skill cards show upstream revision and license provenance', () => {
+  const source = read('lib/redteam/client.js')
+  assert.match(source, /sourceMeta\.repository/)
+  assert.match(source, /sourceMeta\.revision/)
+  assert.match(source, /sourceMeta\.license/)
+  assert.match(source, /已适配/)
+})
