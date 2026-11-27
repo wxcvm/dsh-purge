@@ -1016,7 +1016,7 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 【被动域名情报适配器】所有操作都要求项目明确登记精确 `*.根域名` 范围；只处理该根域下的具体主机名，不把解析出的 IP 自动授权或写入资产/端口/漏洞表。
 
 - `action=subdomains`：离线读取最近 CT 快照；可显式选择固定被动模式的 subfinder（`-d`、限时、限速、每来源结果上限，不启用 `-all` / `-active`），或 Amass `enum -passive`。每次外部数据源请求都必须先取得用户明确同意并传 `confirm_external=true`。subfinder 可在明确选择的 local/WSL/Docker/SSH Kali 环境执行；Amass 当前仅 local。输出只合并授权范围内主机名，最多 1000 项。
-- `action=resolve`：只读取最近保存的子域快照，最多 200 个名称；dnsx 固定查询 A/AAAA/CNAME，使用本机配置的系统 DNS 解析器（不走 HTTP/SOCKS 代理），限速 10 qps、5 线程、单次重试。只接受已输入名称的响应，CNAME 超出授权范围时丢弃且不跟进。需要 `confirm_external=true`；当前仅 local，检测到 TUN/fake-IP 时不启动。
+- `action=resolve`：只读取最近保存的子域快照，最多 200 个名称；dnsx 固定查询 A/AAAA/CNAME，使用本机配置的系统 DNS 解析器（不走 HTTP/SOCKS 代理），限速 10 qps、5 线程、单次重试。只接受已输入名称的响应，CNAME 超出授权范围时丢弃且不跟进。需要 `confirm_external=true`；当前仅 local，检测到 TUN/fake-IP 时不启动；TUN 检查通过也不证明实际出口经代理或 VPS，结果会标记为 route not verified。
 - `action=history`：离线读取最近子域快照，不联网。
 
 参数：`action`（subdomains / resolve / history）、`target`（根域名）、`engagement`、`use_subfinder`、`use_amass`、`confirm_external`、`environment_id`、`max_names`、`commit`（默认 false）。只有显式 `commit=true` 才保存快照。工具执行失败、未安装、环境不支持、无结果和模拟结果必须分别报告；不得使用通用 Shell 兜底。
