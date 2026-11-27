@@ -16,6 +16,9 @@ test('all original archive knowledge filenames are represented once, with nine r
   const counts = Object.fromEntries(['cloud-container','edge-device','exchange-ad','gray-market','java-deser','java-web','linux-priv','triage','web-cms'].map(category=>[category,rows.filter(r=>r.fujiang_category===category).length]))
   assert.deepEqual(counts,{'cloud-container':15,'edge-device':17,'exchange-ad':15,'gray-market':60,'java-deser':10,'java-web':23,'linux-priv':12,'triage':4,'web-cms':20})
   for (const row of loadCveCatalog()) {
+    // 只遍历 fujiang 来源：AboutSecurity 导入条目（as-vuln-*.json）不在
+    // fujiang archive 的 176 篇里，目录名与文件名都无法对应。
+    if (row.source_url.includes('wgpsec/AboutSecurity')) continue
     const name = row.source_url.split('/').pop()
     const ref = rows.find(r=>r.source_ref==='plugin/knowledge/'+row.category+'/'+name)
     assert.ok(ref, name)

@@ -2,6 +2,12 @@ name: Local Compatibility (Windows + WSL)
 
 on:
   workflow_dispatch:
+    inputs:
+      inspect_home_plugin_link:
+        description: 'Explicit opt-in: inspect installed dsh-purge link inside DSH_HOME (read-only, sanitized)'
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [master, codex/compat-maintenance, codex/redteam-workflow-enhancement]
   pull_request:
@@ -15,11 +21,15 @@ concurrency:
 
 jobs:
   api-contracts:
+    env:
+      DSH_COMPAT_TOOLS_MODULE: '' # Always load the compiler from the selected fixture.
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ fromJSON((github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
+    # PR contracts run in disposable hosted runners, including same-repo PRs.
+    # Reserve trusted self-hosted purge-ci machines for master and manual runs.
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && (matrix.os == 'windows-latest' && '["self-hosted","Windows","X64","purge-ci"]' || '["self-hosted","Linux","X64","purge-ci"]') || format('["{0}"]', matrix.os)) }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +41,8 @@ jobs:
       - name: Install declared plugin dependencies once
         id: root-install
         run: npm install --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional --package-lock=false
+      - name: Verify npm package file contract
+        run: node scripts/check-packlist.mjs
       - name: Prepare latest official fixture, without host or model execution
         if: runner.os == 'Linux'
         shell: bash
@@ -48,7 +60,30 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "DSH_COMPAT_HOST_ROOT=$fixture" -Encoding utf8
       - name: Install isolated fixture dependencies
-        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --ignore-scripts --legacy-peer-deps --no-audit --no-fund --prefer-offline --omit=optional
+        # A self-hosted runner can retain packuments from before the rc was published.
+        run: npm install --prefix "${{ env.DSH_COMPAT_HOST_ROOT }}" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify installed rc.5 packages and peers
+        run: node .github/scripts/check-host-fixture.mjs 0.2.2-rc.5
+      - name: Exercise rc.5 PowerShell ToolRuntime escalation parameters
+        if: runner.os == 'Windows'
+        run: node --test test/pwsh-real-tool-host.test.mjs
+      - name: Smoke-test actual npm tarball in disposable DSH_HOME
+        run: node scripts/smoke-packed-install.mjs
+      - name: Prepare and install the independent rc.3 regression fixture
+        env:
+          NODE_USE_ENV_PROXY: '1'
+        run: >-
+          node scripts/prepare-host-fixture.mjs 0.2.2-rc.3 &&
+          npm install --prefix "${{ github.workspace }}/.scratch/hosts/0.2.2-rc.3" --registry=https://registry.npmjs.org/ --prefer-online --ignore-scripts --legacy-peer-deps --no-audit --no-fund --omit=optional
+      - name: Verify rc.3 pins and run the original host contracts
+        env:
+          DSH_COMPAT_HOST_ROOT: ${{ github.workspace }}/.scratch/hosts/0.2.2-rc.3
+        run: >-
+          node .github/scripts/check-host-fixture.mjs 0.2.2-rc.3 &&
+          node --test test/host-compat.test.mjs test/native-redteam-team-host.test.mjs
+          test/prompt-host-boundary.test.mjs test/prompt-real-request-boundary.test.mjs
+          test/pwsh-real-tool-host.test.mjs test/request-error-hook-host.test.mjs
+          test/runtime-observations-host.test.mjs
       - name: Check generated bundle
         run: node scripts/build-client.mjs --check
       - name: Check syntax
@@ -58,12 +93,23 @@ jobs:
         shell: pwsh
         run: ./maintenance/inject-switch/Build.ps1
       - name: Attach optional Windows switch executable
+        id: windows-switch-artifact
         if: runner.os == 'Windows'
+        # The native build above remains release-gating. Artifact storage may
+        # transiently fail (e.g. ECONNRESET) independently of the compiled exe.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: dsh-inject-switch-windows
           path: maintenance/inject-switch/dist/dsh-inject-switch.exe
+          if-no-files-found: error
           retention-days: 14
+      - name: Report optional Windows artifact delivery failure
+        if: ${{ always() && runner.os == 'Windows' && steps.windows-switch-artifact.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          Write-Host '::warning title=Windows switch artifact not delivered::The switch compiled, but optional artifact upload failed. Check the upload job before using the binary.'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Optional Windows switch binary artifact upload failed; build and API test results remain separate. Re-run the failed upload/job before relying on downloadable artifacts.' -Encoding utf8
       - name: Smoke-test Desktop updater and simulated rollback
         if: runner.os == 'Windows'
         shell: pwsh
@@ -79,8 +125,21 @@ jobs:
       - name: Run unit and public API contract tests
         env:
           PURGE_CI_TEST_CONCURRENCY: ${{ vars.PURGE_CI_TEST_CONCURRENCY }}
+          PURGE_CI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          PURGE_VERIFY_GIT_ARCHIVE: '1'
         run: |
-          node -e "const n=Number(process.env.PURGE_CI_TEST_CONCURRENCY || require('node:os').availableParallelism()); if(!Number.isSafeInteger(n)||n<1) throw Error('Invalid test concurrency'); const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-concurrency='+n,'test/*.test.*','maintenance/*.test.mjs','maintenance/desktop-tools/*.test.mjs'],{stdio:'inherit'}); process.exitCode=r.status ?? 1"
+          node -e "const available=require('node:os').availableParallelism(); const fallback=process.env.PURGE_CI_RUNNER_ENVIRONMENT==='self-hosted'?Math.min(4,available):available; const n=Number(process.env.PURGE_CI_TEST_CONCURRENCY || fallback); if(!Number.isSafeInteger(n)||n<1) throw Error('Invalid test concurrency'); const r=require('node:child_process').spawnSync(process.execPath,['--test','--test-concurrency='+n,'test/*.test.*','maintenance/*.test.mjs','maintenance/desktop-tools/*.test.mjs'],{stdio:'inherit'}); process.exitCode=r.status ?? 1"
+      - name: Read-only Windows Desktop evidence (not a release gate)
+        if: ${{ github.ref == 'refs/heads/master' && runner.os == 'Windows' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        shell: pwsh
+        env:
+          DSH_HOME_LINK_OPT_IN: ${{ github.event_name == 'workflow_dispatch' && inputs.inspect_home_plugin_link && '1' || '0' }}
+        run: |
+          if ($env:DSH_HOME_LINK_OPT_IN -eq '1') {
+            node scripts/inspect-windows-desktop-evidence.mjs --inspect-home-plugin-link
+          } else {
+            node scripts/inspect-windows-desktop-evidence.mjs
+          }
       - name: Run pending specifications
         id: specs
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.root-install.outcome == 'success' }}

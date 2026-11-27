@@ -187,7 +187,10 @@ test("loadObedienceSettings：默认值、config 覆盖、maxRetries 收敛", ()
 
   const overridden = loadObedienceSettings("Z:/definitely/missing/home", { enabled: false, maxRetries: 99 });
   assert.equal(overridden.enabled, false);
-  assert.equal(overridden.maxRetries, 1);
+  // 钳制放宽到 3：默认仍 1，用户配 2-3 生效（多一轮拒答自动复核的余量）
+  assert.equal(overridden.maxRetries, 3);
+  const overridden2 = loadObedienceSettings("Z:/definitely/missing/home", { maxRetries: 2 });
+  assert.equal(overridden2.maxRetries, 2);
   const disabled = loadObedienceSettings("Z:/definitely/missing/home", { maxRetries: 0 });
   assert.equal(disabled.maxRetries, 0);
 });

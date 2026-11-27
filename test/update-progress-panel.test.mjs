@@ -126,6 +126,28 @@ test("recovered update keeps disk, renderer, backend and profile outcomes separa
   assert.doesNotMatch(words(tree), /当前宿主运行版本已核验/);
 });
 
+test("update verification names absent local files without calling unknown ones missing", () => {
+  const start = client.indexOf("function UpdateVerification(");
+  const end = client.indexOf("function RepairCenter(", start);
+  assert.ok(start >= 0 && end > start);
+  const h = (type, props, ...children) => ({ type, props, children: children.flat() });
+  const sha = "a".repeat(40);
+  const target = { sha, status: "mismatch", files: [
+    { file: "client.js", status: "mismatch", reason: "local_missing" },
+    { file: "lib/index.js", status: "unknown" },
+  ] };
+  let pos = 0;
+  const useState = init => [pos++ === 2 ? target : init, () => {}];
+  const render = new Function("h", "useState", "Btn", "CLIENT_BUILD_ID",
+    client.slice(start, end) + "\nreturn UpdateVerification;")(h, useState, "button", "build");
+  const tree = render({ state: { update_receipt: {
+    targetSha: sha, phase: "awaiting_restart", diskMatch: false, disk: { missingFiles: ["client.js"] },
+  } } });
+  assert.match(words(tree), /本地缺失：client\.js/);
+  assert.match(words(tree), /client\.js · 本地缺失/);
+  assert.match(words(tree), /lib\/index\.js · 未知/);
+});
+
 test("restart dispatch distinguishes rejection, acknowledgement, and late failure", () => {
   const source = readFileSync(new URL("../lib/update.js", import.meta.url), "utf8");
   const start = source.indexOf("export function dispatchUpdateRestart(");
@@ -165,4 +187,54 @@ test("restart verification requires a new process rather than a scheduled launch
   assert.equal(classify(receipt, true, 2000), "process_restarted");
   assert.equal(classify({ ...receipt, restartRequest: { status: "failed" } }, false, 2000), "dispatch_failed");
   assert.equal(classify({ ...receipt, restartRequest: { status: "manual" } }, false, 2000), "manual_required");
+});
+
+test("uninstall UI requires an explicit success receipt before reporting completion or refreshing", async () => {
+  const start = client.indexOf("const doUninstall = useCallback(");
+  const end = client.indexOf("const s = state;", start);
+  assert.ok(start >= 0 && end > start);
+  const run = async (api, surface = "web") => {
+    let current = { surface };
+    let busy, refreshes = 0;
+    const notices = [], terminal = { current: false };
+    const execute = new Function("useCallback", "actionTerminal", "setUninstallBusy",
+      "setAskUninstall", "setAskRestart", "tRef", "setNotice", "setState",
+      "apiJson", "hostText", "hostSurfaceOf", "state", "waitHostAfterUninstall",
+      client.slice(start, end) + "\nreturn doUninstall;")(
+      cb => cb, terminal, value => { busy = value; }, () => {}, () => {},
+      { current: (key, args) => key + (args ? ": " + args.error : "") },
+      n => notices.push(n), update => { current = update(current); },
+      api, (tr, key) => tr(key), s => s.surface, current, () => { refreshes++; });
+    await execute();
+    return { notice: notices.at(-1), busy, refreshes, terminal: terminal.current, progress: current.apply_progress };
+  };
+  for (const reason of ["Failed to fetch", "Cannot reach the API", "timeout"]) {
+    const result = await run(async () => { throw Error(reason); });
+    assert.match(result.notice.text, /^uninstall\.unconfirmed/);
+    assert.equal(result.notice.kind, "error");
+    assert.equal(result.busy, false);
+    assert.equal(result.progress.active, false);
+    assert.equal(result.progress.error, "");
+    assert.equal(result.refreshes, 0);
+    assert.equal(result.terminal, true);
+  }
+  for (const api of [
+    async () => ({ ok: false, error: "failed to fetch upstream" }),
+    async () => { throw Object.assign(Error("request rejected"), { httpStatus: 403 }); },
+  ]) {
+    const result = await run(api);
+    assert.match(result.notice.text, /^uninstall\.fail/);
+    assert.notEqual(result.progress.error, "");
+    assert.equal(result.busy, false);
+    assert.equal(result.refreshes, 0);
+  }
+  const missing = await run(async () => null);
+  assert.match(missing.notice.text, /^uninstall\.unconfirmed/);
+  assert.equal(missing.refreshes, 0);
+  const web = await run(async () => ({ ok: true }));
+  assert.equal(web.notice.text, "uninstall.done");
+  assert.equal(web.refreshes, 1);
+  const desktop = await run(async () => ({ ok: true, surface: "desktop" }), "desktop");
+  assert.equal(desktop.notice.text, "uninstall.done");
+  assert.equal(desktop.refreshes, 0);
 });
