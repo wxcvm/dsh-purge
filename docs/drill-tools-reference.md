@@ -1102,9 +1102,9 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 参数：`engagement`、`host`（必填，单个 IP 或域名）、`ports`（数组，不传则用内置高价值端口清单）、`proxy`（可选 `socks5://127.0.0.1:7890`，不传则直连）、`concurrency`（默认 4，上限 16）、`confirm`。
 
 ### `redteam_exploit_chain`
-【作战智能体】对一个已知漏洞执行完整利用链编排：Nday POC 利用 → 失败自动降级密码喷洒 → 权限提升 → C2 植入 → 持久化。把此前各自独立的 `exploit-executor` / `password-spray` / `privesc-engine` / `c2-manager` / `post-exploit` 串成一条链路。
+【模拟占位】历史漏洞利用链工具当前不执行目标操作。dry_run=true 仅返回不含命令的阶段标签；dry_run=false 返回 unsupported。旧参数仅为兼容保留，不会读取凭据、执行 PoC、部署 C2、建立持久化或写入执行证据。
 
-**`dry_run` 默认 `true`**：只生成命令与每个阶段的判定，不在目标上执行任何操作；只有显式 `dry_run: false` 才真实执行。执行前同样走 `targetInScope` 范围门禁（未登记 scope 需显式 `confirm: true`）。每个阶段自动落 `redteam_chain_add`（失败也记录，便于复现），返回的报告脱敏（不含 IP / 凭据明文）。链上成果仍须 `redteam_credential_add` / `redteam_webshell_add` / `redteam_access_add` 落库才算数。
+**`dry_run` 默认 `true`**：仅返回无命令的模拟阶段标签，不访问目标、不写入攻击链；`dry_run:false` 当前返回 unsupported，不存在真实执行入口。执行前同样走 `targetInScope` 范围门禁（未登记 scope 需显式 `confirm: true`）。每个阶段自动落 `redteam_chain_add`（失败也记录，便于复现），返回的报告脱敏（不含 IP / 凭据明文）。链上成果仍须 `redteam_credential_add` / `redteam_webshell_add` / `redteam_access_add` 落库才算数。
 
 参数：`engagement`、`vuln_id`（提供时自动读取 CVE/组件/严重级与目标）、`target`、`port`、`service`（http/https/ssh/smb/winrm/db）、`os`（windows/linux）、`strategy`（`auto` 默认，按严重级与服务选择；或 `nday-first` / `spray-first` / `stealth`）、`dry_run`（默认 true）、`deploy_c2`、`persist`、`users`、`passwords`、`confirm`。
 
@@ -1127,7 +1127,7 @@ redteam_agent_slot acquire      占一个执行名额（≤3）
   recon      → asset_add / asset_query / domain_index / web_list
   assess     → asset_assess（priority/potential/reason）+ asset_test
   vuln-scan  → vuln_add → http_evidence_add（原始请求/响应）
-  exploit    → webshell_add → tunnel_add → session_check → access_add → score_hit
+  exploit    → disabled / unsupported（当前无经过审查的执行适配器）
   internal   → asset_add（新网段）→ vuln_add → tunnel_update
 redteam_chain_add                每步写 tool + result（报告复现靠它）
 redteam_evidence_upgrade         claimed → observed（核实后才算拿到）
