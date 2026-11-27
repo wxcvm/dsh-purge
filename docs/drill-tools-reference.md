@@ -143,7 +143,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 列出兼容角色标题。当前仅 recon / assess / vuln-scan 可承担被动资料整理、资产复核和漏洞情报比对；exploit / internal 角色停用，不得派发或执行。
 
 ### `redteam_role_prompt`
-取出某个红队角色当前生效的系统提示词，只供查看。派活时不要把全文抄进任务；在 subagent 的 prompt 第一行写 redteamRole: <code>，角色稿会进入子会话系统提示词。
+只读查看角色提示词。exploit / internal 当前停用：返回 enabled=false、prompt=null，不向模型暴露旧执行指令。其它角色提示词也不授予工具执行权限。
 
 参数：
 - `engagement`
