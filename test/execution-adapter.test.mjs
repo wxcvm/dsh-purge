@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { executeToolInEnvironment } from '../lib/redteam/execution-adapter.js'
+import { executeToolInEnvironment, executeSubfinderInEnvironment } from '../lib/redteam/execution-adapter.js'
 import { scanCommand } from '../lib/redteam/scan-runner.js'
 
 const workspace = (t) => {
@@ -217,4 +217,44 @@ test('a local executable spawn failure is not recorded as a target invocation', 
   assert.equal(result.status, 'failed')
   assert.equal(result.attempted, false)
   assert.equal(result.errorCode, 'ENOENT')
+})
+
+
+test('subfinder remote adapter rechecks WSL and invokes only fixed passive argv', async () => {
+  const calls = []
+  const result = await executeSubfinderInEnvironment({
+    domain: 'Example.test', environmentId: 'wsl:Ubuntu-24.04',
+  }, {
+    platform: 'win32',
+    execFileFn: (command, args, options, done) => {
+      calls.push({ command, args, options })
+      assert.equal(command, 'wsl.exe')
+      assert.equal(options.shell, false)
+      if (args[0] === '--list') return done(null, '* Ubuntu-24.04 Running 2\n', '')
+      if (args.includes('-version')) return done(null, 'subfinder v2.17.0\n', '')
+      assert.deepEqual(args, [
+        '--distribution', 'Ubuntu-24.04', '--exec', 'subfinder',
+        '-d', 'example.test', '-silent', '-timeout', '10', '-max-time', '1',
+        '-rl', '10', '-mr', '100', '-duc',
+      ])
+      done(null, 'www.example.test\n', '')
+    },
+  })
+  assert.equal(calls.length, 3)
+  assert.equal(result.ok, true)
+  assert.equal(result.status, 'executed')
+  assert.equal(result.environmentId, 'wsl:Ubuntu-24.04')
+  assert.equal(result.transport, 'wsl')
+  assert.equal(result.attempted, true)
+})
+
+test('subfinder rejects URLs, wildcards and IP literals before execution', async () => {
+  let calls = 0
+  const options = { execFileFn: () => { calls++; throw Error('must not execute') } }
+  for (const domain of ['https://example.test', '*.example.test', '192.0.2.1', 'bad name.test']) {
+    const result = await executeSubfinderInEnvironment({ domain }, options)
+    assert.equal(result.status, 'invalid-target', domain)
+    assert.equal(result.attempted, false, domain)
+  }
+  assert.equal(calls, 0)
 })
