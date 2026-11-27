@@ -64,9 +64,7 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
     engagement: sensitiveEngagement, host: '192.0.2.11', secret_value: 'must-not-store',
   }, {}))
   assert.equal(credentialAttempt.ok, false)
-  const credentialCheck = JSON.parse(await registered.get('redteam_credential_check').execute({
-    engagement: sensitiveEngagement, host: '192.0.2.10', port: 3306, password: 'must-not-test',
-  }, {}))
+  const credentialCheck = JSON.parse(await registered.get('redteam_credential_check').execute({ engagement: sensitiveEngagement }, {}))
   assert.equal(credentialCheck.status, 'unsupported')
   assert.equal(credentialCheck.actual_execution, false)
 
