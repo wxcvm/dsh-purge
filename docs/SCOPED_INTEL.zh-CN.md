@@ -49,7 +49,7 @@ Agent 接口：`redteam_passive_recon(action=subdomains)`；管理面板接口�
 
 ## dnsx 批量 DNS 核验（第八阶段）
 
-Agent 使用 `redteam_passive_recon(action=resolve)`。只读取最近已保存的子域快照，最多 200 个命中精确 `*.域名` 授权范围的主机名；dnsx 固定查询 A/AAAA/CNAME，使用本机配置的系统 DNS 解析器（不走 HTTP/SOCKS 代理），限速 10 qps、5 线程、单次重试，不使用字典、DNS 爆破、AXFR、DNS 追踪或范围外 CNAME 跟进。每次提交 DNS 查询前必须取得用户明确同意并传 `confirm_external=true`。
+Agent 使用 `redteam_passive_recon(action=resolve)` 执行批量核验，使用 `action=dns-history` 对单个已授权主机离线读取 DNS 历史。只读取最近已保存的子域快照，最多 200 个命中精确 `*.域名` 授权范围的主机名；dnsx 固定查询 A/AAAA/CNAME，使用本机配置的系统 DNS 解析器（不走 HTTP/SOCKS 代理），限速 10 qps、5 线程、单次重试，不使用字典、DNS 爆破、AXFR、DNS 追踪或范围外 CNAME 跟进。每次提交 DNS 查询前必须取得用户明确同意并传 `confirm_external=true`。
 
 当前 dnsx 只支持 local。执行前检查本机 TUN/fake-IP；检测到隧道时拒绝启动，避免 DNS 路由未经核实；未检测到 TUN 也不代表出口经代理或 VPS，工具会标记 route not verified。默认只预览，`commit=true` 才按主机写入 `dns_intel_snapshot`；不创建资产、端口、漏洞，也不自动授权解析出的 IP。未返回记录会标记为 `NO_RESULT` / `NO_OUTPUT`，不冒充 NXDOMAIN。
 
