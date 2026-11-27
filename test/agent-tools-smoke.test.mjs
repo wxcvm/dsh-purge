@@ -4,7 +4,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore } from '../lib/redteam/store-core.js'
@@ -83,11 +83,38 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   const dryInternal = JSON.parse(await campaignTool.execute({
     engagement: internalHome, starting_host: '10.0.0.5', confirm: true,
   }, {}))
+  assert.equal(dryInternal.ok, true, 'the simulation request itself should complete')
   assert.equal(dryInternal.dry_run, true, 'campaign must default to dry-run')
-  assert.ok(Array.isArray(dryInternal.stages))
+  assert.equal(dryInternal.status, 'simulated')
+  assert.equal(dryInternal.success, null, 'simulation must not claim campaign success')
+  assert.equal(dryInternal.simulated, true)
+  assert.equal(dryInternal.actual_execution, false)
+  assert.equal(dryInternal.assets_discovered, null)
+  assert.equal(dryInternal.hosts_compromised, null)
+  assert.equal(dryInternal.stages_completed, 0)
+  assert.equal(dryInternal.stages_recorded, 0)
+  assert.ok(dryInternal.stages_planned > 0)
   assert.ok(dryInternal.audit_id)
+  assert.match(String(dryInternal.hint || ''), /仅返回模拟阶段计划/)
+  assert.equal(redteam.listChain(internalHome).length, 0, 'simulation must not be persisted as execution evidence')
+
+  const unsupportedInternal = JSON.parse(await campaignTool.execute({
+    engagement: internalHome, starting_host: '10.0.0.5', dry_run: false, confirm: true,
+  }, {}))
+  assert.equal(unsupportedInternal.ok, false)
+  assert.equal(unsupportedInternal.status, 'unsupported')
+  assert.equal(unsupportedInternal.success, null)
+  assert.equal(unsupportedInternal.actual_execution, false)
+  assert.equal(unsupportedInternal.experience_recorded, false)
+  assert.match(String(unsupportedInternal.hint || ''), /拒绝启动/)
 
   // 5. 阶段已落链（审计可复核）
   const chain = redteam.listChain(scoped)
   assert.ok(chain.length > 0, 'chain stages must be recorded for review')
+
+  // 6. Red-team agents must consult the task planner and use the supported scan runner.
+  const preset = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8')
+  assert.match(preset, /每个执行角色开始一个新的工具型任务前，必须调用一次 `redteam_tool_select`/)
+  assert.match(preset, /Nmap \/ ProjectDiscovery httpx 单目标扫描必须走 `redteam_scan_run`/)
+  assert.match(preset, /customTools/);
 })
