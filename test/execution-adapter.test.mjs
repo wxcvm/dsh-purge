@@ -149,3 +149,51 @@ test('arbitrary tools and malformed arguments cannot reach an execution adapter'
   }, { execFileFn: noCall })
   assert.equal(badArgs.status, 'invalid-arguments')
 })
+
+test('stale WSL and Docker environment IDs are rejected before target execution', async () => {
+  let wslCalls = 0
+  const staleWsl = await executeToolInEnvironment({
+    toolId: 'nmap', environmentId: 'wsl:Debian', args: ['-sT', '192.0.2.5'],
+  }, {
+    platform: 'win32',
+    execFileFn: (_command, args, _options, done) => {
+      wslCalls++
+      assert.deepEqual(args, ['--list', '--verbose'])
+      done(null, '* Ubuntu-24.04 Running 2\n', '')
+    },
+  })
+  assert.equal(staleWsl.status, 'environment-missing')
+  assert.equal(staleWsl.attempted, false)
+  assert.equal(wslCalls, 1)
+
+  let dockerCalls = 0
+  const staleDocker = await executeToolInEnvironment({
+    toolId: 'nmap', environmentId: 'docker:' + 'b'.repeat(64), args: ['-sT', '192.0.2.5'],
+  }, {
+    execFileFn: (_command, args, _options, done) => {
+      dockerCalls++
+      assert.equal(args[0], 'ps')
+      done(null, dockerListing, '')
+    },
+  })
+  assert.equal(staleDocker.status, 'environment-missing')
+  assert.equal(staleDocker.attempted, false)
+  assert.equal(dockerCalls, 1)
+})
+
+test('remote version-probe failure blocks the actual scan invocation', async () => {
+  let calls = 0
+  const result = await executeToolInEnvironment({
+    toolId: 'nmap', environmentId: 'wsl:Ubuntu-24.04', args: ['-sT', '192.0.2.6'],
+  }, {
+    platform: 'win32',
+    execFileFn: (_command, args, _options, done) => {
+      calls++
+      if (args[0] === '--list') return done(null, '* Ubuntu-24.04 Running 2\n', '')
+      done(Object.assign(new Error('nmap missing'), { code: 127 }), '', 'not found')
+    },
+  })
+  assert.equal(result.status, 'tool-not-runnable')
+  assert.equal(result.attempted, false)
+  assert.equal(calls, 2)
+})
