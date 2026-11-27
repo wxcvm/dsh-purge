@@ -143,32 +143,32 @@ test('overview and header show counts only, and their buttons navigate without a
   summary.children.find(x => x.type === 'button').props.onClick()
   reminder.props.onClick()
   assert.equal(opened, 2)
-  const goto = client.slice(client.indexOf('const openSuperAgent ='), client.indexOf('const openFull ='))
-  assert.match(goto, /setUI\(\{ tab: 'superagent', focus: null \}\)/)
-  assert.match(goto, /if \(eng\) openSuperAgent\('reports'\)/)
+  const goto = client.slice(client.indexOf('const openReportPage ='), client.indexOf('const openFull ='))
+  assert.match(goto, /setUI\(\{ tab: 'agents', focus: null \}\)/)
+  assert.match(goto, /if \(!eng\) return/)
   assert.doesNotMatch(goto, /\bapi\s*\(/)
   assert.match(client, /h\(AgentReportSummary, \{ total: props\.pendingAgentReports, onOpen: props\.onOpenReportPage \}\)/)
   assert.match(client, /h\(AgentReportReminder, \{ total: pendingAgentReports, onOpen: openReportPage \}\)/)
 })
 
 test('the explicit navigation places keyboard focus in the requested project section only once', () => {
-  const focusSuperAgent = vm.runInNewContext(fragment('function focusSuperAgent(', 'function AgentReportSummary(') +
-    '; focusSuperAgent')
+  const focusAgentReview = vm.runInNewContext(fragment('function focusAgentReview(', 'function AgentReportSummary(') +
+    '; focusAgentReview')
   const request = { current: null }
   let focused = 0
   const node = { focus() { focused++ } }
-  focusSuperAgent(node, 'docs', 'reports', request)
+  focusAgentReview(node, 'docs', 'reports', request)
   assert.equal(focused, 0, 'ordinary navigation does not steal focus')
   request.current = { engagement: 'docs', section: 'reports' }
-  focusSuperAgent(null, 'docs', 'reports', request)
-  focusSuperAgent(node, 'other-project', 'reports', request)
-  focusSuperAgent(node, 'docs', 'page', request)
+  focusAgentReview(null, 'docs', 'reports', request)
+  focusAgentReview(node, 'other-project', 'reports', request)
+  focusAgentReview(node, 'docs', 'page', request)
   assert.deepEqual(request, { current: { engagement: 'docs', section: 'reports' } })
-  focusSuperAgent(node, 'docs', 'reports', request)
-  focusSuperAgent(node, 'docs', 'reports', request)
+  focusAgentReview(node, 'docs', 'reports', request)
+  focusAgentReview(node, 'docs', 'reports', request)
   assert.equal(focused, 1)
   assert.deepEqual(request, { current: null })
   assert.match(client, /'aria-label': '待阅回报', tabIndex: -1, ref: props\.onSectionReady/)
-  assert.match(client, /superAgentFocus\.current = \{ engagement: eng, section \}/)
-  assert.match(client, /onReportSectionReady: \(node\) => focusSuperAgent\(node, eng, 'reports', superAgentFocus\)/)
+  assert.match(client, /agentReviewFocus\.current = \{ engagement: eng, section: 'reports' \}/)
+  assert.match(client, /onReportSectionReady: \(node\) => focusAgentReview\(node, eng, 'reports', agentReviewFocus\)/)
 })

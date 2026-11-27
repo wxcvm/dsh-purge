@@ -4,12 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ALL_PATCHES } from "../lib/patches-definitions.js";
-import { applyPatches, patchStatus, restoreNativePermissionForBases } from "../lib/core.js";
+import { applyPatches, backupAll, inspectNativePermissionMigration, patchStatus, refreshStaleBaksForUpgrade, restoreNativePermissionForBases } from "../lib/core.js";
 import {
   NATIVE_PERMISSION_PATCH_IDS,
   hasNativePermissionPatchMarker,
   isNativePermissionPatch,
   nativePermissionPatches,
+  unresolvedPermissionBackupPaths,
   restoreLegacyPermissionText,
   restoreNativePermissionFromBackup,
   restoreNativePermissionText,
@@ -30,7 +31,7 @@ test("the default patch set disables permission and approval bypasses, not compa
 });
 
 test("marked approval, sandbox and filesystem patches reverse only their exact Purge output", () => {
-  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 17, 33, 34, 35, 36, 37, 48, 60, 61, 62, 63]) {
+  for (const id of [5, 7, 8, 9, 10, 11, 12, 14, 16, 17, 29, 33, 34, 35, 36, 37, 48, 59, 60, 61, 62, 63, 70]) {
     const patch = byId(id);
     assert.ok(patch, `missing patch #${id}`);
     const replacements = replacementsOf(patch);
@@ -200,7 +201,33 @@ test("applyPatches leaves native sandbox deny and confine enforcement unchanged"
   const report = await applyPatches(aiBase, [patch6, patch15]);
   assert.deepEqual(report.map(row => [row.patch_id, row.status]), [[6, "off"], [15, "off"]]);
   assert.equal(fs.readFileSync(file, "utf8"), original);
-  assert.deepEqual(await patchStatus(aiBase, [patch6, patch15]), { 6: "off", 15: "off" });
+  const status = await patchStatus(aiBase, [patch6, patch15]);
+  assert.equal(status[6], "off");
+  assert.equal(status[15], "off");
+});
+
+test("ambiguous #6 host drift leaves both current file and original backup untouched", async t => {
+  const patch6 = byId(6);
+  const patch15 = byId(15);
+  const original = `${patch6.patterns[0]}\n`;
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const current = applyPatchText(original, patch6) + "// unrelated host edit\n";
+  fs.writeFileSync(file, current);
+  fs.writeFileSync(`${file}.dshpurge.bak`, original);
+
+  const report = await applyPatches(aiBase, [patch6, patch15]);
+  assert.equal(fs.readFileSync(file, "utf8"), current);
+  assert.equal(fs.readFileSync(`${file}.dshpurge.bak`, "utf8"), original);
+  assert.equal(report.find(row => row.patch_id === 6)?.status, "pending");
+});
+
+test("a missing #15 backup is not replaced with the already-bypassed host file", async t => {
+  const patch15 = byId(15);
+  const { aiBase, file } = makeSandboxHost(t, patch15.replace);
+  const result = await restoreNativePermissionForBases([aiBase]);
+  assert.ok(result.pending.some(row => row.patch_id === 15 && row.reason === "marker_remaining"));
+  await backupAll(aiBase, { skipFiles: [file] });
+  assert.equal(fs.existsSync(`${file}.dshpurge.bak`), false);
 });
 
 test("startup migration restores exact #6/#15 sandbox bypass output from its original backup", async t => {
@@ -217,7 +244,9 @@ test("startup migration restores exact #6/#15 sandbox bypass output from its ori
   assert.equal(result.pending.length, 0);
   assert.equal(result.failed.length, 0);
   assert.ok(result.changed.some(row => row.patch_id === 6 && row.path === file));
-  assert.deepEqual(await patchStatus(aiBase, [patch6, patch15]), { 6: "off", 15: "off" });
+  const status = await patchStatus(aiBase, [patch6, patch15]);
+  assert.equal(status[6], "off");
+  assert.equal(status[15], "off");
 });
 
 test("patch #6 is idempotent after an exact restoration", () => {
@@ -232,4 +261,105 @@ test("patch #6 is idempotent after an exact restoration", () => {
   });
   assert.equal(result.status, "already-restored");
   assert.equal(result.text, backup);
+});
+
+test("unresolved permission migrations preserve original backups after failure or ambiguity", async t => {
+  const { aiBase, file } = makeSandboxHost(t, "original recovery evidence\n");
+  const backup = file + ".dshpurge.bak";
+  fs.writeFileSync(backup, "original recovery evidence\n");
+  fs.writeFileSync(file, "unverified current file\n");
+  const other = path.join(aiBase, "another-file");
+  const paths = unresolvedPermissionBackupPaths({
+    pending: [{ patch_id: 16, path: other }],
+    failed: [{ patch_id: 6, path: file }, { patch_id: 15, path: file }],
+  });
+  assert.deepEqual(paths, [other, file]);
+  assert.deepEqual(unresolvedPermissionBackupPaths({ pending: [], failed: [] }), []);
+  await backupAll(aiBase, { skipFiles: paths });
+  assert.deepEqual(refreshStaleBaksForUpgrade(aiBase, { skipPaths: paths }), []);
+  assert.equal(fs.readFileSync(backup, "utf8"), "original recovery evidence\n");
+  assert.equal(fs.readFileSync(file, "utf8"), "unverified current file\n");
+});
+
+test("read-only permission migration inventory distinguishes unknown and unresolved hosts", async t => {
+  assert.deepEqual(await inspectNativePermissionMigration([]), {
+    status: "unverified", inspected: 0, unresolved: 0,
+  });
+  const patch = byId(6);
+  const original = patch.patterns[0];
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const clean = await inspectNativePermissionMigration([aiBase]);
+  assert.equal(clean.status, "no-known-residue");
+  assert.ok(clean.inspected > 0);
+  assert.equal(clean.unresolved, 0);
+  const current = applyPatchText(original, patch);
+  fs.writeFileSync(file, current);
+  const before = fs.readFileSync(file);
+  const unresolved = await inspectNativePermissionMigration([aiBase]);
+  assert.equal(unresolved.status, "review");
+  assert.ok(unresolved.unresolved > 0);
+  assert.deepEqual(fs.readFileSync(file), before);
+  assert.equal(fs.existsSync(file + ".dshpurge.bak"), false);
+});
+
+test("permission inventory never treats an uninspected host as clean because another host was inspected", async t => {
+  const patch = byId(6);
+  const original = patch.patterns[0];
+  const { aiBase, file } = makeSandboxHost(t, original);
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "purge-uninspected-host-"));
+  t.after(() => fs.rmSync(empty, { recursive: true, force: true }));
+  for (const bases of [[aiBase, empty], [empty, aiBase]]) {
+    const result = await inspectNativePermissionMigration(bases);
+    assert.equal(result.status, "unverified");
+    assert.ok(result.inspected > 0);
+    assert.equal(result.unresolved, 0);
+  }
+  fs.writeFileSync(file, applyPatchText(original, patch));
+  const result = await inspectNativePermissionMigration([empty, aiBase]);
+  assert.equal(result.status, "review");
+  assert.ok(result.unresolved > 0);
+  assert.deepEqual(fs.readdirSync(empty), []);
+});
+
+test("backup recovery never introduces a previously absent unrelated change", () => {
+  const restore = { id: 6, from: "original-a", to: "changed-a" };
+  const unrelated = { id: 9000, from: "original-b", to: "changed-b" };
+  const backup = "original-a\noriginal-b\n";
+  const applyPatch = (text, item) => text.replace(item.from, item.to);
+  const current = applyPatch(backup, restore);
+  const result = restoreNativePermissionFromBackup({
+    current, backup, patch: restore, relatedPatches: [restore, unrelated],
+    restorePatchIds: [6], applyPatch,
+  });
+  assert.equal(result.status, "restored");
+  assert.equal(result.text, backup);
+  assert.deepEqual(result.matchedPatchIds, [6]);
+});
+
+test("backup recovery refuses matching histories with different recovered contents", () => {
+  const restore = { id: 6, from: "original", to: "changed" };
+  const unrelated = { id: 9000, from: "original", to: "changed" };
+  const backup = "original\n";
+  const current = "changed\n";
+  const applyPatch = (text, item) => text.replace(item.from, item.to);
+  for (const relatedPatches of [[restore, unrelated], [unrelated, restore]]) {
+    const result = restoreNativePermissionFromBackup({
+      current, backup, patch: restore, relatedPatches,
+      restorePatchIds: [6], applyPatch,
+    });
+    assert.equal(result.status, "ambiguous");
+    assert.equal(result.text, current);
+  }
+});
+
+test("backup recovery accepts matching histories with identical recovered contents", () => {
+  const restore = { id: 6, from: "original", to: "changed" };
+  const noop = { id: 9000, from: "absent", to: "unused" };
+  const result = restoreNativePermissionFromBackup({
+    current: "changed\n", backup: "original\n", patch: restore,
+    relatedPatches: [restore, noop], restorePatchIds: [6],
+    applyPatch: (text, item) => text.replace(item.from, item.to),
+  });
+  assert.equal(result.status, "restored");
+  assert.equal(result.text, "original\n");
 });
