@@ -158,6 +158,7 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 
 ### `redteam_asset_add`
 把一个资产及其端口/服务/指纹写入资产库（幂等 upsert）。每条发现必须标注 provenance：被动收集填 passive，主动探测填 active，并填写 tool（数据源或工具名）。
+重复导入同一端口的相同服务/指纹时，按资产端口、指纹字段、provenance 与 tool 识别同一来源记录，只刷新 `last_seen`，保留 `first_seen`；不同来源仍分别留档。`counts.services_added/refreshed` 与 `counts.fingerprints_added/refreshed` 区分新增和复用，原有 `services` / `fingerprints` 仍表示本批处理条数。扫描运行记录与资产写入处于同一 SQLite 事务，导入失败会一起回滚。
 
 参数：
 - `engagement` — 靶标 id；省略则用当前会话绑定的靶标
