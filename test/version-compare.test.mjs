@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { versionLess } from '../lib/redteam/version-compare.js'
-import { latestStableVersion, versionIsNewer } from '../lib/update.js'
+import { hideListedVersion, latestStableVersion, safeUpdateRef, versionIsNewer } from '../lib/update.js'
 
 test('updater compares numeric prerelease components across digit boundaries', () => {
   const prefix = '1.1.92-wxcvm.7-beta.'
@@ -32,4 +32,17 @@ test('fork build revision changes are visible even when the base version stays t
   assert.equal(versionLess('1.1.93', '1.1.92-wxcvm.3'), false)
   assert.equal(versionLess('1.1.92-wxcvm.2', '1.1.92'), true)
   assert.equal(versionLess('1.1.92', '1.1.92-wxcvm.2'), false)
+})
+
+test('build metadata does not hide stable tags or make valid tags unselectable', () => {
+  const tag = 'v1.1.92-wxcvm.24+build-beta.1'
+  const row = { ref: tag, id: tag, version: tag.slice(1), channel: 'stable' }
+  assert.equal(hideListedVersion(row), false)
+  assert.equal(latestStableVersion([row]), row.version)
+  assert.equal(safeUpdateRef(tag), tag)
+  assert.equal(safeUpdateRef('v1.1.92+build.2'), 'v1.1.92+build.2')
+  assert.equal(hideListedVersion({ ref: 'v1.1.92-beta.1+build.2', channel: 'beta' }), true)
+  for (const value of ['master+build.1', 'v1.1.92+', 'v1.1.92+build..1', 'v1.1.92+build/other', 'v1.1.92+build%2fother', 'v1.1.92+build 1']) {
+    assert.equal(safeUpdateRef(value), '')
+  }
 })

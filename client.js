@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "3367b70f20e26d00";
+		const CLIENT_BUILD_ID = "98fd3ecb371ac6eb";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -71,12 +71,12 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 					throw new Error(r.status + " non-json: " + text.slice(0, 120));
 				}
 				if (!r.ok) throw Object.assign(new Error((data && (data.error || data.message)) ||
-					(r.status + " " + r.statusText)), { code: data?.code });
+					(r.status + " " + r.statusText)), { code: data?.code, httpStatus: r.status });
 				return data;
 			} catch (e) {
 				if (isAbortError(e)) throw new Error("timeout");
 				const msg = String((e && e.message) || e || "");
-				if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+				if (!e?.httpStatus && /failed to fetch|networkerror|load failed/i.test(msg)) {
 					throw new Error("Cannot reach the API. Make sure dsh is still running, then press Ctrl+F5");
 				}
 				throw e;
@@ -271,6 +271,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"uninstall.done": "已卸载并还原，正在重启…",
 			"uninstall.done.desktop": "已卸载并还原，正在重启桌面应用…",
 			"uninstall.fail": "卸载失败: {error}",
+			"uninstall.unconfirmed": "卸载结果未确认：{error}。请核对宿主实际状态后再决定是否重试。",
 			"btn.checkUpdate": "检测更新",
 			"btn.checkUpdate.busy": "检测中…",
 			"btn.doUpdate": "更新",
@@ -660,6 +661,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 			"uninstall.done": "Uninstalled and restored. Restarting…",
 			"uninstall.done.desktop": "Uninstalled and restored. Restarting the desktop app…",
 			"uninstall.fail": "Uninstall failed: {error}",
+			"uninstall.unconfirmed": "Uninstall result unconfirmed: {error}. Check the actual host state before retrying.",
 			"btn.checkUpdate": "Check update",
 			"btn.checkUpdate.busy": "Checking…",
 			"btn.doUpdate": "Update",
@@ -1070,8 +1072,8 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-modal h4{margin:0 0 8px;font-family:inherit;font-size:18px;line-height:28px;font-weight:600}
 .dshp-modal p{margin:0 0 16px;font-size:14px;line-height:20px;text-wrap:pretty}
 .dshp-modal-ops{display:flex;justify-content:flex-end;gap:8px}
-.dshp-restart-mask{position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.62);font-family:inherit}
-.dshp-restart-card{width:min(420px,100%);box-sizing:border-box;padding:16px;border-radius:16px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fffcf7) 46%,transparent);color:var(--dsw-alias-label-primary,#16140f);border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6d8f78) 34%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 42%,transparent),0 16px 40px color-mix(in srgb,#000 22%,transparent);backdrop-filter:blur(22px) saturate(1.4);-webkit-backdrop-filter:blur(22px) saturate(1.4)}
+.dshp-restart-mask{position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:clamp(8px,4vmin,24px);background:rgba(0,0,0,.62);font-family:inherit}
+.dshp-restart-card{width:min(420px,100%);max-height:100%;min-height:0;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;padding:16px;border-radius:16px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fffcf7) 46%,transparent);color:var(--dsw-alias-label-primary,#16140f);border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#6d8f78) 34%,transparent);box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 42%,transparent),0 16px 40px color-mix(in srgb,#000 22%,transparent);backdrop-filter:blur(22px) saturate(1.4);-webkit-backdrop-filter:blur(22px) saturate(1.4)}
 .dshp-restart-card h4{margin:0 0 8px;font-family:inherit;font-size:20px;font-weight:600;line-height:28px;color:inherit}
 .dshp-restart-card p{margin:0 0 16px;font-size:16px;font-weight:500;line-height:24px;color:inherit}
 .dshp-restart-card .dshp-modal-ops{display:flex;justify-content:flex-end;gap:8px}
@@ -1079,6 +1081,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-restart-card .dshp-btn-primary,.dshp-restart-card .dshp-btn-primary:hover:not(:disabled){color:#fff;background:var(--dsw-alias-brand-primary,#2f6b4f);border-color:var(--dsw-alias-brand-primary,#2f6b4f)}
 /* The portal's resolved theme may lag the host's palette while it switches.
    Keep the inherited host tokens when they match, but never mix palettes. */
+.dshp-restart-card .dshp-modal-ops{flex-wrap:wrap}
 .dshp-restart-mask[data-theme="white"]{color-scheme:light}
 .dshp-restart-mask[data-theme="dusk"]{color-scheme:dark}
 :is(html,body)[data-ds-dark-theme] .dshp-restart-mask[data-theme="white"]{
@@ -1138,7 +1141,7 @@ html:not([data-ds-dark-theme]) body:not([data-ds-dark-theme]) .dshp-restart-mask
 .dshp-root em,.dshp-dock em,.rt-flow-action.inferred,.rt-ap-act.inferred{font-style:normal}
 @media (prefers-reduced-motion:reduce){.dshp-btn,.dshp-bar>i,.dshp-flow-node{transition:opacity 300ms var(--dshp-ease)}.dshp-btn:hover:not(:disabled),.dshp-flow-node.is-cur{transform:none}.dshp-skel{animation:none}}
 
-.dshp-dock{position:fixed;top:12px;right:12px;z-index:10050;display:flex;flex-direction:column;width:var(--dshp-dock-w,620px);height:var(--dshp-dock-h,72vh);min-width:380px;min-height:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,var(--dshp-paper,#fffcf7)) 52%,transparent);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 65%,transparent);border-radius:12px;box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent),0 0 0 1px color-mix(in srgb,#fff 6%,transparent);pointer-events:auto;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));overflow:visible}
+.dshp-dock{position:fixed;top:12px;right:12px;z-index:10050;display:flex;flex-direction:column;width:var(--dshp-dock-w,620px);height:var(--dshp-dock-h,72vh);min-width:min(380px,calc(100vw - 16px));min-height:min(240px,calc(100vh - 16px));max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);box-sizing:border-box;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,var(--dshp-paper,#fffcf7)) 52%,transparent);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,var(--dshp-line,#555)) 65%,transparent);border-radius:12px;box-shadow:0 18px 48px color-mix(in srgb,#000 30%,transparent),0 0 0 1px color-mix(in srgb,#fff 6%,transparent);pointer-events:auto;color:var(--dsw-alias-label-primary,var(--dshp-ink,#f2f2f2));overflow:visible}
 .dshp-dock[data-open="0"]{display:none}
 .dshp-dock[data-maximized="1"]{left:8px!important;top:8px!important;width:calc(100vw - 16px)!important;height:calc(100vh - 16px)!important;max-width:none;max-height:none}
 .dshp-dock[data-maximized="1"] .dshp-dock-resize,.dshp-dock[data-maximized="1"] .dshp-dock-resize-l,.dshp-dock[data-maximized="1"] .dshp-dock-resize-r,.dshp-dock[data-maximized="1"] .dshp-dock-resize-b{display:none}
@@ -2223,6 +2226,13 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		}
 
 		function RestartAsk(props) {
+			const [, refreshPortal] = useState(0);
+			useEffect(() => {
+				if (typeof document === "undefined") return;
+				const sync = () => refreshPortal((revision) => revision + 1);
+				document.addEventListener("fullscreenchange", sync);
+				return () => document.removeEventListener("fullscreenchange", sync);
+			}, []);
 			const node = h("div", {
 				className: "dshp-restart-mask",
 				"data-theme": props.theme === "dusk" ? "dusk" : "white",
@@ -2243,7 +2253,9 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			try {
 				const rd = require("react-dom");
 				if (rd && typeof rd.createPortal === "function" && typeof document !== "undefined" && document.body) {
-					return rd.createPortal(node, document.body);
+					const fullscreen = document.fullscreenElement;
+					const target = fullscreen?.matches?.(".dshp-dock.dshp-workspace") ? fullscreen : document.body;
+					return rd.createPortal(node, target);
 				}
 			} catch { /* host 可能没暴露 react-dom */ }
 			return node;
@@ -2932,24 +2944,38 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				setState((prev) => Object.assign({}, prev || {}, {
 					apply_progress: { active: true, kind: "uninstall", stage: "locate", error: "" },
 				}));
-				apiJson("/dsh-purge/uninstall", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+				const finishWithoutSuccess = (msg, rejected) => {
+					actionTerminal.current = true;
+					setNotice({ kind: "error", text: tr(rejected ? "uninstall.fail" : "uninstall.unconfirmed", { error: msg }) });
+					setState((prev) => {
+						const progress = (prev && prev.apply_progress) || {};
+						return Object.assign({}, prev || {}, {
+							apply_progress: {
+								...progress, active: false, kind: "uninstall",
+								stage: progress.stage && !["idle", "done", "restart"].includes(progress.stage) ? progress.stage : "locate",
+								error: rejected ? msg : "",
+							},
+						});
+					});
+					setUninstallBusy(false);
+				};
+				return apiJson("/dsh-purge/uninstall", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
 					.then((d) => {
-						if (!d || !d.ok) throw new Error((d && d.error) || "uninstall failed");
+						if (!d || typeof d.ok !== "boolean") {
+							finishWithoutSuccess("missing receipt", false);
+							return;
+						}
+						if (!d.ok) {
+							finishWithoutSuccess(String(d.error || "uninstall failed"), true);
+							return;
+						}
 						actionTerminal.current = true;
 						setNotice({ kind: "ok", text: (d && d.note) || hostText(tr, "uninstall.done", d.surface || hostSurfaceOf(state)) });
 						if ((d && d.surface) === "desktop" || (d && d.fullApp) || hostSurfaceOf(state) === "desktop") return;
 						waitHostAfterUninstall(tr);
-					})
-					.catch((e) => {
+					}, (e) => {
 						const msg = String((e && e.message) || e || "");
-						if (/failed to fetch|networkerror|load failed/i.test(msg)) {
-							setNotice({ kind: "ok", text: hostText(tr, "uninstall.done", hostSurfaceOf(state)) });
-							if (hostSurfaceOf(state) === "desktop" || clientGuessSurface() === "desktop") return;
-							waitHostAfterUninstall(tr);
-							return;
-						}
-						setNotice({ kind: "error", text: tr("uninstall.fail", { error: msg }) });
-						setUninstallBusy(false);
+						finishWithoutSuccess(msg, Number.isInteger(e?.httpStatus));
 					});
 			}, [state, waitHostAfterUninstall]);
 
@@ -4082,7 +4108,12 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 			try {
 				if (typeof document !== "undefined") {
 					const root = document.documentElement;
-					if (document.body?.hasAttribute("data-ds-dark-theme") || root?.hasAttribute("data-ds-dark-theme")) return "dusk";
+					const darkMarker = (target) => {
+						if (!target?.hasAttribute("data-ds-dark-theme")) return false;
+						const value = String(target.getAttribute?.("data-ds-dark-theme") ?? "").trim().toLowerCase();
+						return !["false", "0", "off", "no"].includes(value);
+					};
+					if (darkMarker(document.body) || darkMarker(root)) return "dusk";
 					const inline = root?.style?.colorScheme;
 					const style = !inline && root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
 					schemes = (inline || style?.colorScheme || style?.getPropertyValue?.("color-scheme") || "")
@@ -4627,11 +4658,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
         h('button', { type: 'button', onClick: () => onNavigate('overview') }, t('diag.overview.back')),
         h('button', { type: 'button', onClick: () => onNavigate('diagnostics') }, t('diag.overview.details'))) : null),
     privacyApi ? h('div', { className: 'dshp-runtime-meta' },
-      '智能隐私中心 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
+      '本机隐私设置 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
         : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置') + (!maskRuntime && revealPrivate ? ' · 当前临时显示详情' : ''),
       h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => {
         __dshPurgeDrill.setUI({ tab: 'low-impact', focus: null }); showPurgeWorkspace('drill');
-      } }, '打开智能隐私中心'),
+      } }, '打开本机隐私设置'),
       temporary?.maskHistory ? h('span', null, ' · 本次工作区临时遮蔽已开启') : null,
       !temporary?.maskHistory && privacyDisplay?.maskHistory === true ? h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
@@ -6423,16 +6454,17 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
       artex: ['M12 2l9 5-9 5-9-5z', 'M3 12l9 5 9-5', 'M3 17l9 5 9-5'],
       guide: ['M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1z', 'M12 6c3-2 6-2 9-1v14c-3-1-6-1-9 1z'],
       env: ['M12 3v3', 'M12 18v3', 'M3 12h3', 'M18 12h3', 'M5.6 5.6l2.1 2.1', 'M16.3 16.3l2.1 2.1', 'M18.4 5.6l-2.1 2.1', 'M7.7 16.3l-2.1 2.1', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6'],
-      'low-impact': ['M12 3l8 4v5c0 5-3 8-8 10c-5-2-8-5-8-10V7z', 'M9 12l2 2 4-4'],
       skills: ['M8 6l-5 6 5 6', 'M16 6l5 6-5 6', 'M14 4l-4 16'],
-      superagent: ['M8 5H5v16h14V5h-3', 'M8 3h8v4H8z', 'M8 12h8', 'M8 16h6'],
       agents: ['M9 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6', 'M16 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6', 'M3 20v-4a6 6 0 0 1 12 0v4', 'M16 13a5 5 0 0 1 5 5v2'],
       report: ['M6 2h8l5 5v15H6z', 'M14 2v5h5', 'M9 12h7', 'M9 16h7'],
+      antiforensics: ['M12 2l9 5v5c0 7-4 10-9 12c-5-2-9-5-9-12V7z', 'M8 10l4 3 4-5', 'M9 15h6'],
     }
     function activeWorkbenchTab(tab) {
       switch (tab) {
         case 'skills': return 'knowledge-center'
+        case 'superagent': // Legacy saved tab; no separate page.
         case 'prompts': return 'agents'
+        case 'low-impact': // Legacy saved tab; privacy settings now live under Environment.
         case 'local-search':
         case 'knowledge': return 'env'
         default: return tab
@@ -7660,6 +7692,210 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return h('span', { className: 'rt-test rt-test-' + st }, TEST_LABEL[st] || st)
     }
 
+
+    /* 敏感资产情报：只读、按靶标隔离，不读取/展示明文 secret。 */
+    // Share only aggregate review counts. No record IDs, locations or credentials.
+    function buildSensitiveRemediationSummary(summary, capturedAt) {
+      const fields = ['total', 'unreviewed', 'reviewing', 'confirmed', 'falsePositive', 'resolved']
+      if (!summary || fields.some((k) => !Number.isSafeInteger(summary[k]) || summary[k] < 0)) return null
+      const { total, unreviewed, reviewing, confirmed, falsePositive, resolved } = summary
+      if (unreviewed + reviewing + confirmed + falsePositive + resolved !== total) return null
+      if (typeof capturedAt !== 'string') return null
+      const time = new Date(capturedAt)
+      if (!Number.isFinite(time.getTime()) || time.toISOString() !== capturedAt) return null
+      return {
+        schema: 'purge.remediation-summary.v1', capturedAt,
+        counts: { total, pending: unreviewed, reviewing, confirmed, falsePositive, resolved },
+      }
+    }
+
+    function SensitiveIntelTab(props) {
+      const eng = props.engagement
+      const masked = !!useTemporaryPrivacy()?.maskAssetResults
+      const [category, setCategory] = React.useState('all')
+      const [draft, setDraft] = React.useState('')
+      const [query, setQuery] = React.useState('')
+      const [page, setPage] = React.useState(0)
+      const [reviewStatus, setReviewStatus] = React.useState('all')
+      const [savingId, setSavingId] = React.useState(null)
+      const [notice, setNotice] = React.useState('')
+      const [refresh, setRefresh] = React.useState(0)
+      const [state, setState] = React.useState({ loading: true, error: '', data: null })
+      const limit = 40
+      React.useEffect(() => {
+        setCategory('all')
+        setDraft('')
+        setQuery('')
+        setReviewStatus('all')
+        setNotice('')
+        setPage(0)
+      }, [eng])
+      React.useEffect(() => {
+        let live = true
+        if (!eng || masked) {
+          setState({ loading: false, error: masked ? '临时资产展示保护已开启' : '请先选择靶标', data: null })
+          return undefined
+        }
+        setState({ loading: true, error: '', data: null })
+        api({ op: 'sensitiveIntel', engagement: eng, category, status: reviewStatus, query, offset: page * limit, limit })
+          .then((r) => {
+            if (!live) return
+            if (!r || !r.ok || r.engagement !== eng) {
+              setState({ loading: false, error: (r && r.error) || '无法读取当前靶标的敏感资产统计', data: null })
+              return
+            }
+            setState({ loading: false, error: '', data: r, capturedAt: new Date().toISOString() })
+          }, (e) => {
+            if (live) setState({ loading: false, error: String((e && e.message) || e), data: null })
+          })
+        return () => { live = false }
+      }, [eng, masked, category, reviewStatus, query, page, refresh, props.refreshKey])
+      const result = !masked && state.data?.engagement === eng ? state.data : null
+      const summary = result?.summary || {}
+      const shareSummary = buildSensitiveRemediationSummary(result?.summary, state.capturedAt)
+      const changeCategory = (id) => { setCategory(id); setPage(0) }
+      const applyQuery = () => { setQuery(draft.trim()); setPage(0) }
+      const reviewOptions = [
+        ['pending', '待研判'], ['reviewing', '研判中'], ['confirmed', '人工确认'],
+        ['false_positive', '误报'], ['resolved', '已处置'],
+      ]
+      const saveSensitiveReview = (item, status) => {
+        if (savingId !== null || !eng || masked || !result) return
+        setNotice('')
+        setSavingId(item.id)
+        api({ op: 'sensitiveIntelReview', engagement: eng, credential_id: item.id, status }).then((r) => {
+          if (!r?.ok || r.engagement !== eng || r.review?.credential_id !== item.id) {
+            setNotice((r && r.error) || '复核状态保存失败')
+          } else {
+            setRefresh((n) => n + 1)
+          }
+        }, (e) => setNotice(String((e && e.message) || e))).finally(() => setSavingId(null))
+      }
+      const exportReviewSummary = () => {
+        if (!shareSummary || masked) return
+        const url = URL.createObjectURL(new Blob([JSON.stringify(shareSummary, null, 2)], { type: 'application/json' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'purge-remediation-summary.json'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
+      const exportPageCsv = () => {
+        if (!result?.items?.length) return
+        // Export only server-redacted records on this page. Neutralize spreadsheet formulas.
+        const cell = (value) => {
+          const raw = String(value ?? '')
+          const safe = /^[\s\u0000-\u001f]*[=+@-]|^[\t\r\n]/.test(raw) ? "'" + raw : raw
+          return '"' + safe.replace(/"/g, '""') + '"'
+        }
+        const columns = ['ID', '资产ID', '主机', '账号(脱敏)', '类型', '高权限标记', '复核状态', '发现时间', '证据引用存在']
+        const data = result.items.map((item) => [
+          item.id, item.asset_id ?? '', item.host, item.username, item.secret_type,
+          item.high_privilege ? '是' : '否', item.review_status, item.found_at || '',
+          item.has_evidence_ref ? '是' : '否',
+        ])
+        const csv = '\uFEFF' + [columns, ...data].map((line) => line.map(cell).join(',')).join('\r\n')
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = 'purge-sensitive-intel-redacted-page-' + (page + 1) + '.csv'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
+      const stat = (title, value, explanation) => h('div', {
+        className: 'rt-card',
+        style: { margin: 0, flex: '1 1 155px', minWidth: 142 },
+      },
+        h('div', { className: 'rt-foot' }, title),
+        h('div', { style: { fontSize: 25, fontWeight: 700, margin: '5px 0' } }, result ? String(value ?? 0) : '—'),
+        h('div', { className: 'rt-foot', style: { fontSize: 11 } }, explanation))
+      return h('div', { className: 'rt-pane', style: { overflow: 'auto' } },
+        h('div', { className: 'rt-card' },
+          h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 } },
+            h('h3', { style: { margin: 0 } }, '敏感资产情报'),
+            h('div', { className: 'rt-spacer' }),
+            h('button', { type: 'button', className: 'rt-btn', onClick: props.onBack }, '返回资产列表'),
+            h('button', { type: 'button', className: 'rt-btn', disabled: masked, onClick: () => setRefresh((n) => n + 1) }, '刷新'),
+            h('button', { type: 'button', className: 'rt-btn', disabled: !shareSummary,
+              onClick: exportReviewSummary }, '导出整改摘要（ARTEX）')),
+          h('p', { className: 'rt-foot' }, '仅查询当前靶标已有凭据记录，默认不传输明文、密钥原值、证据文件路径或原始请求。不是自动扫描或实时泄露监控。'),
+          h('p', { className: 'rt-foot' }, 'ARTEX 摘要仅含本靶标的复核状态计数与读取时间，不含靶标名称、账号、记录明细；手动导入整改工作台，不会联网或写入 ARTEX 发现。')),
+        state.error ? h('div', { className: 'rt-err', role: 'alert' }, state.error) : null,
+        state.loading ? h('div', { className: 'rt-foot', role: 'status' }, '读取统计中…') : null,
+        h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 } },
+          stat('敏感记录', summary.total, '当前靶标凭据表'),
+          stat('高权限标记', summary.highPrivilege, '按权限字段判断，不代表高危漏洞'),
+          stat('待研判', summary.unreviewed, '还未进行人工复核'),
+          stat('研判中', summary.reviewing, '人工正在核查的记录'),
+          stat('人工确认', summary.confirmed, '仅确认记录，不代表凭据可用'),
+          stat('近 24 小时新增', summary.recent24h, '仅统计有效时间戳'),
+          stat('证据引用', summary.evidenceRefs, '存在引用，不等于已核实'),
+          stat('关联资产', summary.relatedAssets, '非空资产 ID 去重'),
+          stat('已处置', summary.resolved, '已人工标记处置')),
+        h('div', { className: 'rt-card' },
+          h('h4', null, '按凭据类型归类'),
+          h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))', gap: 8 } },
+            h('button', { type: 'button', className: 'rt-btn' + (category === 'all' ? ' rt-btn-primary' : ''),
+              onClick: () => changeCategory('all') }, '全部 · ' + (summary.total ?? 0)),
+            (result?.categories || []).map((entry) =>
+              h('button', { type: 'button', key: entry.id,
+                className: 'rt-btn' + (category === entry.id ? ' rt-btn-primary' : ''),
+                onClick: () => changeCategory(entry.id),
+                title: entry.highPrivilege + ' 条带高权限标记' },
+                entry.label + ' · ' + entry.total))),
+          h('p', { className: 'rt-foot' }, '严格按保存的 secret_type 分类；模糊或通用密码类型归入“未分类”，不会猜测其用途。')),
+        h('div', { className: 'rt-card' },
+          h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } },
+            h('h4', { style: { margin: '0 8px 0 0' } }, '记录列表'),
+            h('input', { className: 'rt-input', style: { flex: '1 1 190px' }, value: draft,
+              placeholder: '搜索主机 / 账号 / 凭据类型',
+              onChange: (e) => setDraft(e.target.value),
+              onKeyDown: (e) => { if (e.key === 'Enter') applyQuery() } }),
+            h('button', { type: 'button', className: 'rt-btn', onClick: applyQuery }, '搜索'),
+            h('select', { className: 'rt-input', value: reviewStatus, title: '人工复核状态',
+              onChange: (e) => { setReviewStatus(e.target.value); setPage(0) } },
+              h('option', { value: 'all' }, '全部状态'),
+              reviewOptions.map(([id, label]) => h('option', { key: id, value: id }, label))),
+            h('button', { type: 'button', className: 'rt-btn', disabled: !result?.items?.length,
+              onClick: exportPageCsv }, '导出当前页（脱敏 CSV）')),
+          notice ? h('div', { role: 'status', className: 'rt-foot' }, notice) : null,
+          h('p', { className: 'rt-foot' },
+            result ? ('匹配 ' + result.total + ' 条 · 第 ' + (page + 1) + ' 页') : '尚未取得记录'),
+          result && !result.items.length ? h('div', { className: 'rt-empty' }, '当前筛选下没有记录') : null,
+          (result?.items || []).map((item) =>
+            h('div', { key: item.id, className: 'rt-cred' },
+              h('div', { className: 'rt-cred-head' },
+                h('span', { className: 'rt-cred-host' }, item.host || '未记录主机'),
+                h('span', { className: 'rt-tag' }, item.secret_type || '未知类型'),
+                item.high_privilege ? h('span', { className: 'rt-tag', title: '仅为权限文字标记，未经独立核实' }, '高权限·待核实') : null,
+                item.asset_id != null ? h('button', { type: 'button', className: 'rt-btn',
+                  onClick: () => props.onGotoAsset(item.asset_id) }, '查看资产 #' + item.asset_id) : null),
+              h('div', { className: 'rt-foot' },
+                '账号：' + (item.username || '未记录') + ' · ' +
+                (item.has_secret ? '已存凭据值（隐藏）' : '未存凭据值') + ' · ' +
+                (item.has_evidence_ref ? '有证据引用' : '无证据引用') + ' · ' +
+                (item.found_at || '时间未记录')),
+              h('div', { className: 'rt-foot', title: '以下是同一资产上保存的证据数量，并非该凭据的登录验证结果' },
+                '同资产 HTTP 证据：' + (item.related_asset_http_evidence || 0) +
+                ' · 同资产数据证明：' + (item.related_asset_data_proofs || 0)),
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 } },
+                h('span', { className: 'rt-foot' }, '人工复核状态（不执行登录验证）'),
+                h('select', { className: 'rt-input', value: item.review_status || 'pending',
+                  disabled: savingId !== null,
+                  onChange: (e) => saveSensitiveReview(item, e.target.value) },
+                  reviewOptions.map(([id, label]) => h('option', { key: id, value: id }, label))),
+                item.reviewed_at ? h('span', { className: 'rt-foot' }, '更新：' + item.reviewed_at) : null))),
+          result && result.total > limit ? h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 } },
+            h('button', { type: 'button', className: 'rt-btn', disabled: page === 0,
+              onClick: () => setPage((p) => Math.max(0, p - 1)) }, '上一页'),
+            h('button', { type: 'button', className: 'rt-btn', disabled: (page + 1) * limit >= result.total,
+              onClick: () => setPage((p) => p + 1) }, '下一页')) : null))
+    }
+
     /* ---------------------------------------------------------- 资产测绘 */
     function AssetsTab(props) {
       const eng = props.engagement
@@ -7851,7 +8087,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('button', { className: 'rt-btn' + (view === 'list' ? ' rt-btn-primary' : ''), onClick: () => setView('list') }, '列表'),
         h('button', { className: 'rt-btn' + (view === 'timeline' ? ' rt-btn-primary' : ''), title: '按发现时间看资产（什么时候发现、哪天收了多少）', onClick: () => setView('timeline') }, '发现时间'),
         h('button', { className: 'rt-btn' + (view === 'domain' ? ' rt-btn-primary' : ''), onClick: () => setView('domain') }, '域名'),
-        h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'))
+        h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'),
+        h('button', { className: 'rt-btn' + (view === 'sensitive' ? ' rt-btn-primary' : ''), onClick: () => setView('sensitive') }, '敏感情报'))
 
       /* ── 结论行：一屏看清家底，数字点一下就是筛选 ───────────────────── */
       const tests = (snapshot && snapshot.tests) || {}
@@ -8047,6 +8284,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       else if (view === 'web') pane = webPane
       /* 发现时间视图自带滚动容器，直接放进 rt-main 的 flex 里 */
       else if (view === 'timeline') pane = h(DiscoveryView, { engagement: eng, refreshKey: refreshKey })
+
+      if (view === 'sensitive') return h(SensitiveIntelTab, {
+        key: eng, engagement: eng, refreshKey,
+        onBack: () => setView('list'),
+        onGotoAsset: (assetId) => { setFocusAssetId(assetId); setView('list') },
+      })
 
       return h('div', { className: 'rt-split' }, side,
         h('div', { className: 'rt-main' },
@@ -10545,9 +10788,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           onChange: (e) => update(key, !!e.target.checked), style: { marginTop: 3 } }),
       h('span', null, h('b', null, label),
         h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 4 } }, description)))
-      return h('div', { className: 'rt-main' },
+      return h(props.embedded ? React.Fragment : 'div', props.embedded ? null : { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
-          h('b', null, '智能隐私中心'),
+          h('b', null, '本机隐私设置'),
           saved ? h('span', { className: 'rt-tag' }, savedManagement.mode === 'automatic' ? '自动管理' : '手动管理') : null,
           h('div', { className: 'rt-spacer' }),
           h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save },
@@ -10789,6 +11032,27 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onClick: runArtexOverview, style: { marginTop: 8 } }, artexOverviewBusy ? '读取中…' : '检查 ARTEX 隐私总览'),
             artexOverview && artexOverview.ok && artexOverview.summary
               ? h('div', { style: { fontSize: 12, marginTop: 8 } },
+                  h('b', null, 'ARTEX 任务网络（模式 B）'),
+                  h('div', null, '网络声明：' + (artexOverview.summary.network.mode === 'B'
+                    ? artexOverview.summary.network.finalExit === 'matched_expected'
+                      ? '模式 B · 预期最终出口 IP 已匹配（逐跳未核验）'
+                      : '模式 B · 机场 → VPS1（最终出口未验证）'
+                    : artexOverview.summary.network.mode === 'off' ? '未配置隔离 Runner' : '未确认模式 B')),
+                  h('div', null, '执行范围：' + (artexOverview.summary.network.scope === 'runner_builtins_intended'
+                    ? '仅内置 Runner 工具（配置意图）' : '未报告受控范围')),
+                  h('div', null, '出口验证：' + ({
+                    not_tested: '未执行',
+                    exit_ip_match: '单次出口 IP 与预期匹配',
+                    exit_ip_mismatch: '出口 IP 不匹配',
+                    probe_failed: '出口探测失败',
+                  }[artexOverview.summary.network.verification] || '未知')
+                    + ' · 实际出口：' + ({
+                      not_tested: '未验证',
+                      matches_expected: '匹配预期',
+                      mismatch: '不匹配',
+                      unavailable: '不可用',
+                    }[artexOverview.summary.network.actualEgress] || '未知')
+                    + ' · 失败关闭未验证，任务开始前校验未启用；逐跳、DNS/IPv6、模型、MCP、外部浏览器和 Windows 原生任务不在此覆盖范围。'),
                   h('b', null, '模型密钥'),
                   artexOverview.summary.modelKeys.state !== 'complete'
                     ? h('div', null, '数据库不可用，密钥未检查')
@@ -10848,12 +11112,124 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 '本地 scan-output 中的原始输出和必要执行清单继续保留，用于核对扫描结果；不会替你删除证据。')))))
     }
 
+    /* ---------------------------------------------------------- 防溯源工作流 */
+    function AntiForensicsTab(props) {
+      const eng = props.engagement
+      const [strategy, setStrategy] = React.useState('balanced')
+      const [preview, setPreview] = React.useState(null)
+      const [previewLoading, setPreviewLoading] = React.useState(false)
+      const [confirmDialog, setConfirmDialog] = React.useState(false)
+      const [executing, setExecuting] = React.useState(false)
+      const [auditLog, setAuditLog] = React.useState([])
+      const [finished, setFinished] = React.useState(false)
+      const [error, setError] = React.useState('')
+      const [message, setMessage] = React.useState('')
+
+      const strategyLabels = {
+        safe: { name: '安全（Minimal）', desc: '仅删除明显痕迹（浏览历史、Shell 历史）' },
+        balanced: { name: '平衡（Balanced）', desc: '标准清除（日志、临时文件、缓存）' },
+        aggressive: { name: '激进（Aggressive）', desc: '彻底清除（包括系统日志、取证工件）' }
+      }
+
+      const handlePreview = () => {
+        setPreviewLoading(true); setError(''); setPreview(null)
+        api({ op: 'antiforensicsPreview', strategy }).then((r) => {
+          setPreviewLoading(false)
+          if (!r || r.ok === false) { setError((r && r.error) || '预览失败'); return }
+          setPreview(r.artifacts || [])
+        }, (e) => { setPreviewLoading(false); setError(String((e && e.message) || e)) })
+      }
+
+      const handleExecute = () => {
+        setExecuting(true); setAuditLog([]); setError(''); setMessage(''); setFinished(false)
+        api({ op: 'antiforensicsExecute', strategy, engagement: eng }).then((r) => {
+          if (!r || r.ok === false) { 
+            setExecuting(false); setError((r && r.error) || '执行失败'); setFinished(true)
+            return 
+          }
+          if (r.auditLog) setAuditLog(r.auditLog)
+          setMessage((r.summary && r.summary.total ? '✓ 清除完成 · ' + r.summary.total + ' 个能力' : '✓ 清除完成'))
+          setExecuting(false); setFinished(true)
+        }, (e) => { 
+          setExecuting(false); setError(String((e && e.message) || e)); setFinished(true) 
+        })
+      }
+
+      return h('div', { className: 'rt-main' },
+        h('div', { className: 'rt-toolbar' },
+          h('b', null, '防溯源工作流'),
+          h('div', { className: 'rt-spacer' }),
+          h('button', { className: 'rt-btn', disabled: executing, onClick: () => { setPreview(null); setStrategy('balanced') } }, '重置')),
+        h('div', { className: 'rt-pane' },
+          error ? h('div', { className: 'rt-err' }, error) : null,
+          message ? h('div', { className: 'rt-card', style: { color: '#2f6b4f', background: 'color-mix(in srgb, #2f6b4f 10%, transparent)', border: '1px solid #2f6b4f33' } }, message) : null,
+
+          // 策略选择
+          h('div', { className: 'rt-card' },
+            h('h4', null, '1. 选择清除策略'),
+            Object.entries(strategyLabels).map(([key, { name, desc }]) =>
+              h('label', { key, style: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', cursor: 'pointer' } },
+                h('input', { type: 'radio', name: 'strategy', value: key, checked: strategy === key,
+                  disabled: executing, onChange: (e) => setStrategy(e.target.value) }),
+                h('span', null, h('b', null, name), h('div', { style: { fontSize: 11, opacity: 0.7, marginTop: 2 } }, desc))))),
+
+          // 操作按钮
+          h('div', { className: 'rt-card', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            h('button', { className: 'rt-btn', disabled: executing || previewLoading, onClick: handlePreview },
+              previewLoading ? '生成预览…' : '预览清除内容'),
+            h('button', { className: 'rt-btn rt-btn-primary', disabled: executing || !preview, onClick: () => setConfirmDialog(true) },
+              executing ? '执行中…' : '一键执行'),
+            h('button', { className: 'rt-btn', disabled: executing || !finished, onClick: () => { setAuditLog([]); setFinished(false) } }, 
+              '返回开始')),
+
+          // 预览窗口
+          preview ? h('div', { className: 'rt-card', style: { borderColor: '#f59e0b', borderLeftWidth: 3 } },
+            h('b', { style: { color: '#8a5a12', display: 'block', marginBottom: 8 } }, '预览：即将清除的项目（' + preview.length + '）'),
+            h('div', { style: { maxHeight: 300, overflowY: 'auto', fontSize: 12 } },
+              preview.map((item, i) => h('div', { key: i, style: { padding: '4px 0', borderBottom: '1px solid var(--dsw-alias-border-l1)' } },
+                '·',  item.type ? ' [' + item.type + '] ' : ' ',
+                h('span', { style: { fontFamily: 'ui-monospace', fontSize: 11 } }, item.path || item.name),
+                item.size ? ' (' + (item.size > 1024 * 1024 ? (item.size / 1024 / 1024).toFixed(1) + ' MB' : (item.size / 1024).toFixed(1) + ' KB') + ')' : '')),
+              h('div', { style: { padding: '8px 0', fontWeight: 600, color: 'var(--dsw-alias-brand-primary)' } }, '总计 ' + preview.length + ' 项')))
+            : null,
+
+          // 执行确认弹窗
+          confirmDialog ? h('div', { className: 'rt-modal', style: { background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+            h('div', { className: 'rt-card', style: { maxWidth: 420, padding: 16 } },
+              h('h4', { style: { color: '#9a3434', marginBottom: 12 } }, '⚠️ 此操作不可逆'),
+              h('div', { style: { fontSize: 12, lineHeight: 1.6, marginBottom: 12 } },
+                '即将使用 ',
+                h('b', null, strategyLabels[strategy].name),
+                ' 清除 ',
+                h('b', null, (preview && preview.length) || '?'),
+                ' 个项目。',
+                h('div', { style: { marginTop: 8, opacity: 0.8 } }, '预计耗时 2-5 分钟，请勿中断。')),
+              h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+                h('button', { className: 'rt-btn', disabled: executing, onClick: () => setConfirmDialog(false) }, '取消'),
+                h('button', { className: 'rt-btn rt-btn-primary', disabled: executing, onClick: () => { setConfirmDialog(false); handleExecute() } }, '确认清除'))))
+            : null,
+
+          // 操作日志
+          auditLog.length > 0 ? h('div', { className: 'rt-card' },
+            h('b', null, '操作日志（实时更新）'),
+            h('div', { style: { maxHeight: 400, overflowY: 'auto', marginTop: 8, fontFamily: 'ui-monospace', fontSize: 11 } },
+              h('div', { style: { display: 'grid', gridTemplateColumns: '100px 180px 60px 60px', gap: 8, paddingBottom: 8, borderBottom: '1px solid var(--dsw-alias-border-l1)', fontWeight: 600 } },
+                '时间', '能力', '结果', '耗时'),
+              auditLog.map((entry, i) => h('div', { key: i, style: { display: 'grid', gridTemplateColumns: '100px 180px 60px 60px', gap: 8, padding: '4px 0', borderBottom: '1px solid var(--dsw-alias-border-l1)', alignItems: 'center' } },
+                h('span', null, entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : ''),
+                h('span', { title: entry.capability }, entry.capability.substring(0, 20)),
+                h('span', { style: { color: entry.status === 'success' ? '#2f6b4f' : entry.status === 'running' ? '#8a5a12' : '#9a3434', fontWeight: 600 } }, 
+                  entry.status === 'success' ? '✓' : entry.status === 'running' ? '⏳' : '✗'),
+                h('span', null, entry.duration ? (entry.duration / 1000).toFixed(1) + 's' : '')))))
+            : null))
+    }
+
     /* ---------------------------------------------------------- 测绘中心：平台总览 + 离线资产检索 */
     let intelSourcesWriteQueue = Promise.resolve()
     function LocalAssetSearchTab(props) {
       const eng = props.engagement
-      const [surveyPage, setSurveyPage] = React.useState('platforms')
-      const surveyPages = [['platforms', '平台管理'], ['assets', '本地资产'], ['external', '外部情报与历史'], ['active', '本机测绘']]
+      const [surveyPage, setSurveyPage] = React.useState('overview')
+      const surveyPages = [['overview', '总览'], ['sources', '数据源'], ['query', '开始测绘'], ['assets', '本地资产'], ['external', '外部情报与历史'], ['active', '本机测绘']]
       const surveyCard = (id, attrs, ...children) => surveyPage === id ? h('div', attrs, ...children) : null
       const [draft, setDraft] = React.useState('domain="example.org" && port=443')
       const [query, setQuery] = React.useState('')
@@ -10999,13 +11375,174 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!eng || !intelConsent || !intelTarget.trim() || intelBusy) return
         setIntelBusy(true); setIntelResult(null)
         setIntelConsent(false)
+        const selectedSources = chosen.selected.filter(source => ['internetdb', 'shodan', 'censys'].includes(source))
         api({ op: 'scopedIntelLookup', engagement: eng, target: intelTarget.trim(),
-          sources: surveyPreferences.includeShodan ? ['internetdb', 'shodan'] : ['internetdb'],
+          sources: selectedSources.length ? selectedSources : ['internetdb'],
           confirmExternal: true, commit: surveyPreferences.saveIntel }).then(r => {
           setIntelBusy(false); setIntelResult(r)
           if (r?.imported) setRefresh(n => n + 1)
         }, () => { setIntelBusy(false); setIntelResult({ error: '查询失败' }) })
       }
+      const freeSources = [
+        { id: 'local', name: '本地资产库', status: 'SQLite · 离线检索', desc: '当前项目的资产、端口、指纹与证据' },
+        { id: 'internetdb', name: 'InternetDB', status: '免 Key · 单 IP', desc: '公开历史端口线索' },
+        { id: 'ct', name: '证书透明度', status: 'crt.sh · 子域线索', desc: '历史证书名称；需要 *.域名 授权' },
+        { id: 'dns', name: 'DNS 查询', status: 'A / AAAA / CNAME', desc: '系统 DNS 解析器' },
+      ]
+      const [quickSource, setQuickSource] = React.useState('internetdb')
+      const [quickTarget, setQuickTarget] = React.useState('')
+      const [quickConsent, setQuickConsent] = React.useState(false)
+      const [quickBusy, setQuickBusy] = React.useState(false)
+      const [quickResponse, setQuickResponse] = React.useState(null)
+      const [quickError, setQuickError] = React.useState('')
+      const [quickPage, setQuickPage] = React.useState(1)
+      const quickRevision = React.useRef(0)
+      const [fofaConnection, setFofaConnection] = React.useState(null)
+      const [fofaSettings, setFofaSettings] = React.useState(false)
+      const [fofaUrl, setFofaUrl] = React.useState('https://fofa.info')
+      const [fofaKey, setFofaKey] = React.useState('')
+      const [fofaClear, setFofaClear] = React.useState(false)
+      const [fofaBusy, setFofaBusy] = React.useState(false)
+      const [fofaFeedback, setFofaFeedback] = React.useState('')
+      const [fofaTest, setFofaTest] = React.useState(null)
+      const fofaDraftChanged = !!fofaKey.trim() || fofaClear ||
+        fofaUrl.trim() !== (fofaConnection?.baseUrl || 'https://fofa.info')
+      const [censysConnection, setCensysConnection] = React.useState(null)
+      const [censysSettings, setCensysSettings] = React.useState(false)
+      const [censysPat, setCensysPat] = React.useState('')
+      const [censysOrgId, setCensysOrgId] = React.useState('')
+      const [censysClearPat, setCensysClearPat] = React.useState(false)
+      const [censysClearOrg, setCensysClearOrg] = React.useState(false)
+      const [censysBusy, setCensysBusy] = React.useState(false)
+      const [censysFeedback, setCensysFeedback] = React.useState('')
+      const [censysTest, setCensysTest] = React.useState(null)
+      const censysDraftChanged = !!censysPat.trim() || censysClearPat || censysClearOrg ||
+        censysOrgId.trim() !== (censysConnection?.organizationId || '')
+      React.useEffect(() => {
+        let live = true
+        api({ op: 'fofaConnectionGet' }).then(r => {
+          if (!live) return
+          if (r?.ok) { setFofaConnection(r); setFofaUrl(r.baseUrl) }
+          else setFofaFeedback(r?.error || 'FOFA 配置读取失败')
+        }, () => { if (live) setFofaFeedback('FOFA 配置读取失败') })
+        return () => { live = false }
+      }, [props.refreshKey])
+      React.useEffect(() => {
+        let live = true
+        api({ op: 'censysConnectionGet' }).then(r => {
+          if (!live) return
+          if (r?.ok) {
+            setCensysConnection(r)
+            setCensysOrgId(r.organizationId || '')
+          } else setCensysFeedback(r?.error || 'Censys 配置读取失败')
+        }, () => { if (live) setCensysFeedback('Censys 配置读取失败') })
+        return () => { live = false }
+      }, [props.refreshKey])
+      React.useEffect(() => {
+        quickRevision.current += 1
+        setQuickConsent(false); setQuickResponse(null); setQuickError('')
+        setQuickBusy(false); setQuickPage(1)
+      }, [eng])
+      const resetQuick = () => {
+        quickRevision.current += 1
+        setQuickConsent(false); setQuickResponse(null); setQuickError('')
+        setQuickBusy(false); setQuickPage(1)
+      }
+      const openQuick = id => {
+        resetQuick(); setQuickSource(id); setSurveyPage('query')
+      }
+      const changeFofaPage = next => {
+        if (quickBusy || next < 1 || next > 20) return
+        quickRevision.current += 1
+        setQuickPage(next); setQuickConsent(false); setQuickResponse(null)
+        setQuickError('请确认新页码后重新查询')
+      }
+      const runQuick = () => {
+        const target = quickTarget.trim()
+        const source = quickSource, pageNumber = quickPage
+        if (!eng || quickBusy) return
+        if (!target) { setQuickError('请输入已登记目标或本地查询表达式'); return }
+        if (quickSource !== 'local' && !quickConsent) {
+          setQuickError('请先确认本次外部查询'); return
+        }
+        const req = quickSource === 'local'
+          ? { op: 'localAssetSearch', engagement: eng, query: target, limit: 30 }
+          : quickSource === 'fofa'
+            ? { op: 'fofaSearch', engagement: eng, target, page: pageNumber, confirmExternal: true }
+            : quickSource === 'internetdb'
+              ? { op: 'scopedIntelLookup', engagement: eng, target, sources: ['internetdb'],
+                confirmExternal: true, commit: false }
+              : quickSource === 'censys'
+                ? { op: 'scopedIntelLookup', engagement: eng, target, sources: ['censys'],
+                  confirmExternal: true, commit: false }
+                : { op: quickSource === 'ct' ? 'scopedCtLookup' : 'scopedDnsLookup',
+                engagement: eng, target, confirmExternal: true, commit: false }
+        const revision = ++quickRevision.current
+        setQuickBusy(true); setQuickError(''); setQuickResponse(null); setQuickConsent(false)
+        api(req).then(r => {
+          if (revision !== quickRevision.current) return
+          setQuickBusy(false)
+          if (!r?.ok) setQuickError(r?.error || '查询未成功')
+          else setQuickResponse({ ...r, quickSource: source })
+        }, () => {
+          if (revision !== quickRevision.current) return
+          setQuickBusy(false); setQuickError('查询失败')
+        })
+      }
+      const saveFofa = () => {
+        if (fofaBusy) return
+        setFofaBusy(true); setFofaFeedback('正在保存…'); setFofaTest(null)
+        api({ op: 'fofaConnectionSave', baseUrl: fofaUrl.trim(),
+          ...(fofaKey.trim() ? { key: fofaKey.trim() } : {}),
+          ...(fofaClear ? { clearKey: true } : {}) }).then(r => {
+          setFofaBusy(false)
+          if (!r?.ok) { setFofaFeedback(r?.error || '保存失败'); return }
+          setFofaConnection(r); setFofaUrl(r.baseUrl); setFofaKey(''); setFofaClear(false)
+          setFofaFeedback('设置已保存，尚未测试连接')
+        }, () => { setFofaBusy(false); setFofaFeedback('保存失败') })
+      }
+      const testFofa = () => {
+        if (fofaBusy || !fofaConnection?.configured) return
+        setFofaBusy(true); setFofaTest(null)
+        api({ op: 'fofaConnectionTest' }).then(r => {
+          setFofaBusy(false); setFofaTest(r || { ok: false, error: '没有收到回执' })
+        }, () => { setFofaBusy(false); setFofaTest({ ok: false, error: '连接测试失败' }) })
+      }
+      const saveCensys = () => {
+        if (censysBusy || !censysDraftChanged) return
+        setCensysBusy(true); setCensysFeedback('正在保存…'); setCensysTest(null)
+        const request = {
+          ...(censysPat.trim() ? { token: censysPat.trim() } : {}),
+          ...(!censysClearOrg && censysOrgId.trim() !== (censysConnection?.organizationId || '')
+            ? { organizationId: censysOrgId.trim() } : {}),
+          ...(censysClearPat ? { clearToken: true } : {}),
+          ...(censysClearOrg ? { clearOrganizationId: true } : {}),
+        }
+        api({ op: 'censysConnectionSave', ...request }).then(r => {
+          setCensysBusy(false)
+          if (!r?.ok) { setCensysFeedback(r?.error || '保存失败'); return }
+          setCensysConnection(r); setCensysOrgId(r.organizationId || '')
+          setCensysPat(''); setCensysClearPat(false); setCensysClearOrg(false)
+          setCensysFeedback('设置已保存，尚未测试连接')
+        }, () => { setCensysBusy(false); setCensysFeedback('保存失败') })
+      }
+      const testCensys = () => {
+        if (censysBusy || !censysConnection?.configured || censysDraftChanged) return
+        setCensysBusy(true); setCensysTest(null)
+        api({ op: 'censysConnectionTest' }).then(r => {
+          setCensysBusy(false); setCensysTest(r || { ok: false, error: '没有收到回执' })
+        }, () => { setCensysBusy(false); setCensysTest({ ok: false, error: '连接测试失败' }) })
+      }
+      const rows = quickResponse?.quickSource === 'ct' ? quickResponse.names || []
+        : quickResponse?.quickSource === 'dns' ? quickResponse.records || []
+          : ['internetdb', 'censys'].includes(quickResponse?.quickSource) ? quickResponse.ports || []
+            : quickResponse?.items || []
+      const formatRow = item => quickResponse.quickSource === 'ct' ? item.name
+        : quickResponse.quickSource === 'dns' ? item.type + ' · ' + item.value
+          : ['internetdb', 'censys'].includes(quickResponse.quickSource) ? item.port + '/' + item.proto
+            : quickResponse.quickSource === 'fofa' ? [item.host, item.ip, item.port,
+              item.title, item.product, item.observedAt].filter(Boolean).join(' · ')
+              : [item.primary_name, item.ip].filter(Boolean).join(' · ')
       const limit = 30
       React.useEffect(() => {
         setSubConsent(false); setCtConsent(false); setDnsConsent(false); setIntelConsent(false)
@@ -11151,64 +11688,178 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             className: 'rt-btn' + (surveyPage === id ? ' rt-btn-primary' : ''),
             'aria-pressed': surveyPage === id, onClick: () => setSurveyPage(id) }, label))),
         h('div', { className: 'rt-pane rt-survey-pane' },
-          !eng && surveyPage !== 'platforms' ? h('div', { className: 'rt-card' }, '请在顶部选择靶标，再查询或查看该项目的记录。平台管理不需要靶标。') : null,
-          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.75 } },
-            h('h4', null, '网络空间测绘平台 · 总介绍'),
-            h('div', null, '这类平台索引互联网上公开可见的主机、端口、服务、网页指纹和证书，适合与本地资产记录交叉核对。'
-              + ' 各平台收录范围、查询语言、账号要求和额度不同。'),
-            h('div', { style: { marginTop: 5 } },
-              '本地资产支持 SQLite 检索；FOFA 保留原有专项技能。外部情报支持 InternetDB 与 Shodan 单 IP 查询；其余平台提供官网入口。')),
-          surveyCard('platforms', { className: 'rt-card', style: { fontSize: 12, lineHeight: 1.65 } },
-            h('div', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 } },
-              h('h4', { style: { margin: 0 } }, '选择常用测绘平台'),
-              h('span', { className: 'rt-tag' }, '已选 ' + chosen.selected.length + ' / ' + sources.length),
-              h('div', { className: 'rt-spacer' }),
-              h('button', { className: 'rt-btn rt-btn-primary', disabled: sourceBusy || !sources.length,
-                onClick: saveSources }, sourceBusy ? '保存中…' : '保存平台选择')),
-            h('div', { style: { fontSize: 11, opacity: 0.8, margin: '5px 0 9px' } },
-              '勾选后自动保存；选择只决定本页展示偏好，不会自动提交外部查询。免费起步优先本地库与 InternetDB；平台 Key 是否配置不代表额度或连接已验证。'),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 } },
-              [['免费起步', ['local', 'shodan']], ['国内优先', ['local', 'fofa', 'zoomeye', 'quake', 'hunter']], ['全球参考', ['local', 'shodan', 'censys', 'netlas']]].map(([label, selected]) =>
-                h('button', { key: label, type: 'button', className: 'rt-btn', disabled: !sources.length,
-                  onClick: () => saveSelection({ selected, preferred: 'local' }) }, label))),
-            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '8px 14px' } },
-              sources.map((source) => h('label', { key: source.id, style: { display: 'flex',
-                  alignItems: 'center', gap: 5, cursor: 'pointer' } },
-                h('input', { type: 'checkbox', checked: chosen.selected.includes(source.id),
-                  onChange: () => toggleSource(source.id) }),
-                source.name))),
-            chosen.selected.length
-              ? h('label', { style: { display: 'block', marginTop: 10 } },
-                  '首选平台 ',
-                  h('select', { className: 'rt-input', value: chosen.preferred,
-                    onChange: (e) => saveSelection({ ...sourceDraft.current, preferred: e.target.value }) },
-                    activeSources.map((x) => h('option', { key: x.id, value: x.id }, x.name))))
-              : h('div', { style: { fontSize: 11, opacity: 0.7, marginTop: 8 } },
-                  '当前没有选中平台；仍可切换到本地资产进行检索。'),
-            savedSources && sources.length ? h('div', { style: { opacity: 0.72, fontSize: 11, marginTop: 7 } },
-              '已保存 ' + savedSources.selected.length + ' 家 · 首选 '
-                + ((sources.find((x) => x.id === savedSources.preferred) || {}).name || '本地资产库'))
-              : null,
-            sourceMsg ? h('div', { className: 'rt-foot', style: { marginTop: 8 } }, sourceMsg) : null),
-          surveyPage === 'platforms' && activeSources.map((source) => h('div', { key: source.id, className: 'rt-card',
-            style: { fontSize: 12, lineHeight: 1.7 } },
-            h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } },
-              h('b', null, source.name),
+          !eng && !['overview','sources'].includes(surveyPage) ? h('div', { className: 'rt-card' }, '请先在顶部选择项目，才能查询项目记录。') : null,
+          surveyCard('overview', { className: 'rt-card' },
+            h('h4', null, '资产测绘'),
+            h('div', { className: 'rt-foot' },
+              '本地资产、InternetDB、证书透明度和 DNS 查询无需商业 API Key。FOFA 需要配置连接。'),
+            h('button', { className: 'rt-btn rt-btn-primary', style: { marginTop: 10 },
+              onClick: () => setSurveyPage('query') }, '开始测绘')),
+          surveyCard('overview', { className: 'rt-card' },
+            h('h4', null, '数据源'),
+            h('div', { style: { display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 9 } },
+              freeSources.map(x => h('div', { className: 'rt-card', key: x.id, style: { margin: 0 } },
+                h('b', null, x.name),
+                h('div', { className: 'rt-foot' }, x.status),
+                h('div', { style: { fontSize: 12, margin: '8px 0' } }, x.desc),
+                h('button', { className: 'rt-btn', onClick: () =>
+                  x.id === 'local' ? setSurveyPage('assets') : openQuick(x.id) }, '查询'))))),
+          surveyCard('overview', { className: 'rt-card' },
+            h('b', null, 'FOFA · ' + (fofaConnection?.configured ? 'Key 已配置（连接未验证）' : 'Key 未配置')),
+            h('div', { className: 'rt-foot' }, '通过 FOFA 官方或兼容 API 查询已登记目标。'),
+            h('button', { className: 'rt-btn', style: { marginTop: 8 },
+              onClick: () => { setSurveyPage('sources'); setFofaSettings(true) } }, 'FOFA 设置')),
+          surveyCard('sources', { className: 'rt-card' },
+            h('h4', null, '无需 Key'),
+            freeSources.map(x => h('div', { key: x.id, style: { display: 'flex', flexWrap: 'wrap',
+              gap: 10, alignItems: 'center', padding: '9px 0',
+              borderBottom: '1px solid var(--dsw-border, #26334c)' } },
+              h('div', { style: { flex: '1 1 220px', fontSize: 12 } },
+                h('b', null, x.name), h('div', { className: 'rt-foot' }, x.status + ' · ' + x.desc)),
+              h('button', { className: 'rt-btn',
+                onClick: () => x.id === 'local' ? setSurveyPage('assets') : openQuick(x.id) }, '查询')))),
+          surveyCard('sources', { className: 'rt-card', style: { fontSize: 12 } },
+            h('h4', null, '单 IP 被动 API 来源'),
+            h('div', { className: 'rt-foot' },
+              '勾选后，下面的被动情报查询会调用对应 API。未勾选时使用 InternetDB 免 Key 查询；网站入口不会自动访问。每次外部查询仍需单次确认。'),
+            sources.filter(x => ['shodan', 'censys'].includes(x.id)).map(x => h('label', {
+              key: x.id, style: { display: 'flex', gap: 9, alignItems: 'flex-start', padding: '9px 0',
+                borderBottom: '1px solid var(--dsw-border, #26334c)' },
+            },
+              h('input', { type: 'checkbox', checked: chosen.selected.includes(x.id), disabled: sourceBusy,
+                onChange: () => toggleSource(x.id), style: { marginTop: 3 } }),
+              h('div', { style: { flex: 1 } },
+                h('b', null, x.name),
+                h('div', { className: 'rt-foot' }, (sourceStatus[x.id]?.label || '状态未读取')
+                  + ' · ' + (sourceStatus[x.id]?.quota || '额度未检查')),
+                h('div', { className: 'rt-foot' }, x.details)))),
+            h('div', { className: 'rt-foot', style: { marginTop: 8 } },
+              '当前选择：' + (activeSources.filter(x => ['shodan', 'censys'].includes(x.id)).map(x => x.name).join('、') || 'InternetDB 免 Key')),
+            sourceMsg ? h('div', { className: sourceMsg.startsWith('保存失败') ? 'rt-err' : 'rt-foot' }, sourceMsg) : null),
+          surveyCard('sources', { className: 'rt-card', style: { fontSize: 12 } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+              h('h4', { style: { margin: 0 } }, 'FOFA'),
               h('span', { className: 'rt-tag' },
-                source.mode === 'local' ? '已接通 · 离线查询'
-                  : source.mode === 'existing-skill' ? '保留专项技能 · 需 Key'
-                    : source.mode === 'scoped-api' ? '单 IP 被动查询 · 已接通' : '官网入口 · API 未接入'),
-              h('span', { style: { opacity: 0.75 } }, source.language)),
-            h('div', null, source.focus),
-            sourceStatus[source.id] ? h('div', { className: 'rt-foot' },
-              sourceStatus[source.id].label + ' · 额度：' + sourceStatus[source.id].quota) : null,
-            h('div', { style: { opacity: 0.85 } }, source.details),
-            source.url ? h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer',
-              style: { display: 'inline-block', marginTop: 5 } }, '访问 ' + source.name + ' 官网') : null)),
+                fofaConnection?.configured ? 'Key 已配置（待测试）' : 'Key 未配置'),
+              h('div', { className: 'rt-spacer' }),
+              h('button', { className: 'rt-btn', onClick: () => setFofaSettings(v => !v) },
+                fofaSettings ? '收起设置' : '设置连接'),
+              h('button', { className: 'rt-btn rt-btn-primary',
+                disabled: !fofaConnection?.configured, onClick: () => openQuick('fofa') }, '查询')),
+            h('div', { className: 'rt-foot' }, '接口地址：' + (fofaConnection?.baseUrl || 'https://fofa.info')),
+            fofaSettings ? h('div', { style: { display: 'grid', gap: 9, marginTop: 12 } },
+              h('label', null, '接口地址（HTTPS，须兼容 FOFA API）',
+                h('input', { className: 'rt-input', style: { width: '100%' }, disabled: fofaBusy,
+                  value: fofaUrl, onChange: e => { setFofaUrl(e.target.value); setFofaTest(null); setFofaFeedback('') } })),
+              h('label', null, 'FOFA API Key',
+                h('input', { type: 'password', autoComplete: 'new-password', className: 'rt-input',
+                  style: { width: '100%' }, disabled: fofaBusy, value: fofaKey,
+                  placeholder: fofaConnection?.configured ? '留空保留已保存 Key' : '请输入 Key',
+                  onChange: e => { setFofaKey(e.target.value); setFofaTest(null); setFofaFeedback('') } })),
+              fofaConnection?.configured ? h('label', null,
+                h('input', { type: 'checkbox', checked: fofaClear, disabled: fofaBusy,
+                  onChange: e => { setFofaClear(e.target.checked); setFofaTest(null) } }), ' 清除已保存 Key') : null,
+              h('div', { className: 'rt-foot' }, '更换接口地址需要同时提交该服务的 Key。'),
+              h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+                h('button', { className: 'rt-btn rt-btn-primary', disabled: fofaBusy,
+                  onClick: saveFofa }, fofaBusy ? '处理中…' : '保存配置'),
+                h('button', { className: 'rt-btn', disabled: fofaBusy || !fofaConnection?.configured || fofaDraftChanged,
+                  onClick: testFofa }, '测试连接')),
+              fofaDraftChanged ? h('div', { className: 'rt-foot' }, '保存修改后才能测试当前连接。') : null,
+              fofaFeedback ? h('div', { className: 'rt-foot' }, fofaFeedback) : null,
+              fofaTest ? h('div', { className: fofaTest.ok ? 'rt-foot' : 'rt-err' },
+                fofaTest.ok ? '账户接口连接成功 · ' + fofaTest.testedAt : fofaTest.error) : null) : null),
+          surveyCard('sources', { className: 'rt-card', style: { fontSize: 12 } },
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+              h('h4', { style: { margin: 0 } }, 'Censys Platform API v3'),
+              h('span', { className: 'rt-tag' }, censysTest?.ok ? '连接已验证' : censysConnection?.storageMode === 'encrypted-local' ? 'PAT 已加密保存（待测试）'
+                : censysConnection?.storageMode === 'encrypted-local-locked' ? 'PAT 已保存，但密钥不可用'
+                : censysConnection?.storageMode === 'environment' ? 'PAT 来自环境变量'
+                  : censysConnection?.storageMode === 'legacy-plaintext' ? '旧版明文 PAT（建议加密迁移）'
+                    : censysConnection?.configured ? 'PAT 已配置（待测试）' : 'PAT 未配置'),
+              h('div', { className: 'rt-spacer' }),
+              h('button', { className: 'rt-btn', onClick: () => setCensysSettings(v => !v) },
+                censysSettings ? '收起设置' : '设置连接'),
+              h('button', { className: 'rt-btn rt-btn-primary',
+                disabled: !censysConnection?.configured, onClick: () => openQuick('censys') }, '单 IP 查询')),
+            h('div', { className: 'rt-foot' },
+              '官方 API · 单 IP 被动主机查询 · 每次查询消耗 1 credit。连接测试只访问账户额度接口，不执行主机查询。'),
+            censysSettings ? h('div', { style: { display: 'grid', gap: 9, marginTop: 12 } },
+              h('label', null, 'Personal Access Token（PAT）',
+                h('input', { type: 'password', autoComplete: 'new-password', className: 'rt-input',
+                  style: { width: '100%' }, disabled: censysBusy, value: censysPat,
+                  placeholder: censysConnection?.configured ? '留空保留已保存 PAT' : '请输入 PAT',
+                  onChange: e => { setCensysPat(e.target.value); setCensysClearPat(false); setCensysTest(null); setCensysFeedback('') } })),
+              h('label', null, 'Organization ID（可选 UUID）',
+                h('input', { className: 'rt-input', style: { width: '100%' }, disabled: censysBusy,
+                  value: censysOrgId, placeholder: 'Free 用户留空；组织账号可填写 UUID',
+                  onChange: e => { setCensysOrgId(e.target.value); setCensysClearOrg(false); setCensysTest(null); setCensysFeedback('') } })),
+              censysConnection?.configured && censysConnection?.storageMode !== 'environment' ? h('label', null,
+                h('input', { type: 'checkbox', checked: censysClearPat, disabled: censysBusy,
+                  onChange: e => { setCensysClearPat(e.target.checked); setCensysTest(null) } }), ' 清除已保存 PAT') : null,
+              censysConnection?.organizationConfigured ? h('label', null,
+                h('input', { type: 'checkbox', checked: censysClearOrg, disabled: censysBusy,
+                  onChange: e => { setCensysClearOrg(e.target.checked); setCensysTest(null) } }), ' 清除已保存 Organization ID') : null,
+              h('div', { className: 'rt-foot' },
+                '本地 PAT 使用 DSH_PURGE_SECRET_KEY 的 AES-256-GCM 加密保存（需 64 位十六进制密钥）；未配置密钥时可通过进程环境变量 CENSYS_PAT 临时使用；本地加密保存的 PAT 优先于环境变量。PAT 不回显到界面或日志。Starter / Search / Core 组织账号可能需要 API Access 角色。'),
+              h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+                h('button', { className: 'rt-btn rt-btn-primary', disabled: censysBusy || !censysDraftChanged || (!!censysPat.trim() && !censysConnection?.vaultEnabled),
+                  onClick: saveCensys }, censysBusy ? '处理中…' : '保存配置'),
+                h('button', { className: 'rt-btn', disabled: censysBusy || !censysConnection?.configured || censysDraftChanged,
+                  onClick: testCensys }, '测试连接')),
+              censysPat.trim() && !censysConnection?.vaultEnabled ? h('div', { className: 'rt-err' }, '先设置 DSH_PURGE_SECRET_KEY（64 位十六进制字符）才能加密保存 PAT；也可在启动环境中设置 CENSYS_PAT。') : null,
+              censysConnection?.credentialError ? h('div', { className: 'rt-err' }, censysConnection.credentialError + '；可以清除旧凭据后重新保存。') : null,
+              censysDraftChanged ? h('div', { className: 'rt-foot' }, '保存修改后才能测试当前连接。') : null,
+              censysFeedback ? h('div', { className: 'rt-foot' }, censysFeedback) : null,
+              censysTest ? h('div', { className: censysTest.ok ? 'rt-foot' : 'rt-err' },
+                censysTest.ok ? '账户额度接口连接成功 · ' + censysTest.testedAt + ' · 不消耗查询额度' : censysTest.error) : null) : null),
+          surveyCard('query', { className: 'rt-card' },
+            h('h4', null, '开始测绘'),
+            h('div', { className: 'rt-foot' }, '选择来源，填写当前项目已登记的 IP / 域名或本地检索表达式。'),
+            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 } },
+              h('select', { className: 'rt-input', value: quickSource,
+                onChange: e => { resetQuick(); setQuickSource(e.target.value) } },
+                [...freeSources, { id: 'fofa', name: 'FOFA' }, { id: 'censys', name: 'Censys' }].map(x =>
+                  h('option', { key: x.id, value: x.id }, x.name))),
+              h('input', { className: 'rt-input', style: { flex: '1 1 250px' },
+                value: quickTarget,
+                placeholder: quickSource === 'local' ? '例如 domain="example.test"'
+                  : ['internetdb', 'censys'].includes(quickSource) ? '已登记范围内的单个 IP' : '已登记的单个域名或 IP',
+                onChange: e => { resetQuick(); setQuickTarget(e.target.value) } })),
+            quickSource === 'censys' ? h('div', { className: 'rt-foot', style: { marginTop: 8 } },
+              'Censys Platform API v3 单 IP 查询会消耗 1 credit；测试连接不消耗查询额度。') : null,
+            quickSource !== 'local' ? h('label', { style: { display: 'block', marginTop: 12 } },
+              h('input', { type: 'checkbox', checked: quickConsent,
+                onChange: e => setQuickConsent(e.target.checked) }),
+              ' 确认目标已获授权，同意向所选外部来源提交本次查询') : null,
+            h('div', { style: { marginTop: 12, display: 'flex', gap: 8 } },
+              h('button', { className: 'rt-btn rt-btn-primary', disabled: !eng || quickBusy,
+                onClick: runQuick }, quickBusy ? '正在查询…' : '查询'),
+              quickSource === 'fofa' ? h('button', { className: 'rt-btn',
+                onClick: () => { setSurveyPage('sources'); setFofaSettings(true) } }, 'FOFA 设置') : null),
+            quickSource === 'fofa' ? h('div', { style: { display: 'flex', gap: 8,
+              alignItems: 'center', flexWrap: 'wrap', marginTop: 10 } },
+              h('button', { className: 'rt-btn', disabled: quickBusy || quickPage <= 1,
+                onClick: () => changeFofaPage(quickPage - 1) }, '上一页'),
+              h('span', { className: 'rt-foot' }, 'FOFA 第 ' + quickPage + ' 页 / 最多 20 页'),
+              h('button', { className: 'rt-btn',
+                disabled: quickBusy || quickPage >= 20 ||
+                  (quickResponse?.page === quickPage && !quickResponse.hasNext),
+                onClick: () => changeFofaPage(quickPage + 1) }, '下一页')) : null,
+            quickError ? h('div', { className: 'rt-err' }, quickError) : null,
+            quickResponse ? h('div', { style: { marginTop: 12, fontSize: 12 } },
+              h('b', null, '本页范围内记录：' + rows.length + (Number.isInteger(quickResponse.total)
+                ? ' · 平台返回总数 ' + quickResponse.total : '')),
+              h('div', { className: 'rt-foot' }, quickResponse.note || '仅展示本次查询结果。'),
+              maskAssets ? h('div', { className: 'rt-foot' }, '资产详情已遮蔽') :
+                rows.slice(0, 40).map((row, i) =>
+                  h('div', { key: i, style: { padding: '7px 0', overflowWrap: 'anywhere' } }, formatRow(row))),
+              !rows.length ? h('div', { className: 'rt-foot' }, '没有符合条件的记录') : null) : null),
           surveyCard('external', { className: 'rt-card', style: { fontSize: 12 } },
             h('b', null, '测绘默认选项'),
             h('div', { className: 'rt-foot' },
-              '使用 subfinder、Shodan 与默认保存结果的勾选会自动保存，刷新后回显；'
+              '使用 subfinder 与默认保存结果的勾选会自动保存，刷新后回显；'
               + '向 crt.sh、DNS、第三方工具等外部服务提交目标的授权不会保存，每次操作需明确确认。'),
             h('div', { className: surveyPreferencesMessage.startsWith('保存失败') ? 'rt-err' : 'rt-foot' },
               surveyPreferencesBusy ? '正在保存…' : surveyPreferencesMessage)),
@@ -11334,12 +11985,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           surveyCard('external', { className: 'rt-card' },
             h('h4', null, '外部被动情报 · 单 IP'),
             h('div', { style: { fontSize: 12, marginBottom: 8 } },
-              'InternetDB 免费免 Key；可选 Shodan API（服务端 SHODAN_API_KEY）。只查询项目已登记范围内的单个 IP，不主动探测目标。历史线索不会修改实时端口状态；可保存全部观察并离线查询。'),
+              '按当前选择调用 InternetDB / Shodan / Censys 的单 IP 被动查询；Censys 每个 IP 消耗 1 credit。仅提交已登记范围内的 IP，不主动探测目标，历史线索不会修改实时端口状态。'),
             h('input', { className: 'rt-input', value: intelTarget, placeholder: '已登记范围内的 IP',
               onChange: e => { setIntelTarget(e.target.value); setIntelConsent(false); setIntelResult(null) } }),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8, fontSize: 12 } },
-              h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.includeShodan, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
-                onChange: e => { updateSurveyPreference('includeShodan', e.target.checked); setIntelConsent(false) } }), ' 加查 Shodan API'),
               h('label', null, h('input', { type: 'checkbox', checked: intelConsent,
                 onChange: e => setIntelConsent(e.target.checked) }), ' 同意将该 IP 提交给所选外部平台'),
               h('label', null, h('input', { type: 'checkbox', checked: surveyPreferences.saveIntel, disabled: !surveyPreferencesReady || surveyPreferencesBusy,
@@ -11496,12 +12145,29 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return next
     }
 
+    // Display only evidence actually observed; path presence is not task readiness.
+    function envToolReadiness(tool, check) {
+      if (!tool.path) return 'missing'
+      if (check?.status === 'runnable' || check?.status === 'probe_verified') return 'verified'
+      if (check && ['failed', 'timeout', 'degraded', 'missing'].includes(check.status)) return 'failed'
+      return tool.canProbe ? 'unchecked' : 'path-only'
+    }
+    function envToolSummary(items, checks) {
+      const out = { total: 0, located: 0, verified: 0, unchecked: 0, 'path-only': 0, failed: 0, missing: 0 }
+      for (const item of items || []) {
+        out.total++
+        if (item.path) out.located++
+        out[envToolReadiness(item, (checks || {})[item.id])]++
+      }
+      return out
+    }
+
     function EnvTab(props) {
       const refreshKey = props.refreshKey || 0
       const [section, setSection] = React.useState(props.initialSection || 'summary')
       const sections = [
         ['summary', '环境总览'], ['execution', '执行环境'], ['tools', '工具管理'],
-        ['local-search', '测绘中心'], ['network', '网络配置'], ['diagnostics', '诊断与修复'],
+        ['local-search', '测绘中心'], ['network', '网络配置'], ['diagnostics', '诊断与修复'], ['privacy', '本机隐私'],
       ]
       const sectionCard = (id, attrs, ...children) => section === id ? h('div', attrs, ...children) : null
       const [data, setData] = React.useState(null)
@@ -11533,9 +12199,167 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           setNetworkCheck(prev => ({ ...prev, [kind]: { ok: false, error: String(e?.message || e) } }))
         } finally { setNetworkChecking('') }
       }
+      // Explicit, plugin-scoped Mode B setup. No TUN or subscription access.
+      const emptyModeBVps = () => ({ server: '', port: '443', uuid: '',
+        servername: '', publicKey: '', shortId: '' })
+      const [flClashLocal, setFlClashLocal] = React.useState(null)
+      const [modeBVps1, setModeBVps1] = React.useState(emptyModeBVps)
+      const [modeBVps2, setModeBVps2] = React.useState(emptyModeBVps)
+      const [modeBUseVps2, setModeBUseVps2] = React.useState(false)
+      const [modeBExitIp, setModeBExitIp] = React.useState('')
+      const [modeBResult, setModeBResult] = React.useState(null)
+      const [modeBBusy, setModeBBusy] = React.useState('')
+      const detectFlClash = async () => {
+        if (modeBBusy) return
+        setModeBBusy('detect')
+        setModeBResult(null)
+        try {
+          const found = await api({ op: 'proxyLocalDiscover' })
+          setFlClashLocal(found)
+        } catch {
+          setFlClashLocal({ ok: false, status: 'discovery_failed' })
+        } finally { setModeBBusy('') }
+      }
+      const modeBVlessNode = (vps) => ({
+        type: 'vless', server: vps.server.trim(), port: Number(vps.port),
+        uuid: vps.uuid.trim(), tls: true, servername: vps.servername.trim(),
+        'reality-opts': { 'public-key': vps.publicKey.trim(), 'short-id': vps.shortId.trim() },
+      })
+      const saveModeBFromPage = async () => {
+        if (modeBBusy) return
+        if (!flClashLocal?.found || !flClashLocal?.loopbackListening
+            || !flClashLocal?.endpoint || flClashLocal?.requiresAuth) {
+          setModeBResult({ ok: false, message: '请先检测可用且无需本地认证的 FlClash 代理端口。' })
+          return
+        }
+        const required = (vps) => vps.server.trim() && vps.port.trim() && vps.uuid.trim()
+          && vps.servername.trim() && vps.publicKey.trim()
+        if (!required(modeBVps1) || (modeBUseVps2 && !required(modeBVps2))) {
+          setModeBResult({ ok: false, message: '请先补齐每台 VPS 的 IP、端口、VLESS UUID、REALITY SNI 与公钥。' })
+          return
+        }
+        setModeBBusy('save')
+        setModeBResult(null)
+        try {
+          const nodes = [flClashLocal.endpoint, modeBVlessNode(modeBVps1)]
+          if (modeBUseVps2) nodes.push(modeBVlessNode(modeBVps2))
+          const saved = await api({ op: 'proxyProfileSave', profile: {
+            kind: 'mihomo-chain', name: 'Purge 模式 B 多跳', nodes,
+          } })
+          if (!saved?.ok || !saved.savedId) throw new Error(saved?.error || '保存节点失败')
+          const selected = await api({ op: 'proxyPoolSave', settings: {
+            enabled: true, strictEgress: true, autoConnect: false, activeId: saved.savedId,
+          } })
+          if (!selected?.ok) throw new Error(selected?.error || '激活节点失败')
+          if (modeBUseVps2 && !modeBExitIp.trim()) setModeBExitIp(modeBVps2.server.trim())
+          setModeBVps1(v => ({ ...v, uuid: '', publicKey: '', shortId: '' }))
+          setModeBVps2(v => ({ ...v, uuid: '', publicKey: '', shortId: '' }))
+          setModeBResult({ ok: true, message: '模式 B 已保存并设为插件活动节点；严格出口开启，实际链路尚未验证。' })
+        } catch (e) {
+          setModeBResult({ ok: false, message: String(e?.message || '模式 B 保存失败') })
+        } finally { setModeBBusy('') }
+      }
+      const verifyModeBFromPage = async () => {
+        if (modeBBusy) return
+        setModeBBusy('verify')
+        setModeBResult(null)
+        try {
+          const result = await api({ op: 'proxyModeBVerify', expectedExitIp: modeBExitIp.trim() })
+          setModeBResult(result?.ok
+            ? { ok: true, message: '本次插件请求的出口 IP 与预期 VPS2 匹配；中间跳及全局流量仍未验收。' }
+            : { ok: false, message: result?.error || '实际出口未通过验证' })
+        } catch {
+          setModeBResult({ ok: false, message: '网络请求失败，不能证明出口正确。' })
+        } finally { setModeBBusy('') }
+      }
+      const exportModeBForArtex = async () => {
+        if (modeBBusy) return
+        if (!window.confirm('将从 Purge 本机私有代理池导出 ARTEX Docker 配置。下载文件包含机场入口及 VPS 代理凭据，必须保存在本机私密位置，切勿提交到 Git。继续导出？')) return
+        setModeBBusy('export')
+        setModeBResult(null)
+        try {
+          const result = await api({ op: 'proxyModeBExportArtex' })
+          if (!result?.ok || typeof result.yaml !== 'string' || !result.yaml.trim()) {
+            throw new Error(result?.error || '当前没有可导出的严格模式 B 链路')
+          }
+          const blob = new Blob([result.yaml], { type: 'application/yaml;charset=utf-8' })
+          const objectUrl = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = objectUrl
+          link.download = result.filename || 'config.yaml'
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+          setModeBResult({
+            ok: true,
+            message: '已导出 ARTEX Docker 配置（' + result.hopCount + ' 跳，最终节点 ' + result.finalExit + '）。将文件放入 ARTEX/network/mode-b/ 并命名为 config.yaml。FlClash 入口必须允许 Docker host-gateway 访问；若仅监听 127.0.0.1，ARTEX 无法连接。该文件包含凭据，请勿提交 Git。'
+          })
+        } catch (error) {
+          setModeBResult({ ok: false, message: String(error?.message || 'ARTEX 配置导出失败') })
+        } finally { setModeBBusy('') }
+      }
+      const modeBVpsFields = (title, vps, setVps) => h('div', {
+        style: { border: '1px solid var(--rt-border,#404550)', borderRadius: 7, padding: 10, marginTop: 8 },
+      },
+        h('b', null, title),
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(175px,1fr))', gap: 8, marginTop: 8 } },
+          [['server', 'VPS 公网 IP'], ['port', '代理端口'], ['uuid', 'VLESS UUID'],
+            ['servername', 'REALITY SNI'], ['publicKey', 'REALITY 公钥'], ['shortId', 'REALITY short-id']].map(([field, label]) =>
+            h('label', { key: field, style: { display: 'block', fontSize: 12 } }, label,
+              h('input', { className: 'rt-input', style: { width: '100%', marginTop: 4 },
+                type: field === 'uuid' ? 'password' : 'text',
+                value: vps[field] || '', autoComplete: 'off',
+                onChange: e => setVps(prev => ({ ...prev, [field]: e.target.value })) }))))
+      )
+      const modeBNetworkCard = () => h('div', { className: 'rt-card' },
+        h('h4', null, '模式 B · FlClash 自动入口 → VPS1 → VPS2'),
+        h('p', { className: 'rt-foot' },
+          '不需要开启 TUN，也不用填写机场订阅。只读取 Windows 已知 FlClash 本地配置和检查 127.0.0.1 监听；不扫描外网，不修改系统代理。'),
+        h('button', { className: 'rt-btn', disabled: !!modeBBusy,
+          onClick: detectFlClash }, modeBBusy === 'detect' ? '正在检测…' : '检测 FlClash 本地代理'),
+        flClashLocal ? h('div', { className: 'rt-foot', style: { marginTop: 7 } },
+          flClashLocal.found && flClashLocal.loopbackListening
+            ? '候选入口：' + flClashLocal.endpoint.type + '://' + flClashLocal.endpoint.server
+              + ':' + flClashLocal.endpoint.port
+              + (flClashLocal.requiresAuth ? '（配置含本地认证，暂不能自动填入凭据）' : '（本地端口有监听，身份及上游未验证）')
+            : ({
+              windows_only: '当前不是 Windows 进程。WSL/Linux 内的 127.0.0.1 不等于 Windows 的 127.0.0.1。',
+              config_not_found: '没有找到 FlClash 已知的 Windows 配置文件；不会猜测端口。',
+              no_proxy_port: 'FlClash 配置未开启 HTTP/SOCKS 监听；TUN 本身不能代替代理端口。',
+              listener_unavailable: '配置有端口，但本机监听未就绪；请在 FlClash 内核运行后再检测。',
+            }[flClashLocal.status] || '本地入口未确认。')) : null,
+        modeBVpsFields('VPS1 · VLESS + REALITY', modeBVps1, setModeBVps1),
+        h('label', { style: { display: 'block', marginTop: 9, fontSize: 12 } },
+          h('input', { type: 'checkbox', checked: modeBUseVps2,
+            onChange: e => setModeBUseVps2(e.target.checked) }), ' 启用 VPS2（三跳最终出口）'),
+        modeBUseVps2 ? modeBVpsFields('VPS2 · VLESS + REALITY', modeBVps2, setModeBVps2) : null,
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 11 } },
+          h('button', { className: 'rt-btn rt-btn-primary', disabled: !!modeBBusy,
+            onClick: saveModeBFromPage }, modeBBusy === 'save' ? '正在保存…' : '确认入口并保存模式 B')),
+        h('p', { className: 'rt-foot' },
+          '保存只影响 Purge 插件 HTTP 请求，节点密钥保留在本地私有代理池文件；配置成功不代表三跳连通。HY2 仍可保留在 VPS 上，但此链路当前使用 VLESS TCP 中转。'),
+        h('div', { style: { marginTop: 10 } },
+          h('label', { style: { fontSize: 12 } }, '预期 VPS2 公网 IPv4（仅三跳验收使用）',
+            h('input', { className: 'rt-input', style: { width: '100%', marginTop: 4 },
+              placeholder: '填写真实 VPS2 公网 IPv4', value: modeBExitIp,
+              onChange: e => setModeBExitIp(e.target.value), autoComplete: 'off' })),
+          h('button', { className: 'rt-btn', style: { marginTop: 7 },
+            disabled: !!modeBBusy || !modeBExitIp.trim(), onClick: verifyModeBFromPage },
+            modeBBusy === 'verify' ? '正在验证…' : '验证插件 VPS2 出口（无需命令）'),
+          h('button', { className: 'rt-btn', style: { marginTop: 7 },
+            disabled: !!modeBBusy, onClick: exportModeBForArtex },
+            modeBBusy === 'export' ? '正在生成配置…' : '导出 ARTEX Docker 配置（包含凭据）')),
+        modeBResult ? h('p', { className: modeBResult.ok ? 'rt-foot' : 'rt-note' },
+          modeBResult.message) : null,
+        h('p', { className: 'rt-foot' },
+          '导出只生成 ARTEX 私有 Mihomo 配置，不启动 ARTEX、不修改 Docker/Windows 网络；ARTEX 的隔离执行器仍需单独启动并完成出口验证。导出文件含凭据，绝不可提交仓库。'),
+        h('p', { className: 'rt-foot' },
+          '范围提示：不能据此认定 Harness 模型、外部 MCP、Windows TUN 或整机 DNS/IPv6 已受到保护。'))
       const [folderPath, setFolderPath] = React.useState('')
       const [toolSearch, setToolSearch] = React.useState('')
       const [toolGroup, setToolGroup] = React.useState('all')
+      const [toolStatusFilter, setToolStatusFilter] = React.useState('all')
       const [toolChecks, setToolChecks] = React.useState({})
       const [checkingTool, setCheckingTool] = React.useState(null)
       const [taskId, setTaskId] = React.useState('services')
@@ -11925,6 +12749,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const adapt = (data && data.adapt) || {}
       const tools = (data && data.tools && data.tools.items) || []
       const found = tools.filter((t) => t.path).length
+      const readiness = envToolSummary(tools, toolChecks)
+      const showToolStatus = (status) => {
+        setToolStatusFilter(status); setToolGroup('all'); setToolSearch(''); setSection('tools')
+      }
       // Existing discovery stays authoritative; explicit paths are only pinned on request.
       const suggestedPaths = tools.filter(t => t.path && ['toolkit', 'binDir', 'path', 'artex'].includes(t.source)
         && !String(draft?.tools?.[t.id] || '').trim())
@@ -11956,8 +12784,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const sourceLabels = { config: '自定义路径', toolkit: '工具箱', binDir: '搜索目录',
         path: '系统 PATH', artex: 'ARTEX' }
       const filteredTools = tools.filter((t) =>
-        (toolGroup === 'all' || t.group === toolGroup) &&
-        [t.id, t.label, ...(t.names || [])].join(' ').toLowerCase().includes(toolSearch.trim().toLowerCase()))
+        (toolGroup === 'all' || t.group === toolGroup)
+        && (toolStatusFilter === 'all' || envToolReadiness(t, toolChecks[t.id]) === toolStatusFilter)
+        && [t.id, t.label, ...(t.names || [])].join(' ').toLowerCase().includes(toolSearch.trim().toLowerCase()))
       const probeResultForCell = (cell) => {
         const environment = capabilityMatrix && capabilityMatrix.environments.find((item) => item.id === cell.environmentId)
         if (!environment) return null
@@ -11988,8 +12817,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('span', { className: 'rt-tag' }, !data ? '未检测' : runtime.effective === 'windows' ? 'Windows' : 'Linux/Kali'),
           adapt.kali ? h('span', { className: 'rt-tag rt-tag-live' }, 'Kali') : null,
           h('span', { className: 'rt-tag' + (adapt.ready ? ' rt-tag-live' : ' rt-tag-warn') },
-            adapt.ready ? ('配置可继续 · ' + (adapt.reason || '')) : '待配置'),
-          h('span', { className: 'rt-tag' + (found ? ' rt-tag-live' : ' rt-tag-warn') }, data ? '工具 ' + found + '/' + tools.length : '工具未检测'),
+            adapt.ready ? '配置引导可继续（非运行验证）' : '配置待处理（可继续只读）'),
+          h('span', { className: 'rt-tag' + (found ? ' rt-tag-live' : ' rt-tag-warn') }, data ? '路径已定位 ' + found + '/' + tools.length : '路径尚未读取'),
           h('div', { className: 'rt-spacer' }),
           dirty ? h('span', { className: 'rt-tag rt-tag-warn' }, '未保存修改') : null,
           h('button', { className: 'rt-btn', disabled: busy, onClick: load }, busy ? '读取中…' : '刷新'),
@@ -12007,25 +12836,34 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-foot', style: { padding: '4px 12px' } },
             '顶部“保存环境配置”不保存测绘操作勾选；测绘偏好在测绘中心自动保存，外部提交同意不持久化。'),
           h(LocalAssetSearchTab, { engagement: props.engagement, refreshKey })) :
+        section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true }) :
         h('div', { className: 'rt-pane', style: { minHeight: 0 } },
         err ? h('div', { className: 'rt-err' }, err) : null,
         msg ? h('div', { className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
         sectionCard('summary', { className: 'rt-card' },
-          h('h4', null, '环境能力概览'),
+          h('h4', null, '开工前 · 环境速检'),
+          h('p', { className: 'rt-foot' }, '先发现环境和工具路径，再按本轮任务需要验证版本。路径存在、版本命令成功都不等于实际任务成功。'),
           h('div', { className: 'rt-toolbar', style: { padding: '0 0 8px', border: 0 } },
             h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || matrixBusy || environmentBusy || !!wslChecking || !!dockerBusy || !!kaliBusy,
-              onClick: loadCapabilityMatrix }, matrixBusy ? '正在检测…' : '一键检测环境'),
+              onClick: loadCapabilityMatrix }, matrixBusy ? '读取中…' : '读取环境与工具路径'),
             h('span', { className: 'rt-foot' }, '只读发现环境和工具路径；不安装、不执行目标任务。')),
-          matrixError ? h('div', { className: 'rt-err' }, matrixError) : null,
+          matrixError ? h('div', { className: 'rt-err', role: 'alert' }, matrixError) : null,
+          dirty ? h('p', { className: 'rt-foot', role: 'status' }, '有未保存修改：当前检查结果仍基于已保存配置。请先保存，再刷新环境。') : null,
           h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8 } },
-            [['本机工具', data ? found + ' / ' + tools.length + ' 已定位' : '尚未读取', 'tools'],
-              ['执行环境', environmentSnapshot ? (environmentSnapshot.environments || []).length + ' 个已发现' : '尚未发现', 'execution'],
-              ['测绘平台', '查看已保存选择', 'local-search'],
-              ['网络状态', data && data.egress ? '已读取代理配置' : '尚未读取', 'network'],
-              ['配置诊断', adapt.ready ? '配置可继续' : data ? '待配置' : '尚未读取', 'diagnostics'],
-            ].map(([label, status, id]) => h('button', { key: id, type: 'button', className: 'rt-btn',
-              style: { textAlign: 'left', padding: 10, whiteSpace: 'normal' }, onClick: () => setSection(id) },
-              h('strong', { style: { display: 'block' } }, label), h('span', null, status))))),
+            [['已定位路径', data ? readiness.located + '/' + readiness.total : '尚未读取', 'all'],
+              ['版本已验证', readiness.verified + ' 项', 'verified'],
+              ['待验证版本', readiness.unchecked + ' 项', 'unchecked'],
+              ['验证未通过', readiness.failed + ' 项', 'failed'],
+              ['未定位路径', readiness.missing + ' 项', 'missing']
+            ].map(([label, status, filter]) => h('button', { key: filter, type: 'button', className: 'rt-btn',
+              style: { textAlign: 'left', padding: 10, whiteSpace: 'normal' }, onClick: () => showToolStatus(filter) },
+              h('strong', { style: { display: 'block' } }, label), h('span', null, status)))),
+          h('p', { className: 'rt-foot', style: { marginTop: 8 } },
+            '未定位工具不一定是本轮必需项；没有可靠版本参数的已定位工具：' + readiness['path-only'] + ' 项。'),
+          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 8 } },
+            [['工具管理', 'tools'], ['执行环境', 'execution'], ['测绘中心', 'local-search'],
+              ['网络配置', 'network'], ['诊断与修复', 'diagnostics']].map(([label, id]) =>
+              h('button', { key: id, type: 'button', className: 'rt-btn', onClick: () => setSection(id) }, label)))),
         sectionCard('summary', { className: 'rt-card' },
           h('h4', null, '推荐配置与下一步'),
           h('div', { className: 'rt-foot' }, '根据当前已读取的配置和检测结果推荐；不会覆盖手工设置。'),
@@ -12311,6 +13149,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('button', { className: 'rt-btn', disabled: !!networkChecking, onClick: () => runNetworkCheck(id) }, action))
           })),
 
+        section === 'network' ? modeBNetworkCard() : null,
         data && data.egress ? sectionCard('network', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.55 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '出网状态（借鉴 Z3r0 egress，只读）'),
           h('div', { className: 'rt-mono', style: { fontSize: 11 } }, 'HTTP_PROXY=' + (data.egress.http_proxy || '(空)')),
@@ -12355,7 +13194,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         sectionCard('network', { className: 'rt-card' },
           h('h4', null, '可选外部测绘资源与 VPS'),
           h('p', { className: 'rt-foot' },
-            'FOFA 只是可选来源之一。其他平台请在「管理 → 环境 → 测绘中心」选择；不填写 API Key 也能使用本机工具。'),
+            'FOFA 连接设置在「环境 → 测绘中心 → 数据源」；这里保留原 Key 编辑入口以兼容旧配置。'),
           h('label', { style: { display: 'block', fontSize: 12, marginBottom: 10 } },
             'FOFA API Key（仅 FOFA，可选）',
             h('input', { className: 'rt-input', type: 'password', autoComplete: 'new-password',
@@ -12489,10 +13328,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                       h('span', null, item.environmentLabel + ' · ' + item.status + ' · ' + item.score)))),
                 h('p', { className: 'rt-foot' }, environmentTaskPlan.note))) : null),
           sectionCard('tools', { className: 'rt-card' },
-            h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 已找到）'),
+            h('h4', null, '本机工具目录（' + found + '/' + tools.length + ' 路径已定位）'),
             h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginBottom: 8 } },
               '顺序：自定义路径 → DSH 工具箱 → 搜索目录 → PATH → ARTEX。发现文件 ≠ 已验证可运行；版本检测只在你点击时执行，不扫描目标。'),
             h('button', { className: 'rt-btn', disabled: busy || !suggestedPaths.length, onClick: fillDetectedPaths }, '填入已发现路径（' + suggestedPaths.length + '）'),
+            h('p', { className: 'rt-foot' }, '显示 ' + filteredTools.length + '/' + tools.length + ' 项；仅对本轮任务需要的工具按需验证版本。'),
             h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 } },
               h('input', {
                 className: 'rt-input', style: { flex: '1 1 130px' }, value: toolSearch,
@@ -12501,7 +13341,14 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               h('select', { className: 'rt-input', style: { flex: '1 1 110px' },
                 value: toolGroup, onChange: (e) => setToolGroup(e.target.value) },
                 h('option', { value: 'all' }, '全部用途'),
-                toolGroups.map((g) => h('option', { key: g.id, value: g.id }, g.title)))),
+                toolGroups.map((g) => h('option', { key: g.id, value: g.id }, g.title))),
+              h('select', { className: 'rt-input', style: { flex: '1 1 110px' },
+                'aria-label': '工具验证状态筛选', value: toolStatusFilter,
+                onChange: (e) => setToolStatusFilter(e.target.value) },
+                [['all', '全部状态'], ['missing', '未定位路径'], ['unchecked', '待验证版本'],
+                  ['verified', '版本已验证'], ['failed', '验证未通过'], ['path-only', '仅定位路径']].map(([id, label]) =>
+                  h('option', { key: id, value: id }, label)))),
+            !filteredTools.length ? h('div', { className: 'rt-empty' }, '该筛选条件下没有工具，可切换“全部状态”查看。') : null,
             toolGroups.map((g) => {
               const rows = filteredTools.filter((t) => (t.group || 'other') === g.id)
               if (!rows.length) return null
@@ -12510,14 +13357,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   g.title + ' · ' + rows.filter((t) => !!t.path).length + '/' + rows.length),
                 rows.map((t) => {
                   const health = toolChecks[t.id]
+                  const status = envToolReadiness(t, health)
                   return h('div', { key: t.id, style: { marginBottom: 9, paddingBottom: 7,
                     borderBottom: '1px solid var(--dsw-alias-border-l1)' } },
                     h('div', { style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 } },
                       h('span', { style: { fontWeight: 600, minWidth: 75 } }, t.label || t.id),
                       t.path
-                        ? h('span', { className: 'rt-tag', title: t.path },
-                            (sourceLabels[t.source] || t.source) + ' · 找到路径')
-                        : h('span', { className: 'rt-tag rt-tag-warn' }, '未找到'),
+                        ? h('span', { className: 'rt-tag'
+                          + (status === 'verified' ? ' rt-tag-live' : status === 'failed' ? ' rt-tag-warn' : ''), title: t.path },
+                            (sourceLabels[t.source] || t.source) + ' · ' +
+                            (status === 'verified' ? '版本已验证' : status === 'failed' ? '验证未通过'
+                              : status === 'unchecked' ? '待验证版本' : '仅定位路径'))
+                        : h('span', { className: 'rt-tag rt-tag-warn' }, '未定位路径'),
                       t.path && t.canProbe
                         ? h('button', { className: 'rt-btn', type: 'button',
                             disabled: busy || checkingTool !== null,
@@ -12762,7 +13613,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         ),
       )
     }
-    function focusSuperAgent(node, engagement, section, request) {
+    function focusAgentReview(node, engagement, section, request) {
       if (!node || !request.current || request.current.engagement !== engagement || request.current.section !== section) return
       request.current = null
       node.focus()
@@ -12774,7 +13625,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-ops-section-head' }, h('h3', null, '智能体待阅回报')),
         h('p', { className: 'rt-ops-subtle', role: 'status' },
           count === null ? '暂未取得待阅数量。' : count === 0 ? '当前没有待阅回报。' : count + ' 条回报待人工查看。'),
-        h('button', { className: 'rt-btn', type: 'button', onClick: onOpen }, '打开 Super Agent 回报'))
+        h('button', { className: 'rt-btn', type: 'button', onClick: onOpen }, '查看智能体回报'))
     }
 
     function AgentReportReminder({ total, onOpen }) {
@@ -14606,18 +15457,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         : null
     }
 
-    function SuperAgentTab(props) {
+    function AgentReviewSection(props) {
       const eng = props.engagement
       const { refreshKey } = props
       const reports = React.useRef(null)
       const tasks = React.useRef(null)
-      return h('div', { className: 'rt-main' },
+      return h('section', { className: 'rt-card', 'aria-label': '人工核对与回报' },
         h('div', { className: 'rt-toolbar' },
-          h('h3', { tabIndex: -1, ref: props.onPageReady, style: { margin: 0 } }, 'Super Agent'),
+          h('h3', { tabIndex: -1, ref: props.onPageReady, style: { margin: 0 } }, '人工核对与回报'),
           h('div', { className: 'rt-spacer' }),
           eng ? h('button', { type: 'button', className: 'rt-btn', onClick: () => reports.current?.focus() }, '查看待阅回报') : null,
           eng ? h('button', { type: 'button', className: 'rt-btn', onClick: () => tasks.current?.focus() }, '查看持久任务') : null),
-        h('div', { className: 'rt-pane' },
+        h('div', null,
           h(AgentReports, { key: 'agent-reports:' + (eng || ''), engagement: eng, onReceipt: props.onReportReceipt,
             onSectionReady: (node) => { reports.current = node; props.onReportSectionReady?.(node) },
             onOpenReportSession: props.onOpenReportSession, maskReportOrigin: props.maskReportOrigin }),
@@ -14698,10 +15549,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-pane' },
           err ? h('div', { className: 'rt-err' }, err) : null,
           concurrency && concurrency.ok === false ? h('div', { className: 'rt-err' }, concurrency.error || '智能体状态读取失败') : null,
-          h('div', { className: 'rt-card' },
-            h('h4', null, '人工核对与回报'),
-            h('p', { className: 'rt-note' }, '持久任务、历史尝试和待阅回报在 Super Agent。当前页展示智能体状态和角色设置。'),
-            h('button', { className: 'rt-btn', type: 'button', onClick: props.onOpenSuperAgent }, '打开 Super Agent')),
+          h(AgentReviewSection, { engagement: eng, refreshKey, onReportReceipt: props.onReportReceipt,
+            onPageReady: props.onPageReady, onReportSectionReady: props.onReportSectionReady,
+            onOpenReportSession: props.onOpenReportSession, maskReportOrigin: props.maskReportOrigin }),
           h('div', { className: 'rt-card' },
             h('h4', null, '并发规则（硬约束）'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
@@ -15588,7 +16438,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             ? '已保存的测绘展示保护：' + (displayPrivacy.maskAssetResults ? '已开启' : '未开启') + (showPrivateDetails ? ' · 当前临时显示详情' : '')
             : privacyReadFailed ? '无法读取保存设置，暂时隐藏路径及报告详情。' : '正在读取保存设置…'),
           h('p', { className: 'rt-foot' }, '仅影响本页工具路径、情报、项目概览及报告展示；不修改 ARTEX 配置、报告或数据库。'),
-          h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开智能隐私中心'),
+          h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开环境中的本机隐私设置'),
           temporary?.maskAssetResults ? h('p', { className: 'rt-foot' }, '本次工作区临时遮蔽已开启；请在隐私中心结束后再显示详情。') : null,
           !temporary?.maskAssetResults && (!displayPrivacy || displayPrivacy.maskAssetResults) ? h('button', { className: 'rt-btn', type: 'button',
             onClick: () => setShowPrivateDetails(v => !v) }, showPrivateDetails ? '重新隐藏本页详情' : '临时显示本页详情') : null),
@@ -15977,9 +16827,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [snapshotError, setSnapshotError] = React.useState(null)
       const snapshotRequest = React.useRef(0)
       const selectedEngagement = React.useRef(null)
-      const superAgentFocus = React.useRef(null)
+      const agentReviewFocus = React.useRef(null)
 
-      React.useEffect(() => { superAgentFocus.current = null }, [eng])
+      React.useEffect(() => { agentReviewFocus.current = null }, [eng])
 
       React.useEffect(() => {
         if (embedded) return undefined
@@ -16156,15 +17006,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
         { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '技能与知识库'], ['artex', 'ARTEX']] },
-        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['low-impact', '智能隐私中心'], ['superagent', 'Super Agent'], ['agents', '智能体'], ['report', '报告']] },
+        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['antiforensics', '防溯源'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
       const activeTab = activeWorkbenchTab(st.tab)
-      const openSuperAgent = (section = 'page') => {
-        superAgentFocus.current = { engagement: eng, section }
-        setUI({ tab: 'superagent', focus: null })
+      const openReportPage = () => {
+        if (!eng) return
+        agentReviewFocus.current = { engagement: eng, section: 'reports' }
+        setUI({ tab: 'agents', focus: null })
       }
-      const openReportPage = () => { if (eng) openSuperAgent('reports') }
       const openFull = () => {
         // A browser popup is not necessarily maximized. Request the available
         // desktop work area; individual browsers may ignore these hints.
@@ -16217,8 +17067,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : h('div', { className: 'rt-note', role: 'status' }, summaryStatus)
       }
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
-      else if (st.tab === 'env' || st.tab === 'knowledge' || st.tab === 'local-search') body = h(EnvTab, { engagement: eng, refreshKey, initialSection: st.tab === 'local-search' ? 'local-search' : 'summary' })
-      else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey, visible: full || embedded || st.open })
+      else if (st.tab === 'env' || st.tab === 'knowledge' || st.tab === 'local-search' || st.tab === 'low-impact') body = h(EnvTab, { engagement: eng, refreshKey, visible: full || embedded || st.open, initialSection: st.tab === 'low-impact' ? 'privacy' : st.tab === 'local-search' ? 'local-search' : 'summary' })
+      else if (st.tab === 'antiforensics') body = h(AntiForensicsTab, { engagement: eng, refreshKey: refreshKey })
        else if (st.tab === 'knowledge-center' || st.tab === 'skills') body = h(LibraryTab, { refreshKey, initialView: st.tab === 'skills' ? 'skills' : 'search' })
       else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng, refreshKey,
         intelTarget: st.artexIntel?.engagement === eng ? st.artexIntel.target : '',
@@ -16234,11 +17084,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           markTabSeen('findings')
           setUI({ tab: 'findings', focus: { engagement: eng, kind: 'vulns', assetId } })
         } })
-      else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey,
-        onOpenSuperAgent: () => openSuperAgent() })
-      else if (st.tab === 'superagent') body = h(SuperAgentTab, { engagement: eng, refreshKey, onReportReceipt,
-        onPageReady: (node) => focusSuperAgent(node, eng, 'page', superAgentFocus),
-        onReportSectionReady: (node) => focusSuperAgent(node, eng, 'reports', superAgentFocus),
+      else if (activeTab === 'agents') body = h(AgentsTab, { engagement: eng, refreshKey, onReportReceipt,
+        onPageReady: (node) => focusAgentReview(node, eng, 'page', agentReviewFocus),
+        onReportSectionReady: (node) => focusAgentReview(node, eng, 'reports', agentReviewFocus),
         onOpenReportSession: props?.onOpenReportSession, maskReportOrigin: props?.maskReportOrigin })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng, onRestored: (id) => { api({ op: 'activateEngagement', engagement: id }).finally(() => refreshList(id)) } })
       else if (!eng) {
@@ -16318,7 +17166,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onClick: deleteCurrentEngagement }, deleting ? '归档中…' : '归档靶标'),
           h('div', { className: 'rt-spacer' }),
           embedded ? null : h(VersionBar, null),
-          activeTab === 'superagent' ? null :
+          activeTab === 'agents' ? null :
             h(AgentReportReminder, { total: pendingAgentReports, onOpen: openReportPage }),
           full ? h('button', { className: 'rt-btn', title: '回到带侧栏的普通界面（或按 Esc）', onClick: exitFull }, '退出全面浏览') : null,
           h('button', { className: 'rt-btn', title: '刷新名册、快照与当前页面数据', onClick: refreshAll }, '刷新'),
@@ -16540,7 +17388,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 				setDock({ open: true, maximized: true, tab: purgeWorkspaceBus.page });
 			}
 		}
-		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;z-index:10040!important;\n  width:auto!important;height:auto!important;box-sizing:border-box!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"],\nhtml[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,\nhtml[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role=\"button\"]){\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\nhtml[data-windows-titlebar] .dshp-workspace[data-default-full=\"1\"] .dshp-workspace-nav,\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-privacy,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-privacy:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-privacy{border-color:#365477;color:#d3e5f6;padding:7px 10px}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden;container:purge-clean / inline-size}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@container purge-clean (max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n\n.dshp-prompt-advanced-content{display:grid;gap:14px;padding-top:12px;min-width:0}\n.dshp-prompt-help{padding:12px 14px;border:1px solid #304663;border-radius:9px;background:#14243a;font-size:12px;line-height:1.6;color:#b5c8df}\n.dshp-prompt-help strong{display:block;color:#e7f1ff;font-size:13px;margin-bottom:5px}\n.dshp-prompt-help p{margin:5px 0}\n.dshp-prompt-examples{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}\n.dshp-prompt-examples span{white-space:normal}\n.dshp-prompt-examples code{color:#c4e3ff;padding:2px 5px;background:#233b57;border-radius:4px}\n.dshp-prompt-environment{border:1px solid #304663;border-radius:9px;background:#14243a;padding:12px;margin-bottom:15px;min-width:0}\n.dshp-prompt-environment h5{margin:0 0 9px;font-size:13px}\n.dshp-prompt-env-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px;font-size:12px;word-break:break-word}\n.dshp-prompt-target-picker{display:grid;gap:8px;min-width:0}\n.dshp-prompt-target-options,.dshp-prompt-target-tags{display:flex;flex-wrap:wrap;gap:5px;min-width:0}\n.dshp-prompt-target-options button,.dshp-prompt-target-tags button{border:1px solid #406487;border-radius:7px;background:#1d3857;color:#e3f0ff;padding:5px 8px;font:inherit;max-width:100%;overflow-wrap:anywhere;text-align:left;cursor:pointer}\n.dshp-prompt-target-options button:disabled{opacity:.45;cursor:default}\n.dshp-prompt-target-tags button{background:#285074}\n.dshp-prompt-manual summary{font-size:12px;color:#a9c5e7;cursor:pointer}\n.dshp-prompt-manual textarea{margin-top:8px}\n.dshp-prompt-criteria,.dshp-prompt-targets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;align-items:start;min-width:0}\n.dshp-prompt-criteria>label,.dshp-prompt-targets>label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}\n.dshp-prompt-field-note{display:block;font-size:11px;line-height:1.5;color:#9eb5d1;font-weight:400}\n.dshp-prompt-advanced textarea.dshp-area{display:block;flex:none;width:100%;box-sizing:border-box;min-height:68px;max-width:100%;resize:vertical}\n.dshp-prompt-criteria input[type=number]{max-width:100%;width:150px;box-sizing:border-box}\n.dshp-prompt-lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));align-items:start;gap:12px;min-width:0}\n.dshp-prompt-list-card{padding:12px;border:1px solid #304663;border-radius:10px;min-width:0}\n.dshp-prompt-list-card>summary{cursor:pointer;font-weight:600}\n.dshp-prompt-list-switch{display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:12px}\n.dshp-prompt-list-card>.dshp-prompt-field-note{margin:6px 0 12px}\n.dshp-workspace-recovery{padding:24px;color:#e5eefb;overflow:auto}\n.dshp-workspace-recovery button{padding:8px 12px;cursor:pointer}\n";
+		const PURGE_WORKSPACE_CSS = "\n/* Native DSH main page, not a floating window. Reuse the real embedded console. */\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]:fullscreen{\n  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border-radius:0!important;overflow:hidden!important;background:#0c1422!important;\n}\n.dshp-dock.dshp-workspace:fullscreen::backdrop{background:#0c1422}\n\n.dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]{\n  /* Default host-wide workspace: hide the Harness sidebar without a user gesture. */\n  position:fixed!important;inset:0!important;z-index:10040!important;\n  width:auto!important;height:auto!important;box-sizing:border-box!important;\n  max-width:none!important;max-height:none!important;margin:0!important;\n  border:0!important;border-radius:0!important;box-shadow:none!important;\n  /* Render exactly like fullscreen instead of blurring the light host behind us. */\n  background:#0c1422!important;color-scheme:dark;\n  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;\n}\n\n/* Portalled workspaces are interactive surfaces, not window drag regions.\n   Electron composes drag rectangles geometrically, ignoring visual z-index. */\nhtml[data-windows-titlebar] .dshp-dock.dshp-workspace[data-default-full=\"1\"],\nhtml[data-windows-titlebar] .dshp-workspace .dshp-workspace-nav,\nhtml[data-windows-titlebar] .dshp-workspace :is(button,input,select,textarea,a,[role=\"button\"]){\n  -webkit-app-region:no-drag;\n}\n/* Windows reserves its top caption row for native drag/menu hit testing.\n   The portalled workspace must start below it, not just paint over it. */\nhtml[data-windows-titlebar]:not([data-fullscreen]) .dshp-dock.dshp-workspace[data-maximized=\"1\"][data-default-full=\"1\"]:not(:fullscreen){\n  top:var(--dsh-windows-titlebar-height,40px)!important;\n}\n.dshp-dock.dshp-workspace[data-maximized=\"1\"]{\n  position:relative!important;inset:auto!important;top:auto!important;left:auto!important;\n  right:auto!important;bottom:auto!important;z-index:1;\n  width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;\n  min-width:0!important;min-height:0!important;border:0;border-radius:0;\n  box-shadow:none;overflow:hidden;margin:0;display:flex;flex-direction:column;\n}\n.dshp-workspace .dshp-workspace-nav{\n  display:flex;align-items:center;gap:16px;flex:none;min-height:52px;\n  padding:8px 16px;padding-right:max(16px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px));box-sizing:border-box;background:#101c2d;color:#e5eefb;\n  border-bottom:1px solid #30435d;\n}\n/* The native overlay is absent in actual fullscreen. */\nhtml[data-windows-titlebar] .dshp-workspace[data-default-full=\"1\"] .dshp-workspace-nav,\n.dshp-workspace:fullscreen .dshp-workspace-nav{padding-right:16px}\n.dshp-workspace .dshp-workspace-nav strong{font-size:15px;white-space:nowrap}\n.dshp-workspace .dshp-workspace-tabs{display:flex;align-items:center;gap:6px;min-width:0;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin}\n.dshp-workspace .dshp-workspace-tabs button{flex:none}\n.dshp-workspace .dshp-workspace-tabs button,\n.dshp-workspace .dshp-workspace-back,\n.dshp-workspace .dshp-workspace-privacy,\n.dshp-workspace .dshp-workspace-fullscreen{\n  appearance:none;border:1px solid transparent;border-radius:8px;\n  padding:7px 13px;cursor:pointer;font:inherit;font-size:13px;\n  color:#aabed8;background:transparent;white-space:nowrap;\n}\n.dshp-workspace .dshp-workspace-tabs button:hover,\n.dshp-workspace .dshp-workspace-back:hover,\n.dshp-workspace .dshp-workspace-privacy:hover,\n.dshp-workspace .dshp-workspace-fullscreen:hover{background:#1b3049;color:#fff}\n.dshp-workspace .dshp-workspace-nav button:focus-visible{outline:2px solid #78b6ff;outline-offset:-2px}\n.dshp-workspace .dshp-workspace-tabs button[aria-selected=\"true\"]{\n  background:#213a58;border-color:#325782;color:#eaf4ff;font-weight:700;\n}\n.dshp-workspace .dshp-workspace-back{margin-left:auto;border-color:#304663}\n.dshp-workspace .dshp-workspace-privacy{border-color:#365477;color:#d3e5f6;padding:7px 10px}\n.dshp-workspace .dshp-workspace-fullscreen{border-color:#365477}\n.dshp-workspace .dshp-workspace-fullscreen-error{color:#ffcf96;font-size:11px;max-width:250px;overflow-wrap:anywhere}\n.dshp-workspace .dshp-dock-body{\n  display:flex;flex:1;min-width:0;min-height:0;width:100%;height:auto;\n  overflow:hidden;background:transparent;\n}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:auto}\n.dshp-workspace[data-workspace=\"redteam\"] .dshp-dock-body>.rt-dock.rt-embedded{\n  min-width:0;min-height:0;width:100%!important;height:100%;\n}\n@media(max-width:720px){\n  .dshp-workspace .dshp-workspace-nav{flex-wrap:wrap;gap:7px;padding:9px;padding-right:max(9px,calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 9px))}\n  .dshp-workspace .dshp-workspace-back{margin-left:auto}\n}\n\n/* Clean console: distinct navigation and a full-width content pane. */\n.dshp-workspace[data-workspace=\"clean\"] .dshp-dock-body{overflow:hidden;container:purge-clean / inline-size}\n.dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n  display:grid;grid-template-columns:216px minmax(0,1fr);gap:0;\n  width:100%;height:100%;min-width:0;min-height:0;max-width:none;\n  padding:0;border:0;border-radius:0;overflow:hidden;\n  background:#0c1422!important;color:#e5eefb;\n  --dsw-alias-bg-layer-1:#15243a;--dsw-alias-bg-layer-2:#1c2d44;\n  --dsw-alias-label-primary:#e5eefb;--dsw-alias-label-secondary:#a2b5cf;\n  --dsw-alias-brand-primary:#78b6ff;--dsw-alias-border-l1:#304663;\n  --dshp-paper:#15243a;--dshp-ink:#e5eefb;--dshp-mute:#a2b5cf;\n  --dshp-line:#304663;--dshp-fill:#223d61;\n  --dshp-accent:#78b6ff;--dshp-accent-soft:#223d61;\n  --dshp-hi:#ffffff12;--dshp-glass:none;\n}\n.dshp-clean-nav{display:flex;flex-direction:column;align-items:stretch;gap:6px;\n  padding:22px 12px;background:#0e1a2b;border-right:1px solid #30435d;\n  min-width:0;min-height:0;overflow:auto}\n.dshp-clean-nav-heading{padding:0 10px 12px;font-size:11px;\n  color:#7894b4;letter-spacing:.12em;font-weight:700}\n.dshp-clean-nav-item{display:flex;flex-direction:column;align-items:flex-start;\n  gap:4px;padding:13px 12px;background:transparent;color:#aabed8;\n  border:1px solid transparent;border-radius:10px;\n  text-align:left;font:inherit;cursor:pointer}\n.dshp-clean-nav-item strong{font-size:13px;color:inherit}\n.dshp-clean-nav-item small{font-size:11px;line-height:1.45;color:#90a8c6}\n.dshp-clean-nav-item:hover{background:#1b3049;color:#f0f6ff}\n.dshp-clean-nav-item[aria-current=\"page\"]{background:#213a58;color:#eaf4ff;\n  border-color:#325782}\n.dshp-clean-nav-item:focus-visible{outline:2px solid #78b6ff;outline-offset:2px}\n.dshp-clean-content{min-width:0;min-height:0;overflow:auto;box-sizing:border-box;\n  padding:24px;display:block}\n.dshp-clean-page-heading{margin:0 0 18px;padding:0 0 14px;\n  border-bottom:1px solid #304663}\n.dshp-clean-page-heading h2{font-size:20px;color:#eaf4ff;margin:0 0 5px}\n.dshp-clean-page-heading p{font-size:12px;color:#a2b5cf;margin:0}\n.dshp-clean-pane{min-width:0}\n.dshp-clean-pane[hidden],.dshp-clean-subpane[hidden]{display:none!important}\n.dshp-clean-workspace .dshp-panel{max-width:none}\n@container purge-clean (max-width:800px){\n  .dshp-workspace[data-workspace=\"clean\"] .dshp-root.dshp-clean-workspace{\n    grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}\n  .dshp-clean-nav{flex-direction:row;align-items:center;gap:6px;\n    overflow-x:auto;overflow-y:hidden;padding:8px 12px;border-right:0;\n    border-bottom:1px solid #30435d}\n  .dshp-clean-nav-heading{display:none}\n  .dshp-clean-nav-item{flex:none;padding:9px 12px}\n  .dshp-clean-nav-item small{display:none}\n  .dshp-clean-content{padding:14px}\n}\n\n.dshp-prompt-advanced-content{display:grid;gap:14px;padding-top:12px;min-width:0}\n.dshp-prompt-help{padding:12px 14px;border:1px solid #304663;border-radius:9px;background:#14243a;font-size:12px;line-height:1.6;color:#b5c8df}\n.dshp-prompt-help strong{display:block;color:#e7f1ff;font-size:13px;margin-bottom:5px}\n.dshp-prompt-help p{margin:5px 0}\n.dshp-prompt-examples{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}\n.dshp-prompt-examples span{white-space:normal}\n.dshp-prompt-examples code{color:#c4e3ff;padding:2px 5px;background:#233b57;border-radius:4px}\n.dshp-prompt-environment{border:1px solid #304663;border-radius:9px;background:#14243a;padding:12px;margin-bottom:15px;min-width:0}\n.dshp-prompt-environment h5{margin:0 0 9px;font-size:13px}\n.dshp-prompt-env-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px;font-size:12px;word-break:break-word}\n.dshp-prompt-target-picker{display:grid;gap:8px;min-width:0}\n.dshp-prompt-target-options,.dshp-prompt-target-tags{display:flex;flex-wrap:wrap;gap:5px;min-width:0}\n.dshp-prompt-target-options button,.dshp-prompt-target-tags button{border:1px solid #406487;border-radius:7px;background:#1d3857;color:#e3f0ff;padding:5px 8px;font:inherit;max-width:100%;overflow-wrap:anywhere;text-align:left;cursor:pointer}\n.dshp-prompt-target-options button:disabled{opacity:.45;cursor:default}\n.dshp-prompt-target-tags button{background:#285074}\n.dshp-prompt-manual summary{font-size:12px;color:#a9c5e7;cursor:pointer}\n.dshp-prompt-manual textarea{margin-top:8px}\n.dshp-prompt-criteria,.dshp-prompt-targets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;align-items:start;min-width:0}\n.dshp-prompt-criteria>label,.dshp-prompt-targets>label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}\n.dshp-prompt-field-note{display:block;font-size:11px;line-height:1.5;color:#9eb5d1;font-weight:400}\n.dshp-prompt-advanced textarea.dshp-area{display:block;flex:none;width:100%;box-sizing:border-box;min-height:68px;max-width:100%;resize:vertical}\n.dshp-prompt-criteria input[type=number]{max-width:100%;width:150px;box-sizing:border-box}\n.dshp-prompt-lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));align-items:start;gap:12px;min-width:0}\n.dshp-prompt-list-card{padding:12px;border:1px solid #304663;border-radius:10px;min-width:0}\n.dshp-prompt-list-card>summary{cursor:pointer;font-weight:600}\n.dshp-prompt-list-switch{display:flex;align-items:center;gap:6px;margin:12px 0 6px;font-size:12px}\n.dshp-prompt-list-card>.dshp-prompt-field-note{margin:6px 0 12px}\n.dshp-workspace-recovery{padding:24px;color:#e5eefb;overflow:auto}\n.dshp-workspace-recovery button{padding:8px 12px;cursor:pointer}\n";
 		const PURGE_PROMPT_PAGE_CSS = `
 .dshp-prompt-page summary{cursor:pointer}
 .dshp-prompt-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,390px),1fr));gap:16px;align-items:start;min-width:0}
@@ -16887,7 +17735,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 							onClick: () => open(key),
 						}, key === "clean" ? "清洗台" : "作战台"))),
 					h("button", { type: "button", className: "dshp-workspace-privacy",
-						title: privacySummary.detail, "aria-label": "打开智能隐私中心。" + privacySummary.detail,
+						title: privacySummary.detail, "aria-label": "打开本机隐私设置。" + privacySummary.detail,
 						onClick: () => { __dshPurgeDrill.setUI({ open: true, tab: "low-impact", focus: null }); showPurgeWorkspace("drill"); }
 					}, privacySummary.label + (temporaryPrivacy ? " · 临时" : "")),
 					h("button", { type: "button", className: "dshp-workspace-back", onClick: back }, "返回会话"),
@@ -16968,10 +17816,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 		function clampDockGeom(g) {
 			const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
 			const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-			const w = Math.min(Math.max(380, Number(g && g.w) || 620), Math.max(380, vw - 16));
-			const h = Math.min(Math.max(240, Number(g && g.h) || 520), Math.max(240, vh - 16));
+			const w = Math.min(Math.max(380, Number(g && g.w) || 620), Math.max(1, vw - 16));
+			const h = Math.min(Math.max(240, Number(g && g.h) || 520), Math.max(1, vh - 16));
 			const x = Math.min(Math.max(8, Number(g && g.x) || 8), Math.max(8, vw - w - 8));
-			const y = Math.min(Math.max(8, Number(g && g.y) || 8), Math.max(8, vh - Math.min(h, vh - 16) - 8));
+			const y = Math.min(Math.max(8, Number(g && g.y) || 8), Math.max(8, vh - h - 8));
 			return { x: x, y: y, w: w, h: h };
 		}
 		function loadDockGeom() {
@@ -16998,9 +17846,12 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 			// gesture persists just the fields the user actually changed.
 			const edit = (patch) => setPreference((previous) => {
 				const base = previous.preferred || defaultDockGeom();
-				const next = clampDockGeom({ ...clampDockGeom(base), ...patch });
+				const current = clampDockGeom(base);
+				const next = clampDockGeom({ ...current, ...patch });
+				const changed = Object.keys(patch).filter((key) => next[key] !== current[key]);
+				if (!changed.length) return previous;
 				const updated = { ...base };
-				for (const key of Object.keys(patch)) updated[key] = next[key];
+				for (const key of changed) updated[key] = next[key];
 				return { preferred: updated, edited: true };
 			});
 			return [visible, edit];

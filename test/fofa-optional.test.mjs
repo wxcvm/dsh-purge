@@ -47,8 +47,8 @@ test('recon instructions prioritize local-first discovery and preserve optional 
   assert.match(DEFAULT_PROMPTS.recon, /subfinder/)
   assert.match(DEFAULT_PROMPTS.recon, /fofa-recon/)
   const pipeline = readFileSync(new URL('../skills/redteam/recon-pipeline.md', import.meta.url), 'utf8')
-  assert.match(pipeline, /推荐顺序（默认无 FOFA）/)
+  assert.match(pipeline, /推荐顺序（默认无商业 API Key）/)
   assert.match(pipeline, /FOFA_KEY/)
   assert.match(readFileSync(new URL('../skills/redteam/fofa-recon.md', import.meta.url), 'utf8'),
-    /不是侦察阶段的前置依赖/)
+    /只作为已配置 API Key 时的补充来源/)
 })
