@@ -547,7 +547,7 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 
 ### 凭据数据边界
 
-当前模型工具表不暴露凭据新增、秘密值读取或认证检查入口。历史凭据仍保留在本地数据库；`redteam_sessions` 只返回脱敏元数据与是否存在秘密值的布尔标记，不解密、不回显，也不发起认证。
+当前模型工具表不暴露凭据新增、逐条列表、秘密值读取或认证检查入口。历史凭据仍保留在本地数据库；`redteam_sessions` 只返回各类历史记录的汇总计数，不返回账号、主机清单、秘密值、secret_present 标记或连接信息，也不发起认证。
 
 ### `redteam_access_add`
 
@@ -839,10 +839,8 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 参数：`engagement`（可选）、`file`（必填）、`kind`（可选）、`commit`（默认 false）、`max`（默认 5000，上限 20000）。
 
-### `redteam_credential_check`
-**已停用**：返回 `unsupported`，不会发起网络连接、协议认证或密码尝试。
-
-参数：`engagement`。
+### 旧版 `redteam_credential_check` 接口
+未注册到当前模型工具面，不存在可调用入口；不会发起网络连接、协议认证或密码尝试。
 
 ### `redteam_score_suggest`
 只读对账已确认漏洞、证据、实际成果与计分规则；`can_score` 是待复核建议，不会自动生成 `score_hit`。
