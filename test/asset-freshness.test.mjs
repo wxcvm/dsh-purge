@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RedteamStore } from '../lib/redteam/store-core.js'
+import { dispatch, RedteamStore } from '../lib/redteam/store-core.js'
 
 test('asset freshness separates recency, provenance and stored test status', t => {
   const home = mkdtempSync(join(tmpdir(), 'purge-asset-freshness-'))
@@ -68,4 +68,8 @@ test('asset freshness separates recency, provenance and stored test status', t =
   assert.equal(allByIp['192.0.2.33'].source, 'unknown')
   assert.equal(allByIp['192.0.2.34'].freshness, 'aging')
   assert.equal(report.semantics.verification.includes('不代表资产此刻仍在线'), true)
+  const api = dispatch(store, { op: 'assetFreshness', engagement: id, limit: 1 })
+  assert.equal(api.ok, true)
+  assert.equal(api.total, 4)
+  assert.equal(api.items.length, 1)
 })
