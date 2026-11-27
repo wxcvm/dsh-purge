@@ -188,3 +188,53 @@ test("restart verification requires a new process rather than a scheduled launch
   assert.equal(classify({ ...receipt, restartRequest: { status: "failed" } }, false, 2000), "dispatch_failed");
   assert.equal(classify({ ...receipt, restartRequest: { status: "manual" } }, false, 2000), "manual_required");
 });
+
+test("uninstall UI requires an explicit success receipt before reporting completion or refreshing", async () => {
+  const start = client.indexOf("const doUninstall = useCallback(");
+  const end = client.indexOf("const s = state;", start);
+  assert.ok(start >= 0 && end > start);
+  const run = async (api, surface = "web") => {
+    let current = { surface };
+    let busy, refreshes = 0;
+    const notices = [], terminal = { current: false };
+    const execute = new Function("useCallback", "actionTerminal", "setUninstallBusy",
+      "setAskUninstall", "setAskRestart", "tRef", "setNotice", "setState",
+      "apiJson", "hostText", "hostSurfaceOf", "state", "waitHostAfterUninstall",
+      client.slice(start, end) + "\nreturn doUninstall;")(
+      cb => cb, terminal, value => { busy = value; }, () => {}, () => {},
+      { current: (key, args) => key + (args ? ": " + args.error : "") },
+      n => notices.push(n), update => { current = update(current); },
+      api, (tr, key) => tr(key), s => s.surface, current, () => { refreshes++; });
+    await execute();
+    return { notice: notices.at(-1), busy, refreshes, terminal: terminal.current, progress: current.apply_progress };
+  };
+  for (const reason of ["Failed to fetch", "Cannot reach the API", "timeout"]) {
+    const result = await run(async () => { throw Error(reason); });
+    assert.match(result.notice.text, /^uninstall\.unconfirmed/);
+    assert.equal(result.notice.kind, "error");
+    assert.equal(result.busy, false);
+    assert.equal(result.progress.active, false);
+    assert.equal(result.progress.error, "");
+    assert.equal(result.refreshes, 0);
+    assert.equal(result.terminal, true);
+  }
+  for (const api of [
+    async () => ({ ok: false, error: "failed to fetch upstream" }),
+    async () => { throw Object.assign(Error("request rejected"), { httpStatus: 403 }); },
+  ]) {
+    const result = await run(api);
+    assert.match(result.notice.text, /^uninstall\.fail/);
+    assert.notEqual(result.progress.error, "");
+    assert.equal(result.busy, false);
+    assert.equal(result.refreshes, 0);
+  }
+  const missing = await run(async () => null);
+  assert.match(missing.notice.text, /^uninstall\.unconfirmed/);
+  assert.equal(missing.refreshes, 0);
+  const web = await run(async () => ({ ok: true }));
+  assert.equal(web.notice.text, "uninstall.done");
+  assert.equal(web.refreshes, 1);
+  const desktop = await run(async () => ({ ok: true, surface: "desktop" }), "desktop");
+  assert.equal(desktop.notice.text, "uninstall.done");
+  assert.equal(desktop.refreshes, 0);
+});

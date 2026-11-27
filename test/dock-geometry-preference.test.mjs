@@ -98,3 +98,33 @@ test('legacy Dock viewport sizing and user gestures use their distinct hooks', (
   assert.match(dock, /startResizeRight[\s\S]*?editGeom\(\{ w: ow \+ \(ev\.clientX - sx\) \}\)/)
   assert.match(dock, /startResizeBottom[\s\S]*?editGeom\(\{ h: oh \+ \(ev\.clientY - sy\) \}\)/)
 })
+
+test('a viewport smaller than the normal Dock minimum still contains the Dock', () => {
+  const app = setup(wide)
+  assert.deepEqual(app.render()[0], wide)
+  assert.deepEqual(app.resize(320, 200), { x: 8, y: 8, w: 304, h: 184 })
+  assert.deepEqual(app.saved(), wide)
+  assert.equal(app.writes, 0)
+  assert.deepEqual(app.resize(1440, 900), wide)
+  assert.deepEqual(setup(wide, 320, 200).render()[0], { x: 8, y: 8, w: 304, h: 184 })
+  assert.match(source, /min-width:min\(380px,calc\(100vw - 16px\)\);min-height:min\(240px,calc\(100vh - 16px\)\)/)
+})
+
+test('clamped no-op gestures never overwrite saved preferences', () => {
+  const app = setup(wide, 525, 500)
+  assert.deepEqual(app.edit({ x: 20, y: 30 }), { x: 8, y: 8, w: 509, h: 484 })
+  assert.deepEqual(app.edit({ w: 600, h: 600 }), { x: 8, y: 8, w: 509, h: 484 })
+  assert.equal(app.writes, 0)
+  assert.deepEqual(app.saved(), wide)
+  assert.deepEqual(app.resize(1440, 900), wide)
+})
+
+test('a partially clamped gesture saves only visibly changed dimensions', () => {
+  const app = setup(wide, 525, 500)
+  assert.equal(app.edit({ w: 600, h: 320 }).h, 320)
+  assert.deepEqual(app.saved(), { ...wide, h: 320 })
+  assert.equal(app.writes, 1)
+  app.edit({ w: 600, h: 320 })
+  assert.equal(app.writes, 1)
+  assert.deepEqual(app.resize(1440, 900), { ...wide, h: 320 })
+})
