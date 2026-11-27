@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4bd98244ea5f4931";
+		const CLIENT_BUILD_ID = "98fd3ecb371ac6eb";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4658,11 +4658,11 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
         h('button', { type: 'button', onClick: () => onNavigate('overview') }, t('diag.overview.back')),
         h('button', { type: 'button', onClick: () => onNavigate('diagnostics') }, t('diag.overview.details'))) : null),
     privacyApi ? h('div', { className: 'dshp-runtime-meta' },
-      '智能隐私中心 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
+      '本机隐私设置 · ' + (privacyDisplay ? (privacyDisplay.maskHistory ? '已启用会话标识及导入报告遮蔽' : '展示遮蔽未开启')
         : privacyFailed ? '设置读取失败，详情暂时隐藏' : '正在读取展示设置') + (!maskRuntime && revealPrivate ? ' · 当前临时显示详情' : ''),
       h('button', { type: 'button', className: 'dshp-runtime-action', onClick: () => {
         __dshPurgeDrill.setUI({ tab: 'low-impact', focus: null }); showPurgeWorkspace('drill');
-      } }, '打开智能隐私中心'),
+      } }, '打开本机隐私设置'),
       temporary?.maskHistory ? h('span', null, ' · 本次工作区临时遮蔽已开启') : null,
       !temporary?.maskHistory && privacyDisplay?.maskHistory === true ? h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
@@ -6454,9 +6454,7 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
       artex: ['M12 2l9 5-9 5-9-5z', 'M3 12l9 5 9-5', 'M3 17l9 5 9-5'],
       guide: ['M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1z', 'M12 6c3-2 6-2 9-1v14c-3-1-6-1-9 1z'],
       env: ['M12 3v3', 'M12 18v3', 'M3 12h3', 'M18 12h3', 'M5.6 5.6l2.1 2.1', 'M16.3 16.3l2.1 2.1', 'M18.4 5.6l-2.1 2.1', 'M7.7 16.3l-2.1 2.1', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6'],
-      'low-impact': ['M12 3l8 4v5c0 5-3 8-8 10c-5-2-8-5-8-10V7z', 'M9 12l2 2 4-4'],
       skills: ['M8 6l-5 6 5 6', 'M16 6l5 6-5 6', 'M14 4l-4 16'],
-      superagent: ['M8 5H5v16h14V5h-3', 'M8 3h8v4H8z', 'M8 12h8', 'M8 16h6'],
       agents: ['M9 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6', 'M16 9a3 3 0 1 0 0-6a3 3 0 1 0 0 6', 'M3 20v-4a6 6 0 0 1 12 0v4', 'M16 13a5 5 0 0 1 5 5v2'],
       report: ['M6 2h8l5 5v15H6z', 'M14 2v5h5', 'M9 12h7', 'M9 16h7'],
       antiforensics: ['M12 2l9 5v5c0 7-4 10-9 12c-5-2-9-5-9-12V7z', 'M8 10l4 3 4-5', 'M9 15h6'],
@@ -6464,7 +6462,9 @@ body[data-ds-dark-theme] .dshp-rewind-item span{color:var(--dsw-alias-label-tert
     function activeWorkbenchTab(tab) {
       switch (tab) {
         case 'skills': return 'knowledge-center'
+        case 'superagent': // Legacy saved tab; no separate page.
         case 'prompts': return 'agents'
+        case 'low-impact': // Legacy saved tab; privacy settings now live under Environment.
         case 'local-search':
         case 'knowledge': return 'env'
         default: return tab
@@ -10788,9 +10788,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           onChange: (e) => update(key, !!e.target.checked), style: { marginTop: 3 } }),
       h('span', null, h('b', null, label),
         h('div', { style: { fontSize: 12, opacity: 0.8, marginTop: 4 } }, description)))
-      return h('div', { className: 'rt-main' },
+      return h(props.embedded ? React.Fragment : 'div', props.embedded ? null : { className: 'rt-main' },
         h('div', { className: 'rt-toolbar' },
-          h('b', null, '智能隐私中心'),
+          h('b', null, '本机隐私设置'),
           saved ? h('span', { className: 'rt-tag' }, savedManagement.mode === 'automatic' ? '自动管理' : '手动管理') : null,
           h('div', { className: 'rt-spacer' }),
           h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft, onClick: save },
@@ -12167,7 +12167,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [section, setSection] = React.useState(props.initialSection || 'summary')
       const sections = [
         ['summary', '环境总览'], ['execution', '执行环境'], ['tools', '工具管理'],
-        ['local-search', '测绘中心'], ['network', '网络配置'], ['diagnostics', '诊断与修复'],
+        ['local-search', '测绘中心'], ['network', '网络配置'], ['diagnostics', '诊断与修复'], ['privacy', '本机隐私'],
       ]
       const sectionCard = (id, attrs, ...children) => section === id ? h('div', attrs, ...children) : null
       const [data, setData] = React.useState(null)
@@ -12836,6 +12836,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { className: 'rt-foot', style: { padding: '4px 12px' } },
             '顶部“保存环境配置”不保存测绘操作勾选；测绘偏好在测绘中心自动保存，外部提交同意不持久化。'),
           h(LocalAssetSearchTab, { engagement: props.engagement, refreshKey })) :
+        section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true }) :
         h('div', { className: 'rt-pane', style: { minHeight: 0 } },
         err ? h('div', { className: 'rt-err' }, err) : null,
         msg ? h('div', { className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
@@ -13612,7 +13613,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         ),
       )
     }
-    function focusSuperAgent(node, engagement, section, request) {
+    function focusAgentReview(node, engagement, section, request) {
       if (!node || !request.current || request.current.engagement !== engagement || request.current.section !== section) return
       request.current = null
       node.focus()
@@ -13624,7 +13625,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-ops-section-head' }, h('h3', null, '智能体待阅回报')),
         h('p', { className: 'rt-ops-subtle', role: 'status' },
           count === null ? '暂未取得待阅数量。' : count === 0 ? '当前没有待阅回报。' : count + ' 条回报待人工查看。'),
-        h('button', { className: 'rt-btn', type: 'button', onClick: onOpen }, '打开 Super Agent 回报'))
+        h('button', { className: 'rt-btn', type: 'button', onClick: onOpen }, '查看智能体回报'))
     }
 
     function AgentReportReminder({ total, onOpen }) {
@@ -15456,18 +15457,18 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         : null
     }
 
-    function SuperAgentTab(props) {
+    function AgentReviewSection(props) {
       const eng = props.engagement
       const { refreshKey } = props
       const reports = React.useRef(null)
       const tasks = React.useRef(null)
-      return h('div', { className: 'rt-main' },
+      return h('section', { className: 'rt-card', 'aria-label': '人工核对与回报' },
         h('div', { className: 'rt-toolbar' },
-          h('h3', { tabIndex: -1, ref: props.onPageReady, style: { margin: 0 } }, 'Super Agent'),
+          h('h3', { tabIndex: -1, ref: props.onPageReady, style: { margin: 0 } }, '人工核对与回报'),
           h('div', { className: 'rt-spacer' }),
           eng ? h('button', { type: 'button', className: 'rt-btn', onClick: () => reports.current?.focus() }, '查看待阅回报') : null,
           eng ? h('button', { type: 'button', className: 'rt-btn', onClick: () => tasks.current?.focus() }, '查看持久任务') : null),
-        h('div', { className: 'rt-pane' },
+        h('div', null,
           h(AgentReports, { key: 'agent-reports:' + (eng || ''), engagement: eng, onReceipt: props.onReportReceipt,
             onSectionReady: (node) => { reports.current = node; props.onReportSectionReady?.(node) },
             onOpenReportSession: props.onOpenReportSession, maskReportOrigin: props.maskReportOrigin }),
@@ -15548,10 +15549,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('div', { className: 'rt-pane' },
           err ? h('div', { className: 'rt-err' }, err) : null,
           concurrency && concurrency.ok === false ? h('div', { className: 'rt-err' }, concurrency.error || '智能体状态读取失败') : null,
-          h('div', { className: 'rt-card' },
-            h('h4', null, '人工核对与回报'),
-            h('p', { className: 'rt-note' }, '持久任务、历史尝试和待阅回报在 Super Agent。当前页展示智能体状态和角色设置。'),
-            h('button', { className: 'rt-btn', type: 'button', onClick: props.onOpenSuperAgent }, '打开 Super Agent')),
+          h(AgentReviewSection, { engagement: eng, refreshKey, onReportReceipt: props.onReportReceipt,
+            onPageReady: props.onPageReady, onReportSectionReady: props.onReportSectionReady,
+            onOpenReportSession: props.onOpenReportSession, maskReportOrigin: props.maskReportOrigin }),
           h('div', { className: 'rt-card' },
             h('h4', null, '并发规则（硬约束）'),
             h('div', { style: { fontSize: 12, lineHeight: 1.7 } },
@@ -16438,7 +16438,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             ? '已保存的测绘展示保护：' + (displayPrivacy.maskAssetResults ? '已开启' : '未开启') + (showPrivateDetails ? ' · 当前临时显示详情' : '')
             : privacyReadFailed ? '无法读取保存设置，暂时隐藏路径及报告详情。' : '正在读取保存设置…'),
           h('p', { className: 'rt-foot' }, '仅影响本页工具路径、情报、项目概览及报告展示；不修改 ARTEX 配置、报告或数据库。'),
-          h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开智能隐私中心'),
+          h('button', { className: 'rt-btn', type: 'button', onClick: () => setUI({ tab: 'low-impact' }) }, '打开环境中的本机隐私设置'),
           temporary?.maskAssetResults ? h('p', { className: 'rt-foot' }, '本次工作区临时遮蔽已开启；请在隐私中心结束后再显示详情。') : null,
           !temporary?.maskAssetResults && (!displayPrivacy || displayPrivacy.maskAssetResults) ? h('button', { className: 'rt-btn', type: 'button',
             onClick: () => setShowPrivateDetails(v => !v) }, showPrivateDetails ? '重新隐藏本页详情' : '临时显示本页详情') : null),
@@ -16827,9 +16827,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [snapshotError, setSnapshotError] = React.useState(null)
       const snapshotRequest = React.useRef(0)
       const selectedEngagement = React.useRef(null)
-      const superAgentFocus = React.useRef(null)
+      const agentReviewFocus = React.useRef(null)
 
-      React.useEffect(() => { superAgentFocus.current = null }, [eng])
+      React.useEffect(() => { agentReviewFocus.current = null }, [eng])
 
       React.useEffect(() => {
         if (embedded) return undefined
@@ -17006,15 +17006,15 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           ['chain', '攻击链'], ['scores', '得分'],
         ] },
         { label: '资源', pages: [['sessions', '入口'], ['intel', '情报'], ['knowledge-center', '技能与知识库'], ['artex', 'ARTEX']] },
-        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['antiforensics', '防溯源'], ['low-impact', '智能隐私中心'], ['superagent', 'Super Agent'], ['agents', '智能体'], ['report', '报告']] },
+        { label: '管理', pages: [['guide', '指南'], ['env', '环境'], ['antiforensics', '防溯源'], ['agents', '智能体'], ['report', '报告']] },
       ]
       const tabs = tabSections.flatMap((section) => section.pages)
       const activeTab = activeWorkbenchTab(st.tab)
-      const openSuperAgent = (section = 'page') => {
-        superAgentFocus.current = { engagement: eng, section }
-        setUI({ tab: 'superagent', focus: null })
+      const openReportPage = () => {
+        if (!eng) return
+        agentReviewFocus.current = { engagement: eng, section: 'reports' }
+        setUI({ tab: 'agents', focus: null })
       }
-      const openReportPage = () => { if (eng) openSuperAgent('reports') }
       const openFull = () => {
         // A browser popup is not necessarily maximized. Request the available
         // desktop work area; individual browsers may ignore these hints.
@@ -17067,9 +17067,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : h('div', { className: 'rt-note', role: 'status' }, summaryStatus)
       }
       /* 全局页：没有靶标也能查看环境适配、技能库和智能体概览。 */
-      else if (st.tab === 'env' || st.tab === 'knowledge' || st.tab === 'local-search') body = h(EnvTab, { engagement: eng, refreshKey, initialSection: st.tab === 'local-search' ? 'local-search' : 'summary' })
+      else if (st.tab === 'env' || st.tab === 'knowledge' || st.tab === 'local-search' || st.tab === 'low-impact') body = h(EnvTab, { engagement: eng, refreshKey, visible: full || embedded || st.open, initialSection: st.tab === 'low-impact' ? 'privacy' : st.tab === 'local-search' ? 'local-search' : 'summary' })
       else if (st.tab === 'antiforensics') body = h(AntiForensicsTab, { engagement: eng, refreshKey: refreshKey })
-      else if (st.tab === 'low-impact') body = h(LowImpactTab, { engagement: eng, refreshKey: refreshKey, visible: full || embedded || st.open })
        else if (st.tab === 'knowledge-center' || st.tab === 'skills') body = h(LibraryTab, { refreshKey, initialView: st.tab === 'skills' ? 'skills' : 'search' })
       else if (st.tab === 'artex') body = h(ArtexTab, { engagement: eng, refreshKey,
         intelTarget: st.artexIntel?.engagement === eng ? st.artexIntel.target : '',
@@ -17085,11 +17084,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           markTabSeen('findings')
           setUI({ tab: 'findings', focus: { engagement: eng, kind: 'vulns', assetId } })
         } })
-      else if (st.tab === 'agents' || st.tab === 'prompts') body = h(AgentsTab, { engagement: eng, refreshKey,
-        onOpenSuperAgent: () => openSuperAgent() })
-      else if (st.tab === 'superagent') body = h(SuperAgentTab, { engagement: eng, refreshKey, onReportReceipt,
-        onPageReady: (node) => focusSuperAgent(node, eng, 'page', superAgentFocus),
-        onReportSectionReady: (node) => focusSuperAgent(node, eng, 'reports', superAgentFocus),
+      else if (activeTab === 'agents') body = h(AgentsTab, { engagement: eng, refreshKey, onReportReceipt,
+        onPageReady: (node) => focusAgentReview(node, eng, 'page', agentReviewFocus),
+        onReportSectionReady: (node) => focusAgentReview(node, eng, 'reports', agentReviewFocus),
         onOpenReportSession: props?.onOpenReportSession, maskReportOrigin: props?.maskReportOrigin })
       else if (st.tab === 'guide') body = h(GuideTab, { engagement: eng, onRestored: (id) => { api({ op: 'activateEngagement', engagement: id }).finally(() => refreshList(id)) } })
       else if (!eng) {
@@ -17169,7 +17166,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             onClick: deleteCurrentEngagement }, deleting ? '归档中…' : '归档靶标'),
           h('div', { className: 'rt-spacer' }),
           embedded ? null : h(VersionBar, null),
-          activeTab === 'superagent' ? null :
+          activeTab === 'agents' ? null :
             h(AgentReportReminder, { total: pendingAgentReports, onOpen: openReportPage }),
           full ? h('button', { className: 'rt-btn', title: '回到带侧栏的普通界面（或按 Esc）', onClick: exitFull }, '退出全面浏览') : null,
           h('button', { className: 'rt-btn', title: '刷新名册、快照与当前页面数据', onClick: refreshAll }, '刷新'),
@@ -17738,7 +17735,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 							onClick: () => open(key),
 						}, key === "clean" ? "清洗台" : "作战台"))),
 					h("button", { type: "button", className: "dshp-workspace-privacy",
-						title: privacySummary.detail, "aria-label": "打开智能隐私中心。" + privacySummary.detail,
+						title: privacySummary.detail, "aria-label": "打开本机隐私设置。" + privacySummary.detail,
 						onClick: () => { __dshPurgeDrill.setUI({ open: true, tab: "low-impact", focus: null }); showPurgeWorkspace("drill"); }
 					}, privacySummary.label + (temporaryPrivacy ? " · 临时" : "")),
 					h("button", { type: "button", className: "dshp-workspace-back", onClick: back }, "返回会话"),

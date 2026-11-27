@@ -210,12 +210,14 @@ test('unobserved run requires explicit operator attestation; observed exact end 
     assert.throws(() => reportWorkItem(db, request), /operator host check/)
     assert.equal(getWorkItem(db, taskId).status, 'running')
     assert.equal(reportWorkItem(db, { ...request, host_checked: true }).recorded, true)
+    assert.equal(getWorkItem(db, taskId).assignment.settlement_basis, 'operator-attestation')
 
     const observedId = create(db, 'observed-run').item.id
     assign(db, observedId, 'ended-child', 'run-2')
     observeWorkItemEnd(db, { session_id: 'ended-child', run_id: 'run-2', stop_reason: 'completed' })
     assert.equal(reportWorkItem(db, { task_id: observedId, session_id: 'ended-child',
       run_id: 'run-2', status: 'ready', summary: 'Host event observed' }).recorded, true)
+    assert.equal(getWorkItem(db, observedId).assignment.settlement_basis, 'host-end-observed')
   } finally { db.close() }
 })
 
@@ -262,6 +264,8 @@ test('a delayed host end can annotate history but cannot override the new attemp
     assert.equal(current.status, 'running')
     assert.equal(current.needs_host_check, true)
     assert.equal(current.history[1].host_stop_reason, 'aborted')
+    assert.equal(current.history[1].settlement_basis, 'operator-attestation')
+    assert.equal(current.history[0].settlement_basis, null)
     assert.equal(current.history[0].host_end_at, null)
     assert.equal(workRecoveryCandidates(db).total, 1)
   } finally { db.close() }
@@ -326,10 +330,12 @@ test('old work assignment tables gain observational columns without losing exist
     assert.ok(columns.includes('host_stop_reason'))
     assert.ok(columns.includes('review_feedback'))
     assert.ok(columns.includes('review_returned_at'))
+    assert.ok(columns.includes('settlement_basis'))
     const old = db.prepare('SELECT * FROM agent_work_assignment WHERE id = 17').get()
     assert.equal(old.session_id, 'old-session')
     assert.equal(old.run_id, 'old-run')
     assert.equal(old.host_end_at, null)
     assert.equal(old.review_feedback, null)
+    assert.equal(old.settlement_basis, null)
   } finally { db.close() }
 })

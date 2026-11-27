@@ -1051,6 +1051,20 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 参数：`engagement`、`before`（必填，原样传入上次 `redteam_next_action` 的 `focus.before` JSON 字符串）、`task_key`（可选）。
 
+### `redteam_exploit_chain`
+【作战智能体】对一个已知漏洞执行完整利用链编排：Nday POC 利用 → 失败自动降级密码喷洒 → 权限提升 → C2 植入 → 持久化。把此前各自独立的 `exploit-executor` / `password-spray` / `privesc-engine` / `c2-manager` / `post-exploit` 串成一条链路。
+
+**`dry_run` 默认 `true`**：只生成命令与每个阶段的判定，不在目标上执行任何操作；只有显式 `dry_run: false` 才真实执行。执行前同样走 `targetInScope` 范围门禁（未登记 scope 需显式 `confirm: true`）。每个阶段自动落 `redteam_chain_add`（失败也记录，便于复现），返回的报告脱敏（不含 IP / 凭据明文）。链上成果仍须 `redteam_credential_add` / `redteam_webshell_add` / `redteam_access_add` 落库才算数。
+
+参数：`engagement`、`vuln_id`（提供时自动读取 CVE/组件/严重级与目标）、`target`、`port`、`service`（http/https/ssh/smb/winrm/db）、`os`（windows/linux）、`strategy`（`auto` 默认，按严重级与服务选择；或 `nday-first` / `spray-first` / `stealth`）、`dry_run`（默认 true）、`deploy_c2`、`persist`、`users`、`passwords`、`confirm`。
+
+### `redteam_internal_campaign`
+【作战智能体】内网渗透编排：通过已有隧道做 内网侦察 → 资产风险排序 → 横向移动 → 权限提升 → 数据获取 → 防溯源。三种模式：`recon-first`（先摸清再按风险排序打）、`speed-run`（并行扩张）、`stealth`（低速串行，避免 IDS/防火墙告警）。
+
+**`dry_run` 默认 `true`**，真实执行需显式 `dry_run: false`。内网 IP 属私网：登记了 scope 就必须落在范围内，未登记则要求显式 `confirm: true`。没有可用隧道就没有内网前提，先用 `redteam_tunnel_list` 确认 `status=active` 的隧道。内网成果需 `redteam_asset_add`（自动 `scope=internal`）+ `redteam_access_add` 落库才算数。
+
+参数：`engagement`、`starting_host`（必填，已控内网立足点 IP）、`tunnel_listen`（如 `socks5://127.0.0.1:1080`，仅作提示，本工具不自动套代理）、`username`、`password`、`cred_type`（local/domain/admin）、`mode`、`target_network`、`exfiltrate`、`max_parallel`、`dry_run`、`confirm`。
+
 ## 典型调用链
 
 ```
