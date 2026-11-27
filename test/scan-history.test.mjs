@@ -276,7 +276,7 @@ test('scan history exposes only real manifest execution lineage; legacy records 
   const manifestFile = join(root, 'alpha', 'scan-output', ONE + '.json')
   const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
   manifest.execution = {
-    executionId: ONE, environmentId: 'local', toolId: 'nmap',
+    executionId: ONE, environmentId: 'docker:' + 'a'.repeat(64), transport: 'docker', toolId: 'nmap',
     binarySource: 'config', attempted: true,
     resultStatus: 'executed',
     startedAt: manifest.startedAt, finishedAt: manifest.finishedAt,
@@ -284,7 +284,8 @@ test('scan history exposes only real manifest execution lineage; legacy records 
   writeFileSync(manifestFile, JSON.stringify(manifest))
   const history = listScanHistory(store, 'alpha')
   const recent = history.items.find((item) => item.run_id === ONE)
-  assert.equal(recent.execution.environment_id, 'local')
+  assert.equal(recent.execution.environment_id, 'docker:' + 'a'.repeat(64))
+  assert.equal(recent.execution.transport, 'docker')
   assert.equal(recent.execution.execution_id, ONE)
   assert.equal(recent.execution.tool_id, 'nmap')
   assert.equal(recent.execution.result_status, 'executed')
