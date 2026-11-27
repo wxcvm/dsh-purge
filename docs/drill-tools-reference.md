@@ -553,6 +553,10 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 
 **已停用**：模型不能仅凭文字声明写入已获得访问会话。未核验报告应记录为 `claimed` evidence。
 
+### `redteam_access_list`
+
+【脱敏元数据只读】列出历史访问记录的主机标签、账号标签、方法、权限级别和时间；不返回 `session_ref`、`note` 或其它自由文本。
+
 ### `redteam_webshell_add` / `redteam_tunnel_add`
 
 **已停用**：不生成、上传、部署或登记目标侧 WebShell/隧道。
