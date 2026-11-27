@@ -41,7 +41,7 @@ DNS 解析地址和别名仅是观察记录，不自动生成资产、端口或�
 
 ## 统一子域线索（第五阶段扩展）
 
-管理 → 环境 → 测绘中心 → 统一子域线索 · CT + subfinder + Amass。输入已登记 `*.域名` 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可分别选择 subfinder 或 Amass，并明确确认向其配置的被动数据源提交根域名。subfinder 使用固定被动参数，不启用 `-all` / `-active`，可在明确选择的 local、WSL、运行中的 Docker 或已验证 SSH Kali 环境执行；Amass 固定使用 `enum -passive`，当前仅支持 local。不会下载或安装工具。
+管理 → 环境 → 测绘中心 → 统一子域线索 · CT + subfinder + Amass。输入已登记 `*.域名` 范围对应的根域名。默认只读取最近保存的 CT 快照，不触网；可分别选择 subfinder 或 Amass，并明确确认向其配置的被动数据源提交根域名。subfinder 使用固定被动参数，不启用 `-all` / `-active`，可在明确选择的 local、WSL、运行中的 Docker 或已验证 SSH Kali 环境执行；Amass 固定使用 `enum -passive`，当前仅支持 local。不会下载或安装工具。 两者使用所选环境的默认出站路由，不强制或验证代理/VPS；若用户要求 VPS-only 或禁止直连，必须先完成独立出口验证，否则不执行。
 
 合并去重具体子域名，保留 crt.sh/subfinder/Amass 来源，最多 1000 项；工具缺失、失败、超时、环境不支持与空结果分别标记，已有 CT 线索仍可独立查看。可选保存到当前项目 SQLite `subdomain_intel_snapshot`，离线读取最近 20 条快照。DNS 解析必须另行确认；解析结果不会自动添加资产或扩大授权范围。
 
