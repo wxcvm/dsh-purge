@@ -545,17 +545,9 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 
 `exploit` / `internal` 角色已停用。模型工具不创建 WebShell、不部署隧道、不测试凭据、不探测旧会话，也不把文字声明写成已获得访问。历史记录仅用于盘点和清理。
 
-### `redteam_credential_add`
+### 凭据数据边界
 
-仅登记主机、用户名、类型、来源和脱敏元数据；不接收密码、Hash、Token、私钥或连接串。秘密值不会通过模型工具存入或回显。
-
-### `redteam_credential_list`
-
-只返回凭据元数据与 `secret_present` 布尔标记，不返回 `secret_value`。
-
-### `redteam_credential_check`
-
-**已停用**：不发起 TCP 探测、协议认证或凭据有效性检查，返回 `unsupported`。
+当前模型工具表不暴露凭据新增、秘密值读取或认证检查入口。历史凭据仍保留在本地数据库；`redteam_sessions` 只返回脱敏元数据与是否存在秘密值的布尔标记，不解密、不回显，也不发起认证。
 
 ### `redteam_access_add`
 
