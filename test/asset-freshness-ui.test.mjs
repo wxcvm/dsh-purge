@@ -16,6 +16,10 @@ test('asset freshness overview and detail view are wired into source and embedde
     assert.match(source, /最近观察/)
     assert.match(source, /freshnessState\.summary/)
     assert.match(source, /不代表实时在线/)
+    assert.match(source, /freshnessSourceFilter/)
+    assert.match(source, /freshnessVerificationFilter/)
+    assert.match(source, /全部新鲜度/)
+    assert.match(source, /全部来源/)
     assert.match(source, /setFocusAssetId\(it\.id\)/)
   }
 })
