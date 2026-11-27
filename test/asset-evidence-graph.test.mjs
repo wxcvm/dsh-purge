@@ -46,6 +46,9 @@ test('asset graph includes aliases, services, fingerprints and stored relations 
   const db = store.db(id)
   const first = db.prepare("SELECT id FROM asset WHERE ip = '192.0.2.10'").get()
   const second = db.prepare("SELECT id FROM asset WHERE ip = '198.51.100.11'").get()
+  const portId = db.prepare('SELECT id FROM port WHERE port = 443').get().id
+  const serviceId = db.prepare('SELECT id FROM service').get().id
+  const fingerprintId = db.prepare('SELECT id FROM fingerprint').get().id
   store.importBundle(id, {
     edges: [{
       src_kind: 'asset', src_id: String(first.id),
@@ -58,19 +61,19 @@ test('asset graph includes aliases, services, fingerprints and stored relations 
   const node = key => graph.nodes.find(item => item.id === key)
   assert.equal(node('name:shared.example.test').kind, 'domain')
   assert.equal(graph.nodes.filter(item => item.id === 'name:shared.example.test').length, 1)
-  assert.ok(node('service:1'))
-  assert.equal(node('service:1').meta.product, 'nginx')
-  assert.ok(node('fingerprint:1'))
-  assert.equal(node('fingerprint:1').meta.confidence, 0.9)
+  assert.ok(node('service:' + serviceId))
+  assert.equal(node('service:' + serviceId).meta.product, 'nginx')
+  assert.ok(node('fingerprint:' + fingerprintId))
+  assert.equal(node('fingerprint:' + fingerprintId).meta.confidence, 0.9)
   assert.equal(JSON.stringify(graph).includes('private-graph-evidence-marker'), false)
   assert.ok(graph.edges.some(edge => edge.source === 'name:shared.example.test'
     && edge.target === 'asset:' + first.id && edge.relation === 'resolves'))
   assert.ok(graph.edges.some(edge => edge.source === 'name:shared.example.test'
     && edge.target === 'asset:' + second.id && edge.relation === 'resolves'))
-  assert.ok(graph.edges.some(edge => edge.source === 'port:1'
-    && edge.target === 'service:1' && edge.relation === 'identified_as'))
-  assert.ok(graph.edges.some(edge => edge.source === 'port:1'
-    && edge.target === 'fingerprint:1' && edge.relation === 'fingerprinted_as'))
+  assert.ok(graph.edges.some(edge => edge.source === 'port:' + portId
+    && edge.target === 'service:' + serviceId && edge.relation === 'identified_as'))
+  assert.ok(graph.edges.some(edge => edge.source === 'port:' + portId
+    && edge.target === 'fingerprint:' + fingerprintId && edge.relation === 'fingerprinted_as'))
   assert.ok(graph.edges.some(edge => edge.source === 'asset:' + first.id
     && edge.target === 'asset:' + second.id && edge.relation === 'shares_cert'))
 
