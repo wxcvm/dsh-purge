@@ -35,6 +35,9 @@ test('fresh load returns empty defaults with exists=false', () => {
   // env has default keys initialized to empty strings (CENSYS_PAT stored separately in encrypted storage)
   assert.deepEqual(cfg.env, {
     FOFA_KEY: '',
+    SHODAN_API_KEY: '',
+    SHODAN_API_KEY_DISABLED: '',
+    SHODAN_BASE_URL: '',
     CENSYS_ORG_ID: '',
     REDTEAM_VPS_HOST: '',
     REDTEAM_VPS_USER: '',
