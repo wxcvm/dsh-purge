@@ -45,7 +45,7 @@ test('redteam_pivot_probe requires scope, tunnel reach, target-side legitimacy a
   mkdirSync(moduleDir, { recursive: true })
   writeFileSync(join(home, 'package.json'), '{}')
   writeFileSync(join(moduleDir, 'package.json'), '{"name":"@deepseek-ai/dsh-tools","main":"index.js"}')
-  writeFileSync(join(moduleDir, 'index.js'), 'exports.defineTool = spec => spec\\n')
+  writeFileSync(join(moduleDir, 'index.js'), 'exports.defineTool = spec => spec\n')
   process.env.DSH_HOME = home
   process.env.ARTEX_KB_DIR = join(home, 'artkb')
   mkdirSync(process.env.ARTEX_KB_DIR, { recursive: true })
