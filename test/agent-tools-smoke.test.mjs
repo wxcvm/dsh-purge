@@ -82,6 +82,20 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(sessions.totals.webshells, 1)
   assert.equal(sessions.totals.tunnels, 1)
   assert.doesNotMatch(JSON.stringify(sessions), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
+
+  for (const method of ['listCredentials', 'listTunnels', 'listWebshells', 'listAccess']) {
+    redteam[method] = () => { throw new Error('unsafe legacy session reader invoked: ' + method) }
+  }
+  const nextAction = JSON.parse(await registered.get('redteam_next_action').execute({
+    engagement: sensitiveEngagement, limit: 10,
+  }, {}))
+  assert.equal(nextAction.state.credentials, 1)
+  assert.equal(nextAction.state.webshells, 1)
+  assert.equal(nextAction.state.tunnels, 1)
+  assert.equal(nextAction.state.access, 0)
+  assert.doesNotMatch(JSON.stringify(nextAction), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
+  assert.doesNotMatch(JSON.stringify(nextAction), /redteam_credential_list|redteam_session_check|redteam_report/)
+
   const accessList = JSON.parse(await registered.get('redteam_access_list').execute({ engagement: sensitiveEngagement }, {}))
   assert.equal(accessList.items.length, 1)
   assert.equal(Object.hasOwn(accessList.items[0], 'session_ref'), false)
