@@ -71,7 +71,7 @@ test('dnsx batch resolves only saved in-scope names and stores DNS evidence with
   addSubdomainSnapshot(store, id)
   let calls = 0
   const options = {
-    root, interfaces: () => ({}),
+    root, interfaces: () => ({}), dnsServers: ['192.0.2.53'],
     resolveTool: toolId => {
       assert.equal(toolId, 'dnsx')
       return { path: '/fixture/dnsx' }
@@ -82,7 +82,9 @@ test('dnsx batch resolves only saved in-scope names and stores DNS evidence with
       assert.equal(runOptions.shell, false)
       assert.equal(args[0], '-l')
       assert.ok(args[1].endsWith('hosts.txt'))
-      assert.deepEqual(args.slice(2), [
+      assert.equal(args[2], '-r')
+      assert.equal(args[3], '192.0.2.53')
+      assert.deepEqual(args.slice(4), [
         '-silent', '-a', '-aaaa', '-cname', '-json', '-rl', '10',
         '-t', '5', '-timeout', '2', '-retry', '1', '-duc', '-auth=false',
       ])
