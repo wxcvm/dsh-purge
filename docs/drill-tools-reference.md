@@ -103,14 +103,21 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 「智能体」页现通过现有 `agentsStatus` 只读接口按根会话展示近期任务交接：活动预留（`reserved`）、已关联子运行（`delegated`）、正常结束且有最终回复但未验收（待核验）或异常结束（需关注）。来源为现有 `redteam_agent_slot` 的预留与持久交接索引，每个会话只显示自己的任务键；不自动更新工作记录，也不把子智能体结束当成任务完成。页面每次只显示最近 12 条，完整状态仍可通过 `redteam_agent_slot(action=status)` 查看。
 
 ### `redteam_tool_select`
-【只读】按任务类型查找当前本机可用路径，标注每个候选是否有专用执行适配器（当前仅 Nmap/httpx）；并单独返回 `configuredCustomTools` 路径清单。自定义工具未分类且无参数 schema，不会自动执行。不会执行网络探测或目标扫描，不把“找到可执行文件”当作实际测试成功。
+【只读】按任务类型查找当前本机可用路径，并为每个内置工具返回审查过的 Skill 读取键、执行策略、范围复核要求和是否需要本次动作确认。当前只有 Nmap / ProjectDiscovery httpx 有专用执行适配器（`redteam_scan_run`）。`configuredCustomTools` 只展示路径状态；自定义工具没有任务分类、Skill 和参数 schema，不会自动执行。规划不会运行目标任务，也不把“找到可执行文件”或“版本探针成功”当作实际测试成功。
 
 参数：
 - `task` — `domains`、`services`、`web`、`vulns`、`internal`、`identity`、`connectivity`
 - `verify` — 可选；`true` 时仅执行推荐工具已定义的本地版本参数，返回 `version-verified`、`path-only` 或 `verification-failed`。默认不运行任何程序。
 - `include_environments` — 可选；`true` 返回最近显式发现的跨环境候选及实际探针状态（最多 12 项），`false` 仅返回本机结果。省略时，本机无候选或版本验证失败才补充一个已有版本证据的远端候选。不执行新的远端探针或任务。
 
-候选优先级根据本机路径与已知版本探测能力确定，不修改已有工具的执行权限，也不会自动选择执行目标测试。其他自定义工具在环境目录中显示但不作为自动执行的候选。 跨环境评分由本机已定位路径和服务端本次会话里保存的显式探针结果决定；没有观测到某环境中某工具版本成功时，结果保持 `unknown` 而非推测已安装。默认本机优先，仅在本机无候选或版本验证失败时补充已有版本证据的远端候选。
+关键输出：
+- `skillRequirements[].key` — 稳定 Skill key；按需调用 `redteam_skill_read(key=...)` 读取正文。状态初始为 `not-read`，不是已加载证明。
+- `executionPolicy=dedicated-adapter` — 只能使用返回的专用适配器；当前为 Nmap/httpx 的 `redteam_scan_run`。
+- `executionPolicy=skill-guided-host-tool` — 读取所有必需 Skill 后，才可使用当前会话真实可用的宿主 Shell/MCP 接口；必须先核对范围，不得猜测命令或参数。
+- `executionPolicy=manual-review-only` — 需要针对本次工具、目标和动作的明确确认；默认不执行。
+- `executionPolicy=unmapped-manual-review` — 没有经过审查的 Skill/参数契约；不得执行或通过通用 Shell 兜底。
+
+每个候选都要求范围复核；`redteam_scope_review` 是离线范围文本核对，不证明真实授权。规划中的 `automaticExecutionAllowed` 始终为 false。禁止口令爆破、拒绝服务、持久化、规避检测和超范围操作。版本探针能力仅是验证元数据，不再给工具排名加分；任务顺序和用户显式首选决定推荐。跨环境评分由本机已定位路径和服务端本次会话里保存的显式探针结果决定；没有观测到某环境中某工具版本成功时，结果保持 `unknown` 而非推测已安装。
 
 ### `redteam_preflight`
 【开工前必须跑一次】平台技能与资源自检：逐个检查红队技能的必需环境变量（如 FOFA 测绘的 FOFA_KEY）、本机工具与二进制（suo5 / fscan / gogo / frp / 冰蝎 / 哥斯拉 / nmap / nuclei…）、外部基础设施（反弹 Shell 用的 VPS）。返回 available/broken 清单与每个坏掉的技能"缺什么、怎么补"。**缺 key / 缺 VPS 时直接向用户要，或改用替代方案，不要假装能跑。**
