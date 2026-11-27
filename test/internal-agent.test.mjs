@@ -111,10 +111,9 @@ test('internal-agent: config options are honoured', () => {
   assert.equal(agent.config.mode, 'speed-run')
 })
 
-test('internal-agent: dry-run chain returns audit id and stops on empty recon', async () => {
+test('internal-agent: dry-run returns a simulation plan without invoking fixture engines', async () => {
   const agent = new InternalAgent({ dryRun: true })
-  // 目标无存活主机：不得伪造入侵结果
-  agent.recon.scanLiveHosts = async () => ({ success: true, hosts: [] })
+  agent.recon.scanLiveHosts = async () => { throw new Error('placeholder recon must not run') }
 
   const result = await agent.executeInternalChain(
     '192.168.1.100',
@@ -123,14 +122,21 @@ test('internal-agent: dry-run chain returns audit id and stops on empty recon', 
     {},
   )
 
-  assert.equal(result.success, false, 'no live hosts must not claim success')
+  assert.equal(result.success, false)
+  assert.equal(result.status, 'simulated')
+  assert.equal(result.simulated, true)
+  assert.equal(result.actual_execution, false)
+  assert.equal(result.reason, 'dry_run_simulation_only')
+  assert.equal(result.assets_discovered, null)
+  assert.equal(result.hosts_compromised, null)
+  assert.ok(result.planned_stages.length > 0)
+  assert.deepEqual(result.chain, [])
   assert.ok(result.audit_id)
-  assert.ok(Array.isArray(result.chain))
 })
 
-test('internal-agent: recon failure is reported, not swallowed', async () => {
-  const agent = new InternalAgent({ dryRun: true })
-  agent.recon.scanLiveHosts = async () => { throw new Error('Network unreachable') }
+test('internal-agent: real execution fails closed until adapters are implemented', async () => {
+  const agent = new InternalAgent({ dryRun: false })
+  agent.recon.scanLiveHosts = async () => { throw new Error('placeholder recon must not run') }
 
   const result = await agent.executeInternalChain(
     '192.168.1.100',
@@ -138,7 +144,11 @@ test('internal-agent: recon failure is reported, not swallowed', async () => {
   )
 
   assert.equal(result.success, false)
-  assert.ok(result.error)
+  assert.equal(result.status, 'unsupported')
+  assert.equal(result.simulated, false)
+  assert.equal(result.actual_execution, false)
+  assert.equal(result.reason, 'internal_campaign_execution_not_implemented')
+  assert.deepEqual(result.chain, [])
   assert.ok(result.audit_id)
 })
 
