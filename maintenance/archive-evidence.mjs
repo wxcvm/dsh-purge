@@ -64,7 +64,7 @@ export function openArchive(path) {
       }
       const bytes = Buffer.alloc(entry.size);
       read(fd, bytes, 0, bytes.length, entry.off);
-      return JSON.parse(bytes.toString('utf8').replace(/^\\uFEFF/u, ''));
+      return JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/u, ''));
     }
     return { files, fingerprint, jsonMember, close: () => closeSync(fd) };
   } catch (err) { closeSync(fd); throw err; }
