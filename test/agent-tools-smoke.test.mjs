@@ -55,18 +55,11 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
     kind: 'socks5', listen: '127.0.0.1:1080', reach: '10.0.0.0/8', command: 'tunnel-command-marker',
   })
 
-  const credentialList = JSON.parse(await registered.get('redteam_credential_list').execute({ engagement: sensitiveEngagement }, {}))
-  assert.equal(credentialList.items[0].secret_present, true)
-  assert.equal(Object.hasOwn(credentialList.items[0], 'secret_value'), false)
-  assert.doesNotMatch(JSON.stringify(credentialList), /credential-secret-marker/)
-
-  const credentialAttempt = JSON.parse(await registered.get('redteam_credential_add').execute({
-    engagement: sensitiveEngagement, host: '192.0.2.11', secret_value: 'must-not-store',
-  }, {}))
-  assert.equal(credentialAttempt.ok, false)
-  const credentialCheck = JSON.parse(await registered.get('redteam_credential_check').execute({ engagement: sensitiveEngagement }, {}))
-  assert.equal(credentialCheck.status, 'unsupported')
-  assert.equal(credentialCheck.actual_execution, false)
+  // Credential CRUD/check tools are intentionally absent from the model-visible surface.
+  // Legacy credential records may remain in local storage, but no tool can retrieve or test them.
+  for (const name of ['redteam_credential_list', 'redteam_credential_add', 'redteam_credential_check']) {
+    assert.equal(registered.has(name), false, name + ' must not be registered')
+  }
 
   const webshellList = JSON.parse(await registered.get('redteam_webshell_list').execute({ engagement: sensitiveEngagement }, {}))
   assert.equal(Object.hasOwn(webshellList.items[0], 'url'), false)
