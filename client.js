@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "799ae67cb93bb2cd";
+		const CLIENT_BUILD_ID = "bad89b42145a3a80";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7926,6 +7926,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const pageSize = 100
       const [freshnessPage, setFreshnessPage] = React.useState(0)
       const freshnessPageSize = 100
+      const [freshnessFilter, setFreshnessFilter] = React.useState('')
+      const [freshnessSourceFilter, setFreshnessSourceFilter] = React.useState('')
+      const [freshnessVerificationFilter, setFreshnessVerificationFilter] = React.useState('')
       const [freshnessState, setFreshnessState] = React.useState({
         loading: false, error: null, total: 0, items: [], summary: null,
       })
@@ -7939,6 +7942,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setFreshnessState({ loading: true, error: null, total: 0, items: [], summary: null })
         api({
           op: 'assetFreshness', engagement: eng,
+          freshness: freshnessFilter || undefined,
+          source: freshnessSourceFilter || undefined,
+          verification_status: freshnessVerificationFilter || undefined,
           limit: freshnessPageSize, offset: freshnessPage * freshnessPageSize,
         }).then((r) => {
           if (!live) return
@@ -7957,7 +7963,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           })
         })
         return () => { live = false }
-      }, [eng, refreshKey, freshnessPage])
+      }, [eng, refreshKey, freshnessPage, freshnessFilter, freshnessSourceFilter, freshnessVerificationFilter])
       React.useEffect(() => { setPage(0); setOpenId(null); setDetail(null) },
         [eng, cidr, qApplied, service, port, prov, testStatus, priority, scope, assetState, sort])
       const [domains, setDomains] = React.useState(null)
@@ -8160,8 +8166,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const freshnessCounts = (freshnessState.summary && freshnessState.summary.freshness) || {}
       const sourceCounts = (freshnessState.summary && freshnessState.summary.sources) || {}
       const freshnessChip = (key, label, value) => h('span', Object.assign({
-        key: key, className: 'rt-concl-i', title: '打开资产新鲜度明细',
-      }, clickable(() => { setFreshnessPage(0); setView('freshness') }, { label: '查看' + label + '资产明细' })),
+        key: key, className: 'rt-concl-i' + (freshnessFilter === key ? ' on' : ''),
+        title: '点击筛选该新鲜度；再次点击清除',
+      }, clickable(() => {
+        setFreshnessFilter((current) => current === key ? '' : key)
+        setFreshnessPage(0)
+        setView('freshness')
+      }, { label: '按' + label + '筛选资产', expanded: freshnessFilter === key })),
         h('b', null, freshnessState.loading && !freshnessState.summary ? '…' : String(value || 0)),
         h('span', null, label))
       const freshnessStrip = h('div', { className: 'rt-concl', title: '根据本地已保存观察时间计算，不会向目标发起探测' },
@@ -8335,6 +8346,28 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 
 
       const freshnessPane = h('div', { className: 'rt-table' },
+        h('div', { className: 'rt-toolbar' },
+          h('select', { className: 'rt-input', value: freshnessFilter, onChange: (e) => { setFreshnessFilter(e.target.value); setFreshnessPage(0) } },
+            h('option', { value: '' }, '全部新鲜度'),
+            h('option', { value: 'fresh' }, '新鲜（≤7 天）'),
+            h('option', { value: 'aging' }, '临近过期（8–30 天）'),
+            h('option', { value: 'stale' }, '已过期（>30 天）'),
+            h('option', { value: 'unknown' }, '时间未知')),
+          h('select', { className: 'rt-input', value: freshnessSourceFilter, onChange: (e) => { setFreshnessSourceFilter(e.target.value); setFreshnessPage(0) } },
+            h('option', { value: '' }, '全部来源'),
+            h('option', { value: 'active' }, '主动发现'),
+            h('option', { value: 'passive' }, '被动发现'),
+            h('option', { value: 'mixed' }, '混合来源'),
+            h('option', { value: 'unknown' }, '来源未知')),
+          h('select', { className: 'rt-input', value: freshnessVerificationFilter, onChange: (e) => { setFreshnessVerificationFilter(e.target.value); setFreshnessPage(0) } },
+            h('option', { value: '' }, '全部测试状态'),
+            h('option', { value: 'untested' }, '未测试'),
+            h('option', { value: 'testing' }, '测试中'),
+            h('option', { value: 'tested' }, '已测试'),
+            h('option', { value: 'blocked' }, '被封禁'),
+            h('option', { value: 'abandoned' }, '已放弃'),
+            h('option', { value: 'no_surface' }, '无攻击面'),
+            h('option', { value: 'unknown' }, '状态未知'))),
         h('div', { className: 'rt-row head', style: { gridTemplateColumns: '1.35fr 1.15fr 105px 85px 105px' } },
           h('span', null, '资产'), h('span', null, '最近观察'), h('span', null, '新鲜度'),
           h('span', null, '来源'), h('span', null, '测试状态')),
