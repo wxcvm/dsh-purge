@@ -9,7 +9,7 @@ const end = client.indexOf("function SettingsRoot(props)", start);
 assert.ok(start > 0 && end > start, "profile component must be included in the generated client");
 const source = client.slice(start, end);
 
-function mount({ querySession, readSettings, requestPreview, fullWriteResponse = false } = {}) {
+function mount({ querySession, readSettings, requestPreview, requestWrite, fullWriteResponse = false } = {}) {
   const profiles = [
     { id: "global", name: "全局", scope: "global", enabled: false, priority: 0, keywords: [], excludes: [], body: "" },
     { id: "redteam", name: "红队", enabled: true, priority: 100, keywords: ["红队演练"], excludes: [], body: "" },
@@ -22,6 +22,13 @@ function mount({ querySession, readSettings, requestPreview, fullWriteResponse =
   let stateIndex = 0, refIndex = 0, sessionLock = "writing";
   const snapshot = () => ({ ok: true, profiles: structuredClone(profiles),
     routingSettings: structuredClone(routingSettings), observedTargets: structuredClone(observed),
+    backupSource: { ready: true, code: "READY", bytes: 1234, version: "v2.0.0" },
+    modelPromptCatalog: [
+      { id: "openai", label: "GPT / OpenAI", sampleModel: "gpt-6", text: "[GPT-ADAPT] built-in GPT text" },
+      { id: "claude", label: "Claude / Anthropic", sampleModel: "claude-sonnet-4", text: "Claude model guidance" },
+      { id: "gemini", label: "Gemini / Google", sampleModel: "gemini-2.5-pro", text: "Gemini model guidance" },
+      { id: "glm", label: "GLM / 智谱", sampleModel: "glm-4.6", text: "GLM model guidance" },
+    ],
     lastAssembly: { stage: "assembled", delivery: "unverified" } });
   const context = vm.createContext({
     useState(initial) {
@@ -41,6 +48,7 @@ function mount({ querySession, readSettings, requestPreview, fullWriteResponse =
     },
     promptProfilesApi: async (op, data) => {
       actions.push({ op, data });
+      if (op === "save" && requestWrite) return requestWrite(op, data, profiles, snapshot);
       if (op === "preview" && requestPreview) return requestPreview(data);
       if (op === "routing-settings") Object.assign(routingSettings, data.settings);
       if (op === "save") {
@@ -87,7 +95,87 @@ function mount({ querySession, readSettings, requestPreview, fullWriteResponse =
   return { render, find, nodes, initialize, actions, apiCalls, profiles, routingSettings, observed };
 }
 
+test("saved and draft blacklists are visible and searchable without changing route settings", async () => {
+  const ui = mount();
+  Object.assign(ui.profiles.find(p => p.id === "coding"), {
+    allowEnabled: false, blockEnabled: true,
+    blockTargets: { models: ["blocked-model"], providers: ["blocked-provider"],
+      sessions: ["blocked-session"], presets: ["redteam"] },
+  });
+  Object.assign(ui.profiles.find(p => p.id === "writing"), {
+    allowEnabled: true, allowTargets: { models: ["allowed-writer"] },
+    blockEnabled: true, blockTargets: { models: ["forbidden-writer"] },
+  });
+  await ui.initialize();
+  const local = () => ui.nodes(ui.render()).find(n => n.props.className === "dshp-prompt-local");
+  const search = value => ui.find(ui.render(), "input", "查找局部提示词规则")
+    .props.onChange({ target: { value } });
+  let display = JSON.stringify(local());
+  assert.match(display, /白名单关闭 · 黑名单排除：模型：blocked-model · Provider：blocked-provider · 会话：blocked-session · Agent 预设：redteam/);
+  assert.match(display, /模型：allowed-writer · 黑名单排除：模型：forbidden-writer/);
+  search("BLOCKED-PROVIDER");
+  assert.ok(ui.find(local(), "button", "编辑规则 coding"));
+  assert.equal(ui.find(local(), "button", "编辑规则 writing"), undefined);
+  search("FORBIDDEN-WRITER");
+  assert.ok(ui.find(local(), "button", "编辑规则 writing"));
+  assert.equal(ui.find(local(), "button", "编辑规则 coding"), undefined);
+  search("");
+  ui.find(local(), "textarea", "黑名单模型 ID").props.onChange({ target: { value: "new-blocked-draft" } });
+  display = JSON.stringify(local());
+  assert.match(display, /已保存范围：","白名单关闭 · 黑名单排除：模型：blocked-model/);
+  assert.match(display, /未保存的范围：","白名单关闭 · 黑名单排除：模型：new-blocked-draft/);
+  search("NEW-BLOCKED-DRAFT");
+  assert.ok(ui.find(local(), "button", "编辑规则 coding"));
+  assert.equal(ui.actions.length, 0, "search and editing draft do not save or route");
+});
+
 const nextTask = () => new Promise(resolve => setImmediate(resolve));
+
+test("local rule list separates saved and draft model scopes; searching does not change the editor", async () => {
+  const ui = mount();
+  Object.assign(ui.profiles.find(p => p.id === "coding"), {
+    allowEnabled: true, allowTargets: { models: ["editor-old"], providers: ["local-writer"] },
+  });
+  Object.assign(ui.profiles.find(p => p.id === "writing"), { allowEnabled: true, allowTargets: {} });
+  let tree = await ui.initialize();
+  const local = () => ui.nodes(ui.render()).find(n => n.props.className === "dshp-prompt-local");
+  assert.match(JSON.stringify(local()), /白名单开启但未填条件/);
+  ui.find(local(), "textarea", "白名单模型 ID").props.onChange({ target: { value: "editor-draft" } });
+  const search = query => ui.find(ui.render(), "input", "查找局部提示词规则").props.onChange({ target: { value: query } });
+  search("LOCAL-WRITER");
+  tree = local();
+  assert.ok(ui.find(tree, "button", "编辑规则 coding"));
+  assert.equal(ui.find(tree, "button", "编辑规则 writing"), undefined);
+  const display = JSON.stringify(tree);
+  assert.match(display, /已保存启用 · 有草稿/);
+  assert.match(display, /已保存范围：","模型：editor-old · Provider：local-writer/);
+  assert.match(display, /未保存的范围：","模型：editor-draft · Provider：local-writer/);
+  search("editor-draft");
+  assert.ok(ui.find(local(), "button", "编辑规则 coding"));
+  search("nothing-here");
+  assert.equal(ui.find(local(), "button", "编辑规则 coding"), undefined);
+  assert.match(JSON.stringify(local()), /仍可继续编辑/);
+  assert.equal(ui.find(local(), "textarea", "白名单模型 ID").props.value, "editor-draft");
+  assert.equal(ui.actions.length, 0);
+});
+
+test("creating in a filtered list reveals the new draft and focuses its name once", async () => {
+  const ui = mount();
+  const tree = await ui.initialize();
+  const name = () => ui.find(ui.render(), "input", "局部规则名称");
+  let focused = 0;
+  const node = { focus() { focused++; } };
+  name().props.ref(node);
+  assert.equal(focused, 0, "opening the page does not steal focus");
+  ui.find(tree, "input", "查找局部提示词规则").props.onChange({ target: { value: "narrow-search" } });
+  ui.find(ui.render(), "button", "新建提示词规则").props.onClick();
+  name().props.ref(node);
+  name().props.ref(node);
+  assert.equal(focused, 1);
+  assert.equal(name().props.value, "新提示词规则");
+  assert.equal(ui.find(ui.render(), "input", "查找局部提示词规则").props.value, "");
+  assert.equal(ui.actions.length, 0, "new drafts are not auto-saved");
+});
 
 test("a late preview cannot replace results for a newer model; input and saved changes retire results", async () => {
   const replies = new Map();
@@ -327,13 +415,132 @@ test("prompt routing switches persist through the existing settings API without 
   await ui.find(tree, "button", "保存路由开关").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
   const saved = ui.actions.find(item => item.op === "routing-settings");
-  assert.equal(saved.data.settings.bundledDefault, false);
+  assert.equal(Object.hasOwn(saved.data.settings, "bundledDefault"), false, "unmodified routing settings must not be written");
+  assert.equal(Object.hasOwn(saved.data.settings, "upstreamSafeBackup"), false, "ordinary controls never write source selection");
   assert.equal(saved.data.settings.redteamTaskRoute, true);
   assert.equal(saved.data.settings.modelAdaptive, true);
   assert.equal(ui.routingSettings.redteamTaskRoute, true);
   tree = ui.render();
   assert.equal(ui.find(tree, "input", "普通模式识别红队任务").props.checked, true);
   assert.equal(ui.find(tree, "input", "按当前模型家族自动适配").props.checked, true);
+});
+
+test("source status is readable on the same page, independently of ordinary routing edits", async () => {
+  const ui = mount({ fullWriteResponse: true });
+  ui.routingSettings.upstreamSafeBackup = true;
+  let tree = await ui.initialize();
+  const status = () => JSON.stringify(ui.nodes(tree).find(n => n.props["aria-label"] === "主副提示词来源"));
+  assert.match(status(), /配置已选择副方案/);
+  assert.match(status(), /不表示当前会话已组装或模型已收到/);
+  assert.equal(ui.find(tree, "button", "保存路由开关").props.disabled, true);
+  ui.find(tree, "input", "按当前模型家族自动适配").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  await ui.find(tree, "button", "保存路由开关").props.onClick();
+  tree = ui.render();
+  const write = ui.actions.find(item => item.op === "routing-settings");
+  assert.deepEqual(structuredClone(write.data.settings), { modelAdaptive: true });
+  assert.equal(ui.routingSettings.upstreamSafeBackup, true);
+  assert.match(status(), /配置已选择副方案/);
+});
+
+test("model family cards show real host-provided text and create only an unsaved scoped rule", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  const modelPanel = ui.nodes(tree).find(node => node.props["aria-label"] === "模型专属提示词");
+  const panelText = JSON.stringify(modelPanel);
+  assert.match(panelText, /GPT \/ Claude \/ Gemini \/ GLM/);
+  assert.match(panelText, /\[GPT-ADAPT\] built-in GPT text/);
+  assert.match(panelText, /Claude model guidance/);
+  assert.match(panelText, /Gemini model guidance/);
+  assert.ok(ui.find(tree, "button", "编辑GPT专属规则"));
+  ui.find(tree, "button", "编辑GPT专属规则").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.find(tree, "input", "局部规则名称").props.value, "GPT 专属规则");
+  assert.equal(ui.find(tree, "input", "启用当前提示词规则").props.checked, false);
+  assert.equal(ui.actions.length, 0, "creating an editor must not save or inject a prompt");
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "Owner's custom GPT rule" } });
+  tree = ui.render();
+  ui.find(tree, "input", "启用当前提示词规则").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(x => x.op === "save").data.profile;
+  assert.equal(saved.id, "model-openai");
+  assert.equal(saved.enabled, true);
+  assert.equal(saved.allowEnabled, true);
+  assert.ok(saved.allowTargets.models.includes("gpt-*"));
+  assert.equal(saved.body, "Owner's custom GPT rule");
+});
+
+test("source choice saves only the backup switch and leaves other unsaved routing changes", async () => {
+  const ui = mount({ fullWriteResponse: true });
+  ui.routingSettings.upstreamSafeBackup = false;
+  let tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /备用资源可读取/);
+  assert.equal(ui.find(tree, "input", "启用接手版副提示词").props.checked, false);
+  ui.find(tree, "input", "普通模式识别红队任务").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  ui.find(tree, "input", "启用接手版副提示词").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  await ui.find(tree, "button", "保存副提示词方案").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const first = ui.actions.find(x => x.op === "routing-settings");
+  assert.deepEqual(structuredClone(first.data.settings), { upstreamSafeBackup: true });
+  assert.equal(ui.routingSettings.upstreamSafeBackup, true);
+  assert.equal(ui.routingSettings.redteamTaskRoute, false, "unrelated router switch must not be saved");
+  tree = ui.render();
+  assert.equal(ui.find(tree, "input", "普通模式识别红队任务").props.checked, true,
+    "the unrelated routing draft must survive source save");
+  await ui.find(tree, "button", "保存路由开关").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const writes = ui.actions.filter(x => x.op === "routing-settings");
+  assert.equal(writes.length, 2);
+  assert.deepEqual(structuredClone(writes[1].data.settings), { redteamTaskRoute: true });
+});
+
+test("unknown backup selection is not clickable, and missing built-in family text is not invented", async () => {
+  const ui = mount({ readSettings(result) {
+    return { ...result, modelPromptCatalog: undefined, backupSource: undefined };
+  } });
+  const tree = await ui.initialize();
+  assert.equal(ui.find(tree, "input", "启用接手版副提示词").props.disabled, true);
+  assert.match(JSON.stringify(tree), /备用资源未核验/);
+  assert.match(JSON.stringify(tree), /当前宿主未返回内置适配正文/);
+  assert.equal(ui.find(tree, "button", "保存副提示词方案").props.disabled, true);
+});
+
+test("local-only leaves the source unconfirmed and preserves an edited prompt", async () => {
+  let refuse = false;
+  const ui = mount({ readSettings(result) {
+    if (refuse) throw new Error("local-only");
+    return result;
+  } });
+  ui.routingSettings.upstreamSafeBackup = false;
+  let tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /配置使用主方案/);
+  ui.find(tree, "textarea", "全局提示词正文").props.onChange({ target: { value: "keep this draft" } });
+  refuse = true;
+  tree = ui.render();
+  await ui.find(tree, "button", "重新读取").props.onClick();
+  tree = ui.render();
+  assert.match(JSON.stringify(tree), /当前 Harness 拒绝了这次本机设置请求/);
+  assert.match(JSON.stringify(tree), /读取失败，当前状态未确认/);
+  assert.doesNotMatch(JSON.stringify(tree), /配置使用主方案/);
+  assert.equal(ui.find(tree, "textarea", "全局提示词正文").props.value, "keep this draft");
+  assert.equal(ui.find(tree, "button", "保存全局提示词").props.disabled, true);
+  refuse = false;
+  await ui.find(tree, "button", "重新读取").props.onClick();
+  tree = ui.render();
+  assert.match(JSON.stringify(tree), /配置使用主方案/);
+  assert.equal(ui.find(tree, "textarea", "全局提示词正文").props.value, "keep this draft");
+  assert.deepEqual(ui.actions, []);
+});
+
+test("a legacy payload without a source setting must not be reported as the main source", async () => {
+  const ui = mount();
+  const tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /宿主未返回备用方案状态/);
+  assert.doesNotMatch(JSON.stringify(tree), /配置使用主方案|配置已选择副方案/);
 });
 
 test("advanced list controls explain wildcard scope and save GPT exclusion", async () => {
@@ -460,4 +667,43 @@ test("recent picker distinguishes no observations, every ID added, and a stale s
   assert.equal(add.props.disabled, true);
   add.props.onClick();
   assert.equal(ui.find(ui.render(), "textarea", "白名单模型 ID").props.value, "");
+});
+
+test("ordinary editor reads back a stale-save conflict without overwriting or losing its draft", async () => {
+  const a = "a".repeat(64), b = "b".repeat(64), c = "c".repeat(64);
+  const ui = mount({
+    readSettings: snapshot => {
+      if (!snapshot.profiles.find(row => row.id === "coding").revision)
+        snapshot.profiles.find(row => row.id === "coding").revision = a;
+      return snapshot;
+    },
+    requestWrite(op, data, profiles, snapshot) {
+      assert.equal(op, "save");
+      const row = profiles.find(row => row.id === "coding");
+      if (!row.revision) {
+        assert.equal(data.expectedRevision, a);
+        Object.assign(row, { body: "Body saved in another window", revision: b });
+        throw Object.assign(new Error("stale"), { code: "prompt_profile_conflict" });
+      }
+      assert.equal(data.expectedRevision, b);
+      Object.assign(row, { body: data.profile.body, revision: c });
+      return snapshot();
+    },
+  });
+  let tree = await ui.initialize();
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "My local draft" } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  tree = ui.render();
+  assert.equal(ui.find(tree, "textarea", "局部提示词正文").props.value, "My local draft");
+  assert.equal(ui.find(tree, "textarea", "已保存正文 coding").props.value, "Body saved in another window");
+  assert.equal(ui.profiles.find(row => row.id === "coding").body, "Body saved in another window");
+  ui.find(tree, "button", "采用已保存版本作为比对基线 coding").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.actions.length, 1, "comparison does not save");
+  assert.equal(ui.find(tree, "textarea", "局部提示词正文").props.value, "My local draft");
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ui.profiles.find(row => row.id === "coding").body, "My local draft");
 });

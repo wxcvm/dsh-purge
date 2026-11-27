@@ -69,7 +69,7 @@ function fixture(t) {
   git('update-ref', 'refs/remotes/origin/master', head)
   assert.equal(typeof releaseStep?.run, 'string', 'the real workflow step must be exercised')
   return {
-    git, write, commit, head, run, path: file => path.join(repo, file),
+    git, write, commit, head, run, ghExecutable: path.join(bin, 'gh'), ghCalled, path: file => path.join(repo, file),
     preflight(extra = {}) {
       const result = run('bash', ['-c', releaseStep.run], {
         GITHUB_REPOSITORY: 'wxcvm/dsh-purge',
@@ -134,4 +134,60 @@ test('release preflight will not attest an archive with a different version or m
   result = f.preflight({ GITHUB_SHA: missing })
   assert.notEqual(result.status, 0)
   assert.equal(existsSync(f.path('SHA256SUMS.txt')), false)
+})
+
+test('publishing sends only the current version notes rather than the historical changelog', { skip }, t => {
+  const f = fixture(t)
+  f.write('release-notes-wxcvm.md', [
+    '# ' + version, '', '## Current features', '',
+    '- Only this version may appear in the GitHub Release.', '',
+    '---', '', '# 0.9.9', '', '- Historical text must not appear.', '',
+  ].join('\n'))
+  const candidate = f.commit('fixture release with historical changelog')
+  const captured = f.path('published-notes.txt')
+  writeFileSync(f.ghExecutable, [
+    '#!/bin/sh',
+    'printf "%s\\n" "$*" >> "$PREFLIGHT_GH_PROBE"',
+    'if [ "$1" = release ] && [ "$2" = view ]; then exit 1; fi',
+    'if [ "$1" = release ] && [ "$2" = create ]; then',
+    '  while [ "$#" -gt 0 ]; do',
+    '    if [ "$1" = --notes-file ]; then shift; cat "$1" > "$PREFLIGHT_NOTES_CAPTURE"; break; fi',
+    '    shift',
+    '  done',
+    'fi',
+    'exit 0',
+    '',
+  ].join('\n'), { mode: 0o700 })
+  const result = f.run('bash', ['-c', releaseStep.run], {
+    GITHUB_REPOSITORY: 'wxcvm/dsh-purge',
+    GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_NAME: 'master',
+    GITHUB_SHA: candidate, DRY_RUN: 'false', PREFLIGHT_NOTES_CAPTURE: captured,
+  })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  const notes = readFileSync(captured, 'utf8')
+  assert.match(notes, /^# 1\.0\.0\n/)
+  assert.match(notes, /## Current features/)
+  assert.match(notes, /Only this version may appear/)
+  assert.doesNotMatch(notes, /# 0\.9\.9|Historical text/)
+  const calls = readFileSync(f.ghCalled, 'utf8').trim().split('\n')
+  assert.equal(calls.length, 3)
+  assert.equal(calls[0], 'release view ' + tag)
+  assert.match(calls[1], /^release create /)
+  assert.match(calls[1], /--notes-file /)
+  assert.equal(calls[2], 'release upload ' + tag + ' ' + zip + ' SHA256SUMS.txt')
+})
+
+test('existing published GitHub Release fails closed without replacing assets', { skip }, t => {
+  const f = fixture(t)
+  writeFileSync(f.ghExecutable, '#!/bin/sh\nprintf "%s\n" "$*" >> "$PREFLIGHT_GH_PROBE"\nif [ "$1" = release ] && [ "$2" = view ]; then exit 0; fi\nexit 98\n', { mode: 0o700 })
+  const result = f.run('bash', ['-c', releaseStep.run], {
+    GITHUB_REPOSITORY: 'wxcvm/dsh-purge',
+    GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF_NAME: 'master',
+    GITHUB_SHA: f.head, DRY_RUN: 'false',
+  })
+  assert.notEqual(result.status, 0, 'preexisting release must block publication')
+  assert.match(result.stdout + result.stderr, /already exists; refusing to overwrite immutable assets/)
+  assert.deepEqual(readFileSync(f.ghCalled, 'utf8').trim().split('\n'), ['release view ' + tag],
+    'no release create or upload may run after an existing release is observed')
+  assert.equal(f.git('tag', '--list'), '', 'local repository tags are unchanged')
 })
