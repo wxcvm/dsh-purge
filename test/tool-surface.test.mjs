@@ -114,6 +114,11 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.match(blockedPassive.error, /redteam:passive-recon/)
   const passiveSkill = JSON.parse(await skillReader.execute({ key: 'redteam:passive-recon' }, passiveExec))
   assert.equal(passiveSkill.skillReadReceipt, 'recorded-for-current-root-session')
+  const passivePlanAfterRead = JSON.parse(await registered.get('redteam_tool_select').execute({
+    task: 'domains',
+  }, passiveExec))
+  assert.equal(passivePlanAfterRead.candidates.find(item => item.id === 'subfinder')
+    .skillRequirements[0].status, 'read')
   const otherSession = { agent: { session: { id: 'another-session' } } }
   const isolatedPassive = JSON.parse(await passiveTool.execute(passiveRequest, otherSession))
   assert.equal(isolatedPassive.ok, false)
@@ -136,6 +141,11 @@ test('reviewed tool names match source declarations and actual registrations', a
     key: 'redteam:nmap-service-inventory',
   }, scanExec))
   assert.equal(nmapSkill.skillReadReceipt, 'recorded-for-current-root-session')
+  const scanPlanAfterRead = JSON.parse(await registered.get('redteam_tool_select').execute({
+    task: 'services',
+  }, scanExec))
+  assert.equal(scanPlanAfterRead.candidates.find(item => item.id === 'nmap')
+    .skillRequirements[0].status, 'read')
   const scanAfterRead = JSON.parse(await scanTool.execute(scanRequest, scanExec))
   assert.equal(scanAfterRead.status, 'unsupported-environment')
   assert.equal(scanAfterRead.execution.attempted, false)
