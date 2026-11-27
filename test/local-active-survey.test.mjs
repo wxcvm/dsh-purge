@@ -136,6 +136,23 @@ test('hostname-only scope does not authorize importing its resolved IP as an ass
   assert.ok(result.output_file, 'raw scan output remains available for manual review')
 })
 
+test('empty-scope confirmation of a hostname still cannot import its resolved IPs', async t => {
+  const { store, imported, scan } = fixture(t, [])
+  const output = '<nmaprun><host><address addr="192.0.2.51" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host></nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: 'example.test',
+    ports: '80,443', confirm: true, commit: true,
+  }, { ...scan, execFileFn: (_exe, _argv, _options, cb) => cb(null, output, '') })
+  assert.equal(result.ok, true)
+  assert.equal(result.scope, 'scope-empty-confirmed')
+  assert.equal(result.assets, 0)
+  assert.match(result.note, /IP\/CIDR/)
+  assert.equal(imported.length, 0)
+})
+
 test('hostname scope plus an explicit matching IP/CIDR rule can import the resolved asset', async t => {
   const { store, imported, scan } = fixture(t, ['example.test', '192.0.2.0/24'])
   const output = '<nmaprun><host><address addr="192.0.2.50" addrtype="ipv4"/>'
