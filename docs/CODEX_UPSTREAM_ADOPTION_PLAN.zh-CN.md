@@ -1,5 +1,41 @@
 # Purge 接手版上游吸收 · Codex 可执行总方案
 
+## 2026-11-27 · 当前源码与上游工具对账（覆盖下方 2026-11-22 状态快照）
+
+**固定双仓基线**：我方 `wxcvm/dsh-purge master@7f99f0aaf81a9f29a4c99d34e0be5da7190921ce`；指定上游 `CallMeGuLab/dsh-purge-safe main@29bf73a962891cc2c543077572ebd70078897d69`（v2.0.2 / DSH 0.2.2-rc.5）。这是本轮核对时的固定 SHA，不代表未来 main 不再更新。
+
+**README 回归状态**：`README.md`、`README.zh-CN.md`、`README.ja.md` 与指定上游 `main` 对应文件逐字节一致；不要再重复覆盖。后续 README 更新继续以明确的上游差异为准，NOTICE、LICENSE 和我方独有功能文档另行保留。
+
+### 上游工具名称差异：按能力映射，不按名字盲目复制
+
+当前上游工具清单为 67 个，本仓 master 为 101 个。上游独有名称不能直接等同于本仓缺失能力；本仓已经有更细的本地实现，映射如下：
+
+| 上游工具 | 本仓现有对应能力 | 同步裁定 |
+| --- | --- | --- |
+| `redteam_asset`、`redteam_asset_next` | `redteam_coverage(phase=external)` 的 status/update/close/queue；另有 `redteam_next_action`、`redteam_candidate_queue` | 已有更细的人工复核和候选队列，不再平行建表或重复注册。 |
+| `redteam_host` | `redteam_coverage(phase=internal)` 的覆盖度与 findings；底层复用 `recordHostFinding/listHostFindings` | 已有同类能力；发现记录不自动证明权限、完成检查或计分。 |
+| `redteam_batch` | `redteam_asset_batch`（手动资产/评估预览与显式提交）+`redteam_ingest`（扫描文件 dry-run/显式导入） | 仅吸收人工资产批量录入；不复制上游直接批量写入漏洞的宽泛入口。漏洞仍走有来源的导入或逐条证据记录。 |
+| `redteam_scope_check` | `redteam_scope_review` | 本仓版本离线只读、不做 DNS/网络探测；域名 name-only 明确标记需复核解析 IP，不能当作 IP 授权。 |
+| `redteam_template_refresh` | `redteam_poc_search(refresh_index:true)` 只重建本机已有模板索引；`redteam_kev(action=refresh)` 仅在明确请求时更新 CISA KEV | 不引入启动时自动下载模板/KEV；不把索引重建伪称为模板下载。 |
+| `redteam_pivot_probe` | 新的 [PR #676](https://github.com/wxcvm/dsh-purge/pull/676) | 不照搬上游多目标/弱 scope SOCKS5 探测；本仓实现限定一个已登记资产、一个已记录开放 TCP 端口、活动且标记为 target-side 的隧道、loopback SOCKS5 listener 和短超时。PR 尚未合并。 |
+
+**当前红队与资料 PR 状态（均未合并；CI 与宿主验收分开）**：
+
+- [#667](https://github.com/wxcvm/dsh-purge/pull/667)：单目标 Nmap/httpx 多环境执行、真实执行状态与 TUN 守卫；补回 InternalAgent 导入后 Ubuntu UI、Ubuntu/Windows 兼容 CI 通过。仍为 Draft。
+- [#674](https://github.com/wxcvm/dsh-purge/pull/674)：拒答后只整理本轮已返回的工具结果；不重跑任务、不扩 scope；Ubuntu UI、Ubuntu/Windows 兼容 CI 通过。仍为 Draft。
+- [#675](https://github.com/wxcvm/dsh-purge/pull/675)：单 IP Shodan Host API 被动情报、write-only 凭据与显式外发同意；Ubuntu/Windows 两组 CI 通过。仍为 Draft。
+- [#676](https://github.com/wxcvm/dsh-purge/pull/676)：单端口 SOCKS5 可达性探针，scope/reach/已有开放端口三重门禁；loopback mock 工具级测试与 Ubuntu/Windows CI 通过。仍为 Draft。
+- [#677](https://github.com/wxcvm/dsh-purge/pull/677)：1,805 条 CISA KEV 离线快照、显式刷新、流式大小上限和来源溯源；Ubuntu/Windows 两组 CI 通过。仍为 Draft。
+- [#678](https://github.com/wxcvm/dsh-purge/pull/678)、[#679](https://github.com/wxcvm/dsh-purge/pull/679)：本地资产导入去重、离线来源检索；当前对应 CI 已通过。
+- [#680](https://github.com/wxcvm/dsh-purge/pull/680)：Nmap/httpx 本地测绘证据解析。新增域名-only 不提升解析 IP 为授权资产的边界修复；最新回归提交 CI 运行中，不能沿用前一提交的通过状态。
+- [#681](https://github.com/wxcvm/dsh-purge/pull/681)、[#682](https://github.com/wxcvm/dsh-purge/pull/682)、[#683](https://github.com/wxcvm/dsh-purge/pull/683)：只读数据质量/去重预览、资产证据图、资产新鲜度与来源评估；当前对应 CI 已通过。
+- [#684](https://github.com/wxcvm/dsh-purge/pull/684)、[#685](https://github.com/wxcvm/dsh-purge/pull/685)、[#686](https://github.com/wxcvm/dsh-purge/pull/686)：分别依赖 #683、#681、#682 的 UI 分支；先合并各自后端父 PR，再将 UI PR 的 base 改到 master，避免把功能分支历史误当作独立主线改动。
+
+**共同边界**：PR/CI 通过只证明对应自动化合同；不等于用户 Windows Harness rc.5 Desktop、真实 Provider、VPS/TUN 路由或双端 ARTEX 已验收。未明确要求合并或发布时保持 PR 开放，不自动合并、不提升 Release 频道。新证据回填本文件、[Issue #347](https://github.com/wxcvm/dsh-purge/issues/347) 与 [Issue #351](https://github.com/wxcvm/dsh-purge/issues/351)，不要另建平行总计划。
+
+---
+
+
 ## 2026-11-22 · 当前执行状态（覆盖下方旧快照的状态，不改历史记录）
 
 **固定双仓版本**：主参考上游 [dsh-purge-safe v2.0.2@29bf73a](https://github.com/CallMeGuLab/dsh-purge-safe/commit/29bf73a962891cc2c543077572ebd70078897d69) 未出现更新；我方已正式发行 [.22](https://github.com/wxcvm/dsh-purge/releases/tag/v1.1.92-wxcvm.22)，Release SHA `4efe83d`。以下新合并代码位于最新主线、**不在 .22 制品**；独立 .23 候选另按 PR/CI/Release 验收，不能把候选当发行。
