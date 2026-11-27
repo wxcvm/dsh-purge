@@ -54,7 +54,7 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
       engagement: plannerEngagement,
     }, {}))
     assert.equal(nextAction.ok, true)
-    assert.equal(nextAction.state.access, 1)
+    assert.equal(nextAction.state.access, 0)
     assert.equal(nextAction.state.sessions_review.active_target_tunnels, 1)
   } finally {
     redteam.listTunnelMetadata = originalTunnelMetadata
@@ -117,7 +117,7 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(nextAction.state.credentials, 1)
   assert.equal(nextAction.state.webshells, 1)
   assert.equal(nextAction.state.tunnels, 1)
-  assert.equal(nextAction.state.access, 0)
+  assert.equal(nextAction.state.access, 1)
   assert.doesNotMatch(JSON.stringify(nextAction), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
   assert.doesNotMatch(JSON.stringify(nextAction), /redteam_credential_list|redteam_session_check|redteam_report/)
 
