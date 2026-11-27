@@ -116,10 +116,22 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
     const updatedCandidate = JSON.parse(await registered.get('redteam_vuln_update').execute({
       engagement: sensitiveEngagement, id: candidateId, severity: 'medium',
     }, {}))
-    assert.equal(updatedCandidate.verified, false)
+    assert.equal(updatedCandidate.verification_state_unchanged, true)
     const storedCandidate = redteam.listVulns(sensitiveEngagement, { limit: 20 }).items.find(item => item.id === candidateId)
     assert.equal(storedCandidate.status, 'candidate')
   }
+
+  redteam.addVuln(sensitiveEngagement, {
+    cve: 'CVE-2026-0001', title: 'Existing verified finding', severity: 'high', status: 'confirmed',
+  })
+  const preservedFinding = JSON.parse(await registered.get('redteam_vuln_add').execute({
+    engagement: sensitiveEngagement, cve: 'CVE-2026-0001',
+    title: 'Existing verified finding', severity: 'high',
+  }, {}))
+  assert.equal(preservedFinding.existing, true)
+  assert.equal(preservedFinding.status, 'confirmed')
+  const storedPreserved = redteam.listVulns(sensitiveEngagement, { limit: 20 }).items.find(item => item.cve === 'CVE-2026-0001')
+  assert.equal(storedPreserved.status, 'confirmed')
 
   const evidenceRecord = JSON.parse(await registered.get('redteam_evidence_record').execute({
     engagement: sensitiveEngagement, operation: 'model-claim-test',
@@ -130,7 +142,7 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   if (evidenceId) {
     const evidenceRow = redteam.db(sensitiveEngagement).prepare('SELECT confidence, authority FROM evidence WHERE ev_id = ?').get(evidenceId)
     assert.equal(evidenceRow.confidence, 'claimed')
-    assert.equal(evidenceRow.authority, 'tool-output')
+    assert.equal(evidenceRow.authority, 'subagent-report')
   }
 
   const skillReadTool = registered.get('redteam_skill_read')
