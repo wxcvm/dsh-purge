@@ -28,7 +28,7 @@ async function mockTruncatedSocks5() {
   return { server, listen: `127.0.0.1:${server.address().port}` }
 }
 
-async function mockSocks5(replyCode = 0, method = 0) {
+async function mockSocks5(replyCode = 0, method = 0, reserved = 0) {
   let request = null
   const server = createServer(socket => {
     let stage = 'greeting'
@@ -43,7 +43,7 @@ async function mockSocks5(replyCode = 0, method = 0) {
       if (stage === 'connect' && buffer.length >= 10) {
         request = Buffer.from(buffer.subarray(0, 10))
         buffer = buffer.subarray(10)
-        socket.write(Buffer.from([5, replyCode, 0, 1, 127, 0, 0, 1, 0, 0]))
+        socket.write(Buffer.from([5, replyCode, reserved, 1, 127, 0, 0, 1, 0, 0]))
         stage = 'done'
       }
     })
@@ -73,6 +73,17 @@ test('probeSocks5Connect sends one IPv4 TCP CONNECT and accepts success', async 
     assert.deepEqual([...request.subarray(0, 4)], [5, 1, 0, 1])
     assert.deepEqual([...request.subarray(4, 8)], [10, 0, 0, 2])
     assert.equal(request.readUInt16BE(8), 443)
+  } finally {
+    await new Promise(resolve => mock.server.close(resolve))
+  }
+})
+
+test('probeSocks5Connect rejects a non-zero reserved byte in the SOCKS5 reply', async () => {
+  const mock = await mockSocks5(0, 0, 1)
+  try {
+    const result = await probeSocks5Connect(parseLoopbackSocks5Listen(mock.listen), '10.0.0.2', 443, 1000)
+    assert.equal(result.ok, false)
+    assert.equal(result.error, 'invalid_socks5_reply')
   } finally {
     await new Promise(resolve => mock.server.close(resolve))
   }
