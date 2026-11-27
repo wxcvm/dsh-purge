@@ -14,7 +14,9 @@ test('internet asset search sources have distinct official browser entries and h
   assert.equal(INTEL_SOURCES[0].mode, 'local')
   assert.equal(INTEL_SOURCES.find((x) => x.id === 'fofa').mode, 'existing-skill')
   assert.equal(INTEL_SOURCES.find((x) => x.id === 'shodan').mode, 'scoped-api')
-  for (const src of INTEL_SOURCES.filter((x) => !['local', 'fofa', 'shodan'].includes(x.id))) {
+  assert.equal(INTEL_SOURCES.find((x) => x.id === 'censys').mode, 'scoped-api')
+  assert.match(INTEL_SOURCES.find((x) => x.id === 'censys').details, /1 credit/)
+  for (const src of INTEL_SOURCES.filter((x) => !['local', 'fofa', 'shodan', 'censys'].includes(x.id))) {
     assert.equal(src.mode, 'website-only')
     assert.ok(src.url.startsWith('https://'))
     assert.match(src.details, /没有直连 .* API/)

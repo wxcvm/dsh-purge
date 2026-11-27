@@ -49,4 +49,17 @@ test('把证据挂回漏洞后计数归零、重新变绿', t => {
   assert.equal(report.counts.confirmedWithoutHttpEvidence, 0)
   assert.equal(report.counts.unlinkedHttpEvidence, 0)
   assert.equal(report.status, 'no_issues_detected')
+  assert.equal(report.validatesFindings, false)
+  assert.equal(report.scope, 'stored-record-metadata')
+})
+
+test('an empty workspace has no metadata issues but does not validate findings', t => {
+  const store = storeInTemp(t)
+  const { id } = store.openEngagement('QualityEmpty', [])
+  const report = store.dataQuality(id)
+  assert.equal(report.status, 'no_issues_detected')
+  assert.equal(report.validatesFindings, false)
+  assert.equal(report.scope, 'stored-record-metadata')
+  assert.equal(report.totals.vulnerabilities, 0)
+  assert.deepEqual(report.issues, [])
 })

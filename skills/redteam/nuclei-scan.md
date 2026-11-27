@@ -63,10 +63,16 @@ nuclei -l runs/alive-urls.txt -tags cve -tl
 
 ## 与知识库的配合（先查再打，禁止重复劳动）
 
-动手前先 `redteam_poc_search`（按 CVE / 组件 / 版本 / 正文特征）——它一次查两层：**本机 POC 知识库 + 本机 nuclei 模板库**。
-命中就用 `redteam_poc_get` 取全文或直接 `nuclei -t <模板>`；两层都没有才上网找，最后才手搓。
+**漏洞知识库查询** → 本机 POC 库 + nuclei 模板库 → 命中即用 → 无则上网 → 有效验证后回填
 
-验证有效的新模板/EXP 用 `redteam_poc_add` 回填知识库（带 `category` + `engagement` + `asset_target` + `verified` + `verified_note`，脱敏本次靶标信息）。
+流程：
+1. 指纹定型后：`redteam_cve_match` 拿候选 CVE 清单
+2. **POC 知识查询**（同时查两层）：`redteam_poc_search {query:"CVE-2024-xxxxx" / "产品名 版本"}` 
+   - 一层命中本机 POC 知识库 → `redteam_poc_get` 取全文
+   - 二层命中 nuclei 模板库 → 直接 `nuclei -t <模板>`
+3. 两层都没有才上网找；新 POC 验证后用 `redteam_poc_add` 回填知识库（带 `category` + `engagement` + `asset_target` + `verified` + `verified_note`，脱敏靶标信息）
+
+**配合被动情报**：结合 `passive-recon`（Shodan/Censys 单 IP 查询）快速定型开放服务 → `redteam_cve_match` 候选 CVE → nuclei 精打
 
 ## 降噪与自保（重要）
 
