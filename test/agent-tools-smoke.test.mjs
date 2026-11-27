@@ -91,13 +91,24 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
     engagement: sensitiveEngagement, id: 1, status: 'active',
   }, {}))
   assert.equal(tunnelReactivate.ok, false)
+  redteam.addAttackFile(sensitiveEngagement, {
+    target: '192.0.2.99', name: 'metadata-only-fixture.txt', kind: 'other',
+    description: 'fixture', evidence: 'private-evidence-marker', content: 'private-file-body-marker',
+  })
+  const attackFiles = JSON.parse(await registered.get('redteam_attack_file_list').execute({ engagement: sensitiveEngagement }, {}))
+  const fileRow = attackFiles.folders.flatMap(folder => folder.files).find(file => file.name === 'metadata-only-fixture.txt')
+  assert.ok(fileRow)
+  assert.equal(Object.hasOwn(fileRow, 'path'), false)
+  assert.equal(Object.hasOwn(fileRow, 'evidence'), false)
+  assert.doesNotMatch(JSON.stringify(attackFiles), /private-evidence-marker|private-file-body-marker/)
+
   const evidenceUpgrade = JSON.parse(await registered.get('redteam_evidence_upgrade').execute({
     engagement: sensitiveEngagement, claimed_ev_id: 'fake-evidence-id', verified_result: { verified: true },
   }, {}))
   assert.equal(evidenceUpgrade.status, 'unsupported')
   assert.equal(evidenceUpgrade.verified, false)
 
-  for (const name of ['redteam_chain_add', 'redteam_score_hit', 'redteam_chain_plan', 'redteam_chain_advance']) {
+  for (const name of ['redteam_chain_add', 'redteam_score_hit', 'redteam_chain_plan', 'redteam_chain_advance', 'redteam_poc_use', 'redteam_attack_file_add']) {
     const result = JSON.parse(await registered.get(name).execute({ engagement: sensitiveEngagement }, {}))
     assert.equal(result.status, 'unsupported', name)
     assert.equal(result.ok, false, name)
