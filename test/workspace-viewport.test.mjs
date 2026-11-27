@@ -27,7 +27,8 @@ test("workspace styles are installed before paint and back releases fullscreen",
   assert.match(source, /useLayoutEffect\(\(\) => \{ ensurePurgeWorkspaceStyles\(\); \}, \[\]\)/);
   const back = source.match(/const back = \(\) => \{([\s\S]*?)\n\t\t\t\};\n\t\t\tif \(!workspaceVisible\)/);
   assert.ok(back, "workspace back handler must exist");
-  assert.match(back[1], /document\.exitFullscreen\(\)[\s\S]*selectPurgeHostPanel\(null\)[\s\S]*setWorkspaceVisible\(false\)/);
+  assert.match(back[1], /selectPurgeHostPanel\(null\)[\s\S]*leaveWorkspace\(\)/);
+  assert.match(source, /const leaveWorkspace = \(\) => \{\s*fullscreen\.release\(workspaceRef\.current\);[\s\S]*?setWorkspaceVisible\(false\)/);
 });
 
 test("host layout failures fall back to the Dock instead of escaping", () => {
@@ -36,13 +37,34 @@ test("host layout failures fall back to the Dock instead of escaping", () => {
 });
 
 test("failed host navigation keeps the workspace visible", () => {
-  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*setNavigationError\(""\);\s*__dshPurgeDrill\.setTemporaryPrivacy\(null\);\s*setWorkspaceVisible\(false\)/);
+  assert.match(source, /if \(!selectPurgeHostPanel\(null\)\) \{\s*setNavigationError\([\s\S]*?\);\s*return;\s*\}\s*leaveWorkspace\(\)/);
 });
 
 test("a page render failure leaves navigation available and supports retry", () => {
   assert.match(source, /class PurgeWorkspaceBoundary extends Component/);
   assert.match(source, /static getDerivedStateFromError\(\) \{ return \{ failed: true \}; \}/);
   assert.match(source, /onClick: \(\) => this\.setState\(\{ failed: false \}\)/);
-  assert.match(source, /h\(PurgeWorkspaceBoundary, \{ key: page \}, h\(PurgeWorkspaceContent, \{ page, t \}\)\)/);
+  assert.match(source, /h\(PurgeWorkspaceBoundary, \{ key: page \},\s*h\(PurgeWorkspaceContent, \{ page, t, onOpenReportSession, maskReportOrigin \}\)\)/);
   assert.match(css, /\.dshp-workspace-recovery\{/);
+});
+
+test("host panel access failures return false without hiding the workspace", () => {
+  const start = source.indexOf("function selectPurgeHostPanel(");
+  const end = source.indexOf("function showPurgeWorkspace(", start);
+  assert.ok(start >= 0 && end > start);
+  const make = new Function("purgeWorkspaceCtx", "console", source.slice(start, end) + "\nreturn selectPurgeHostPanel");
+  const logger = { warn() {} };
+  assert.equal(make({ get() { throw Error("host unavailable"); } }, logger)(null), false);
+  assert.equal(make({ layout: { selectPanel() { throw Error("navigation denied"); } } }, logger)(null), false);
+  let selected;
+  assert.equal(make({ layout: { selectPanel(p) { selected = p; } } }, logger)(null), true);
+  assert.equal(selected, null);
+});
+
+test("workspace navigation keeps keyboard focus visible and narrow tab rows scrollable", () => {
+  const tabs = css.match(/\.dshp-workspace \.dshp-workspace-tabs\{([^}]+)\}/)?.[1];
+  assert.match(tabs, /min-width:0;max-width:100%;overflow-x:auto/);
+  assert.match(tabs, /overscroll-behavior-inline:contain/);
+  assert.match(css, /\.dshp-workspace \.dshp-workspace-tabs button\{flex:none\}/);
+  assert.match(css, /\.dshp-workspace \.dshp-workspace-nav button:focus-visible\{outline:2px solid #78b6ff;outline-offset:-2px\}/);
 });

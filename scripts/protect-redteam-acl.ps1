@@ -75,18 +75,7 @@ if (-not $Apply) {
     }
     foreach ($item in $targets) {
         try {
-            # Windows PowerShell 5.1 uses .NET Framework's native ACL API.
-            # Avoid provider/module differences when launched from a PowerShell 7 runner.
-            if ($PSVersionTable.PSEdition -eq 'Desktop') {
-                $sections = [System.Security.AccessControl.AccessControlSections]::Access
-                $acl = if ($item.PSIsContainer) {
-                    [System.IO.Directory]::GetAccessControl($item.FullName, $sections)
-                } else {
-                    [System.IO.File]::GetAccessControl($item.FullName, $sections)
-                }
-            } else {
-                $acl = Get-Acl -LiteralPath $item.FullName -ErrorAction Stop
-            }
+            $acl = Get-Acl -LiteralPath $item.FullName -ErrorAction Stop
             $rules = @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))
             $hasBroad = $false
             $hasOther = $false
@@ -116,7 +105,7 @@ if (-not $Apply) {
             $summary.aclReadErrors++
             if ($Details) {
                 $relative = if ($item.FullName -eq $Root) { '.' } else { $item.FullName.Substring($Root.Length).TrimStart([char[]]'\/') }
-                Write-Output ('ACL_FINDING ' + ([ordered]@{ path = $relative; status = 'acl_unreadable'; errorType = $_.Exception.GetType().Name } | ConvertTo-Json -Compress))
+                Write-Output ('ACL_FINDING ' + ([ordered]@{ path = $relative; status = 'acl_unreadable' } | ConvertTo-Json -Compress))
             }
         }
     }

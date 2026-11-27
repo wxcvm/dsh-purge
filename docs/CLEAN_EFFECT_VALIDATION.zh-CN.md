@@ -1,6 +1,62 @@
 # 清洗效果专项：真实宿主三组对照验收
 
-本文件用于收集真实 DeepSeek 正常任务的交付质量和效率数据。评测器已在 beta 中实现，本文不引入模型调用服务，也不修改宿主、权限、审批、系统提示或安全拒绝行为。
+本文件用于收集真实 DeepSeek 正常任务的交付质量和效率数据。评测器与三组隔离环境采集脚本已合并进 master。本文说明如何在现有独立测试 Profile 上使用，不会自动发起模型请求，也不会修改生产宿主、权限、审批或系统提示。
+
+## 0. 先运行零模型调用的采集预检
+
+主线提供的采集器是 **scripts/capture-task-quality.mjs**。配置指向三个已经存在的独立测试 Profile，而不是默认会话；四个路径 exe、cli、dshHome、runtime 均必须为本机真实存在的绝对路径。不要把真实本地路径、密钥或账户数据提交到仓库。
+
+以下为字段模板（示例路径和模型路由均为占位符，不代表已经安装成功）：
+
+~~~json
+{
+  "exe": "C:\\path\\to\\existing\\runtime.exe",
+  "cli": "C:\\path\\to\\existing\\cli.mjs",
+  "dshHome": "C:\\path\\to\\existing\\.dsh",
+  "runtime": "C:\\path\\to\\existing\\runtime-entry.mjs",
+  "host": {
+    "profile": "qa-host",
+    "variant": "unmodified-host",
+    "model": "provider/model",
+    "hostVersion": "observed-version",
+    "environment": "common-test-environment",
+    "settings": {}
+  },
+  "current": {
+    "profile": "qa-current",
+    "variant": "current-purge",
+    "model": "provider/model",
+    "hostVersion": "observed-version",
+    "environment": "common-test-environment",
+    "settings": {}
+  },
+  "candidate": {
+    "profile": "qa-candidate",
+    "variant": "candidate-purge",
+    "model": "provider/model",
+    "hostVersion": "observed-version",
+    "environment": "common-test-environment",
+    "settings": {}
+  }
+}
+~~~
+
+从仓库根目录执行：
+
+~~~powershell
+node scripts/capture-task-quality.mjs --preflight local-capture-config.json
+node scripts/capture-task-quality.mjs --smoke local-capture-config.json
+node scripts/capture-task-quality.mjs --full local-capture-config.json --resume .scratch/task-quality-xxxxx/matrix.json
+~~~
+
+- **--preflight**：检查路径、三组隔离 Profile 和采样计划，模型调用数为 **0**。
+- **--smoke**：首轮计划 2 个固定普通任务 × 3 组，共 6 次 CLI 运行；**--full** 首轮计划 10 个任务 × 3 组，共 30 次 CLI 运行。这些不是 Provider 实际请求数或费用保证。
+- **--resume**：只复用元数据一致、声明 real 的现有样本；此前失败及中断结果保留，不伪装成成功。运行前仍须人工确认 Profile 实际安装版本。
+- 采集器使用现有 Profile 的只读/不自动批准模式，不创建 Profile 或修改生产预设；每轮结果在 .scratch/task-quality-*/matrix.json 和 report.json。遇到错误留下未完成记录。
+- Provider、模型与 token 使用量以实际观测为准；不能把缺失值写成零，也不能把部分采样当作完整计费记录。
+
+只需要离线评分时，不运行 smoke/full，按下面的手动评测流程即可。
+
 
 ## 1. 实验配置
 
