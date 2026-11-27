@@ -4,6 +4,36 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseReportExportArgs, writeReportBundle } from '../lib/redteam/report-export.js'
+import { redactCredentialText } from '../lib/redteam/report-shareable.js'
+
+test('YAML literal and folded secret blocks are fully redacted without eating sibling fields', () => {
+  const input = [
+    'private_key: |-',
+    '  synthetic-secret-line-1',
+    '  synthetic-secret-line-2',
+    '',
+    'public_note: safe metadata',
+    'items:',
+    '  - sshPrivateKey: >2-',
+    '      synthetic-ssh-block',
+    '  - label: safe item',
+    "passphrase: | # legacy credential",
+    '  synthetic-passphrase-block',
+    'other: visible',
+  ].join('\r\n')
+  const masked = redactCredentialText(input)
+  for (const secret of ['synthetic-secret-line-1', 'synthetic-secret-line-2',
+    'synthetic-ssh-block', 'synthetic-passphrase-block']) {
+    assert.equal(masked.includes(secret), false)
+  }
+  assert.match(masked, /private_key: "\[REDACTED_SECRET\]"/)
+  assert.match(masked, /sshPrivateKey: "\[REDACTED_SECRET\]"/)
+  assert.match(masked, /passphrase: "\[REDACTED_SECRET\]"/)
+  assert.match(masked, /public_note: safe metadata/)
+  assert.match(masked, /- label: safe item/)
+  assert.match(masked, /other: visible/)
+  assert.match(masked, /\r\n/, 'original CRLF line endings remain')
+})
 
 test('shareable switch is explicit; legacy raw mode remains the default', () => {
   const cwd = process.cwd()
@@ -33,6 +63,10 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
       '{"Set-Cookie": "session=synthetic-set-cookie; Path=/"}',
       'password=synthetic-password',
       'api_key: synthetic-api-key',
+      'private_key: |-',
+      '  synthetic-report-yaml-block',
+      'public_note: keep this line',
+      '{"private_key":"synthetic-private-key","sshPrivateKey":"synthetic-ssh-private-key","passphrase":"synthetic-passphrase","signing_key":"synthetic-signing-key","encryptionKey":"synthetic-encryption-key"}',
       'password: "synthetic secret with spaces"',
       'GET https://operator:in-url-password@example.net/private',
       'prose: Bearer standalone-secret',
@@ -52,12 +86,14 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   const safe = writeReportBundle({ root, engagement, outDir: output, report, shareable: true })
   const markdown = fs.readFileSync(safe.reportFile, 'utf8')
   for (const secret of ['synthetic-credential', 'synthetic-cookie', 'synthetic-password',
-    'synthetic-api-key', 'synthetic-basic', 'synthetic-json-cookie', 'synthetic-proxy', 'synthetic-set-cookie', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
+    'synthetic-report-yaml-block', 'synthetic-api-key', 'synthetic-private-key', 'synthetic-ssh-private-key', 'synthetic-passphrase',
+    'synthetic-signing-key', 'synthetic-encryption-key', 'synthetic-basic', 'synthetic-json-cookie', 'synthetic-proxy', 'synthetic-set-cookie', 'synthetic-key-body', 'Example Company', '10.1.2.3', 'shots/sample.png',
     'synthetic secret with spaces', 'in-url-password', 'standalone-secret', 'operator:']) {
     assert.ok(!markdown.includes(secret), 'shareable markdown must not contain ' + secret)
   }
   assert.match(markdown, /Authorization: \[REDACTED_SECRET\]/)
   assert.match(markdown, /IP-01 links to IP-01/)
+  assert.match(markdown, /public_note: keep this line/)
   assert.match(markdown, /password: "\[REDACTED_SECRET\]"/)
   assert.match(markdown, /https:\/\/\[REDACTED_USERINFO\]@example\.net\/private/)
   assert.match(markdown, /prose: Bearer \[REDACTED_SECRET\]/)
@@ -69,4 +105,25 @@ test('shareable copy masks common secrets, hides target/IP and omits screenshots
   assert.equal(fs.existsSync(path.join(safe.bundleDir, 'shots')), false)
   assert.equal(fs.readFileSync(raw.reportFile, 'utf8'), original)
   assert.equal(report.markdown, original)
+})
+
+test('mask encrypted PEM credentials and complete API key header values', () => {
+  const input = [
+    '-----BEGIN ENCRYPTED PRIVATE KEY-----',
+    'synthetic-encrypted-key-body',
+    '-----END ENCRYPTED PRIVATE KEY-----',
+    'X-API-Key: synthetic-header-first synthetic-header-rest',
+    'public_note: keep this line',
+    '-----BEGIN CERTIFICATE-----',
+    'public-certificate-body',
+    '-----END CERTIFICATE-----',
+  ].join('\r\n')
+  const masked = redactCredentialText(input)
+  for (const value of ['synthetic-encrypted-key-body', 'synthetic-header-first', 'synthetic-header-rest']) {
+    assert.equal(masked.includes(value), false)
+  }
+  assert.match(masked, /\[REDACTED_PRIVATE_KEY\]/)
+  assert.match(masked, /X-API-Key: \[REDACTED_SECRET\]/)
+  assert.match(masked, /public_note: keep this line/)
+  assert.match(masked, /public-certificate-body/)
 })

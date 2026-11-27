@@ -15,11 +15,12 @@ test("explicit refusal is identified only with a committed completed answer", ()
 });
 
 test("structured policy metadata outranks text classification, but PI_AI_ERROR is generic", () => {
-  for (const code of ["CONTENT_FILTER", "CONTENT_POLICY_VIOLATION", "POLICY_VIOLATION"]) {
+  for (const code of ["CONTENT_FILTER", "CONTENT_POLICY_VIOLATION", "POLICY_VIOLATION", "CONTENT_REFUSED", "content_refused"]) {
     assert.deepEqual(diagnoseAttempt({ ...committed, errorCode: code }).kind, "upstream-policy");
   }
   assert.equal(diagnoseAttempt({ ...committed, finish: "content_filter" }).kind, "upstream-policy");
   assert.equal(diagnoseAttempt({ ...committed, errorCode: "PI_AI_ERROR" }).kind, "provider-failure");
+  assert.equal(diagnoseAttempt({ ...committed, errorCode: "CONTENT_REFUSED", terminalConflict: true }).kind, "uncertain");
   assert.equal(diagnoseAttempt({ ...committed, httpStatus: 403 }).kind, "provider-failure");
   assert.equal(diagnoseAttempt({ ...committed, httpStatus: 503 }).kind, "provider-failure");
 });

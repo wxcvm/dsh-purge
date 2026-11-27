@@ -125,14 +125,18 @@ await check("用户改稿保留逻辑", async () => {
   return "keep 哨兵 OK";
 });
 
-// 12. 宿主目标声明：主字段是当前适配版本，且必须在 dshTargets 里（0.2.2-rc.1 起多版本）
-await check("dshTarget 声明一致", () => {
+// 12. 宿主目标声明：主字段指向最新实测版本，engines.dsh 才是宿主安装/启动兼容门槛
+await check("dshTarget / engines.dsh 声明一致", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const targets = Array.isArray(pkg.dshTargets) ? pkg.dshTargets : [];
-  expect(pkg.dshTarget === "0.2.2-rc.1", `dshTarget=${pkg.dshTarget}`);
-  expect(targets.includes(pkg.dshTarget), `dshTargets 不含 ${pkg.dshTarget}`);
-  for (const v of ["0.2.1-rc.5", "0.2.1-rc.2"]) expect(targets.includes(v), `dshTargets 丢回退版本 ${v}`);
-  return pkg.dshTarget + " / " + targets.join(",");
+  const expectedRange = "=0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2";
+  expect(pkg.dshTarget === "0.2.2-rc.5", `dshTarget=${pkg.dshTarget}`);
+  expect(pkg.engines?.dsh === expectedRange, `engines.dsh=${pkg.engines?.dsh}`);
+  for (const v of ["0.2.2-rc.5", "0.2.2-rc.3", "0.2.2-rc.1", "0.2.1-rc.5", "0.2.1-rc.2"]) {
+    expect(targets.includes(v), `dshTargets 丢失已声明版本 ${v}`);
+  }
+  expect(targets.length === 5, `dshTargets 出现未核验版本：${targets.join(",")}`);
+  return pkg.dshTarget + " / " + targets.join(",") + " / " + expectedRange;
 });
 
 // 13. 移植模块在位

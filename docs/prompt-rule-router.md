@@ -93,3 +93,31 @@ $DSH_HOME/dsh-purge/prompt-profiles/research.md
 - PR #330 已合并。新布局修复需独立 PR 和对应 CI 核验；不能沿用旧 PR 的绿灯宣称新布局已通过。
 - 需使用目标版本的实机安装包，确认前后端接口同时更新，并核对清洗台与实际宿主版本；GitHub CI 不能替代 Desktop 实机验收。
 - Purge 与 ARTEX 联合发版仍须依照既有 `docs/JOINT_RELEASE_PURGE_ARTEX_20261117.zh-CN.md` 进行双端、资产、升级和回退验收；本文不宣称完成那部分工作。
+
+
+## 本机可视化路由开关（#369）
+
+在当前 Harness Web/桌面宿主的本机 HTTP 地址访问 `/dsh-purge/prompt-routing`，可分别设置：
+
+- `bundledDefault`：普通预设无规则匹配时使用内置稿，默认关闭。
+- `redteamTaskRoute`：在普通预设下按任务识别红队规则，仍遵循已有的会话暂停、预设及模型/Provider 黑白名单，默认关闭。
+- `modelAdaptive`：只在当前请求可识别的模型家族下启用自适应回退，默认关闭。未知模型不会自动兜底。
+
+设置通过同源 `/dsh-purge/prompt-routing-settings` 读写，落盘 `$DSH_HOME/dsh-purge/prompt-routing.json`，保存后立即更新当前插件运行实例，重启重新加载；无需编辑已有提示词规则。旧版宿主若不支持插件 Web 路由，该页面不可用，不能据此推断设置已经生效。
+
+诊断报告中的 `stage=assembled` 只表示此插件返回的 sections 中注入段非空且置顶；`delivery=unverified` 表示还没有从模型实际请求边界得到证据。不能把这两者混为一谈。
+
+
+## 宿主渲染边界的实测证据（#369）
+
+CI 的 `test/prompt-host-boundary.test.mjs` 现在使用固定版本宿主依赖，实际执行官方 Cordis 的 `system-prompt/assemble` 事件，再通过官方 `@deepseek-ai/dsh-system-prompt` 的 `renderPrompt` 渲染。验证注入段在渲染文本中置顶、仅出现一次，原生宿主段保留；普通会话无命中时渲染文本与原生文本一致。
+
+注意：此结果只证明**宿主事件和系统提示词渲染**，不是实际 Provider HTTP 请求，更不能凭它给 `delivery` 标记成功。真实 Windows Harness Desktop 的最后一次请求体需在受控本机环境验证，避免暴露 Key、完整提示词或用户会话内容。
+
+## 高级名单的屏幕说明与密集布局
+
+- 高级设置增加了就地说明：匹配规则只影响当前提示词的注入，不会禁用模型或覆盖其它提示词规则；黑名单优先，白名单同字段按“或”、不同字段按“且”，实际 ID 未观测时不假定命中。
+- 模型 ID 支持 `*`（任意非空 ID）、`gpt-*`（以 gpt- 开头）、`*gpt*`（包含 gpt）等示例。要排除 GPT 相关 ID，在**黑名单的模型 ID**填写 `*gpt*` 并启用该名单；如果另保留单独一行 `*`，则会排除所有可识别的非空模型 ID。实际宿主 ID 未经确认时不保证示例命中。
+- 字段下方解释了模型 / Provider / Session ID / Agent 预设的区别，提示词关键词与模型黑名单的不同含义，以及局部规则优先级仅控制拼接顺序。
+- 高级设置使用宽屏响应式网格，关键词和名单输入框改为紧凑高度；局部正文与全局正文编辑器的高度及手动拉伸不受影响。全局、局部规则复用同一高级设置 UI。
+- 本次仅改前端说明和视觉密度，不更改路由匹配、保存格式、初始启停状态或红队隔离机制；自动化测试不能代替 Windows Desktop 实机截图和真实宿主 ID 验证。
