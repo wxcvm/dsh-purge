@@ -120,6 +120,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `nmap`：仅 `redteam_scan_run`，单目标，必须匹配用户明确提供并登记的授权范围。
 - `httpx`：仅 `redteam_scan_run`，单目标，使用 ProjectDiscovery 版本，不使用 Python httpx。
 - `subfinder` / `dnsx` / `amass`：仅 `redteam_passive_recon` 的固定被动模式；每次向外部数据源或 DNS 解析器提交域名/主机名前，必须取得本次明确同意并传 `confirm_external=true`。
+- `redteam_l7_probe`：不是二进制扫描工具；仅用于 TUN/fake-IP 阻断后的单主机单端口复核，必须读取 `redteam:l7-service-confirmation`、登记非空 scope、每次 `confirm:true`，且 SOCKS5 仅限 loopback。
 - 其余工具目前均为 `unmapped-manual-review`：即使路径存在也不执行，不得猜测命令或使用通用 Shell 兜底。
 
 参数：
