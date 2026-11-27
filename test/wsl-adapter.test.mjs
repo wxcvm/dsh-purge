@@ -143,7 +143,7 @@ test('remote httpx probe falls through catalogued aliases without accepting cust
       if (calls.length === 1) return done(null, tableBytes, Buffer.alloc(0))
       if (args[3] === 'httpx-toolkit') return done(Object.assign(new Error('not found'), { code: 127 }), Buffer.alloc(0), Buffer.from('not found'))
       assert.deepEqual(args, ['--distribution', 'kali-linux', '--exec', 'pd-httpx', '-version'])
-      done(null, Buffer.from('httpx 1.6.0\\n'), Buffer.alloc(0))
+      done(null, Buffer.from('httpx 1.6.0\n'), Buffer.alloc(0))
     },
   })
   assert.equal(calls.length, 3)
