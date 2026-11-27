@@ -37,7 +37,7 @@ test('Docker JSON lines only recognize running container IDs and never trust nam
 test('environment discovery lists running Docker containers without executing inside them', async () => {
   let commands = 0
   const result = await discoverEnvironments({
-    platform: 'linux',
+    platform: 'linux', config: { kaliVm: {} },
     dockerExecFileFn: (...args) => { commands++; return listDocker(...args) },
   })
   assert.equal(commands, 1)
@@ -169,7 +169,7 @@ test('WSL and Docker discovery are started concurrently without touching contain
   let finishWsl
   let finishDocker
   const discovering = discoverEnvironments({
-    platform: 'win32',
+    platform: 'win32', config: { kaliVm: {} },
     execFileFn: (_cmd, _args, _opts, done) => { finishWsl = done },
     dockerExecFileFn: (_cmd, args, _opts, done) => {
       assert.deepEqual(args, expectedList)

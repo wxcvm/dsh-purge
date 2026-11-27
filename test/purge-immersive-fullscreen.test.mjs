@@ -9,22 +9,22 @@ test('native Purge workspace can enter and leave real immersive fullscreen from 
   assert.match(client, /const workspaceRef = useRef\(null\)/)
   assert.match(client, /document\.addEventListener\("fullscreenchange", onChange\)/)
   assert.match(client, /document\.removeEventListener\("fullscreenchange", onChange\)/)
-  assert.match(client, /document\.fullscreenElement === workspaceRef\.current/)
-  assert.match(client, /el\.requestFullscreen\(\)/)
+  assert.match(client, /document\.fullscreenElement === element/)
+  assert.match(client, /element\.requestFullscreen\(\)/)
   assert.match(client, /document\.exitFullscreen\(\)/)
   assert.match(client, /onClick: toggleImmersive/)
   assert.match(client, /immersive \? "退出系统全屏" : "系统全屏"/)
   assert.match(client, /ref: workspaceRef/)
   assert.match(client, /宿主不允许全屏/)
-  assert.doesNotMatch(client, /useEffect\(\(\) => \{\s*el\.requestFullscreen\(\)/)
+  assert.doesNotMatch(client, /use(?:Layout)?Effect\(\(\) => \{\s*element\.requestFullscreen\(\)/)
 })
 
 test('Purge fills the Harness viewport by default without a fullscreen click', () => {
   const client = read('client.js')
   assert.match(client, /const \[workspaceVisible, setWorkspaceVisible\] = useState\(true\)/)
   assert.match(client, /data-default-full/)
-  assert.match(client, /position:fixed!important;inset:0!important;top:0!important;left:0!important/)
-  assert.match(client, /width:100vw!important;height:100vh!important;height:100dvh!important/)
+  assert.match(client, /position:fixed!important;inset:0!important;z-index:10040!important/)
+  assert.match(client, /width:auto!important;height:auto!important;box-sizing:border-box!important/)
   assert.match(client, /return rd\.createPortal\(panel, document\.body\)/)
   assert.match(client, /setWorkspaceVisible\(false\)/)
   assert.match(client, /setWorkspaceVisible\(true\)/)
@@ -33,7 +33,7 @@ test('Purge fills the Harness viewport by default without a fullscreen click', (
 test('immersive workspace overrides the old max-size layout and stays dark', () => {
   const client = read('client.js')
   assert.match(client, /\.dshp-dock\.dshp-workspace\[data-maximized=\\"1\\"\]:fullscreen/)
-  assert.match(client, /inset:0!important;width:100vw!important;height:100vh!important/)
+  assert.match(client, /inset:0!important;width:100%!important;height:100%!important/)
   assert.match(client, /\.dshp-dock\.dshp-workspace:fullscreen::backdrop\{background:#0c1422\}/)
 })
 
@@ -74,18 +74,16 @@ test('Purge renders an opaque dark workspace before entering system fullscreen',
 })
 
 
-test('Windows native caption palette follows the workspace and restores the host on exit', () => {
+test('Windows native caption palette follows late mount and restores host-owned values', () => {
   const client = read('client.js')
-  const section = client.slice(client.indexOf('function PurgeWorkspacePage() {'), client.indexOf('const toggleImmersive = () =>'))
-  assert.match(section, /document\.documentElement\.hasAttribute\("data-windows-titlebar"\)/)
-  assert.match(section, /\["--dsw-specific-sidebar-fill", "#101c2d"\]/)
-  assert.match(section, /\["--dsw-alias-label-primary", "#e5eefb"\]/)
-  assert.match(section, /style\.setProperty\(name, color\)/)
-  assert.match(section, /return \(\) => \{/)
-  assert.match(section, /style\.getPropertyValue\(name\)\.trim\(\) !== color/)
-  assert.match(section, /style\.setProperty\(name, value, priority\)/)
-  assert.match(section, /style\.removeProperty\(name\)/)
-  assert.match(section, /\}, \[workspaceVisible\]\)/)
+  const workspace = client.slice(client.indexOf('function PurgeWorkspacePage() {'), client.indexOf('const toggleImmersive = () =>'))
+  const helper = client.slice(client.indexOf('function installPurgeCaptionPalette('), client.indexOf('function workspacePrivacySummary('))
+  assert.match(workspace, /installPurgeCaptionPalette\(document, MutationObserver\)/)
+  assert.match(helper, /attributeFilter: \["data-windows-titlebar"\]/)
+  assert.match(helper, /attributeFilter: \["style"\]/)
+  assert.match(helper, /style\.getPropertyValue\(name\)\.trim\(\) !== saved\.color/)
+  assert.match(helper, /style\.setProperty\(name, saved\.value, saved\.priority\)/)
+  assert.match(helper, /observer\.disconnect\(\)/)
 })
 
 
@@ -94,14 +92,15 @@ test('Windows caption keeps Purge tabs below the native 40px hit area until full
   const literal = client.match(/const PURGE_WORKSPACE_CSS = ("(?:[^"\\]|\\.)*");/)?.[1]
   assert.ok(literal, 'workspace CSS must exist')
   const css = JSON.parse(literal)
-  assert.match(css, /html\[data-windows-titlebar\] \.dshp-dock\.dshp-workspace\[data-default-full="1"\]\{\s*-webkit-app-region:no-drag;/)
+  assert.match(css, /html\[data-windows-titlebar\] \.dshp-dock\.dshp-workspace\[data-default-full="1"\],[\s\S]*?\.dshp-workspace :is\(button,input,select,textarea,a,\[role="button"\]\)\{\s*-webkit-app-region:no-drag;/)
   // The native DSH Windows titlebar owns the first 40 CSS pixels for hit
   // testing. A portal with inset:0 can paint tabs there but not receive clicks.
   const normalWindow = /html\[data-windows-titlebar\]:not\(\[data-fullscreen\]\) \.dshp-dock\.dshp-workspace\[data-maximized="1"\]\[data-default-full="1"\]:not\(:fullscreen\)\{([^}]*)\}/.exec(css)
   assert.ok(normalWindow, 'default workspace needs its own normal-window caption clearance')
   assert.match(normalWindow[1], /top:var\(--dsh-windows-titlebar-height,40px\)!important;/)
-  assert.match(normalWindow[1], /height:calc\(100dvh - var\(--dsh-windows-titlebar-height,40px\)\)!important;/)
+  assert.doesNotMatch(normalWindow[1], /height:calc/)
+  assert.match(css, /\[data-default-full="1"\]\{[^}]*inset:0!important;[^}]*height:auto!important;/)
   // The existing true-fullscreen rule keeps the entire viewport available.
-  assert.match(css, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:fullscreen\{[^}]*inset:0!important;[^}]*height:100vh!important;/)
+  assert.match(css, /\.dshp-dock\.dshp-workspace\[data-maximized="1"\]:fullscreen\{[^}]*inset:0!important;[^}]*height:100%!important;/)
   assert.match(client, /onClick: \(\) => open\(key\)/)
 })

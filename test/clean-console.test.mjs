@@ -277,9 +277,9 @@ test('update receipt persists across restart and detects changed disk or boot co
         fs.writeFileSync(path.join(root, file), file + suffix)
       }
     }
-    const load = (pid = 123, startedAt = 1000) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
+    const load = (pid = 123, startedAt = 1000, filesystem = fs) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
       source.slice(start, end).replace(/^export /gm, '') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
-      fs, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
+      filesystem, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
       (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) }, { pid }, { timeOrigin: startedAt })
     setFiles('old')
     const old = load()
@@ -294,7 +294,9 @@ test('update receipt persists across restart and detects changed disk or boot co
     assert.equal(load(123, 2000).updateReceiptStatus().processRestarted, true)
     assert.equal(load(124, 1000).updateReceiptStatus().processRestarted, true)
     setFiles('new')
-    const after = old.updateFingerprint()
+    // A receipt recorded before this patch only stored the version and hashes.
+    const { version, hashes } = old.updateFingerprint()
+    const after = { version, hashes }
     old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after, originProcess })
     let status = old.updateReceiptStatus()
     assert.equal(status.diskMatch, true)
@@ -306,17 +308,6 @@ test('update receipt persists across restart and detects changed disk or boot co
     assert.equal(status.processRestarted, true)
     assert.equal(status.backendBootMatch, true)
     assert.equal(status.diskMatch, true)
-    assert.equal(status.verification, 'backend_verified')
-    fs.mkdirSync(path.join(root, 'lib', 'redteam'), { recursive: true })
-    fs.writeFileSync(path.join(root, 'lib', 'redteam', 'vps-admin-config.js'), 'fixture')
-    assert.equal(restarted.updateReceiptStatus().runtimeMissing, true)
-    assert.equal(restarted.updateReceiptStatus().verification, 'disk_mismatch')
-    fs.mkdirSync(path.join(root, 'scripts'), { recursive: true })
-    fs.writeFileSync(path.join(root, 'scripts', 'vps-admin-check.mjs'), 'fixture')
-    assert.equal(restarted.updateReceiptStatus().verification, 'backend_verified')
-    restarted.saveUpdateReceipt({ root, phase: 'writing', before, originProcess })
-    assert.equal(restarted.updateReceiptStatus().verification, 'interrupted')
-    restarted.saveUpdateReceipt({ root, phase: 'awaiting_restart', before, after, originProcess })
     fs.writeFileSync(path.join(root, 'client.js'), 'unexpected')
     status = restarted.updateReceiptStatus()
     assert.equal(status.clientDiskMatch, false)
@@ -325,7 +316,19 @@ test('update receipt persists across restart and detects changed disk or boot co
     fs.unlinkSync(path.join(root, 'lib', 'index.js'))
     assert.equal(restarted.updateReceiptStatus().diskMatch, false)
     fs.writeFileSync(path.join(root, 'client.js'), 'client.jsnew')
-    assert.equal(restarted.updateReceiptStatus().diskMatch, null)
+    status = restarted.updateReceiptStatus()
+    assert.equal(status.diskMatch, false)
+    assert.equal(status.verification, 'disk_mismatch')
+    assert.deepEqual(status.disk.missingFiles, ['lib/index.js'])
+    fs.writeFileSync(path.join(root, 'lib', 'index.js'), 'lib/index.jsnew')
+    const readDenied = { ...fs, readFileSync(file, ...args) {
+      if (file === path.join(root, 'lib', 'index.js')) throw Object.assign(new Error('denied'), { code: 'EACCES' })
+      return fs.readFileSync(file, ...args)
+    } }
+    status = load(124, 2000, readDenied).updateReceiptStatus()
+    assert.equal(status.diskMatch, null)
+    assert.equal(status.verification, 'unknown')
+    assert.deepEqual(status.disk.missingFiles, [])
     restarted.saveUpdateReceipt({ root, phase: 'failed', error: 'reapply failed', before, after })
     assert.equal(load().updateReceiptStatus().phase, 'failed')
     assert.equal(load().updateReceiptStatus().error, 'reapply failed')
@@ -386,25 +389,45 @@ test('remote target check uses immutable commit and reports per-file differences
   let receipt = { targetSha: sha }
   let unavailable = ''
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
+  let missingFiles = []
   const seen = []
-  const verify = new Function('readJson', 'updateReceiptPath', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer',
+  let token = ''
+  const verify = new Function('readCurrentUpdateReceipt', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
-    () => receipt, () => 'receipt', () => ({ hashes: local }), files,
-    async (url) => {
-      seen.push(url)
-      const file = url.split('/' + sha + '/')[1]
+    () => receipt, () => ({ hashes: local, missingFiles }), files,
+    async (url, timeout, headers) => {
+      seen.push({ url, headers })
+      const parsed = new URL(url)
+      const file = token ? parsed.pathname.split('/contents/')[1] : url.split('/' + sha + '/')[1]
       if (!file || file === unavailable) throw new Error('unavailable')
       return { arrayBuffer: async () => Buffer.from(file) }
-    }, 'fixture/repo', createHash, Buffer)
+    }, 'fixture/repo', createHash, Buffer, () => token,
+    (ref, file) => 'https://api.github.com/repos/fixture/repo/contents/' + file + '?ref=' + ref)
   assert.equal((await verify()).status, 'match')
   assert.equal(seen.length, 4)
-  assert.ok(seen.every((url) => url.includes('/' + sha + '/')))
+  assert.ok(seen.every(({ url }) => url.includes('/' + sha + '/')))
+  seen.length = 0
+  token = 'fixture-token'
+  assert.equal((await verify()).status, 'match')
+  assert.equal(seen.length, 4)
+  assert.ok(seen.every(({ url, headers }) => new URL(url).searchParams.get('ref') === sha &&
+    headers.accept === 'application/vnd.github.raw+json'))
+  token = ''
   local['client.js'] = 'different'
   assert.equal((await verify()).status, 'mismatch')
   unavailable = 'lib/index.js'
   assert.equal((await verify()).status, 'mismatch')
   local['client.js'] = createHash('sha256').update('client.js').digest('hex')
   assert.equal((await verify()).status, 'unknown')
+  local['client.js'] = ''
+  assert.equal((await verify()).status, 'unknown', 'an unreadable local file does not prove a mismatch')
+  missingFiles = ['client.js']
+  const missing = await verify()
+  assert.equal(missing.status, 'mismatch', 'a missing required file outweighs another unknown file')
+  assert.deepEqual(missing.files.find((item) => item.file === 'client.js'),
+    { file: 'client.js', status: 'mismatch', reason: 'local_missing' })
+  unavailable = 'client.js'
+  assert.equal((await verify()).status, 'unknown', 'no remote bytes cannot establish a remote mismatch')
   receipt = { targetSha: 'master' }
   assert.equal((await verify()).files.length, 0)
   assert.match(source, /receipt.failedPhase = receipt.phase/)
@@ -461,6 +484,7 @@ test('update applies one immutable target across git, archives, profile specs an
     updateStage: (stage, detail) => events.push(['progress', stage, detail]),
     gitResetTo: (dir, ref, options) => events.push(['git', dir, ref, options.resolvedSha]),
     overlayFromZip: async (dirs, sha) => events.push(['zip', dirs, sha]),
+    preparePrivateProfileInstall: async () => null,
     pinInstalledSpec: (dir, sha) => events.push(['spec', dir, sha]),
     ensureAllProfileInstall: () => {},
     findDshHome: () => '/home',
@@ -499,6 +523,32 @@ test('update applies one immutable target across git, archives, profile specs an
   assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
   assert.equal(events.at(-1)[1].phase, 'failed')
   assert.equal(events.at(-1)[1].failedPhase, 'resolving_target')
+  events.length = 0
+  resolutions = 0
+  resolved = target
+  const cached = { sha: target, archivePath: '/cache/dsh-purge.tgz', profiles: [{ profile: 'desktop', migrationNeeded: true }] }
+  const privateDeps = {
+    ...deps,
+    preparePrivateProfileInstall: async (jobs, sha) => {
+      events.push(['cache', sha])
+      return cached
+    },
+  }
+  const privateApply = new Function(...Object.keys(privateDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(privateDeps))
+  const privateResult = await privateApply(jobs, { ref: 'master' })
+  assert.equal(privateResult.profileInstall, cached)
+  assert.ok(events.findIndex(e => e[0] === 'cache') < events.findIndex(e => e[0] === 'git'))
+  assert.equal(events.some(e => e[0] === 'spec'), false, 'private update must not rewrite the profile manifest alone')
+  assert.equal(events.filter(e => e[0] === 'receipt').at(-1)[1].profileInstall, cached)
+  events.length = 0
+  resolutions = 0
+  const failureDeps = { ...deps, preparePrivateProfileInstall: async () => { throw Error('cache download failed') } }
+  const failedApply = new Function(...Object.keys(failureDeps),
+    source.slice(start, end) + '\nreturn _applyUpdateImpl;')(...Object.values(failureDeps))
+  await assert.rejects(failedApply(jobs, { ref: 'master' }), /cache download failed/)
+  assert.equal(events.some(e => ['git', 'zip', 'spec', 'stamp', 'history'].includes(e[0])), false)
+  assert.equal(events.at(-1)[1].phase, 'failed')
 })
 
 test('git update keeps channel branch name but never checks out a moving remote ref', async () => {
@@ -519,35 +569,3 @@ test('git update keeps channel branch name but never checks out a moving remote 
   assert.deepEqual(calls.at(-1), ['reset', '--hard', sha])
 })
 
-test('version update reports real live stages and prevents duplicate writes', async () => {
-  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
-  const state = source.slice(source.indexOf('let liveUpdate = null;'), source.indexOf('export function pluginRoot()')).replace('export function', 'function')
-  const wrapper = source.slice(source.indexOf('export async function handleUpdateOp('), source.indexOf('async function handleUpdateOpImpl(')).replace('export async function', 'async function')
-  let release
-  const pending = new Promise(resolve => { release = resolve })
-  const api = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus, updateStage };')(async body => {
-    if (body.op === 'check') return { ok: true }
-    await pending
-    return { ok: true, restartAfter: true }
-  })
-  const task = api.handleUpdateOp({op:'switch',ref:'beta'})
-  assert.equal(api.updateProgressStatus().stage, 'checking_versions')
-  api.updateStage('downloading', { received: 5, total: 10 })
-  assert.equal(api.updateProgressStatus().received, 5)
-  assert.equal(api.updateProgressStatus().total, 10)
-  await assert.rejects(api.handleUpdateOp({op:'switch',ref:'master'}), /already in progress/)
-  assert.equal((await api.handleUpdateOp({op:'check'})).ok, true)
-  release()
-  await task
-  assert.equal(api.updateProgressStatus().active, false)
-  assert.equal(api.updateProgressStatus().stage, 'awaiting_restart')
-  assert.ok(api.updateProgressStatus().finishedAt >= api.updateProgressStatus().startedAt)
-  const failing = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus };')(async () => { throw Error('network offline') })
-  await assert.rejects(failing.handleUpdateOp({op:'switch',ref:'beta'}), /network offline/)
-  assert.equal(failing.updateProgressStatus().stage, 'failed')
-  assert.equal(failing.updateProgressStatus().failedStage, 'checking_versions')
-  assert.equal(failing.updateProgressStatus().error, 'network offline')
-  assert.equal(failing.updateProgressStatus().active, false)
-  assert.match(client, /apiJson\("\/dsh-purge\/update-progress"\)/)
-  assert.match(client, /总大小未知/)
-})

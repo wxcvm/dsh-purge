@@ -99,12 +99,36 @@ test('modern catalog uses live Agent status, not historical child presence, and 
     agents: { get(id) { return id === 'cold' ? undefined : { status: id } } },
   }
   const result = await collectAgentStatus(ctx)
-  assert.equal(result.available, true)
+  assert.equal(result.available, false)
   assert.equal(result.used, 1)
-  assert.equal(result.free, 2)
+  assert.equal(result.free, null)
+  assert.equal(result.unknown_children, 1)
+  assert.equal(result.used_is_lower_bound, true)
   assert.equal(result.total_children, 3)
   assert.deepEqual(queried, ['root'])
   assert.equal(disposed, 1)
+})
+
+test('modern catalog lookup gaps and failures never create fictional free slots', async () => {
+  for (const lookup of [() => undefined, () => null, () => { throw Error('registry lag') }]) {
+    let released = 0
+    const result = await collectAgentStatus({
+      sessions: { list: () => [session('root')] },
+      sessionQuery: { observeSession: () => ({
+        projections: { values: { subagentCatalog: [{ id: 'child', mode: 'one-shot' }] } },
+        [Symbol.dispose]() { released++ },
+      }) },
+      agents: { get: lookup },
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.available, false)
+    assert.equal(result.used, 0)
+    assert.equal(result.free, null)
+    assert.equal(result.unknown_children, 1)
+    assert.equal(result.used_is_lower_bound, true)
+    assert.equal(result.per_root[0].free, null)
+    assert.equal(released, 1)
+  }
 })
 
 test('modern missing projection is unknown and releases its observation', async () => {
@@ -189,4 +213,20 @@ test('scoped legacy read retains known running activity on a partial registry', 
   assert.equal(result.available, false)
   assert.equal(result.free, null)
   assert.equal(result.used_is_lower_bound, true)
+})
+
+test('legacy malformed child rows remain unknown without hiding valid activity', async () => {
+  const result = await collectAgentStatus(context([session('root')], () => [
+    { id: 'known', kind: 'child', activity: 'running' },
+    null, 'bad-row', [],
+    { id: 'not-a-child', kind: 'external', activity: 'running' },
+  ]))
+  assert.equal(result.ok, true)
+  assert.equal(result.used, 1)
+  assert.equal(result.total_children, 4)
+  assert.equal(result.unknown_children, 3)
+  assert.equal(result.available, false)
+  assert.equal(result.free, null)
+  assert.equal(result.used_is_lower_bound, true)
+  assert.equal(result.per_root[0].free, null)
 })
