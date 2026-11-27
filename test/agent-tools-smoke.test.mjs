@@ -49,6 +49,15 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
 
   const chainTool = registered.get('redteam_exploit_chain')
   const campaignTool = registered.get('redteam_internal_campaign')
+  const rolesTool = registered.get('redteam_roles')
+  const rolePromptTool = registered.get('redteam_role_prompt')
+  const roles = JSON.parse(await rolesTool.execute({}, {}))
+  assert.equal(roles.roles.find((item) => item.role === 'exploit').enabled, false)
+  assert.equal(roles.roles.find((item) => item.role === 'internal').enabled, false)
+  const disabledPrompt = JSON.parse(await rolePromptTool.execute({ engagement: redteam.openEngagement('agent-smoke-role', [], { bindCurrent: false }).id, role: 'exploit' }, {}))
+  assert.equal(disabledPrompt.enabled, false)
+  assert.equal(disabledPrompt.executionPolicy, 'disabled-no-reviewed-adapter')
+  assert.equal(disabledPrompt.prompt, null, 'disabled legacy prompt text must not be exposed to the model')
 
   // 2. 参数定义完整（dry_run 必须存在，默认语义在实现里）
   assert.ok(Object.hasOwn(chainTool.parameters, 'dry_run'))
