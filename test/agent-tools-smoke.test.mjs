@@ -135,7 +135,7 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
 
   const evidenceRecord = JSON.parse(await registered.get('redteam_evidence_record').execute({
     engagement: sensitiveEngagement, operation: 'model-claim-test',
-    result: { claim: 'unverified' }, confidence: 'observed', authority: 'tool-output',
+    result: { claim: 'unverified' }, confidence: 'observed',
   }, {}))
   assert.equal(evidenceRecord.ok, true)
   const evidenceId = evidenceRecord.ev_id || evidenceRecord.evidence?.ev_id
