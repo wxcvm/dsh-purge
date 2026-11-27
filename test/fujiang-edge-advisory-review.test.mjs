@@ -34,7 +34,7 @@ test('all edge-device knowledge records retain advisory references and stable do
     assert.ok(row.version_reference, row.title)
     assert.ok(row.source_versions, row.title)
     assert.ok(row.advisory_note, row.title)
-    const name = row.source_url.split('/').pop().replace(/\\.md$/, '')
+    const name = row.source_url.split('/').pop().replace('.md', '')
     const doc = getBundledKnowledge('fujiang:edge-device:' + name)
     assert.ok(doc, row.title)
     assert.ok(doc.body.includes(row.version_reference), row.title)
