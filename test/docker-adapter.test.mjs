@@ -193,7 +193,7 @@ test('Docker httpx probe falls through catalogued binary aliases', async () => {
       if (args[0] === 'ps') return done(null, sample, '')
       if (args[2] === 'httpx-toolkit') return done(Object.assign(new Error('not found'), { code: 127 }), '', 'not found')
       assert.deepEqual(args, ['exec', containerId, 'pd-httpx', '-version'])
-      done(null, 'httpx 1.6.0\\n', '')
+      done(null, 'httpx 1.6.0\n', '')
     },
   })
   assert.equal(calls.length, 3)
