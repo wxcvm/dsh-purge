@@ -34,12 +34,16 @@ test('asset freshness separates recency, provenance and stored test status', t =
         ip: '192.0.2.34', state: 'unknown', provenance: 'passive', tool: 'ct',
         primary_name: 'aging.example.test',
       },
+      {
+        ip: '192.0.2.35', state: 'unknown', provenance: 'passive', tool: 'ct',
+      },
     ],
   })
   const db = store.db(id)
   const stale = db.prepare("SELECT id FROM asset WHERE ip = '192.0.2.32'").get()
   const unknown = db.prepare("SELECT id FROM asset WHERE ip = '192.0.2.33'").get()
   const aging = db.prepare("SELECT id FROM asset WHERE ip = '192.0.2.34'").get()
+  const invalid = db.prepare("SELECT id FROM asset WHERE ip = '192.0.2.35'").get()
   const staleAt = new Date(Date.now() - 45 * 86400000).toISOString()
   const agingAt = new Date(Date.now() - 10 * 86400000).toISOString()
   db.prepare('UPDATE asset SET last_seen = ? WHERE id = ?').run(staleAt, stale.id)
@@ -49,13 +53,14 @@ test('asset freshness separates recency, provenance and stored test status', t =
   db.prepare("UPDATE observation SET collected_at = ? WHERE entity_kind = 'asset' AND entity_id = ?")
     .run(agingAt, aging.id)
   db.prepare('UPDATE asset SET last_seen = NULL WHERE id = ?').run(unknown.id)
+  db.prepare('UPDATE asset SET last_seen = ? WHERE id = ?').run('not-a-timestamp', invalid.id)
   db.prepare("UPDATE asset SET test_status = 'tested' WHERE ip = '192.0.2.31'").run()
 
   const report = store.assetFreshness(id, { limit: 2, offset: 0 })
   const byIp = Object.fromEntries(report.items.map(item => [item.ip, item]))
-  assert.equal(report.total, 4)
-  assert.equal(report.summary.total, 4)
-  assert.deepEqual(report.summary.freshness, { fresh: 1, aging: 1, stale: 1, unknown: 1 })
+  assert.equal(report.total, 5)
+  assert.equal(report.summary.total, 5)
+  assert.deepEqual(report.summary.freshness, { fresh: 1, aging: 1, stale: 1, unknown: 2 })
   assert.equal(byIp['192.0.2.31'].freshness, 'fresh')
   assert.equal(byIp['192.0.2.31'].source, 'mixed')
   assert.equal(byIp['192.0.2.31'].verification_status, 'tested')
@@ -66,10 +71,12 @@ test('asset freshness separates recency, provenance and stored test status', t =
   assert.equal(allByIp['192.0.2.32'].source, 'passive')
   assert.equal(allByIp['192.0.2.33'].freshness, 'unknown')
   assert.equal(allByIp['192.0.2.33'].source, 'unknown')
+  assert.equal(allByIp['192.0.2.35'].freshness, 'unknown')
+  assert.equal(allByIp['192.0.2.35'].timestamp_anomaly, 'invalid_timestamp')
   assert.equal(allByIp['192.0.2.34'].freshness, 'aging')
   assert.equal(report.semantics.verification.includes('不代表资产此刻仍在线'), true)
   const api = dispatch(store, { op: 'assetFreshness', engagement: id, limit: 1 })
   assert.equal(api.ok, true)
-  assert.equal(api.total, 4)
+  assert.equal(api.total, 5)
   assert.equal(api.items.length, 1)
 })
