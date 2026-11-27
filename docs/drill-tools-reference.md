@@ -4,6 +4,16 @@
 
 具体工具数量及定义以 `lib/redteam/tools.js` 为准。分组只是使用习惯，不是权限边界。
 
+## 当前执行契约（2026-11-27）
+
+本文后续仍保留历史工具参数、数据库字段和兼容接口说明；历史命令示例与攻击链字段不是当前执行授权或可复制的操作手册。工具可用性以 lib/redteam/task-tool-plan.js 的实时契约为准。
+
+- 当前可执行：Nmap / ProjectDiscovery httpx 仅通过 redteam_scan_run 单目标适配器；subfinder / dnsx / Amass 仅通过 redteam_passive_recon 固定被动模式。
+- 其余工具均为 unmapped-manual-review：只显示路径/版本信息，不执行目标任务，不得使用通用 Shell、旧 Skill 或 customTools 兜底。
+- 主动任务必须有用户明确提供的授权依据与登记范围；redteam_scope_review 只是离线匹配，不证明授权。无范围时仅进行本地记录和证据整理。
+- 不执行口令爆破/喷洒、漏洞利用、拒绝服务、目标侧上传、WebShell、隧道部署、持久化、规避检测、横向移动、数据提取或破坏性操作。
+- POC / payload / 字典库仅可检索和审阅，不执行其中的代码、请求或命令。
+
 ## A. 开局与调度（主会话/指挥用）
 
 _一次演练只开一个靶标；子智能体并发上限默认 3，派活前先占位。_
@@ -13,7 +23,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 
 参数：
 - `target` — 靶标单位名称，例如「示例科技有限公司」
-- `scope` — 授权范围 CIDR 列表（可选：用户没给就不用问，按公开可见资产面自主推进）
+- `scope` — 用户明确提供的授权范围 CIDR 列表；可为空以便建立本地记录，但 scope 为空时不得启动主动目标任务，也不得把公开资产自动视为授权资产。
 
 ### `redteam_session_bind`
 把一个**已经存在**的靶标绑定到当前会话（多会话并行时用：每个会话绑自己的靶标，互不串写）。可用靶标 id 或单位名称，省略则列出可绑定的靶标。
@@ -56,7 +66,7 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 - `parallel_review.status=ready` 时，`batch` 只包含明确标记的独立只读记录核查任务（目前是候选漏洞的证据缺口/授权范围关联核对）。
 - 同一批最多 `parallel_review.max_parallel` 项（默认 3，随当前并发设置调整）；必须是不同记录 ID，且无依赖、共享可变状态或证据前置关系。其余任务进入 `sequential` 或 `deferred`，不因候选列表靠前就自动并行。
 - 子任务只读本地记录与现有证据索引，不访问目标、不扫描、不登录、不验证漏洞、不写库、不再委派。由主会话等待本批返回后统一核对并决定是否更新记录。
-- 需要主动探测、漏洞验证、凭据操作、利用、隧道或内网操作的任务不属于此只读批次，仍按既有依赖顺序推进。
+- 主动探测、漏洞验证、凭据操作、利用、隧道或内网操作不属于只读批次；当前只有明确列出的专用适配器可执行，其余均保持 unsupported / unmapped，不得改用通用 Shell。
 - `child_writes_allowed=false` 表示子智能体不得直接修改事实库；主会话必须核对记录 ID、证据引用和推理依据。
 
 ### `redteam_attention`
@@ -103,30 +113,34 @@ _一次演练只开一个靶标；子智能体并发上限默认 3，派活前�
 「智能体」页现通过现有 `agentsStatus` 只读接口按根会话展示近期任务交接：活动预留（`reserved`）、已关联子运行（`delegated`）、正常结束且有最终回复但未验收（待核验）或异常结束（需关注）。来源为现有 `redteam_agent_slot` 的预留与持久交接索引，每个会话只显示自己的任务键；不自动更新工作记录，也不把子智能体结束当成任务完成。页面每次只显示最近 12 条，完整状态仍可通过 `redteam_agent_slot(action=status)` 查看。
 
 ### `redteam_tool_select`
-【只读】按任务类型查找当前本机可用路径，并为每个内置工具返回审查过的 Skill 读取键、执行策略、范围复核要求和是否需要本次动作确认。当前只有 Nmap / ProjectDiscovery httpx 有专用执行适配器（`redteam_scan_run`）。`configuredCustomTools` 只展示路径状态；自定义工具没有任务分类、Skill 和参数 schema，不会自动执行。规划不会运行目标任务，也不把“找到可执行文件”或“版本探针成功”当作实际测试成功。
+
+【只读】按任务类型发现本机工具路径，并返回当前审查过的 Skill key、执行策略和范围要求。规划不执行目标任务，也不因路径或版本探针成功而宣称工具可用于目标操作。
+
+当前允许的工具链：
+- `nmap`：仅 `redteam_scan_run`，单目标，必须匹配用户明确提供并登记的授权范围。
+- `httpx`：仅 `redteam_scan_run`，单目标，使用 ProjectDiscovery 版本，不使用 Python httpx。
+- `subfinder` / `dnsx` / `amass`：仅 `redteam_passive_recon` 的固定被动模式；每次向外部数据源或 DNS 解析器提交域名/主机名前，必须取得本次明确同意并传 `confirm_external=true`。
+- 其余工具目前均为 `unmapped-manual-review`：即使路径存在也不执行，不得猜测命令或使用通用 Shell 兜底。
 
 参数：
 - `task` — `domains`、`services`、`web`、`vulns`、`internal`、`identity`、`connectivity`
-- `verify` — 可选；`true` 时仅执行推荐工具已定义的本地版本参数，返回 `version-verified`、`path-only` 或 `verification-failed`。默认不运行任何程序。
-- `include_environments` — 可选；`true` 返回最近显式发现的跨环境候选及实际探针状态（最多 12 项），`false` 仅返回本机结果。省略时，本机无候选或版本验证失败才补充一个已有版本证据的远端候选。不执行新的远端探针或任务。
+- `verify` — 可选；`true` 仅运行已定义的本地版本参数，不访问目标。
+- `include_environments` — 可选；只展示当前已发现的 WSL / Docker / SSH Kali 环境，不自动切换或执行远端任务。
 
 关键输出：
-- `skillRequirements[].key` — 稳定 Skill key；按需调用 `redteam_skill_read(key=...)` 读取正文。状态初始为 `not-read`，不是已加载证明。
-- `executionPolicy=dedicated-adapter` — 只能使用返回的专用适配器；当前为 Nmap/httpx 的 `redteam_scan_run`。
-- `executionPolicy=skill-guided-host-tool` — 读取所有必需 Skill 后，才可使用当前会话真实可用的宿主 Shell/MCP 接口；必须先核对范围，不得猜测命令或参数。
-- `executionPolicy=manual-review-only` — 需要针对本次工具、目标和动作的明确确认；默认不执行。
-- `executionPolicy=unmapped-manual-review` — 没有经过审查的 Skill/参数契约；不得执行或通过通用 Shell 兜底。
-
-每个候选都要求范围复核；`redteam_scope_review` 是离线范围文本核对，不证明真实授权。规划中的 `automaticExecutionAllowed` 始终为 false。禁止口令爆破、拒绝服务、持久化、规避检测和超范围操作。版本探针能力仅是验证元数据，不再给工具排名加分；任务顺序和用户显式首选决定推荐。跨环境评分由本机已定位路径和服务端本次会话里保存的显式探针结果决定；没有观测到某环境中某工具版本成功时，结果保持 `unknown` 而非推测已安装。
-
+- `skillRequirements[].key` — 必须逐个通过 `redteam_skill_read` 读取；缺失或正文冲突时停止。
+- `executionPolicy=dedicated-adapter` — 只能使用返回的专用适配器。
+- `executionPolicy=manual-review-only` — 需要针对本次工具、目标和动作的明确确认；当前没有此类自动执行入口。
+- `executionPolicy=unmapped-manual-review` — 没有经过审查的 Skill/参数契约；不得执行。
+- `automaticExecutionAllowed` 始终为 false。范围复核是离线检查，不证明授权。
 ### `redteam_preflight`
-【开工前必须跑一次】平台技能与资源自检：逐个检查红队技能的必需环境变量（如 FOFA 测绘的 FOFA_KEY）、本机工具与二进制（suo5 / fscan / gogo / frp / 冰蝎 / 哥斯拉 / nmap / nuclei…）、外部基础设施（反弹 Shell 用的 VPS）。返回 available/broken 清单与每个坏掉的技能"缺什么、怎么补"。**缺 key / 缺 VPS 时直接向用户要，或改用替代方案，不要假装能跑。**
+【开工前必须跑一次】平台技能与资源自检：核对当前宿主、已安装 Skill、允许适配器的依赖和可选数据源配置。FOFA Key、VPS 与其它外部基础设施均不是通用前提；不得为未支持的反弹 Shell、隧道或目标侧部署流程索取配置。返回可用/缺失状态，不下载或安装工具。
 
 参数：
 - `include` — 只检查这些技能（逗号分隔）；省略则检查全部红队技能
 
 ### `redteam_roles`
-列出红队角色及其职责标题（信息收集 / 漏洞检测 / 漏洞利用 / 内网渗透）。
+列出兼容角色标题。当前仅 recon / assess / vuln-scan 可承担被动资料整理、资产复核和漏洞情报比对；exploit / internal 角色停用，不得派发或执行。
 
 ### `redteam_role_prompt`
 取出某个红队角色当前生效的系统提示词，只供查看。派活时不要把全文抄进任务；在 subagent 的 prompt 第一行写 redteamRole: <code>，角色稿会进入子会话系统提示词。
@@ -280,7 +294,7 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 示例：先 `redteam_asset_query` 找到资产 id，再 `redteam_cve_match(asset_id=12)`；没有数据库也可以 `redteam_cve_match(product="Grafana", port=3000)`。用 `redteam_poc_search` 查本地已验证 PoC / Nuclei 模板；这两套检索互补，不会相互覆盖。
 
 ### `redteam_armory_search`
-【离线只读】搜索随包武器库索引：payload 库（19 类 68 文件——SQL 注入/XSS/SSRF/XXE/RCE/反弹 shell/403 绕过等载荷）与字典库（68 类 252 文件——目录/用户名/密码/子域名/端口/中间件路径/设备默认口令等字典）。返回分类、文件路径、行数与用途说明；**文件本体保留在本地 AboutSecurity 仓库，索引不含内容**，由执行环境决定可用性。
+【离线只读】搜索本地知识与参考资料索引，只返回分类、文件路径、行数与用途说明。payload、PoC 和字典内容仅供人工审阅，不执行其中的代码、请求、口令或命令；命中不代表当前目标存在对应漏洞。
 
 参数：
 - `kind` — `payload`（载荷库）/ `dictionary`（字典库）/ `all`（默认两者都搜）
@@ -829,7 +843,7 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `created_by` — 哪个角色/智能体沉淀的
 
 ### `redteam_poc_search`
-【打 Nday/1day 前的第一步】先查"现成的"两层：① **知识库**（本机沉淀的通用 POC/EXP，跨靶标共享，按"已验证 → 复用次数"排序）② **本机 nuclei 模板库**（上万条模板，CVE/组件名直接命中）。命中就取用：知识库用 redteam_poc_get 拿全文，模板直接 `nuclei -t <相对路径>`。**不要重复去互联网找或重新手搓**。两层都没有，再去互联网搜索或自己手搓，验证有效后用 redteam_poc_add 回填知识库。
+【只读知识查询】先用 redteam_poc_search 查本地记录，再用 redteam_poc_get 阅读条目。查询结果只是研究线索；当前没有经审查的 PoC / Nuclei 执行契约，不得运行 payload、模板或远端请求。新增记录必须标注来源与验证状态，不把未验证内容写成已验证。
 
 参数：
 - `q` — 关键字：组件+版本、漏洞名、路径片段、正文里的特征串都行
