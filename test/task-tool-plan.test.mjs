@@ -95,3 +95,26 @@ test('environment API and embedded client expose task-tool choice without target
     assert.match(text, /验证推荐工具版本/)
   }
 })
+
+
+test('task selection exposes dedicated execution support and keeps custom tools unclassified', (t) => {
+  const root = workspace(t)
+  const nmap = fileAt(join(root, 'nmap.exe'))
+  const naabu = fileAt(join(root, 'naabu.exe'))
+  const custom = fileAt(join(root, 'custom', 'dns-audit.exe'))
+  const plan = planTaskTools('services', {
+    root,
+    config: { ...configFor(root, { nmap, naabu }), customTools: [{ name: 'DNS Audit', path: custom }] },
+    env: { PATH: '' },
+    execFileFn: () => { throw new Error('planning must not execute tools') },
+  })
+  assert.equal(plan.candidates.find((item) => item.id === 'nmap').executionAdapter, 'redteam_scan_run')
+  assert.equal(plan.candidates.find((item) => item.id === 'nmap').executionSupported, true)
+  assert.equal(plan.candidates.find((item) => item.id === 'naabu').executionSupported, false)
+  assert.equal(plan.candidates.find((item) => item.id === 'naabu').executionMode, 'requires-matching-skill-and-host-tool')
+  assert.equal(plan.configuredCustomTools.length, 1)
+  assert.equal(plan.configuredCustomTools[0].id, 'custom:0')
+  assert.equal(plan.configuredCustomTools[0].taskFit, 'unclassified')
+  assert.equal(plan.configuredCustomTools[0].executionSupported, false)
+  assert.equal(plan.configuredCustomTools[0].executionStatus, 'not-supported')
+})
