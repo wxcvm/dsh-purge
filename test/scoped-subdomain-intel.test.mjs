@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
@@ -82,7 +82,6 @@ test('Amass uses only passive enum mode, writes to a private temporary file and 
       assert.deepEqual(args.slice(0, 6), ['enum', '-passive', '-d', domain, '-timeout', '1'])
       assert.equal(args[6], '-o')
       assert.ok(args[7].endsWith('amass.txt'))
-      const { writeFileSync } = await import('node:fs')
       writeFileSync(args[7], 'a.example.test\\nb.example.test\\noutside.test\\n')
       done(null, '', '')
     },
