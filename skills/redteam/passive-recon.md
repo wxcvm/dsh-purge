@@ -24,7 +24,8 @@ enabled: true
 - Amass：仅使用适配器固定的 `enum -passive` 模式；当前仅支持 local，输出写入私有临时目录并在导入后清理。
 - dnsx：只解析最新已保存子域快照中的主机名，最多 200 项；固定 A/AAAA/CNAME 查询，使用本机系统 DNS 解析器，不走 HTTP/SOCKS 代理；当前仅支持 local。
 - dnsx 在检测到 TUN/fake-IP 时拒绝启动；没有检测到 TUN 不代表 DNS 出口经过代理或 VPS，网络路由状态始终标记为未验证。不得将系统代理等同于 DNS 代理。
-- `commit` 默认 false；只有显式 `commit=true` 才保存子域或 DNS 快照。历史查询为离线读取。
+- `action=history` 离线读取根域的子域快照；`action=dns-history` 离线读取授权范围内单个主机的 DNS 快照，不联网、不需要外部查询确认。
+- `commit` 默认 false；只有显式 `commit=true` 才保存子域或 DNS 快照。
 - 只记录数据源返回的域名和 DNS 观察值，保留具体来源、执行环境、状态、时间与输出哈希。
 - 被动结果只是线索，不证明资产归属、在线状态、漏洞存在或授权范围；DNS 解析出的 IP 不自动加入资产或授权范围。
 
