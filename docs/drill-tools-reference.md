@@ -1006,16 +1006,18 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 
 ### `redteam_scan_run`
 
-【主动测试执行与留证】针对单个已获授权的目标执行 Nmap 或 ProjectDiscovery httpx，原始输出与执行参数保存到当前工作区的 `scan-output/`。命令、时间、输出哈希和解析摘要同步记录；成功后复用现有 `redteam_ingest` 将真实发现批量落库并关联扫描记录。失败或空输出不入库，不把扫描结果冒充已确认漏洞。
+【主动测试执行与留证】针对单个已获授权的目标执行 Nmap 或 ProjectDiscovery httpx，原始输出与执行参数保存到当前工作区的 `scan-output/`。命令、时间、输出哈希、执行环境和解析摘要同步记录；成功后复用现有 `redteam_ingest` 将真实发现批量落库并关联扫描记录。失败或空输出不入库，不把扫描结果冒充已确认漏洞。
 
 参数：
 - `kind` — 必填：`nmap` 或 `httpx`。
 - `target` — 必填：单个 IP、域名或 HTTP(S) URL。
 - `engagement` — 可选：缺省使用会话已绑定的项目。
+- `environment_id` — 可选：`local`（默认）、`wsl:<发行版>`、`docker:<当前运行容器 ID>` 或 `ssh:kali-vm`。远端 ID 必须来自当前环境清单/工具选择结果，不会自动切换。
 - `ports` — Nmap 可选端口，例如 `80,443`。
 - `commit` — 默认 `true`：导入资产/端口；`false` 仅预览但仍保留文件。
+- `confirm` — 未登记授权范围时必须显式确认。
 
-工具在本机直接执行固定命令参数，无 shell 拼接，不进行漏洞利用。
+执行器仅接受固定 Nmap/httpx 参数构造器，不接受任意命令或可执行文件。远端任务会重新发现所选环境并验证工具版本；SSH 还必须通过严格主机密钥检查与 Kali 身份确认。所有环境均复用同一单目标范围门禁、超时与证据 manifest。
 
 ### `redteam_ingest`
 批量解析本地扫描文件，支持 nuclei、httpx、nmap、ffuf。默认只预览计数；只有 `commit: true` 才写入资产或漏洞。ffuf 仅返回路径，不会写库。
