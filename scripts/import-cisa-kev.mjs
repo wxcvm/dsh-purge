@@ -6,7 +6,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DEFAULT_OUTPUT = resolve(ROOT, 'lib/redteam/cve-catalog/cisa-kev.json')
 const CISA_CATALOG_URL = 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog'
 const CISA_FEED_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json'
-const CISA_MIRROR_COMMIT = '51e0a777743fa06957afbaeb280f8735d292c1be'
 
 function clean(value) {
   return String(value ?? '').trim()
@@ -21,12 +20,16 @@ function keywordsFor(parts) {
  * Convert a downloaded official CISA KEV JSON snapshot to Purge's offline
  * catalog schema. No network requests are made by this importer.
  */
-export function normalizeCisaKevPayload(payload) {
+export function normalizeCisaKevPayload(payload, options = {}) {
   if (!payload || typeof payload !== 'object' || !Array.isArray(payload.vulnerabilities)) {
     throw new TypeError('CISA KEV payload must contain a vulnerabilities array')
   }
   const catalogVersion = clean(payload.catalogVersion)
   const dateReleased = clean(payload.dateReleased)
+  const mirrorCommit = clean(options.sourceCatalogCommit)
+  if (mirrorCommit && !/^[\da-f]{40}$/i.test(mirrorCommit)) {
+    throw new Error('CISA mirror commit must be a 40-character hexadecimal SHA')
+  }
   if (!/^\d{4}\.\d{2}\.\d{2}$/.test(catalogVersion) || !dateReleased) {
     throw new Error('CISA KEV catalogVersion/dateReleased is missing or invalid')
   }
@@ -61,7 +64,7 @@ export function normalizeCisaKevPayload(payload) {
       source_catalog_version: catalogVersion,
       source_catalog_date_released: dateReleased,
       source_catalog_count: payload.count,
-      source_catalog_commit: CISA_MIRROR_COMMIT,
+      ...(mirrorCommit ? { source_catalog_commit: mirrorCommit } : {}),
       source_license: 'CC0-1.0',
       source_feed_url: CISA_FEED_URL,
       source_vendor_project: vendor,
@@ -82,7 +85,7 @@ function main() {
   const input = process.argv[2]
   if (!input) throw new Error('Usage: node scripts/import-cisa-kev.mjs <downloaded-CISA-KEV.json> [output.json]')
   const payload = JSON.parse(readFileSync(resolve(input), 'utf8'))
-  const rows = normalizeCisaKevPayload(payload)
+  const rows = normalizeCisaKevPayload(payload, { sourceCatalogCommit: process.env.CISA_KEV_MIRROR_COMMIT })
   const output = resolve(process.argv[3] || DEFAULT_OUTPUT)
   const serialized = '[\n' + rows.map(row => '  ' + JSON.stringify(row)).join(',\n') + '\n]\n'
   writeFileSync(output, serialized, 'utf8')
