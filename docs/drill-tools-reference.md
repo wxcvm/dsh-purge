@@ -191,7 +191,7 @@ _每条资产必须带 provenance（passive/active）与 tool；assess 阶段用
 - `(service=http || port=8080) && scope=internal` — 已登记的内网服务
 - `cert="Example CA"` — 仅匹配已保存的证书观察值与 TLS 指纹描述
 
-支持字段：`domain`、`host`、`ip`、`port`、`title`、`banner`、`url`、`service`、`product`、`app`、`fingerprint`、`cert`、`protocol`、`scope`、`source`。组合运算 `&&` / `AND` 优先于 `||` / `OR`，支持括号与引号。默认按最近发现排序，结果分页；使用参数化 SQL，数据来自当前项目。尚未存储网页正文、地理标签等字段时，会明确提示不支持，不会声称覆盖 FOFA 的全网数据。
+支持字段：`domain`、`host`、`ip`、`port`、`title`、`banner`、`url`、`service`、`product`、`app`、`fingerprint`、`cert`、`protocol`、`scope`、`source`。`source=active|passive` 会综合检查资产名称、端口、服务、指纹及其历史观察，不再只看端口表中的单一来源。组合运算 `&&` / `AND` 优先于 `||` / `OR`，支持括号与引号。默认按最近发现排序，结果分页；使用参数化 SQL，数据来自当前项目。尚未存储网页正文、地理标签等字段时，会明确提示不支持，不会声称覆盖 FOFA 的全网数据。
 
 ### `redteam_asset_query`
 检索资产库。支持按 C 段、端口、服务、指纹、来源、内外网维度（scope）、排序（sort）、关键词（全文，覆盖 IP/域名/banner/服务/指纹）过滤。返回紧凑结果，含每个资产的开放端口与指纹及内外网归属。
