@@ -32,7 +32,13 @@ test('normalize CISA KEV preserves source provenance and leaves version applicab
   assert.equal(row.source_ransomware_use, 'Unknown')
   assert.deepEqual(row.source_cwes, ['CWE-78'])
   assert.equal(row.source_versions, '')
+  assert.equal(row.source_catalog_commit, undefined)
   assert.equal(row.versions, 'CISA KEV 未提供受影响版本范围')
+  const [mirrored] = normalizeCisaKevPayload(sample, {
+    sourceCatalogCommit: '51e0a777743fa06957afbaeb280f8735d292c1be',
+  })
+  assert.equal(mirrored.source_catalog_commit, '51e0a777743fa06957afbaeb280f8735d292c1be')
+  assert.throws(() => normalizeCisaKevPayload(sample, { sourceCatalogCommit: 'not-a-commit' }), /40-character/)
 })
 
 test('normalize CISA KEV rejects mismatched counts, malformed IDs and duplicate IDs', () => {
