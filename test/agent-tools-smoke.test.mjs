@@ -90,10 +90,15 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
     engagement: scoped, target: '192.0.2.50', port: 80, service: 'http',
     strategy: 'spray-first', confirm: true,
   }, {}))
-  assert.equal(dry.dry_run, true, 'chain must default to dry-run')
+  assert.equal(dry.dry_run, true, 'chain must default to simulation-only')
+  assert.equal(dry.status, 'simulated')
+  assert.equal(dry.success, null)
+  assert.equal(dry.actual_execution, false)
+  assert.equal(dry.stages_completed, 0)
+  assert.equal(dry.stages_recorded, 0)
+  assert.equal(dry.audit_id, null)
   assert.ok(Array.isArray(dry.stages))
-  assert.ok(dry.audit_id)
-  assert.match(String(dry.hint || ''), /干运行/)
+  assert.match(String(dry.hint || ''), /仅返回阶段标签/)
 
   const internalHome = redteam.openEngagement('agent-smoke-internal', ['10.0.0.0/24'], { bindCurrent: false }).id
   const dryInternal = JSON.parse(await campaignTool.execute({
@@ -124,9 +129,15 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(unsupportedInternal.experience_recorded, false)
   assert.match(String(unsupportedInternal.hint || ''), /拒绝启动/)
 
-  // 5. 阶段已落链（审计可复核）
-  const chain = redteam.listChain(scoped)
-  assert.ok(chain.length > 0, 'chain stages must be recorded for review')
+  // 5. Simulation and unsupported requests must not write execution evidence.
+  const unsupportedExploit = JSON.parse(await chainTool.execute({
+    engagement: scoped, target: '192.0.2.50', dry_run: false, confirm: true,
+  }, {}))
+  assert.equal(unsupportedExploit.status, 'unsupported')
+  assert.equal(unsupportedExploit.success, null)
+  assert.equal(unsupportedExploit.actual_execution, false)
+  assert.equal(unsupportedExploit.experience_recorded, false)
+  assert.equal(redteam.listChain(scoped).length, 0, 'simulation must not be persisted as execution evidence')
 
   // 6. Red-team agents must consult the task planner and use the supported scan runner.
   const preset = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8')
