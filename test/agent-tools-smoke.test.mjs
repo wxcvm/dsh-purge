@@ -43,6 +43,24 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   }
   apply(ctx)
 
+  // The next-action planner must use counts, not a removed plaintext access list.
+  const plannerEngagement = redteam.openEngagement('next-action-redacted-sessions', [], { bindCurrent: false }).id
+  const originalTunnelMetadata = redteam.listTunnelMetadata
+  const originalWebshellMetadata = redteam.listWebshellMetadata
+  redteam.listTunnelMetadata = () => [{ id: 1, status: 'active', legit: true }]
+  redteam.listWebshellMetadata = () => []
+  try {
+    const nextAction = JSON.parse(await registered.get('redteam_next_action').execute({
+      engagement: plannerEngagement,
+    }, {}))
+    assert.equal(nextAction.ok, true)
+    assert.equal(nextAction.state.access, 0)
+    assert.equal(nextAction.state.sessions_review.active_target_tunnels, 1)
+  } finally {
+    redteam.listTunnelMetadata = originalTunnelMetadata
+    redteam.listWebshellMetadata = originalWebshellMetadata
+  }
+
   // Sensitive legacy records are metadata-only; target-side credential/shell/tunnel paths fail closed.
   const sensitiveEngagement = redteam.openEngagement('sensitive-tool-boundary', [], { bindCurrent: false }).id
   redteam.addCredential(sensitiveEngagement, {
