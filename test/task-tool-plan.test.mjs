@@ -122,7 +122,7 @@ test('task selection exposes dedicated execution support and keeps custom tools 
   assert.equal(plan.candidates.find((item) => item.id === 'nmap').executionAdapter, 'redteam_scan_run')
   assert.equal(plan.candidates.find((item) => item.id === 'nmap').executionSupported, true)
   assert.equal(plan.candidates.find((item) => item.id === 'naabu').executionSupported, false)
-  assert.equal(plan.candidates.find((item) => item.id === 'naabu').executionMode, 'requires-matching-skill-and-host-tool')
+  assert.equal(plan.candidates.find((item) => item.id === 'naabu').executionMode, 'unmapped-manual-review')
   assert.equal(plan.configuredCustomTools.length, 1)
   assert.equal(plan.configuredCustomTools[0].id, 'custom:0')
   assert.equal(plan.configuredCustomTools[0].taskFit, 'unclassified')
