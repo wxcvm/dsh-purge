@@ -1,0 +1,734 @@
+{
+ "source": "https://github.com/wgpsec/AboutSecurity",
+ "source_commit": "c0d3a4645f26be5b94f64344b501db4191dc9788",
+ "kind": "payload",
+ "note": "索引指向本地 AboutSecurity 仓库；文件本体不随包分发。verified=false。",
+ "groups": [
+  {
+   "category": "access-bypass",
+   "description": "访问控制绕过payload集合，包含通过XFF等HTTP头伪造IP地址绕过403限制的payload",
+   "files": [
+    {
+     "name": "xff-403.txt",
+     "path": "Payload/access-bypass/xff-403.txt",
+     "lines": 5,
+     "bytes": 49,
+     "description": "通过伪造内网IP地址（127.0.0.1/10.x/172.x/192.168.x）绕过403访问限制的XFF头值",
+     "usage": "遇到403禁止访问时，配合X-Forwarded-For等请求头逐个尝试这些IP地址绕过访问控制",
+     "tags": "xff,X-Forwarded-For,403 bypass,内网IP,访问绕过,IP spoofing"
+    }
+   ]
+  },
+  {
+   "category": "cors",
+   "description": "CORS跨域资源共享错误配置利用payload集合，包含PoC页面和Origin绕过技巧",
+   "files": [
+    {
+     "name": "cors.html",
+     "path": "Payload/cors/cors.html",
+     "lines": 25,
+     "bytes": 592,
+     "description": "CORS漏洞PoC利用页面，通过XMLHttpRequest带凭据跨域读取目标API响应数据",
+     "usage": "验证CORS配置漏洞时，替换目标URL后在浏览器打开此HTML，观察是否能跨域获取敏感数据",
+     "tags": "poc,XMLHttpRequest,withCredentials,跨域读取,漏洞验证"
+    },
+    {
+     "name": "cors.md",
+     "path": "Payload/cors/cors.md",
+     "lines": 17,
+     "bytes": 555,
+     "description": "CORS漏洞检测参考文档，包含curl检测命令和各类Origin绕过变体（null/子域/前缀等）",
+     "usage": "作为CORS漏洞测试的速查手册，参考各种Origin头变体构造绕过请求",
+     "tags": "reference,curl,origin bypass,参考文档,检测方法,绕过技巧"
+    },
+    {
+     "name": "cors2.html",
+     "path": "Payload/cors/cors2.html",
+     "lines": 26,
+     "bytes": 555,
+     "description": "CORS漏洞PoC利用页面（提取SID版），通过alert弹出跨域响应内容",
+     "usage": "验证CORS漏洞是否可窃取会话ID等敏感信息时使用",
+     "tags": "poc,session,SID,XMLHttpRequest,会话窃取,漏洞验证"
+    }
+   ]
+  },
+  {
+   "category": "email",
+   "description": "电子邮件格式Fuzz payload集合，包含XSS/SQLi/SMTP注入等各类邮箱地址变异",
+   "files": [
+    {
+     "name": "email.txt",
+     "path": "Payload/email/email.txt",
+     "lines": 12,
+     "bytes": 448,
+     "description": "恶意构造的邮箱地址payload，涵盖XSS注入、SQL注入、模板注入、SMTP头注入和SSRF等多种攻击向量",
+     "usage": "测试邮箱输入框的安全过滤时，用这些变异邮箱地址检测是否存在注入漏洞",
+     "tags": "fuzz,xss,sqli,smtp injection,SSRF,模板注入,邮箱注入,输入验证"
+    }
+   ]
+  },
+  {
+   "category": "format",
+   "description": "数据格式Fuzz payload集合，包含十六进制编码、整数溢出、JSON畸形、空字节和特殊字符串",
+   "files": [
+    {
+     "name": "hex.txt",
+     "path": "Payload/format/hex.txt",
+     "lines": 262,
+     "bytes": 1047,
+     "description": "URL编码的十六进制字符集（%00-%FF），覆盖全部256个单字节值",
+     "usage": "测试输入过滤和编码处理时，用完整十六进制字符集Fuzz检测哪些字节可绕过过滤",
+     "tags": "hex,url encoding,十六进制,URL编码,字节,byte,编码绕过"
+    },
+    {
+     "name": "int.txt",
+     "path": "Payload/format/int.txt",
+     "lines": 12,
+     "bytes": 100,
+     "description": "整数边界值payload，包含负数、零、常见溢出值（0x7fffffff/0xffffffff等）",
+     "usage": "测试整数型参数时，检测整数溢出、类型转换错误和边界条件漏洞",
+     "tags": "integer,overflow,boundary,整数溢出,边界值,类型转换,integer overflow"
+    },
+    {
+     "name": "json.txt",
+     "path": "Payload/format/json.txt",
+     "lines": 89,
+     "bytes": 49959,
+     "description": "JSON格式畸形payload，包含空值、特殊键名、嵌套结构和反序列化利用字段",
+     "usage": "测试JSON解析器和API接口时，用这些畸形JSON检测反序列化漏洞和解析异常",
+     "tags": "json,deserialization,反序列化,畸形JSON,解析异常,API fuzz"
+    },
+    {
+     "name": "nullbyte.txt",
+     "path": "Payload/format/nullbyte.txt",
+     "lines": 122,
+     "bytes": 4669,
+     "description": "空字节和格式化字符串payload，包含%00空字节、格式化字符串攻击向量（%s/%x/%n等）和超长空字节序列",
+     "usage": "测试空字节截断和格式化字符串漏洞时使用，检测C/C++程序的内存安全问题",
+     "tags": "null byte,format string,空字节截断,格式化字符串,内存安全,%00,%n"
+    },
+    {
+     "name": "string.txt",
+     "path": "Payload/format/string.txt",
+     "lines": 903,
+     "bytes": 17322,
+     "description": "通用特殊字符串Fuzz payload，包含SQL注入、XSS、命令注入、特殊字符和编码变体的综合集合",
+     "usage": "对任意文本输入框进行全面Fuzz测试，一次性覆盖多种常见注入攻击向量",
+     "tags": "string,comprehensive,fuzz,综合测试,特殊字符,注入检测,通用payload"
+    }
+   ]
+  },
+  {
+   "category": "hpp",
+   "description": "HTTP参数污染payload集合，包含各种参数重复、编码和分隔符变体",
+   "files": [
+    {
+     "name": "hpp.txt",
+     "path": "Payload/hpp/hpp.txt",
+     "lines": 37,
+     "bytes": 475,
+     "description": "HTTP参数污染变体payload，包含参数重复(?id=1&id=2)、编码绕过、数组注入和多种分隔符格式",
+     "usage": "测试Web应用对重复参数的处理逻辑时，检测参数优先级差异和过滤绕过",
+     "tags": "parameter duplicate,encoding bypass,参数重复,编码绕过,分隔符,优先级差异"
+    }
+   ]
+  },
+  {
+   "category": "lfi",
+   "description": "本地文件包含与路径遍历payload集合，覆盖Linux/Windows/Java平台的敏感文件路径和遍历技巧",
+   "files": [
+    {
+     "name": "java-path.txt",
+     "path": "Payload/lfi/java-path.txt",
+     "lines": 8,
+     "bytes": 138,
+     "description": "Java Web应用敏感目录路径（WEB-INF/META-INF），用于读取配置和类文件",
+     "usage": "测试Java Web应用的LFI漏洞时，尝试读取WEB-INF下的web.xml、class文件和Spring配置",
+     "tags": "java,WEB-INF,META-INF,Java Web,敏感目录,配置泄露"
+    },
+    {
+     "name": "java-properties.txt",
+     "path": "Payload/lfi/java-properties.txt",
+     "lines": 1739,
+     "bytes": 57890,
+     "description": "Java应用常见配置文件路径大全，包含Spring/MyBatis/Hibernate/数据库等各类框架配置文件",
+     "usage": "大规模扫描Java应用可能泄露的配置文件，发现数据库连接信息、密钥等敏感数据",
+     "tags": "java,properties,Spring,配置文件,框架配置,敏感信息泄露,大字典"
+    },
+    {
+     "name": "linux-path.txt",
+     "path": "Payload/lfi/linux-path.txt",
+     "lines": 6,
+     "bytes": 108,
+     "description": "Linux Web服务器常见根目录路径（/tmp/www/html等），含路径遍历到Tomcat目录",
+     "usage": "确定Web应用在Linux系统上的文件根目录位置，辅助构造精确的LFI路径",
+     "tags": "linux,web root,根目录,Tomcat,文件路径定位"
+    },
+    {
+     "name": "linux.txt",
+     "path": "Payload/lfi/linux.txt",
+     "lines": 682,
+     "bytes": 15362,
+     "description": "Linux系统敏感文件绝对路径大全，覆盖Apache/Nginx/SSH/系统配置/日志等文件",
+     "usage": "通过LFI漏洞批量测试Linux服务器上的敏感文件是否可读取",
+     "tags": "linux,sensitive files,apache,nginx,ssh,passwd,系统配置,敏感文件,大字典"
+    },
+    {
+     "name": "log.txt",
+     "path": "Payload/lfi/log.txt",
+     "lines": 47,
+     "bytes": 637,
+     "description": "常见Web应用和系统日志文件名字典（access.log/error.log/debug.log等）",
+     "usage": "扫描目标服务器是否存在可直接访问的日志文件，获取敏感信息或用于日志注入",
+     "tags": "log,access log,error log,日志文件,日志泄露,信息收集"
+    },
+    {
+     "name": "properties.txt",
+     "path": "Payload/lfi/properties.txt",
+     "lines": 203,
+     "bytes": 3998,
+     "description": "通用Web应用配置文件路径字典（.properties/.xml/.yml），涵盖多种框架",
+     "usage": "扫描目标是否存在可读取的配置文件，发现数据库密码、API密钥等敏感信息",
+     "tags": "properties,config,xml,yml,配置文件,敏感信息,Actuator,Spring Boot"
+    },
+    {
+     "name": "traversal.txt",
+     "path": "Payload/lfi/traversal.txt",
+     "lines": 64,
+     "bytes": 1478,
+     "description": "路径遍历编码变体集合，包含%5c、%252f双重编码、Unicode编码等各种绕过WAF的遍历序列",
+     "usage": "LFI测试中用各种编码变体的../序列绕过路径过滤和WAF规则",
+     "tags": "traversal,encoding bypass,双重编码,Unicode,WAF绕过,路径遍历变体"
+    },
+    {
+     "name": "windows.txt",
+     "path": "Payload/lfi/windows.txt",
+     "lines": 206,
+     "bytes": 7122,
+     "description": "Windows系统敏感文件绝对路径大全，覆盖Apache/IIS/系统配置/日志等文件（C:/路径格式）",
+     "usage": "通过LFI漏洞批量测试Windows服务器上的敏感文件是否可读取",
+     "tags": "windows,IIS,apache,sensitive files,boot.ini,系统配置,敏感文件,大字典"
+    }
+   ]
+  },
+  {
+   "category": "prompt-injection",
+   "description": "AI/LLM提示词注入payload集合，包含各类绕过大模型安全限制的攻击提示词模板",
+   "files": [
+    {
+     "name": "prompt.md",
+     "path": "Payload/prompt-injection/prompt.md",
+     "lines": 639,
+     "bytes": 34883,
+     "description": "LLM提示词注入技巧参考文档，包含蒸馏攻击、语义相变、角色扮演、DAN越狱等多种绕过安全对齐的提示词模板",
+     "usage": "测试AI/LLM应用的安全性时，参考这些提示词模板检测模型是否可被诱导输出违规内容",
+     "tags": "reference,jailbreak,DAN,蒸馏攻击,角色扮演,安全对齐,越狱模板,参考文档"
+    }
+   ]
+  },
+  {
+   "category": "rce",
+   "description": "远程代码/命令执行payload集合，覆盖Java/PHP/Unix/Windows/PowerShell多平台的命令注入和RCE利用",
+   "files": [
+    {
+     "name": "java.txt",
+     "path": "Payload/rce/java.txt",
+     "lines": 2,
+     "bytes": 1151,
+     "description": "Java OGNL/EL表达式注入RCE payload，通过ScriptEngine执行系统命令",
+     "usage": "测试Struts2/Spring等Java框架的表达式注入漏洞时使用",
+     "tags": "java,OGNL,expression injection,Struts2,表达式注入,ScriptEngine"
+    },
+    {
+     "name": "php.txt",
+     "path": "Payload/rce/php.txt",
+     "lines": 19,
+     "bytes": 398,
+     "description": "PHP代码执行payload，包含system/exec/eval等函数调用和模板注入向量",
+     "usage": "测试PHP应用的代码注入和模板注入漏洞时，检测是否可执行系统命令",
+     "tags": "php,system,exec,eval,template injection,代码注入,模板注入,函数调用"
+    },
+    {
+     "name": "powershell.txt",
+     "path": "Payload/rce/powershell.txt",
+     "lines": 164,
+     "bytes": 2165,
+     "description": "PowerShell命令/cmdlet名称字典，覆盖文件操作、系统管理、网络等常用cmdlet",
+     "usage": "测试Windows系统命令注入时，枚举可用的PowerShell cmdlet构造利用链",
+     "tags": "powershell,cmdlet,windows,命令字典,cmdlet枚举,系统管理"
+    },
+    {
+     "name": "rce.txt",
+     "path": "Payload/rce/rce.txt",
+     "lines": 39,
+     "bytes": 102,
+     "description": "通用命令注入特殊字符和分隔符payload，包含管道符、重定向、命令连接符等",
+     "usage": "快速测试输入点是否存在命令注入，通过各种shell特殊字符触发命令执行",
+     "tags": "special chars,pipe,redirect,命令分隔符,特殊字符,shell元字符,命令连接"
+    },
+    {
+     "name": "unix.txt",
+     "path": "Payload/rce/unix.txt",
+     "lines": 569,
+     "bytes": 3902,
+     "description": "Unix/Linux系统命令名称大全，覆盖系统管理、网络、文件操作等常用命令",
+     "usage": "命令注入利用阶段，枚举目标Linux系统上可用的命令，构造信息收集和提权利用链",
+     "tags": "unix,linux,system commands,命令字典,系统命令,命令枚举,信息收集"
+    },
+    {
+     "name": "windows.txt",
+     "path": "Payload/rce/windows.txt",
+     "lines": 158,
+     "bytes": 1076,
+     "description": "Windows CMD命令名称字典，覆盖系统管理、网络、文件操作等常用命令",
+     "usage": "命令注入利用阶段，枚举目标Windows系统上可用的CMD命令",
+     "tags": "windows,cmd,system commands,命令字典,系统命令,命令枚举"
+    }
+   ]
+  },
+  {
+   "category": "reverse-shell",
+   "description": "反弹Shell/Bind Shell payload集合，覆盖Bash/Python/PowerShell/Perl/PHP/Ruby/Java等多语言，包含Shell升级和稳定化命令",
+   "files": [
+    {
+     "name": "bash.txt",
+     "path": "Payload/reverse-shell/bash.txt",
+     "lines": 14,
+     "bytes": 887,
+     "description": "Bash/sh反弹Shell一行命令，包含/dev/tcp、mkfifo+nc、ncat、ncat --ssl、socat等多种方式",
+     "usage": "获取命令执行权限后，建立反弹Shell回连到攻击机，支持TCP和UDP",
+     "tags": "bash,sh,/dev/tcp,mkfifo,nc,ncat,socat,tcp,udp,netcat"
+    },
+    {
+     "name": "python.txt",
+     "path": "Payload/reverse-shell/python.txt",
+     "lines": 7,
+     "bytes": 1276,
+     "description": "Python反弹Shell一行命令，使用socket+subprocess或socket+pty实现，兼容Python2和Python3",
+     "usage": "目标存在Python环境时，通过socket建立反弹Shell连接",
+     "tags": "python,python3,socket,pty,subprocess,os.dup2"
+    },
+    {
+     "name": "powershell.txt",
+     "path": "Payload/reverse-shell/powershell.txt",
+     "lines": 6,
+     "bytes": 3122,
+     "description": "PowerShell反弹Shell一行命令，使用TCPClient建立连接，支持Base64编码和下载执行方式",
+     "usage": "Windows目标环境下，通过PowerShell建立反弹Shell，绕过cmd限制",
+     "tags": "powershell,windows,TCPClient,base64,powercat,download cradle"
+    },
+    {
+     "name": "others.txt",
+     "path": "Payload/reverse-shell/others.txt",
+     "lines": 15,
+     "bytes": 2298,
+     "description": "多语言反弹Shell payload，覆盖Perl/PHP/Ruby/Java/Lua/Go/OpenSSL/Awk/xterm",
+     "usage": "根据目标可用的编程语言环境，选择对应的反弹Shell方式",
+     "tags": "perl,php,ruby,java,lua,go,openssl,awk,xterm,多语言,nc,netcat,socat"
+    },
+    {
+     "name": "upgrade.txt",
+     "path": "Payload/reverse-shell/upgrade.txt",
+     "lines": 22,
+     "bytes": 670,
+     "description": "Shell升级和稳定化命令，将简单反弹Shell提升为完整交互式TTY终端",
+     "usage": "获取反弹Shell后，升级为完整PTY以支持Tab补全、Ctrl+C、vim等交互操作",
+     "tags": "tty,pty,upgrade,stabilize,stty,交互式,终端升级,rlwrap,pwncat,shell升级,交互式shell"
+    }
+   ]
+  },
+  {
+   "category": "sqli",
+   "description": "SQL注入payload集合，覆盖MySQL/MSSQL/Oracle/LDAP多种数据库的注入向量，以及表名列名字典",
+   "files": [
+    {
+     "name": "column.txt",
+     "path": "Payload/sqli/column.txt",
+     "lines": 1101,
+     "bytes": 12650,
+     "description": "常见数据库列名/字段名字典，包含username/password/email/id等高频字段",
+     "usage": "SQL注入确认后枚举目标数据库的列名，快速定位包含敏感数据的字段",
+     "tags": "column,field name,列名,字段枚举,数据库枚举,字典"
+    },
+    {
+     "name": "database.txt",
+     "path": "Payload/sqli/database.txt",
+     "lines": 21,
+     "bytes": 207,
+     "description": "常见数据库名称字典，包含MySQL默认库名和常用业务数据库名",
+     "usage": "SQL注入时枚举目标服务器上的数据库名称",
+     "tags": "database name,数据库名,库名枚举,MySQL,information_schema"
+    },
+    {
+     "name": "payload-blind.txt",
+     "path": "Payload/sqli/payload-blind.txt",
+     "lines": 41,
+     "bytes": 1174,
+     "description": "基于时间的SQL盲注payload，使用sleep()函数通过响应延迟判断条件真假",
+     "usage": "目标无回显时进行时间盲注测试，通过延迟差异提取数据",
+     "tags": "blind,time-based,sleep,时间盲注,延迟注入,无回显,盲注"
+    },
+    {
+     "name": "payload-ldap.txt",
+     "path": "Payload/sqli/payload-ldap.txt",
+     "lines": 14,
+     "bytes": 108,
+     "description": "LDAP注入payload，包含逻辑运算符和通配符查询构造",
+     "usage": "测试LDAP认证和查询接口时检测注入漏洞",
+     "tags": "ldap,LDAP injection,LDAP注入,目录服务,认证绕过,通配符"
+    },
+    {
+     "name": "payload-mssql.txt",
+     "path": "Payload/sqli/payload-mssql.txt",
+     "lines": 99,
+     "bytes": 3805,
+     "description": "MSSQL专用注入payload，包含waitfor delay时间盲注、版本探测和错误注入",
+     "usage": "针对MSSQL数据库进行SQL注入测试，利用MSSQL特有语法提取信息",
+     "tags": "mssql,SQL Server,waitfor,xp_cmdshell,MSSQL注入,时间盲注"
+    },
+    {
+     "name": "payload-mysql.txt",
+     "path": "Payload/sqli/payload-mysql.txt",
+     "lines": 109,
+     "bytes": 4624,
+     "description": "MySQL专用注入payload，包含sleep/benchmark时间盲注和各类闭合变体",
+     "usage": "针对MySQL数据库进行SQL注入测试，利用MySQL特有函数和语法",
+     "tags": "mysql,sleep,benchmark,MySQL注入,时间盲注,联合查询"
+    },
+    {
+     "name": "payload-oracle.txt",
+     "path": "Payload/sqli/payload-oracle.txt",
+     "lines": 55,
+     "bytes": 7838,
+     "description": "Oracle专用注入payload，包含utl_http/utl_inaddr带外数据提取和系统信息查询",
+     "usage": "针对Oracle数据库进行SQL注入测试，利用Oracle特有包和函数",
+     "tags": "oracle,utl_http,utl_inaddr,Oracle注入,带外通道,OOB,系统信息"
+    },
+    {
+     "name": "payload.txt",
+     "path": "Payload/sqli/payload.txt",
+     "lines": 344,
+     "bytes": 7725,
+     "description": "通用SQL注入payload集合，包含各种编码、Unicode字符和逻辑绕过的or/and注入变体",
+     "usage": "对任意SQL注入点进行全面Fuzz测试，覆盖多种编码和绕过技巧",
+     "tags": "generic,universal,通用注入,编码绕过,Unicode,逻辑注入,综合payload"
+    },
+    {
+     "name": "sql-inj.md",
+     "path": "Payload/sqli/sql-inj.md",
+     "lines": 442,
+     "bytes": 22738,
+     "description": "SQL注入技巧参考文档，包含LDAP注入、MySQL/MSSQL/Oracle语法、WAF绕过技巧等",
+     "usage": "作为SQL注入测试的综合速查手册，快速查阅各数据库的注入语法和绕过方法",
+     "tags": "reference,cheatsheet,参考文档,速查手册,WAF绕过,注入技巧,MySQL,MSSQL,Oracle,LDAP,blind,盲注,联合注入"
+    },
+    {
+     "name": "table.txt",
+     "path": "Payload/sqli/table.txt",
+     "lines": 513,
+     "bytes": 4572,
+     "description": "常见数据库表名字典，包含users/accounts/orders等高频业务表名",
+     "usage": "SQL注入确认后枚举目标数据库的表名，定位存储用户凭据和敏感数据的表",
+     "tags": "table,table name,表名,表名枚举,数据库枚举,字典"
+    }
+   ]
+  },
+  {
+   "category": "ssi",
+   "description": "服务端包含注入(SSI)payload集合，包含exec命令执行、echo信息泄露和include文件包含指令",
+   "files": [
+    {
+     "name": "payload.txt",
+     "path": "Payload/ssi/payload.txt",
+     "lines": 79,
+     "bytes": 2749,
+     "description": "SSI注入payload，涵盖exec命令执行、echo变量泄露、config错误信息、fsize文件探测和include远程包含",
+     "usage": "测试支持SSI的Web服务器时，检测是否可通过SSI指令执行命令或读取文件",
+     "tags": "exec,echo,include,config,命令执行,变量泄露,文件包含,远程包含"
+    }
+   ]
+  },
+  {
+   "category": "ssrf",
+   "description": "服务端请求伪造(SSRF)payload集合，包含各种编码格式的localhost/内网地址绕过变体",
+   "files": [
+    {
+     "name": "payload.txt",
+     "path": "Payload/ssrf/payload.txt",
+     "lines": 94,
+     "bytes": 1717,
+     "description": "SSRF地址绕过payload，包含127.0.0.1的十六进制/八进制/十进制/IPv6/URL编码等多种表示形式",
+     "usage": "绕过SSRF防护的IP黑名单过滤时，用各种等价的localhost表示方式尝试访问内网服务",
+     "tags": "bypass,localhost,127.0.0.1,IPv6,octal,hex,decimal,编码绕过,地址变体,黑名单绕过"
+    }
+   ]
+  },
+  {
+   "category": "upload",
+   "description": "文件上传测试样本集合，包含各种格式的测试文件和任意文件上传 getshell 用的上传表单 PoC 页面",
+   "files": [
+    {
+     "name": "1.doc",
+     "path": "Payload/upload/1.doc",
+     "lines": 1,
+     "bytes": 1,
+     "description": "DOC格式测试文件样本，用于文件上传功能的格式验证测试",
+     "usage": "测试文件上传接口对DOC文档类型的处理和过滤逻辑",
+     "tags": "doc,word,文档,格式测试,文件样本"
+    },
+    {
+     "name": "1.html",
+     "path": "Payload/upload/1.html",
+     "lines": 1,
+     "bytes": 28,
+     "description": "含XSS payload的HTML测试文件（img onerror触发alert）",
+     "usage": "上传HTML文件测试服务器是否允许上传并执行HTML，检测存储型XSS",
+     "tags": "html,xss,存储型XSS,img onerror,脚本执行"
+    },
+    {
+     "name": "1.pdf",
+     "path": "Payload/upload/1.pdf",
+     "lines": 428,
+     "bytes": 25125,
+     "description": "PDF格式测试文件样本，用于文件上传功能的格式验证测试",
+     "usage": "测试文件上传接口对PDF文件类型的处理和过滤逻辑",
+     "tags": "pdf,文档,格式测试,文件样本"
+    },
+    {
+     "name": "1.svg",
+     "path": "Payload/upload/1.svg",
+     "lines": 6,
+     "bytes": 591,
+     "description": "含XSS payload的SVG测试文件（内嵌script标签执行alert）",
+     "usage": "上传SVG文件测试服务器是否允许上传并解析SVG中的JavaScript代码",
+     "tags": "svg,xss,script injection,SVG注入,脚本执行,矢量图"
+    },
+    {
+     "name": "1.txt",
+     "path": "Payload/upload/1.txt",
+     "lines": 1,
+     "bytes": 1,
+     "description": "最简纯文本测试文件，内容为单个字符",
+     "usage": "作为基准测试文件验证上传功能的基本可用性",
+     "tags": "txt,plaintext,纯文本,基准测试"
+    },
+    {
+     "name": "1.xlsx",
+     "path": "Payload/upload/1.xlsx",
+     "lines": 49,
+     "bytes": 8426,
+     "description": "XLSX格式测试文件样本，用于文件上传功能的格式验证测试",
+     "usage": "测试文件上传接口对Excel文件类型的处理和过滤逻辑",
+     "tags": "xlsx,excel,电子表格,格式测试,文件样本"
+    },
+    {
+     "name": "1.zip",
+     "path": "Payload/upload/1.zip",
+     "lines": 1,
+     "bytes": 1,
+     "description": "ZIP压缩包测试文件样本，用于文件上传功能的格式验证测试",
+     "usage": "测试文件上传接口对压缩包类型的处理，检测解压炸弹或路径遍历风险",
+     "tags": "zip,archive,压缩包,格式测试,解压安全"
+    },
+    {
+     "name": "upload.html",
+     "path": "Payload/upload/upload.html",
+     "lines": 8,
+     "bytes": 209,
+     "description": "通用文件上传HTML表单 PoC，用于任意文件上传/getshell 测试",
+     "usage": "当目标上传接口无前端页面时，用此表单快速构造任意文件上传 getshell 请求",
+     "tags": "form,multipart,上传表单,PoC,poc,getshell,辅助工具"
+    },
+    {
+     "name": "upload2.html",
+     "path": "Payload/upload/upload2.html",
+     "lines": 4,
+     "bytes": 216,
+     "description": "精简版 PHP 文件上传 HTML 表单 PoC，用于任意文件上传/getshell",
+     "usage": "快速构造针对 PHP 上传接口的任意文件上传 getshell 请求",
+     "tags": "form,php,multipart,上传表单,PoC,poc,getshell,辅助工具"
+    }
+   ]
+  },
+  {
+   "category": "xss",
+   "description": "XSS跨站脚本攻击payload集合，包含事件属性、HTML标签、JS函数和各类绕过payload",
+   "files": [
+    {
+     "name": "js-event.txt",
+     "path": "Payload/xss/js-event.txt",
+     "lines": 210,
+     "bytes": 2791,
+     "description": "JavaScript事件属性名称完整列表（onload/onerror/onfocus等210个事件）",
+     "usage": "构造XSS payload时枚举所有可用的事件处理属性，寻找未被过滤的事件触发点",
+     "tags": "event,事件属性,onload,onerror,onfocus,事件枚举,属性名,事件"
+    },
+    {
+     "name": "js-function.txt",
+     "path": "Payload/xss/js-function.txt",
+     "lines": 5,
+     "bytes": 93,
+     "description": "JavaScript弹窗函数调用变体（self/parent/frames/content/window对象的alert调用）",
+     "usage": "绕过alert关键词过滤时，使用不同window对象引用方式调用弹窗函数",
+     "tags": "function,alert,弹窗变体,关键词绕过,window对象"
+    },
+    {
+     "name": "js-tag-full.txt",
+     "path": "Payload/xss/js-tag-full.txt",
+     "lines": 157,
+     "bytes": 1252,
+     "description": "完整闭合的HTML标签列表（带尖括号<tag>格式），涵盖157种标签",
+     "usage": "XSS Fuzz测试时枚举所有HTML标签，寻找未被过滤可注入事件属性的标签",
+     "tags": "tag,html tag,完整标签,标签枚举,闭合标签,Fuzz,标签,HTML标签"
+    },
+    {
+     "name": "js-tag-half.txt",
+     "path": "Payload/xss/js-tag-half.txt",
+     "lines": 157,
+     "bytes": 1095,
+     "description": "半闭合HTML标签列表（仅左尖括号<tag格式），涵盖157种标签",
+     "usage": "XSS Fuzz测试时使用半闭合标签探测解析器行为和过滤规则",
+     "tags": "tag,html tag,半闭合标签,标签枚举,未闭合,解析器测试,标签,HTML标签"
+    },
+    {
+     "name": "readme.md",
+     "path": "Payload/xss/readme.md",
+     "lines": 620,
+     "bytes": 17364,
+     "description": "XSS攻击技巧综合参考文档，涵盖基础payload、各种绕过技巧、编码方式和利用场景",
+     "usage": "作为XSS渗透测试的速查手册，快速查阅各种XSS攻击向量和绕过方法",
+     "tags": "reference,cheatsheet,参考文档,速查手册,绕过技巧,编码方式,反射型,存储型,DOM,事件,标签"
+    },
+    {
+     "name": "xss-payload1.txt",
+     "path": "Payload/xss/xss-payload1.txt",
+     "lines": 2148,
+     "bytes": 133059,
+     "description": "XSS综合payload集合，包含各类script/img/svg标签注入、编码绕过和特殊字符变体",
+     "usage": "对目标进行XSS自动化Fuzz扫描，覆盖多种标签和编码绕过方式",
+     "tags": "comprehensive,fuzz,script,img,encoding,综合payload,自动化扫描,编码变体,反射型,存储型,DOM"
+    },
+    {
+     "name": "xss-payload2.txt",
+     "path": "Payload/xss/xss-payload2.txt",
+     "lines": 8493,
+     "bytes": 572206,
+     "description": "按HTML标签+事件属性全组合的XSS payload大字典，覆盖各种标签与事件的完整组合",
+     "usage": "大规模Fuzz测试，全面覆盖所有标签/事件组合以发现被遗漏的XSS攻击面",
+     "tags": "fuzz,tag,event,comprehensive,全组合,标签事件,大字典,完整覆盖,事件,标签"
+    }
+   ]
+  },
+  {
+   "category": "xss/html",
+   "description": "XSS HTML文件载荷，用于通过上传HTML文件触发跨站脚本攻击",
+   "files": [
+    {
+     "name": "1.html",
+     "path": "Payload/xss/html/1.html",
+     "lines": 1,
+     "bytes": 28,
+     "description": "含img onerror XSS payload的HTML文件，上传后触发JavaScript执行",
+     "usage": "测试文件上传功能是否允许上传HTML文件并在浏览器中执行脚本",
+     "tags": "img,onerror,上传XSS,存储型XSS,文件上传"
+    }
+   ]
+  },
+  {
+   "category": "xss/pdf",
+   "description": "XSS PDF文件载荷，用于通过上传含脚本的PDF文件触发跨站脚本攻击",
+   "files": [
+    {
+     "name": "1.pdf",
+     "path": "Payload/xss/pdf/1.pdf",
+     "lines": 428,
+     "bytes": 25125,
+     "description": "含JavaScript代码的恶意PDF文件样本，可在PDF阅读器或浏览器中触发脚本执行",
+     "usage": "测试PDF上传和在线预览功能是否会执行PDF内嵌的JavaScript代码",
+     "tags": "pdf javascript,PDF注入,在线预览,脚本执行,文件上传"
+    }
+   ]
+  },
+  {
+   "category": "xss/svg",
+   "description": "XSS SVG文件载荷集合，利用SVG矢量图中的script标签和事件属性执行JavaScript",
+   "files": [
+    {
+     "name": "1.svg",
+     "path": "Payload/xss/svg/1.svg",
+     "lines": 6,
+     "bytes": 591,
+     "description": "含script标签的SVG文件，在正常SVG图片中嵌入JavaScript代码执行alert",
+     "usage": "上传SVG文件测试服务器是否过滤SVG中的script标签，检测SVG XSS漏洞",
+     "tags": "script,embedded,内嵌脚本,图片上传,script标签"
+    },
+    {
+     "name": "2.svg",
+     "path": "Payload/xss/svg/2.svg",
+     "lines": 1,
+     "bytes": 59,
+     "description": "使用onload事件的单行SVG XSS payload，最精简的SVG XSS向量",
+     "usage": "快速验证SVG上传是否存在XSS，使用最简payload减少干扰因素",
+     "tags": "onload,minimal,精简payload,事件触发,快速验证"
+    },
+    {
+     "name": "sanitised.svg",
+     "path": "Payload/xss/svg/sanitised.svg",
+     "lines": 45,
+     "bytes": 3937,
+     "description": "经过清洗处理的合法SVG文件样本，不含恶意代码，作为对照基准",
+     "usage": "作为安全SVG文件的对照样本，验证上传过滤是否能正确区分恶意和正常SVG",
+     "tags": "sanitised,clean,safe,安全样本,对照基准,过滤验证"
+    }
+   ]
+  },
+  {
+   "category": "xss/xml",
+   "description": "XSS XML相关payload集合，利用XML/XSLT/CDATA等特性绕过过滤执行跨站脚本",
+   "files": [
+    {
+     "name": "xml.txt",
+     "path": "Payload/xss/xml/xml.txt",
+     "lines": 16,
+     "bytes": 1652,
+     "description": "基于XML特性的XSS payload，包含XPath注入、CDATA绕过、XML实体和DOCTYPE利用",
+     "usage": "测试XML解析器或接受XML输入的接口时，检测通过XML特性触发XSS的可能性",
+     "tags": "xpath,cdata,entity,DOCTYPE,XML解析,CDATA绕过,实体注入"
+    },
+    {
+     "name": "xss.xml",
+     "path": "Payload/xss/xml/xss.xml",
+     "lines": 4,
+     "bytes": 147,
+     "description": "含JavaScript的恶意XML文件样本，利用XHTML命名空间嵌入script标签",
+     "usage": "上传XML文件或测试XML解析时，检测是否可通过命名空间嵌入脚本执行",
+     "tags": "xhtml,namespace,script,命名空间,文件上传,脚本嵌入"
+    }
+   ]
+  },
+  {
+   "category": "xxe",
+   "description": "XML外部实体注入(XXE)payload集合，包含各种DTD实体声明和利用技巧",
+   "files": [
+    {
+     "name": "xml.txt",
+     "path": "Payload/xxe/xml.txt",
+     "lines": 91,
+     "bytes": 4646,
+     "description": "XXE攻击payload集合，包含XPath注入、CDATA绕过、DOCTYPE实体声明读取系统文件等",
+     "usage": "测试XML解析接口时，检测是否存在XXE漏洞可读取服务器文件或发起SSRF",
+     "tags": "xpath,cdata,DOCTYPE,ENTITY,文件读取,passwd,系统文件,SSRF"
+    },
+    {
+     "name": "xxe.md",
+     "path": "Payload/xxe/xxe.md",
+     "lines": 116,
+     "bytes": 3070,
+     "description": "XXE漏洞攻击技巧参考文档，涵盖基础实体、外部实体、Blind XXE、带外数据提取和各种利用场景",
+     "usage": "作为XXE渗透测试的速查手册，快速查阅各种XXE攻击模式和利用方法",
+     "tags": "reference,cheatsheet,参考文档,速查手册,Blind XXE,OOB,带外提取,利用技巧"
+    }
+   ]
+  }
+ ]
+}

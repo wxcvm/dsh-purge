@@ -1,0 +1,380 @@
+[
+  {
+    "id": "fujiang:gray-market:scheduled-task-injection",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/scheduled-task-injection.md",
+    "metadata": {
+      "title": "后台定时任务 / 计划任务注入（Quartz、XXL-JOB、若依）",
+      "cve": "无（功能滥用）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "若依/XXL-JOB/Quartz 管理后台",
+      "versions": "任意",
+      "ports": "80, 443, 8080",
+      "keywords": "定时任务, quartz, xxl-job, 若依, rce, 计划任务",
+      "verified": "false",
+      "sources": "公开资料整理（功能滥用类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 后台强口令 + 2FA；定时任务只允许白名单 bean（若依新版本已默认禁）；\n- XXL-JOB 管理端只放内网，GLUE 模式默认关闭。",
+    "reference_notes": "- 若依官方安全说明；XXL-JOB 安全配置文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/scheduled-task-injection.md"
+  },
+  {
+    "id": "fujiang:gray-market:sms-bomb-and-enum",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/sms-bomb-and-enum.md",
+    "metadata": {
+      "title": "短信轰炸与账号枚举（验证码面）",
+      "cve": "无（业务逻辑）",
+      "severity": "medium",
+      "source_cvss": "5.3",
+      "product": "自研注册/登录/找回接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "sms, 轰炸, 枚举, 验证码爆破, 频控, user enumeration",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 图形/行为验证（滑块）前置；按\"手机号 + IP + 设备 + 类型\"四维频控，超限静默丢弃。\n- 验证码 6 位、5 分钟、5 次上限、一次性；绑定手机号与会话。\n- 注册/找回/登录统一文案（\"若号码存在将发送验证码\"），不泄露存在性。\n- 短信通道侧限速与费用告警（轰炸的直接损失是短信费）。",
+    "reference_notes": "- OWASP WSTG-IDNT-04（账号枚举）；OWASP Authentication Cheat Sheet。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/sms-bomb-and-enum.md"
+  },
+  {
+    "id": "fujiang:gray-market:sms-code-reuse-and-bruteforce",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/sms-code-reuse-and-bruteforce.md",
+    "metadata": {
+      "title": "短信验证码回显 / 复用 / 爆破（任意账号接管）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "自研注册/登录/改密接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "sms, code, 验证码回显, 复用, 爆破, 接管",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 验证码只走短信通道，响应里绝不回显；6 位、5 分钟、5 次上限、一次性。\n- 与会话+手机号强绑定，校验失败计数落库（不能用内存计数被重启绕过）。\n- 登录/改密/绑定统一限速，同号码同 IP 双维。",
+    "reference_notes": "- OWASP Authentication Cheat Sheet；OWASP WSTG-ATHN-03。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/sms-code-reuse-and-bruteforce.md"
+  },
+  {
+    "id": "fujiang:gray-market:sourcemap-js-secret-leak",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/sourcemap-js-secret-leak.md",
+    "metadata": {
+      "title": "sourcemap / 前端 JS 泄露接口与密钥（SPA 包网站第一入口）",
+      "cve": "无（配置缺陷）",
+      "severity": "high",
+      "source_cvss": "8.6",
+      "product": "前后端分离站点（Vue/React/uni-app）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "sourcemap, js, 前端, 密钥, 接口, 泄露, spa",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 生产构建关 sourcemap（`productionSourceMap:false` / `build.sourcemap:false`）；\n- 密钥一律服务端下发/短期 STS，打包里只留公钥。",
+    "reference_notes": "- OWASP WSTG-INFO-05；前端构建安全配置。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/sourcemap-js-secret-leak.md"
+  },
+  {
+    "id": "fujiang:gray-market:spring-actuator-exposure",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/spring-actuator-exposure.md",
+    "metadata": {
+      "title": "Spring Boot Actuator 未授权（heapdump / Jolokia / Gateway）",
+      "cve": "无（配置缺陷；CVE-2022-22947 为 Gateway 特例）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "Spring Boot 2.x/3.x",
+      "versions": "任意（端点暴露且无鉴权）",
+      "ports": "8080, 8443, 9090",
+      "keywords": "actuator, heapdump, jolokia, env, gateway, spring",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- `management.endpoints.web.exposure.include=health,info`；管理端点独立端口且只对内网。\n- 加 Spring Security 保护 `/actuator/**`；关 `heapdump`/`jolokia`/`gateway`。\n- 密钥不进配置文件，走 KMS/环境变量注入并定期轮换。",
+    "reference_notes": "- Spring Boot Actuator 官方文档（端点暴露）；CVE-2022-22947 公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/spring-actuator-exposure.md"
+  },
+  {
+    "id": "fujiang:gray-market:sql-injection-business-api",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/sql-injection-business-api.md",
+    "metadata": {
+      "title": "业务接口 SQL 注入（报表 / 订单 / 代理查询）",
+      "cve": "无（实现缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "自研报表与查询接口",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "sqli, 注入, orderNo, agentId, 报表, 盲注, union",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 全量参数化查询（预编译）；禁止字符串拼 SQL。\n- DB 账号最小权限（禁 `FILE`、禁跨库）；错误页统一（不回显 SQL）。\n- WAF 拦 `SLEEP(`、`UNION SELECT`、`--` 组合；查询接口加限速。",
+    "reference_notes": "- OWASP WSTG-INPV-05；sqlmap 文档。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/sql-injection-business-api.md"
+  },
+  {
+    "id": "fujiang:gray-market:ssrf-to-internal",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/ssrf-to-internal.md",
+    "metadata": {
+      "title": "SSRF（图片抓取 / 回调校验 / 推广链接检测）打内网与云元数据",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.2",
+      "product": "自研后端（抓图、URL 预览、支付回调校验）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "ssrf, 内网, 元数据, 169.254.169.254, redis, gopher",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- URL 白名单（域名 + 端口），禁内网段与链路本地；解析后校验 IP 而非只校验字符串。\n- 禁用重定向跟随；出站代理统一出口；元数据服务开 IMDSv2。",
+    "reference_notes": "- OWASP SSRF Prevention Cheat Sheet；云厂商元数据安全指南。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/ssrf-to-internal.md"
+  },
+  {
+    "id": "fujiang:gray-market:stored-xss-to-admin",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/stored-xss-to-admin.md",
+    "metadata": {
+      "title": "会员资料存储型 XSS 打后台审核（管理员会话劫持）",
+      "cve": "无（实现缺陷）",
+      "severity": "high",
+      "source_cvss": "8.2",
+      "product": "自研后台（客服/审核/风控页）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "stored xss, 存储型, 后台, 审核, cookie, csrf",
+      "verified": "false",
+      "sources": "公开资料整理（实现缺陷类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 输出编码（按上下文）+ 富文本白名单；CSP `default-src 'self'` 且禁内联。\n- 后台 Cookie 加 `HttpOnly` + `SameSite=Strict`；敏感操作二次验证。\n- 审核页对用户内容做纯文本渲染。",
+    "reference_notes": "- OWASP XSS Prevention Cheat Sheet；OWASP WSTG-INPV-02。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/stored-xss-to-admin.md"
+  },
+  {
+    "id": "fujiang:gray-market:support-ticket-attachment-idor",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/support-ticket-attachment-idor.md",
+    "metadata": {
+      "title": "客服工单附件越权下载（证件照 / KYC 材料）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.2",
+      "product": "自研客服工单系统",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "工单, 附件, 越权, 证件, kyc, 下载",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 附件下载校验归属（ticket.user_id = token.uid 或客服角色）；\n- 用不可枚举的随机 id；附件加短期签名 URL。",
+    "reference_notes": "- OWASP API1 BOLA；CWE-639。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/support-ticket-attachment-idor.md"
+  },
+  {
+    "id": "fujiang:gray-market:swagger-knife4j-unauth",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/swagger-knife4j-unauth.md",
+    "metadata": {
+      "title": "Swagger / Knife4j 接口文档暴露 → 未授权接口直打",
+      "cve": "无（配置缺陷）",
+      "severity": "high",
+      "source_cvss": "8.3",
+      "product": "Spring Boot 系（swagger2/3、knife4j、springdoc）",
+      "versions": "任意",
+      "ports": "80, 443, 8080",
+      "keywords": "swagger, knife4j, springdoc, 文档, 未授权, api",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 生产关闭 swagger/knife4j（`springfox.documentation.enabled=false`）；文档只在内网；\n- 网关统一鉴权，不依赖前端隐藏。",
+    "reference_notes": "- OWASP API8 安全配置错误。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/swagger-knife4j-unauth.md"
+  },
+  {
+    "id": "fujiang:gray-market:upload-getshell",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/upload-getshell.md",
+    "metadata": {
+      "title": "上传点 getshell（头像 / KYC 证件 / 客服附件）",
+      "cve": "无（实现缺陷；配合中间件解析差异）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "自研站上传点（博彩包网、代理后台高发）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "upload, getshell, 头像, kyc, 二次渲染, 双扩展名, svg xss",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 白名单后缀 + 服务端重命名（UUID）+ 存到非 webroot 或独立无解析域名。\n- 校验 magic bytes 并做图片重编码（GD/ImageMagick）；SVG 一律转 PNG 或直接拒绝。\n- 上传目录关闭脚本解析（`location ~* /uploads/.*\\.(php|jsp)$ { deny all; }`）。\n- 归档/压缩包上传要防解压穿越（`zip slip`）。",
+    "reference_notes": "- OWASP File Upload Cheat Sheet；WSTG-BUSL-09。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/upload-getshell.md"
+  },
+  {
+    "id": "fujiang:gray-market:vip-level-escalation",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/vip-level-escalation.md",
+    "metadata": {
+      "title": "VIP/等级接口参数篡改（免费拿高等级权益）",
+      "cve": "无（业务逻辑）",
+      "severity": "high",
+      "source_cvss": "8.1",
+      "product": "自研会员体系（博彩/包网）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "vip, level, 等级, 权益, 参数篡改, 会员",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 等级只由服务端按累计流水计算；更新接口白名单字段。\n- 升级接口校验支付单与等级映射表。",
+    "reference_notes": "- OWASP Mass Assignment；CWE-915。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/vip-level-escalation.md"
+  },
+  {
+    "id": "fujiang:gray-market:withdraw-approval-idor",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/withdraw-approval-idor.md",
+    "metadata": {
+      "title": "提现审核接口越权（读他人银行卡 / 改审核状态）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.1",
+      "product": "博彩包网 / 跑分代付",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "提现, withdraw, 审核, approve, 银行卡, 越权",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 审核接口独立管理域 + 强角色校验（财务角色）+ 两级审批 + 幂等（同一单只允许一次状态迁移）。\n- 列表/详情按 `uid` 过滤并做行级鉴权；银行卡号只回后四位。\n- 所有状态变更写审计（操作人、IP、时间、前后状态）。",
+    "reference_notes": "- OWASP API Security Top 10：API5 BFLA；OWASP WSTG-BUSL-01。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/withdraw-approval-idor.md"
+  },
+  {
+    "id": "fujiang:gray-market:withdraw-bankcard-swap",
+    "category": "gray-market",
+    "source_ref": "plugin/knowledge/gray-market/withdraw-bankcard-swap.md",
+    "metadata": {
+      "title": "提现银行卡越权替换（把别人提现收进自己卡）",
+      "cve": "无（业务逻辑）",
+      "severity": "critical",
+      "source_cvss": "9.3",
+      "product": "自研提现模块（博彩包网）",
+      "versions": "任意",
+      "ports": "80, 443",
+      "keywords": "提现, 银行卡, 越权, 替换, 资金, withdraw",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑类，无 CVE）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 提现只从 token 归属的银行卡表取；bankId 校验属于本人；\n- 提现申请与银行卡改绑都要二次验证（短信/2FA）+ 冷静期。",
+    "reference_notes": "- OWASP WSTG-BUSL-01；CWE-639。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-gray-market/withdraw-bankcard-swap.md"
+  }
+]

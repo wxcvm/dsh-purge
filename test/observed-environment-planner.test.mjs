@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  rememberEnvironmentDiscovery, rememberEnvironmentProbe, planObservedEnvironmentTask,
+  rememberEnvironmentDiscovery, rememberEnvironmentProbe, planObservedEnvironmentTask, agentEnvironmentPlan,
 } from '../lib/redteam/environment-planner.js'
 
 test('cross-environment ranking requires real probe observations and never labels target execution', (t) => {
@@ -89,4 +89,73 @@ test('registered agent and management bridge expose observed planner as an opt-i
     assert.match(frontend, /跨环境候选 · 仅使用已观测结果/)
     assert.match(frontend, /op: 'environmentTaskPlan'/)
   }
+})
+
+test('fresh discovery invalidates previous remote probes and changed local paths invalidate local probes', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-env-evidence-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const oldPath = join(root, 'old-nmap.exe')
+  const newPath = join(root, 'new-nmap.exe')
+  writeFileSync(oldPath, 'old')
+  writeFileSync(newPath, 'new')
+  const config = { platform: 'windows', tools: { nmap: oldPath }, binDirs: [], toolkitDir: join(root, 'missing') }
+  const options = { root, config, env: { PATH: '' } }
+  const snapshot = { environments: [
+    { id: 'local', kind: 'local' }, { id: 'wsl:Kali', kind: 'wsl' },
+  ] }
+  rememberEnvironmentDiscovery(root, snapshot)
+  rememberEnvironmentProbe(root, { toolId: 'nmap', environmentId: 'local', path: oldPath, status: 'probe_verified' })
+  rememberEnvironmentProbe(root, { toolId: 'nmap', environmentId: 'wsl:Kali', status: 'probe_verified' })
+  const candidate = (plan, id) => plan.candidates.find(c => c.toolId === 'nmap' && c.environmentId === id)
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'local').status, 'probe_verified')
+  config.tools.nmap = newPath
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'local').status, 'located')
+  rmSync(newPath)
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'local').status, 'missing')
+  rememberEnvironmentDiscovery(root, snapshot)
+  assert.equal(candidate(planObservedEnvironmentTask('services', options), 'wsl:Kali').status, 'unknown')
+})
+
+test('changed saved SSH endpoint cannot reuse old discovered host or probe', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'purge-env-ssh-evidence-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const config = { platform: 'windows', tools: {}, binDirs: [], toolkitDir: root,
+    kaliVm: { host: '192.0.2.1', port: 22, user: 'kali' } }
+  const options = { root, config, env: { PATH: '' } }
+  rememberEnvironmentDiscovery(root, { environments: [{ id: 'local', kind: 'local' },
+    { id: 'ssh:kali-vm', kind: 'ssh', host: '192.0.2.1', port: 22, user: 'kali' }] })
+  rememberEnvironmentProbe(root, { toolId: 'nmap', environmentId: 'ssh:kali-vm', status: 'probe_verified' })
+  assert.equal(planObservedEnvironmentTask('services', options).selected.environmentId, 'ssh:kali-vm')
+  config.kaliVm.host = '192.0.2.2'
+  assert.equal(planObservedEnvironmentTask('services', options).selected, null)
+  assert.ok(planObservedEnvironmentTask('services', options).candidates.every(c => c.environmentId === 'local'))
+})
+
+test('agent records path-only local verification as located rather than degraded', () => {
+  const agent = readFileSync(new URL('../lib/redteam/tools.js', import.meta.url), 'utf8')
+  assert.match(agent, /result\.verification\.status === 'path-only' \? 'located'/)
+  assert.match(agent, /result\.verification\.status === 'missing' \? 'missing'/)
+})
+
+test('agent fallback is lazy, verified-only and respects explicit local-only mode', () => {
+  const local = { ok: true, selected: { id: 'nmap' }, status: 'located' }
+  const missing = { ok: true, selected: null, status: 'missing' }
+  const failed = { ...local, status: 'verification-failed' }
+  const remote = { environmentId: 'wsl:Kali', toolId: 'nmap', status: 'probe_verified' }
+  const unknown = { environmentId: 'ssh:kali-vm', toolId: 'nmap', status: 'unknown' }
+  const candidates = [{ environmentId: 'local', toolId: 'nmap', status: 'located' }, unknown, remote]
+  let calls = 0
+  const get = () => { calls++; return { ok: true, candidates, selected: candidates[0] } }
+  assert.equal(agentEnvironmentPlan(local, undefined, get), null)
+  assert.equal(agentEnvironmentPlan(missing, false, get), null)
+  assert.equal(agentEnvironmentPlan({ ok: false }, undefined, get), null)
+  assert.equal(calls, 0)
+  const fallback = agentEnvironmentPlan(missing, undefined, get)
+  assert.deepEqual(fallback.candidates, [remote])
+  assert.equal(fallback.selected, remote)
+  assert.equal(fallback.totalCandidates, 3)
+  assert.equal(agentEnvironmentPlan(failed, undefined, get).selected, remote)
+  assert.equal(agentEnvironmentPlan(missing, undefined, () => ({ ok: true, candidates: [unknown] })), null)
+  assert.equal(agentEnvironmentPlan(missing, true, get).candidates.length, 3)
+  assert.equal(agentEnvironmentPlan(local, true, () => ({ ok: true, candidates: Array(15).fill(remote) })).candidates.length, 12)
 })
