@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { resolve, dirname, basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import * as zlib from 'node:zlib'
-import { cases, casePacket } from './agent-quality-eval.mjs'
+import { cases, casePacket, answerKey } from './agent-quality-eval.mjs'
 import { isHumanEvent, messageOf, messageText } from '../lib/response-context.js'
 import { streamSummary } from '../lib/runtime-observations.js'
 
@@ -183,6 +183,64 @@ export function observedDelegationTimeline(parent, children, missingChildren) {
       : missingChildren || intervals.length !== rows.length ? 'partial' : 'observed-children-only' }
 }
 
+/**
+ * Content diagnostics are deliberately separate from strict delivery/lifecycle
+ * acceptance. A single unambiguous JSON fence can be scored without counting
+ * it as strict bare JSON. A one-case child may return a standalone object.
+ * Only fixture identifiers, answer letters and allowlisted evidence keys leave
+ * this function; never return the original response text.
+ */
+export function diagnoseReportContent(trace, assigned = ids) {
+  validCases(assigned)
+  const empty = shape => ({ shape, score: null, cases: [] })
+  const text = typeof trace?.finalText === 'string' ? trace.finalText.trim() : ''
+  if (!text) return empty('missing')
+  const rowsOf = value => Array.isArray(value?.reports) ? value.reports
+    : assigned.length === 1 && value?.id === assigned[0]
+      && Object.hasOwn(value, 'answer') && Object.hasOwn(value, 'evidence') ? [value] : null
+  let value = null, shape = 'unrecognized'
+  try { value = JSON.parse(text) } catch {}
+  if (rowsOf(value)) shape = Array.isArray(value.reports) ? 'strict-json' : 'single-json-object'
+  else {
+    const fence = String.fromCharCode(96).repeat(3)
+    const re = new RegExp(fence + '(?:json)?[\\t ]*\\r?\\n([\\s\\S]*?)\\r?\\n' + fence, 'gi')
+    const blocks = [...text.matchAll(re)]
+    if (blocks.length !== 1) return empty(blocks.length > 1 ? 'ambiguous-fences' : shape)
+    try { value = JSON.parse(blocks[0][1]) } catch { return empty(shape) }
+    if (!rowsOf(value)) return empty(shape)
+    shape = blocks[0][0] === text ? 'single-json-fence' : 'json-fence-with-prose'
+  }
+  const expectedIds = new Set(assigned), byId = new Map()
+  for (const row of rowsOf(value)) {
+    if (!expectedIds.has(row?.id) || byId.has(row.id)) {
+      return empty('invalid-report-identity')
+    }
+    byId.set(row.id, row)
+  }
+  const details = assigned.map(id => {
+    const row = byId.get(id)
+    if (!row || !['a', 'b', 'c'].includes(row.answer) || !Array.isArray(row.evidence)) {
+      return { id, conclusionCorrect: null, requiredCovered: null, exactEvidence: null,
+        evidence: null, missing: null, additional: null, invalidCount: null, duplicateCount: null }
+    }
+    const expected = answerKey[id].evidence
+    const known = row.evidence.filter(key => typeof key === 'string' && Object.hasOwn(caseById.get(id).records, key))
+    const evidence = [...new Set(known)].sort()
+    const missing = expected.filter(key => !evidence.includes(key))
+    const additional = evidence.filter(key => !expected.includes(key))
+    const invalidCount = row.evidence.length - known.length
+    const duplicateCount = known.length - evidence.length
+    return { id, conclusionCorrect: row.answer === answerKey[id].answer,
+      requiredCovered: missing.length === 0, exactEvidence: missing.length === 0
+        && additional.length === 0 && invalidCount === 0 && duplicateCount === 0,
+      evidence, missing, additional, invalidCount, duplicateCount }
+  })
+  const count = key => details.filter(row => row[key] === true).length
+  return { shape, score: { total: assigned.length, parsed: details.filter(row => row.conclusionCorrect !== null).length,
+    correctConclusions: count('conclusionCorrect'), requiredCoverage: count('requiredCovered'),
+    exactEvidence: count('exactEvidence') }, cases: details }
+}
+
 function sanitizedBatch(trace, caseIds, attempt) {
   const assignments = caseIds.map(id => ({ id, attempt }))
   const observations = trace.lifecycle === 'unknown' ? []
@@ -243,9 +301,35 @@ export function importReviewRun({ runId, parent, children = [], settingsId }) {
     reports: childBatches.flatMap(row => row.reports),
   } : null
   return { runId, route: main.route, settingsId: label(settingsId), batch, childBatch, usage,
+    contentDiagnostics: { parent: diagnoseReportContent(main),
+      children: childTraces.map(({ trace, caseIds }) => ({ caseIds, report: diagnoseReportContent(trace, caseIds) })) },
     delegationTimeline: observedDelegationTimeline(main, childTraces, missingChildren),
     archiveCoverage: { observedChildren: children.length, listedButMissingChildren: missingChildren,
       strictParentJson: batch.strictJson, childRoutes: traces.slice(1).map(trace => trace.route) } }
+}
+
+/**
+ * Generate an independent re-review packet for the fixed fictional fixture.
+ * Candidate reports are observed answers, never the answer key. Preserve
+ * missing or extra valid evidence so the review must find it independently.
+ */
+export function markedReviewPacket(runId, candidateReports) {
+  const marker = markerFor(runId)
+  if (!Array.isArray(candidateReports) || candidateReports.length !== ids.length) {
+    throw new Error('Expected one candidate report per fictional case')
+  }
+  const seen = new Set()
+  const reports = candidateReports.map(row => {
+    if (!caseById.has(row?.id) || seen.has(row.id) || !['a', 'b', 'c'].includes(row.answer)
+      || !Array.isArray(row.evidence)
+      || row.evidence.some(key => typeof key !== 'string' || !Object.hasOwn(caseById.get(row.id).records, key))) {
+      throw new Error('Invalid or duplicate fictional candidate report')
+    }
+    seen.add(row.id)
+    return { id: row.id, answer: row.answer, evidence: [...row.evidence] }
+  })
+  const instruction = 'This is a fictional record-review experiment. The candidate reports below are previously observed answers, not an answer key. Independently review each candidate against all original records. Decide the answer yourself, check whether every record required to justify the conclusion is present, remove redundant citations and correct any omission or mistake. Do not merely accept the candidate; do not delegate, call tools, read files or access external resources. Return exactly one bare JSON object with a reports array and no Markdown fences or extra text.'
+  return marker + '\n' + instruction + '\n' + JSON.stringify({ ...casePacket(), candidateReports: reports }, null, 2)
 }
 
 export function markedPacket(runId, mode) {
@@ -261,6 +345,9 @@ export function markedPacket(runId, mode) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--packet') {
     console.log(markedPacket(process.argv[3], process.argv[4]))
+  } else if (process.argv[2] === '--review-packet' && process.argv[3] && process.argv[4]) {
+    const input = JSON.parse(readFileSync(resolve(process.argv[4]), 'utf8'))
+    console.log(markedReviewPacket(process.argv[3], input.reports))
   } else if (process.argv[2] === '--import' && process.argv[3]) {
     const manifestPath = resolve(process.argv[3]), manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     const load = spec => {
@@ -272,7 +359,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(JSON.stringify(importReviewRun({ ...manifest, parent: load(manifest.parent),
       children: (manifest.children ?? []).map(load) }), null, 2))
   } else {
-    console.error('Usage: node scripts/review-trace-import.mjs --packet RUN_ID direct|delegated | --import manifest.json')
+    console.error('Usage: node scripts/review-trace-import.mjs --packet RUN_ID direct|delegated | --review-packet RUN_ID candidates.json | --import manifest.json')
     process.exitCode = 1
   }
 }
