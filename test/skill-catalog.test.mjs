@@ -241,3 +241,19 @@ test('legacy high-impact Skills are quarantined and cannot grant executable guid
   assert.equal(safe.executionPolicy, 'reference-only')
   assert.match(safe.content, /Nmap/i)
 })
+
+
+test('unified knowledge search and get cannot bypass quarantined Skill policy', () => {
+  const search = unifiedKnowledgeRequest(undefined, {
+    op: 'knowledgeUnifiedSearch', source: 'redteam', query: 'credential-attack',
+  })
+  const item = search.groups[0].items.find(row => row.id === 'redteam:credential-attack')
+  assert.ok(item)
+  assert.equal(item.quarantined, true)
+  assert.match(item.description, /已隔离/)
+  const detail = unifiedKnowledgeRequest(undefined, {
+    op: 'knowledgeUnifiedGet', source: 'redteam', id: 'redteam:credential-attack',
+  })
+  assert.match(detail.item.body, /Skill 已隔离/)
+  assert.doesNotMatch(detail.item.body, /hydra|password.spray|weak.password/i)
+})
