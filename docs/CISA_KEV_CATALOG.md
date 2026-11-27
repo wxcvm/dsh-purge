@@ -30,4 +30,9 @@ Download the official JSON feed and run the offline importer:
 node scripts/import-cisa-kev.mjs ./known_exploited_vulnerabilities.json
 ```
 
+If the snapshot was downloaded from the CISA-maintained GitHub mirror, optionally preserve its exact commit:
+```sh
+CISA_KEV_MIRROR_COMMIT=<40-hex-commit> node scripts/import-cisa-kev.mjs ./known_exploited_vulnerabilities.json
+```
+
 The importer performs no network requests. It validates the feed count, CVE syntax and uniqueness before writing `lib/redteam/cve-catalog/cisa-kev.json`. Review the catalog version/date and rerun the CVE tests before committing a refresh.
