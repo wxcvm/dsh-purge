@@ -50,6 +50,7 @@ test('running a local scanner preserves raw output and verifiable metadata', asy
   assert.equal(manifest.target, '192.0.2.1')
   assert.equal(manifest.source, 'config')
   assert.equal(manifest.execution.environmentId, 'local')
+  assert.equal(manifest.execution.transport, 'local')
   assert.equal(manifest.execution.executionId, run.runId)
   assert.equal(manifest.execution.toolId, 'nmap')
   assert.equal(manifest.execution.attempted, true)
@@ -156,4 +157,34 @@ test('optional reverse DNS suppression only changes Nmap when enabled', () => {
     ['-sT', '-sV', '--open', '-oX', '-', '-n', '192.0.2.10'])
   assert.deepEqual(scanCommand('httpx', 'https://192.0.2.10', { noReverseDns: true }).args,
     ['-u', 'https://192.0.2.10', '-json', '-silent'])
+})
+
+test('selected WSL environment is revalidated and recorded in the scan manifest', async (t) => {
+  const root = temp(t)
+  const calls = []
+  const run = await runDiscoveryScan({
+    kind: 'nmap', target: '192.0.2.50', environmentId: 'wsl:Ubuntu-24.04',
+    outputDir: join(root, 'records'),
+  }, {
+    platform: 'win32',
+    execFileFn: (command, args, options, done) => {
+      calls.push({ command, args })
+      assert.equal(command, 'wsl.exe')
+      assert.equal(options.shell, false)
+      if (args[0] === '--list') return done(null, '* Ubuntu-24.04 Running 2\\n', '')
+      if (args.includes('--version')) return done(null, 'Nmap version 7.99\\n', '')
+      assert.deepEqual(args, ['--distribution', 'Ubuntu-24.04', '--exec', 'nmap',
+        '-sT', '-sV', '--open', '-oX', '-', '192.0.2.50'])
+      done(null, '<nmaprun><host></host></nmaprun>', '')
+    },
+  })
+  assert.equal(calls.length, 3)
+  assert.equal(run.status, 'executed')
+  assert.equal(run.environmentId, 'wsl:Ubuntu-24.04')
+  assert.equal(run.execution.environmentId, 'wsl:Ubuntu-24.04')
+  assert.equal(run.execution.transport, 'wsl')
+  assert.equal(run.execution.attempted, true)
+  const manifest = JSON.parse(readFileSync(run.manifestFile, 'utf8'))
+  assert.equal(manifest.environmentId, 'wsl:Ubuntu-24.04')
+  assert.equal(manifest.execution.transport, 'wsl')
 })
