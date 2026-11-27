@@ -43,6 +43,62 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   }
   apply(ctx)
 
+  // Sensitive legacy records are metadata-only; target-side credential/shell/tunnel paths fail closed.
+  const sensitiveEngagement = redteam.openEngagement('sensitive-tool-boundary', [], { bindCurrent: false }).id
+  redteam.addCredential(sensitiveEngagement, {
+    host: '192.0.2.10', username: 'operator', secret_value: 'credential-secret-marker',
+  })
+  redteam.addWebshell(sensitiveEngagement, {
+    url: 'https://private.invalid/shell', pass_key: 'webshell-secret-marker', shell_type: 'behinder',
+  })
+  redteam.addTunnel(sensitiveEngagement, {
+    kind: 'socks5', listen: '127.0.0.1:1080', reach: '10.0.0.0/8', command: 'tunnel-command-marker',
+  })
+
+  const credentialList = JSON.parse(await registered.get('redteam_credential_list').execute({ engagement: sensitiveEngagement }, {}))
+  assert.equal(credentialList.items[0].secret_present, true)
+  assert.equal(Object.hasOwn(credentialList.items[0], 'secret_value'), false)
+  assert.doesNotMatch(JSON.stringify(credentialList), /credential-secret-marker/)
+
+  const credentialAttempt = JSON.parse(await registered.get('redteam_credential_add').execute({
+    engagement: sensitiveEngagement, host: '192.0.2.11', secret_value: 'must-not-store',
+  }, {}))
+  assert.equal(credentialAttempt.ok, false)
+  const credentialCheck = JSON.parse(await registered.get('redteam_credential_check').execute({
+    engagement: sensitiveEngagement, host: '192.0.2.10', port: 3306, password: 'must-not-test',
+  }, {}))
+  assert.equal(credentialCheck.status, 'unsupported')
+  assert.equal(credentialCheck.actual_execution, false)
+
+  const webshellList = JSON.parse(await registered.get('redteam_webshell_list').execute({ engagement: sensitiveEngagement }, {}))
+  assert.equal(Object.hasOwn(webshellList.items[0], 'url'), false)
+  assert.equal(Object.hasOwn(webshellList.items[0], 'pass_key'), false)
+  const tunnelList = JSON.parse(await registered.get('redteam_tunnel_list').execute({ engagement: sensitiveEngagement }, {}))
+  assert.equal(Object.hasOwn(tunnelList.items[0], 'command'), false)
+  assert.equal(Object.hasOwn(tunnelList.items[0], 'listen'), false)
+  assert.equal(Object.hasOwn(tunnelList.items[0], 'reach'), false)
+
+  const sessions = JSON.parse(await registered.get('redteam_sessions').execute({ engagement: sensitiveEngagement }, {}))
+  assert.doesNotMatch(JSON.stringify(sessions), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
+  for (const name of ['redteam_webshell_add', 'redteam_tunnel_add', 'redteam_session_check', 'redteam_access_add']) {
+    const result = JSON.parse(await registered.get(name).execute({ engagement: sensitiveEngagement }, {}))
+    assert.equal(result.status, 'unsupported', name)
+    assert.equal(result.actual_execution, false, name)
+  }
+  const webshellReactivate = JSON.parse(await registered.get('redteam_webshell_update').execute({
+    engagement: sensitiveEngagement, id: 1, status: 'online',
+  }, {}))
+  assert.equal(webshellReactivate.ok, false)
+  const tunnelReactivate = JSON.parse(await registered.get('redteam_tunnel_update').execute({
+    engagement: sensitiveEngagement, id: 1, status: 'active',
+  }, {}))
+  assert.equal(tunnelReactivate.ok, false)
+  const evidenceUpgrade = JSON.parse(await registered.get('redteam_evidence_upgrade').execute({
+    engagement: sensitiveEngagement, claimed_ev_id: 'fake-evidence-id', verified_result: { verified: true },
+  }, {}))
+  assert.equal(evidenceUpgrade.status, 'unsupported')
+  assert.equal(evidenceUpgrade.verified, false)
+
   // 1. 两个工具确实注册了
   assert.ok(registered.has('redteam_exploit_chain'), 'redteam_exploit_chain must be registered')
   assert.ok(registered.has('redteam_internal_campaign'), 'redteam_internal_campaign must be registered')
