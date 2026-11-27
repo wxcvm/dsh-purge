@@ -28,19 +28,21 @@ test('built-in updater and profile fallback no longer point at the original repo
   assert.ok(!profile.includes('YuJunZhiXue/dsh-purge'))
 })
 
-test('English and Chinese installation instructions select this fork without deleting upstream attribution', () => {
-  const version = JSON.parse(read('../package.json')).version
-  for (const name of ['README.md', 'README.zh-CN.md']) {
+test('private workspace homepages point to maintained releases and retain upstream attribution', () => {
+  for (const name of ['README.md', 'README.en.md']) {
     const content = read('../' + name)
-    assert.match(content, /https:\/\/codeload\.github\.com\/wxcvm\/dsh-purge\/tar\.gz\/refs\/heads\/master/)
-    assert.doesNotMatch(content, /https:\/\/codeload\.github\.com\/YuJunZhiXue\/dsh-purge\//)
-    assert.match(content, /git clone https:\/\/github\.com\/wxcvm\/dsh-purge\.git/)
-    assert.ok(content.includes('https://github.com/' + fork + '/releases'), 'authorized release source')
-    assert.ok(content.includes('docs/PRIVATE_UPDATE.zh-CN.md'), 'private installation guide')
-    assert.ok(content.includes(version), 'current package version documented')
-    assert.doesNotMatch(content, /dsh:\/\/plugin\/install/, 'no anonymous desktop install link for private repository')
+    assert.ok(content.includes(`https://github.com/${fork}/releases`), name)
+    assert.ok(content.includes('docs/RELEASE_CENTER.zh-CN.md'), name)
     assert.ok(content.includes('YuJunZhiXue/dsh-purge'), 'original attribution retained')
+    assert.ok(content.includes('LICENSE'), 'license retained')
+    assert.ok(content.includes('NOTICE'), 'notice retained')
+    // Private delivery must not be presented as an anonymous install path.
+    assert.doesNotMatch(content, /https:\/\/codeload\.github\.com\/(?:wxcvm|YuJunZhiXue)\/dsh-purge\//)
+    assert.doesNotMatch(content, /downloadUrl=https%3A%2F%2Fcodeload\.github\.com/i)
   }
+  const chineseAlias = read('../README.zh-CN.md')
+  assert.ok(chineseAlias.includes('[README.md](README.md)'), 'Chinese alias points to the maintained homepage')
+  assert.ok(chineseAlias.includes(`https://github.com/${fork}/releases`))
 })
 
 test('Windows Desktop installer pins the current release and supports rollback', () => {

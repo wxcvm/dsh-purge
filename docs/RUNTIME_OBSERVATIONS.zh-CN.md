@@ -1,19 +1,35 @@
-# beta.9 运行观测与质量报告
+# 运行观测与质量报告
 
-清洗台 → **运行诊断**。此功能默认仅保存 200 条近期 attempt 的内存元数据，不持久化提示、回答、思考、工具参数或凭据。
+## HTTP 响应观察（只读实验页）
+
+入口：清洗台 → 诊断中心 → **HTTP 响应观察**。基于现有受保护的
+`GET /dsh-purge/runtime-observations?limit=50`，不创建额外的 Provider 请求、也不拦截实际网络流量。
+
+- 记录当前内存窗口中宿主能提供的 `httpStatus`、`errorCode`、流终态和来源。某些适配器不会暴露 HTTP 状态，此时显示**未观测**，不能推断返回了 200。Host 故障对象报告的状态不一定是 HTTP Wire 原始状态，不能伪称直连上游抓包。
+- 在「本地模拟：403 → 200」勾选后，仅本页面的**展示列**变化；原始 403、错误码、错误终态仍保留。页面用固定离线示例展示 `403 + FORBIDDEN` 即使被显示为 200，仍没有有效模型生成内容。这个控件**不修改服务器、代理、Provider、Header、响应正文或权限判定**。
+- 该页不显示 URL、会话 ID、Prompt、响应内容、请求头、Cookie、Token 或 Provider 实际凭据。所有计数来自最多 50 条已观测内存记录；未观测和读取失败分别提示，离开页面/隐藏窗口停止刷新。
+- `CONTENT_REFUSED` 是模型内容安全终态，不等于 HTTP 403；`FORBIDDEN` 可能是服务商权限、Origin/Host 或插件接口拒绝。页面只有运行时**模型**记录，插件本地诊断接口自身的 403 只以读取错误提示，不能混为一谈。
+
+验收路径：先正常执行一次无害模型请求；打开观察页看 Host 记录；勾选模拟后对比「原始状态 → 模拟显示」以及不可改变的错误码。真实上游 403 的权限问题需要通过合法认证/配置解决，不能从状态码文字替换判断业务成功。正式版客户端是否实际载入新页面、Provider 真实网络报文和模型生成仍需单独实机对账。
+
+
+清洗台 → **诊断中心** → **Provider 与运行记录**。此功能默认仅保存 200 条近期 attempt 的内存元数据，不持久化提示、回答、思考、工具参数或凭据。
 每次插件重载清空观测；旧宿主或还没有新模型请求时显示“未观测”，不是“不支持”的确定结论。
 
 ## 字段含义
 
 - 首文本延迟：从本地 stream/start 至第一个非空 text-delta；不含启动、请求准备或 reasoning 时间，不能冒充端到端首字延迟。
 - 总耗时：同一 attempt 从 stream/start 到 stream/end；采集器另有进程总耗时，两者不要混用。
-- 终态：只信任实际 finish 帧。缺少时为 unknown；宿主默认补出的 stop 不作为观测证据。
-- 结算：committed/abandoned 与回合 completed 是不同维度；都不证明答案正确。
-- Token：适配器上报的快照，缺少字段为 null。缓存计费和总 Token 不混称。
+- 终态：只信任实际 finish 帧。缺少时为 unknown；宿主默认补出的 stop 不作为观测证据。持久事件缺少 finish 时不会抹掉实时终态；实时与持久终态的可见字段不一致时保留实时证据并记录 terminalConflict。reasonSource 区分 host-stream、durable-stream 与 not-observed。
+- 结算：committed/abandoned 与回合 completed 是不同维度；都不证明答案正确。替换 Agent 或回合结束但缺少流结束证据时标为 unobserved-end，不伪造耗时或 finish。迟到的持久事件在同一个会话实例中按已提交 seq 和类型补证，即使 Agent 已被替换也只补原 attempt，一条记录只接收一次。不会回拨当前会话序号，也不从后来的会话快照补算实时耗时或推断原来上下文。
+- 工具与分片：chunks 为实时分片序号覆盖（最大 index + 1），observedChunks 为实际收到的实时分片数；有缺口时两者可能不同。toolCalls 是实时工具 block-start 计数，durableToolStarts 是匹配持久流中的同类计数（无持久分片为 null）。两者不能相加，也不证明工具已执行。durableTextObserved 仅表示持久流中看到文本，不用于补算首文本延迟。
+- Token：实时与持久流分别保留最近的有效 usage 快照及来源。优先使用有总 Token 的持久最终快照，其次是有总 Token 的实时快照；两者不合并字段。空快照不覆盖已观测数据，缺少字段为 null，缓存计费和总 Token 不混称。
+- Provider / 模型归因：分别标明 request-header、request-context、assistant-event 或 not-observed。部分 context 不会清除同一次请求头中的已知字段；流开始时消费该请求证据，迟到的持久事件仅用其自身来源补充，不借用新请求路由。没有新证据的 attempt 保持未知。
+- 子智能体生命周期：单独保留最多 200 条近期 run 的启动/结束事件，以直接父会话和 run ID 精确配对。重复事件不重复计数，仅启动、仅结束及乱序单独统计；峰值重叠只计算顺序正确的已配对区间。按会话筛选时仅统计该直接父会话，不推测孙级关系。未观测结束不等于仍在运行，已结束也不等于任务成功；淘汰数是全局窗口的缺失提示。不返回子智能体标识、提示或结果，不改变派活、预约或并发策略。
 - Provider 原始终态：rc.3 没有稳定透传保证，本版为 null；不解析私有 replayState 或错误正文。
 
 GET `/dsh-purge/runtime-observations?sessionId=<id>&limit=50` 复用原路由保护，仅返回摘要。limit 上限 200。
-页面可见时最多每秒刷新，隐藏/卸载不继续请求；记录淘汰数可见，不能把有限窗口当完整历史。
+页面可见时最多每秒刷新，隐藏/卸载不继续请求；记录淘汰数可见，不能把有限窗口当完整历史。异常优先显示，其余维持近期顺序。记录默认折叠，摘要保留模型、状态、耗时和 Token；可单条展开，也可展开或收起当前筛选结果。404、断连或响应无效时不会把错误当成零条记录，已保留的快照标为未更新并显示最近一次成功读取的时间（不是请求发生时间或 Provider 连通证明）。切换会话后等待新筛选的结果，不沿用上一筛选的数据；筛选无匹配时可清除筛选。隐私配置未确认时，界面不展示会话/请求标识和本地导入报告明细。
 
 ## 离线评分和本地报告
 
@@ -49,9 +65,43 @@ node scripts/capture-task-quality.mjs --full capture-config.json
 ```
 
 preflight 不调用模型；smoke 为两题六次调用；full 为十题三十次调用，每次使用新进程/会话，无采集器自动重试。
-smoke 与 full 是独立运行，会叠加消耗；如需复用已有 smoke 数据，按 CLEAN_EFFECT_VALIDATION 协议手工补采剩余题目，不再次运行 full。
-失败会保留本地部分记录并停止，不补写答案或伪造原生会话事件。配置与报告只放本地 .scratch，不提交模型账号材料。
+若已有 smoke 或中途中断的真实 matrix.json，可直接续测：
+
+```powershell
+node scripts/capture-task-quality.mjs --preflight capture-config.json --resume .scratch/task-quality-旧目录/matrix.json
+node scripts/capture-task-quality.mjs --full capture-config.json --resume .scratch/task-quality-旧目录/matrix.json
+```
+
+preflight 列出剩余 CLI 运行次数，不调用模型。六个冒烟样本已完成时，完整续测只需剩余 24 次 CLI 运行；已经采集的错误答案也保留，不因正确率重新执行。续测要求原矩阵为 real、三组 profile/variant/model/hostVersion/environment/settings 完全一致；新目录保存合并矩阵与新采集记录，原矩阵及原证据目录不改写。实际 Provider attempt 数可能多于 CLI 次数，不把次数估算当账单。
+每个案例核对全部已观测 attempt 的实际路由；任一不匹配或缺失即记录采集失败。探针发生淘汰或 start 数与快照条数不一致时，省略 Token 总量与首文本计时，不将部分记录冒充全量。失败会保留本地部分记录并停止，不补写答案或伪造原生会话事件。配置与报告只放本地 .scratch，不提交模型账号材料。
 
 本机只有通用 codex-review 和生产/default profile，尚未准备三个同条件且对应版本已核实的隔离 profile；因此未运行完整三组对照。
 已运行独立 observer-only 探针，证据见 `validation/runtime-observation-20261114.json`。
 页面逻辑有 VM 回归测试；新页面实际图形界面、生产部署和在线安装仍未验收。
+
+
+master 版本沿用原清洗台导航，导入报告可由下方离线评分命令生成；本功能不启动模型、不修改模型输出、不重试请求。实际 Provider 和 GUI 兼容性另行验证。
+
+## 离线任务质量评分
+
+```sh
+node scripts/evaluate-task-quality.mjs --cases
+node scripts/evaluate-task-quality.mjs --self-test
+node scripts/evaluate-task-quality.mjs --raw capture.json > report.json
+node scripts/evaluate-task-quality.mjs --matrix matrix.json > report.json
+```
+
+`--cases` 列出十项普通 JSON 任务。`--raw` 对已有 baseline/candidate 样本评分；`--matrix` 对已有 host/current/candidate 三组同条件样本评分。两种模式均只读取本地 JSON 并输出报告，不调用模型，不补造缺失指标。采集来源与环境由输入声明，不能代替真实验收。清洗台可直接导入 report.json。
+
+## 智能体离线质量与运行证据对照
+
+`node scripts/agent-quality-eval.mjs --cases` 输出原有六个虚构记录解读案例；`--score report.json` 读取答案、可选 trace 与可选 subagentSnapshots。此评估不调用模型或网络，不改变正常任务评分规则。
+
+- trace 中每条记录由宿主或测试者独立采集，包含 `id`（案例 ID）、`check`（稳定的检查标识）、`status`（ok/error）。原有 trace 汇总保持兼容；新增 traceAnalysis 按案例区分已成功检查后的重复、首次成功前的重试、失败后恢复成功的不同检查，以及成功检查的去重数量。重复并不必然无效，成功检查也不证明交付正确。没有记录的案例不进入 byCase；没有提供 trace 时为 null。
+- subagentSnapshots 可选数组，每项为 `{id, snapshot}`，snapshot 取该案例对应直接父会话的运行诊断响应中的 `subagents` 对象。必须由测试者或采集器确认案例与会话的对应关系，不根据模型文字推测。只接受 direct-parent 范围，保留配对区间峰值、未配对/乱序、全局窗口淘汰数及是否观测；缺失快照为 null，不将空快照解释为没有运行。请使用独立案例会话，不把同一全局快照分摊到多个案例。
+
+评分、trace 与子智能体证据分别报告；没有足够真实采集数据时，不宣称串行或空转已修复。
+
+### 两轮质量与观测对照
+
+使用 `node scripts/agent-quality-eval.mjs --compare baseline.json candidate.json` 读取两份独立采集的原始输入。输出逐案例结论、证据、完成情况与质量差值。只有同一案例两侧均存在 trace 时才计算检查计数差值；只有两侧均实际观测且窗口未发生淘汰时才比较子智能体配对和峰值重叠。缺失观测保持 null，差值方向为候选减基线。报告保留两侧原有用量与诊断摘要，不把观测计数变化视为任务成功或调度优化已证实。无需额外依赖，不改变运行时派活和请求。

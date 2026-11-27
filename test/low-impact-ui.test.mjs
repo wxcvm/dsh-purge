@@ -7,18 +7,23 @@ import { dispatch } from '../lib/redteam/store-core.js'
 
 const read = (file) => readFileSync(new URL('../' + file, import.meta.url), 'utf8')
 
-test('workbench has a real low-impact tab in both source and embedded UI', () => {
+test('privacy settings are nested under Environment, not a standalone workbench page', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
+    const nav = src.slice(src.indexOf('const tabSections = ['), src.indexOf('const tabs = tabSections'))
+    assert.equal(nav.includes("['low-impact',"), false, path)
+    assert.ok(src.includes("case 'low-impact': // Legacy saved tab; privacy settings now live under Environment."), path)
+    assert.ok(src.includes("['privacy', '本机隐私']"), path)
+    assert.ok(src.includes("section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true })"), path)
+    assert.ok(src.includes("initialSection: st.tab === 'low-impact' ? 'privacy'"), path)
+    assert.ok(src.includes("props.embedded ? React.Fragment : 'div'"), path)
     assert.match(src, /function LowImpactTab\(props\)/, path)
-    assert.match(src, /\['low-impact', '低干扰'\]/, path)
-    assert.match(src, /st\.tab === 'low-impact'/, path)
-    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: draft \}/, path)
-    assert.match(src, /maskHistory \? '目标已隐藏'/, path)
-    assert.match(src, /item\.output_file && !maskHistory/, path)
+    assert.ok(src.includes("op: 'platformConfigSave', config: { scanPreferences: expected, privacyManagement: policy }"), path)
+    assert.ok(src.includes("maskHistory ? '目标已隐藏'"), path)
+    assert.ok(src.includes("item.output_file && !maskHistory"), path)
+    assert.ok(src.includes('打开环境中的本机隐私设置'), path)
   }
 })
-
 test('workbench API saves only scan preferences and preserves existing configuration', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'redteam-impact-ui-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
@@ -38,4 +43,142 @@ test('workbench API saves only scan preferences and preserves existing configura
   })
   const loaded = dispatch(store, { op: 'platformConfigGet' })
   assert.deepEqual(loaded.config.scanPreferences, result.config.scanPreferences)
+})
+
+
+test('privacy center applies only local display defaults and preserves saved scan preferences', (t) => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    assert.match(src, /savePreferences\(saved, true, \{ \.\.\.savedManagement, mode: 'automatic' \}\)/, path)
+    assert.match(src, /Object\.keys\(defaults\)\.every\(\(key\) => current\[key\] === expected\[key\]\)/, path)
+    assert.match(src, /自动设置并保存/, path)
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'redteam-privacy-ui-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const store = { root: dir }
+  const initial = dispatch(store, { op: 'platformConfigSave', config: {
+    tools: { nmap: '/mock/nmap' },
+    scanPreferences: { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false }
+  } })
+  assert.equal(initial.ok, true)
+  const saved = initial.config.scanPreferences
+  const result = dispatch(store, { op: 'platformConfigSave', config: {
+    scanPreferences: { ...saved, maskHistory: true, maskAssetResults: true }
+  } })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.config.scanPreferences, { ...saved, maskHistory: true, maskAssetResults: true })
+  assert.equal(result.config.tools.nmap, '/mock/nmap')
+  assert.deepEqual(dispatch(store, { op: 'platformConfigGet' }).config.scanPreferences, result.config.scanPreferences)
+})
+
+
+test('privacy center automatically reads the local network snapshot and distinguishes unknown posture', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('function NetworkPrivacyCard()')
+    const end = src.indexOf('const openGuide = async', start)
+    const card = src.slice(start, end)
+    assert.match(card, /React\.useEffect\(\(\) => \{/)
+    assert.match(card, /api\(\{ op: 'networkPrivacySnapshot' \}\)/)
+    assert.match(card, /\}, \[refreshVersion, watch\]\)/)
+    assert.match(card, /document\.removeEventListener\('visibilitychange', onVisibility\)/)
+    assert.match(card, /if \(!live \|\| inFlight \|\| document\.hidden\) return/)
+    assert.match(card, /setTimeout\(\(\) => \{ timer = null; read\(\) \}, 30000\)/)
+    assert.match(card, /if \(timer !== null\) clearTimeout\(timer\)/)
+    assert.match(card, /!document\.hidden && \(watch \|\| !lastSnapshot\.current\)/)
+    assert.match(src, /props\.visible !== false \? h\(NetworkPrivacyCard\) : null/)
+    assert.match(src, /visible: full \|\| embedded \|\| st\.open/)
+    assert.match(src, /保护状态读取失败；未检查的项目不代表安全/)
+    assert.match(src, /智能诊断 · 本机状态/)
+  }
+})
+
+
+test('privacy center previews presets, discards draft and displays stored changes', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    assert.match(src, /previewPrivacyPreset\('recommended'\)/)
+    assert.match(src, /previewPrivacyPreset\('sharing'\)/)
+    assert.match(src, /previewPrivacyPreset\('default'\)/)
+    assert.match(src, /onClick: discardPrivacyDraft/)
+    assert.match(src, /最近五次配置变更/)
+  }
+})
+
+
+test('five privacy preset previews preserve locks and unrelated preferences', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('    function privacyPresetPreview(')
+    const end = src.indexOf('    function LowImpactTab(', start)
+    assert.ok(start >= 0 && end > start, path)
+    const preview = new Function(src.slice(start, end) + '\nreturn privacyPresetPreview')()
+    const preferences = { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: true }
+    const management = { mode: 'manual', locked: ['maskHistory'] }
+    for (const preset of ['recommended', 'sharing', 'default', 'low-impact', 'custom']) {
+      const result = preview(preferences, management, preset)
+      assert.deepEqual(result.policy.locked, ['maskHistory'], preset)
+      assert.equal(result.preferences.maskHistory, false, preset)
+      assert.equal(result.preferences.timeoutSeconds, 300, preset)
+      assert.equal(result.preferences.captureDiagnostics, true, preset)
+      assert.equal(result.preferences.noReverseDns, false, preset)
+      assert.equal(result.preferences.mode, preset === 'low-impact' ? 'low-impact' : 'standard', preset)
+      assert.equal(result.preferences.maskAssetResults, preset !== 'default', preset)
+      assert.equal(result.policy.mode, preset === 'recommended' ? 'automatic' : 'manual', preset)
+    }
+    assert.deepEqual(preferences, { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: true })
+    assert.deepEqual(management, { mode: 'manual', locked: ['maskHistory'] })
+  }
+})
+
+
+test('task recommendations distinguish observed posture and preserve locks without mutating preferences', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    const start = src.indexOf('    function privacyTaskRecommendation(')
+    const end = src.indexOf('    function LowImpactTab(', start)
+    assert.ok(start >= 0 && end > start, path)
+    const recommend = new Function(src.slice(start, end) + '\nreturn privacyTaskRecommendation')()
+    const prefs = { mode: 'standard', timeoutSeconds: 300, captureDiagnostics: true, noReverseDns: false, maskHistory: false, maskAssetResults: false }
+    const policy = { mode: 'manual', locked: ['maskHistory'] }
+    const local = recommend(prefs, policy, 'local', null, 'unavailable')
+    assert.equal(local.preset, 'recommended')
+    assert.deepEqual(local.changes, ['maskAssetResults'])
+    assert.equal(local.preview.policy.mode, 'automatic')
+    assert.equal(local.preview.preferences.maskHistory, false)
+    assert.match(local.reasons.join(' '), /尚未确认/)
+    const sharing = recommend(prefs, policy, 'sharing', { bridge: { listenerScope: 'all_interfaces' }, vault: { enabled: false }, storageAudit: { available: true } }, 'observed')
+    assert.equal(sharing.preset, 'sharing')
+    assert.equal(sharing.preview.policy.mode, 'manual')
+    assert.match(sharing.reasons.join(' '), /非回环绑定/)
+    assert.match(sharing.reasons.join(' '), /未配置凭据加密密钥/)
+    assert.match(sharing.reasons.join(' '), /未由推荐功能自动检查/)
+    const remote = recommend(prefs, policy, 'remote-model', { bridge: { listenerScope: 'loopback_bound' } }, 'observed')
+    assert.match(remote.reasons.join(' '), /请求内容不受展示遮蔽影响/)
+    assert.match(remote.reasons.join(' '), /不能据此判断/)
+    for (const item of [local, sharing, remote]) {
+      assert.deepEqual(item.preview.policy.locked, ['maskHistory'])
+      assert.equal(item.preview.preferences.mode, 'standard')
+      assert.equal(item.preview.preferences.timeoutSeconds, 300)
+      assert.equal(item.preview.preferences.captureDiagnostics, true)
+      assert.equal(item.preview.preferences.noReverseDns, false)
+    }
+    assert.equal(prefs.maskAssetResults, false)
+    assert.deepEqual(policy, { mode: 'manual', locked: ['maskHistory'] })
+    assert.match(src, /预览推荐设置/)
+  }
+})
+
+
+
+test('master ARTEX hides target-specific panels, paths and reports while retaining the existing links', () => {
+  for (const path of ['lib/redteam/client.js', 'client.js']) {
+    const src = read(path)
+    assert.match(src, /!maskArtex \? h\(ArtexIntelPanel/)
+    assert.match(src, /!maskArtex \? h\(ArtexProjectOverview/)
+    assert.match(src, /report && !maskArtex \? h\('div'/)
+    assert.match(src, /maskArtex \? '路径已隐藏' : tool\.path/)
+    assert.match(src, /savedMaskAssets \|\| !!temporary\?\.maskAssetResults/)
+    assert.match(src, /React\.useEffect\(\(\) => \(\) => setTemporaryPrivacy\(null\), \[\]\)/)
+  }
 })

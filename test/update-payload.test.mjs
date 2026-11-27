@@ -147,3 +147,78 @@ test('pending or malformed journals block a fresh update until restored', async 
   assert.equal((await readUpdateRecovery(pending)).phase,'restored');
   assert.equal((await readUpdateRecovery(complete)).phase,'complete');
 });
+
+
+test('an interrupted update can restore third-party notices as well as plugin files', async t => {
+  const {source,one,two,backup} = await fixture(t);
+  const notice = path.join('third_party', 'example', 'NOTICE');
+  for (const [dir, text] of [[source, 'new notice'], [one, 'old notice']]) {
+    await fsp.mkdir(path.dirname(path.join(dir,notice)), {recursive:true});
+    await fsp.writeFile(path.join(dir,notice),text);
+  }
+  const manifest = JSON.parse(read(source,'package.json'));
+  manifest.files.push('third_party');
+  await fsp.writeFile(path.join(source,'package.json'),JSON.stringify(manifest));
+  const copyNames = [...names,'third_party'];
+  const moduleUrl = new URL('../lib/update-payload.js',import.meta.url).href;
+  const child = spawnSync(process.execPath,['--input-type=module','-e',
+    'import {copyUpdatePayload} from '+JSON.stringify(moduleUrl)+';'+
+    'await copyUpdatePayload(...'+JSON.stringify([source,[one,two],backup,copyNames])+', {onProgress: p => {if(p.copied===p.copyTotal) process.exit(73);}});'
+  ],{encoding:'utf8'});
+  assert.equal(child.status,73,child.stderr);
+  assert.equal(read(one,notice),'new notice');
+  assert.equal(read(two,notice),'new notice');
+  assert.equal((await readUpdateRecovery(backup)).phase,'copying');
+  await restoreInterruptedUpdate(backup);
+  assert.equal(read(one,notice),'old notice');
+  assert.equal(fs.existsSync(path.join(two,'third_party')),false);
+  assert.equal(read(one,'user-config.json'),'keep');
+  assert.equal((await readUpdateRecovery(backup)).phase,'restored');
+});
+
+test('overlapping update paths are refused before snapshot or destination writes', async t => {
+  const {source,one,backup} = await fixture(t);
+  for (const [dests, root] of [
+    [[one, one], backup],
+    [[one, path.join(one, 'nested')], backup],
+    [[source], backup],
+    [[one], path.join(one, 'recovery')],
+  ]) {
+    await assert.rejects(copyUpdatePayload(source,dests,root,names), /Overlapping update paths/);
+    assert.equal(read(one,'lib/index.js'),'old');
+    assert.equal(read(source,'lib/index.js'),'new');
+  }
+  assert.equal(fs.existsSync(backup),false);
+  assert.equal(fs.existsSync(path.join(one,'recovery')),false);
+});
+
+test('a reused backup directory preserves its previous journal and data', async t => {
+  const {source,one,backup} = await fixture(t);
+  await copyUpdatePayload(source,[one],backup,names);
+  const before = read(backup,'recovery.json');
+  await assert.rejects(copyUpdatePayload(source,[one],backup,names), /backup directory is not empty/);
+  assert.equal(read(backup,'recovery.json'),before);
+  assert.equal(read(path.join(backup,'0'),'lib/index.js'),'old');
+  assert.equal(read(one,'lib/index.js'),'new');
+});
+
+test('conflicting recovery entries are rejected before any file is removed', async t => {
+  const {one,two,backup} = await fixture(t);
+  await fsp.mkdir(backup);
+  const entry = { name:'lib', dest:one, index:0, exists:false };
+  for (const entries of [
+    [entry, {...entry}],
+    [entry, {...entry, dest:two}],
+    [entry, {...entry, name:'client.js', index:1}],
+    [entry, {...entry, dest:path.join(one,'nested'), index:1}],
+    [{...entry, dest:backup}],
+    [null],
+  ]) {
+    await fsp.writeFile(path.join(backup,'recovery.json'),JSON.stringify({
+      schema:1,phase:'copying',touched:entries.length,entries,
+    }));
+    await assert.rejects(restoreInterruptedUpdate(backup), /recovery entr|recovery destinations/i);
+    assert.equal(read(one,'lib/index.js'),'old');
+    assert.equal(read(two,'lib/index.js'),'old');
+  }
+});

@@ -52,6 +52,46 @@ export function replayRecords(input) {
     Date.parse(a.r.updatedAt)-Date.parse(b.r.updatedAt) || a.index-b.index
   ).map(({r})=>r);
 }
+// Resume only explicit records. Status is not inferred from conversation text,
+// and recorded "done" is not independent verification of task completion.
+export function resumeRecords(input, coordination) {
+  const {records}=parseRecords(input);
+  const pending=records.filter(r=>r.status==='doing'||r.status==='todo');
+  const blocked=records.filter(r=>r.status==='blocked');
+  const done=records.filter(r=>r.status==='done');
+  const current=pending.filter(r=>r.status==='doing');
+  const todo=pending.filter(r=>r.status==='todo');
+  return {
+    schemaVersion:1,
+    counts:{todo:todo.length,doing:current.length,done:done.length,blocked:blocked.length},
+    current, todo, blocked, done,
+    ...(coordination === undefined ? {} : { delegation: delegationView(records, coordination) }),
+    interpretation:'explicit-recorded-progress-not-execution-or-verification',
+  };
+}
+// Join only explicit task IDs to a caller-supplied redteam_agent_slot status
+// snapshot. It is an advisory view, not a task-state transition or proof of work.
+function delegationView(records, coordination) {
+  if (!plain(coordination)) fail('Expected explicit coordination status object')
+  const active = new Map((Array.isArray(coordination.reservations) ? coordination.reservations : [])
+    .filter(row => typeof row?.key === 'string').map(row => [row.key, row]))
+  const ended = new Map((Array.isArray(coordination.handoffs) ? coordination.handoffs : [])
+    .filter(row => typeof row?.key === 'string').map(row => [row.key, row]))
+  const tasks = records.map(record => {
+    const reservation = active.get(record.id), handoff = ended.get(record.id)
+    let state = 'no-linked-evidence'
+    if (reservation) state = record.status === 'done' ? 'recorded-done-with-active-run'
+      : reservation.runId == null ? 'reserved' : 'delegated'
+    else if (record.status === 'done') state = 'recorded-done'
+    else if (handoff) state = handoff.stopReason === 'completed' && handoff.finalMessage === 'present'
+      ? 'needs-verification' : 'needs-attention'
+    return { id: record.id, recordedStatus: record.status, state,
+      ...(handoff && !reservation ? { stopReason: handoff.stopReason, finalMessage: handoff.finalMessage } : {}) }
+  })
+  return { tasks, counts: Object.fromEntries([...new Set(tasks.map(row => row.state))].map(
+    state => [state, tasks.filter(row => row.state === state).length])),
+    interpretation: 'caller-supplied-key-join-only-never-auto-completes-tasks-or-proves-parent-delivery' }
+}
 function literalBlock(text) {
   // Fences always longer than any supplied tilde run. No interpolation or live links.
   const len=Math.max(3,1+Math.max(0,...(text.match(/~+/gu)??[]).map(x=>x.length)));
