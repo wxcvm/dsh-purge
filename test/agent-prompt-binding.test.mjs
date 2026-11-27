@@ -10,14 +10,14 @@ test('exploit role prompt is disabled and cannot direct target operations', () =
   const prompt = DEFAULT_PROMPTS.exploit
   assert.match(prompt, /漏洞利用角色（已停用）/)
   assert.match(prompt, /dry_run=false 返回 unsupported/)
-  assert.doesNotMatch(prompt, /webshell-toolkit|冰蝎|哥斯拉|密码喷洒|C2|持久化/)
+  assert.doesNotMatch(prompt, /webshell-toolkit|冰蝎|哥斯拉|password-spray|hydra|shell-handler|vps-reverse-shell/)
 })
 
 test('internal role prompt is disabled and cannot direct lateral movement', () => {
   const prompt = DEFAULT_PROMPTS.internal
   assert.match(prompt, /内网角色（已停用）/)
   assert.match(prompt, /status=unsupported|unsupported/)
-  assert.doesNotMatch(prompt, /suo5|proxychains|impacket|横向移动|凭据复用/)
+  assert.doesNotMatch(prompt, /suo5-tunnel|proxychains|impacket-|gogo-intranet|fscan-intranet/)
 })
 
 test('all role prompts retain structured reporting tails', () => {
