@@ -670,22 +670,9 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `created_by` — 哪个角色/智能体沉淀的
 
 ### `redteam_poc_search`
-【只读知识查询】先用 redteam_poc_search 查本地记录，再用 redteam_poc_get 阅读条目。查询结果只是研究线索；当前没有经审查的 PoC / Nuclei 执行契约，不得运行 payload、模板或远端请求。新增记录必须标注来源与验证状态，不把未验证内容写成已验证。
+【离线只读】按 CVE/产品/版本搜索本地 PoC 与模板元数据。搜索结果仅为研究线索；不返回可执行正文、命令或模板路径，也不得运行 payload、模板或请求。历史 `verified` 仅是来源自述标记。
 
-参数：
-- `q` — 关键字：组件+版本、漏洞名、路径片段、正文里的特征串都行
-- `cve` — CVE / CNVD 编号，例如 CVE-2023-21839
-- `component` — 组件/产品名，例如 Weblogic、Shiro、泛微 OA、Nacos
-- `kind` — poc | exp | script | template | payload
-- `category` — 按**归类**筛（可多值，逗号分隔）：rce | deserialization | file-upload | sqli | unauthorized | auth-bypass | weak-password | ssrf | xxe | path-traversal | info-leak | privesc | tunnel | other
-- `engagement` — 按**来源靶标**筛（靶标 id 或名称关键词）：只看"在某个单位上验证过的"经验
-- `asset_target` — 按**发现资产**筛（IP / 域名 / URL 片段）
-- `language` — python | go | java | bash | http | nuclei | js | php
-- `source` — web（互联网）| self（手搓）| manual（人工）| nuclei-template
-- `verified` — true 只看实测验证过的（优先用这些）
-- `templateLimit` — 本机 nuclei 模板最多返回几条，默认 20
-- `refresh_index` — 默认 false。手动运行过 nuclei 模板更新、复制/修改嵌套 YAML 以后，显式设为 true，**只重建本机检索索引**，让新增/更新的模板立即可搜索；不会联网、不下载模板、不启动扫描或修改模板内容。响应的 `local_templates.reindexed` 报告是否找到目录并重建索引。
-- `limit` — 知识库条目上限，默认 200
+参数：`q`、`cve`、`component`、`kind`、`category`、`engagement`、`asset_target`、`language`、`source`、`verified`（按来源自述标记筛选）、`templateLimit`、`refresh_index`（仅重建本地索引）、`limit`。
 
 ### `redteam_poc_get`
 仅返回知识库 POC/EXP 的元数据、CVE、来源、版本范围与验证状态；不向模型返回脚本、payload、原始请求或命令。不传 id 时可用 code（redteam_poc_search 返回里的 code 字段）。
@@ -695,24 +682,12 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `code` — 知识库条目的稳定标识（search 结果里的 code）
 
 ### `redteam_poc_list`
-列出知识库里的 POC/EXP（可按 kind/source/component/verified 过滤，不带条件就是全部）。用于盘点"我们手上已经有哪些现成武器"，避免重复搜集。
+【元数据只读】列出本地 PoC/EXP 参考条目；历史 verified 仅作为来源自述，不代表当前项目验证，也不返回正文或命令。
 
-参数：
-- `kind`
-- `source`
-- `component`
-- `verified`
-- `limit`
+参数：`kind`、`source`、`component`、`verified`（按来源自述标记筛选）、`limit`。
 
 ### `redteam_poc_update`
-更新知识库条目：补验证结论（verified + verified_note）、修正影响版本、补用法或正文、改标签。**在真实目标上验证通过后，一定要回来把 verified 置 true 并写清证据**——后续智能体会优先用已验证的。
-
-参数：
-- `id` — 知识库条目 id
-- `code` — 或用 code 指定条目
-- `patch` — { verified, verified_note, versions, usage, description, content, tags, severity, component, cve, source, source_url, language }
-- `verified` — 便捷写法：直接传 verified
-- `verified_note` — 便捷写法：直接传验证证据
+仅允许更新参考条目的非执行元数据（标题、版本范围、来源、标签与说明）。不接受正文、脚本、payload、usage、verified 或 verified_note 修改；不能将来源自述升级为当前项目核验结论。
 
 ### `redteam_poc_use`
 【已停用】当前没有经审查的 PoC/EXP 执行适配器；模型不能将参考条目标记为实战复用。
@@ -723,27 +698,10 @@ _跨靶标可复用的进 poc_*；只对本次有效的脚本进 attack_file_*�
 - `used_on` — 用在哪：靶标名 / 目标 IP / URL
 
 ### `redteam_attack_file_add`
-保存一个**实际生效**的攻击文件（脚本/POC/EXP/字典）到目标文件夹，供复用与交付。目录结构：attack-files/<IP|URL主机|C段>/<文件名>。evidence 必填且必须写清验证效果（例如"回显 uid=0"、"未授权返回 200 并含数据"）——**没打通的、只是尝试过的脚本不要放进来**。
-
-参数：
-- `engagement`
-- `target` — 目标：IP、URL 或 C 段（同一 IP 的多个端口会归到该 IP 文件夹）
-- `name` — 文件名，例如 cve-2021-22893.sh / vnc_brute.py
-- `kind` — 类型：poc 验证 / exp 利用 / script 脚本 / wordlist 字典
-- `description` — 这个文件做什么（一句话）
-- `evidence` — 有效性证据：实际打通的输出/回显/影响，或对应漏洞/证据 id
-- `content` — 文件内容（与 path 二选一）
-- `path` — 已存在的文件路径（相对靶标目录或绝对路径），会复制进目标文件夹（与 content 二选一）
-- `asset_id`
-- `vuln_id`
-- `created_by`
+**已停用**：模型工具不保存、复制或登记攻击脚本、PoC、EXP、payload 或字典文件。
 
 ### `redteam_attack_file_list`
-列出已保存的攻击文件（按目标文件夹分组）。开始打某个目标前先看这里，避免重复造轮子。
-
-参数：
-- `engagement`
-- `target` — 只看某个目标
+【脱敏元数据只读】列出历史文件记录的目标标签、文件名、类型和创建时间；不返回本地路径、文件正文或证据自由文本。
 
 ## G. 疑点与报告
 
