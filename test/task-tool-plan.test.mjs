@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { listTaskToolProfiles, planTaskTools, verifyTaskTool, TOOL_USE_CONTRACTS, toolUseContract } from '../lib/redteam/task-tool-plan.js'
@@ -30,7 +30,8 @@ test('task selection respects task-specific priority instead of rewarding versio
     root, config: configFor(root, { fscan, nmap }), env: { PATH: '' },
   })
   assert.equal(plan.status, 'located')
-  assert.equal(plan.selected.id, 'fscan')
+  assert.equal(plan.selected.id, 'nmap', 'prefer a reviewed adapter over a higher-ranked but unmapped binary')
+  assert.equal(plan.candidates.find((item) => item.id === 'fscan').executionPolicy, 'unmapped-manual-review')
   assert.equal(plan.selected.verification, 'not-run')
   assert.equal(plan.selected.canProbe, false)
   assert.ok(plan.candidates.find((c) => c.id === 'nmap').canProbe)
@@ -163,7 +164,8 @@ test('passive recon tools use a dedicated adapter and require one-off external-q
     assert.ok(candidate.skillRequirements.length > 0, id)
   }
   const ksubdomain = plan.candidates.find(item => item.id === 'ksubdomain')
-  assert.equal(ksubdomain.executionPolicy, 'manual-review-only')
+  assert.equal(ksubdomain.executionPolicy, 'unmapped-manual-review')
+  assert.equal(ksubdomain.executionMode, 'unmapped-manual-review')
   assert.equal(ksubdomain.executionAdapter, null)
 })
 
@@ -177,8 +179,7 @@ test('selected tools expose Skill read keys and explicit execution policy withou
   assert.equal(webPlan.skillPlan.status, 'read-required')
   assert.equal(webPlan.skillPlan.readTool, 'redteam_skill_read')
   assert.deepEqual(selected.skillRequirements.map((item) => item.key), [
-    'redteam:recon-pipeline',
-    'redteam:web-fingerprint',
+    'redteam:httpx-web-inventory',
   ])
   assert.equal(selected.executionPolicy, 'dedicated-adapter')
   assert.equal(selected.executionAdapter, 'redteam_scan_run')
@@ -190,13 +191,52 @@ test('selected tools expose Skill read keys and explicit execution policy withou
     root, config: configFor(root, { fscan }), env: { PATH: '' },
   })
   const internal = internalPlan.candidates.find((item) => item.id === 'fscan')
-  assert.equal(internal.executionPolicy, 'manual-review-only')
+  assert.equal(internal.executionPolicy, 'unmapped-manual-review')
+  assert.equal(internal.executionMode, 'unmapped-manual-review')
   assert.equal(internal.operatorConfirmationRequired, true)
   assert.equal(internal.automaticExecutionAllowed, false)
-  assert.match(internal.policyNote, /禁止口令爆破/)
+  assert.match(internal.policyNote, /旧 Skill 包含凭据尝试/)
 
   const unreviewed = toolUseContract('netexec')
   assert.equal(unreviewed.executionPolicy, 'unmapped-manual-review')
   assert.deepEqual(unreviewed.skillRequirements, [])
   assert.equal(unreviewed.operatorConfirmationRequired, true)
+})
+
+
+test('only the reviewed adapters and passive-recon flow expose executable Skill contracts', () => {
+  const expected = {
+    nmap: 'redteam:nmap-service-inventory',
+    httpx: 'redteam:httpx-web-inventory',
+    subfinder: 'redteam:passive-recon',
+    dnsx: 'redteam:passive-recon',
+    amass: 'redteam:passive-recon',
+  }
+  for (const [id, key] of Object.entries(expected)) {
+    const contract = toolUseContract(id)
+    assert.deepEqual(contract.skillRequirements.map(item => item.key), [key], id)
+    assert.equal(contract.automaticExecutionAllowed, false, id)
+  }
+
+  const unmapped = [
+    'ksubdomain', 'naabu', 'masscan', 'nuclei', 'fscan', 'gogo',
+    'smbclient', 'netexec', 'impacket', 'suo5', 'frpc', 'frps',
+    'chisel', 'ffuf', 'feroxbuster', 'gowitness', 'testssl', 'katana',
+  ]
+  for (const id of unmapped) {
+    const contract = toolUseContract(id)
+    assert.equal(contract.executionPolicy, 'unmapped-manual-review', id)
+    assert.deepEqual(contract.skillRequirements, [], id)
+    assert.equal(contract.automaticExecutionAllowed, false, id)
+  }
+
+  const passive = readFileSync(new URL('../skills/redteam/passive-recon.md', import.meta.url), 'utf8')
+  const nmap = readFileSync(new URL('../skills/redteam/nmap-service-inventory.md', import.meta.url), 'utf8')
+  const httpx = readFileSync(new URL('../skills/redteam/httpx-web-inventory.md', import.meta.url), 'utf8')
+  const preset = readFileSync(new URL('../presets/redteam/agent.cordis.yml', import.meta.url), 'utf8')
+  assert.match(passive, /confirm_external=true/)
+  assert.match(nmap, /redteam_scan_run/)
+  assert.match(httpx, /redteam_scan_run/)
+  assert.match(preset, /exploit 与 internal 角色当前停用/)
+  assert.doesNotMatch(preset, /武器库优先|立刻建 suo5|弱口令|冰蝎|哥斯拉/)
 })
