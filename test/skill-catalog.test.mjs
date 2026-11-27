@@ -212,5 +212,5 @@ test('SOCKS5 tunnel skill documents only pre-provisioned scoped reachability che
   assert.match(content, /操作者已在授权实验环境中独立配置 SOCKS5 监听/)
   assert.match(content, /redteam_pivot_probe/)
   assert.match(content, /只允许单资产、单端口、单次 SOCKS5 CONNECT/)
-  assert.doesNotMatch(content, /WebShell|RCE|口令尝试|横向移动|数据提取/)
+  assert.doesNotMatch(content, /suo5\\s+-t|--auth\\s+\\S+|proxychains(?:4)?|nmap\\s+-|curl\\s+.*--socks5/)
 })
