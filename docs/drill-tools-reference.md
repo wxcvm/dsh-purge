@@ -419,7 +419,7 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 _模型写入的证据默认是 claimed/inferred；模型工具不能自行升级为 observed。只有独立核验流程产生的可审计证据才能进入已确认成果。_
 
 ### `redteam_vuln_add`
-仅登记待核验的漏洞候选；工具强制写入 `status=candidate`、`verified=false`。不能通过此工具声明漏洞已确认、已利用或已取得权限。
+仅登记待核验的漏洞候选；工具强制写入 `status=candidate`、`verified=false`。若相同资产/CVE/目标已有记录则保留原状态，不覆盖或降级。不能通过此工具声明漏洞已确认、已利用或已取得权限。
 
 参数：`engagement`、`asset_id`、`cve`、`title`、`severity`、`target`、`source`、`confidence`、脱敏 `evidence` 摘要、`found_by_agent`。
 
@@ -467,9 +467,9 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 - `captured_by` — 采集角色
 
 ### `redteam_evidence_record`
-记录模型或子智能体提交的证据声明。模型工具强制将置信度限制为 `claimed` 或 `inferred`，默认 `claimed`；不会因为调用方传入 `observed` 或 `tool-output` 就提升可信度。哈希只保证记录内容可核对，不证明记录内容真实。
+记录模型或子智能体提交的证据声明。模型工具强制将置信度限制为 `claimed` 或 `inferred`，默认 `claimed`，权威来源固定为 `subagent-report`；不会因为调用方传入 `observed` 或 `tool-output` 就提升可信度。哈希只保证记录内容可核对，不证明记录内容真实。
 
-参数：`engagement`、`operation`、`parameters`、`result`、`confidence`（最终仅 claimed/inferred）、`authority`、`limitations`、`supporting_ev_ids`、`source_agent`。
+参数：`engagement`、`operation`、`parameters`、`result`、`confidence`（最终仅 claimed/inferred）、`limitations`、`supporting_ev_ids`、`source_agent`。模型工具不接受调用方指定的 authority。
 
 ### `redteam_evidence_list`
 列出证据账本条目，可按 operation / confidence 过滤。汇报前先确认没有未升级的 claimed。
@@ -523,7 +523,7 @@ _模型写入的证据默认是 claimed/inferred；模型工具不能自行升�
 当前工具只返回 `unsupported`，不接受核验结果，也不会修改证据置信度。
 
 ### `redteam_evidence_verify`
-核对子智能体回报与证据账本是否一致（hash 级核对）。matched=false 表示子智能体改口、夸大或库里没有。
+仅核对提交内容的哈希是否与账本记录一致；matched 不是目标复测或真实性验证，也不会把 claimed 升级为 observed。
 
 参数：
 - `engagement`
