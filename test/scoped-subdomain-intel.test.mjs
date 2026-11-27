@@ -82,7 +82,7 @@ test('Amass uses only passive enum mode, writes to a private temporary file and 
       assert.deepEqual(args.slice(0, 6), ['enum', '-passive', '-d', domain, '-timeout', '1'])
       assert.equal(args[6], '-o')
       assert.ok(args[7].endsWith('amass.txt'))
-      writeFileSync(args[7], 'a.example.test\\nb.example.test\\noutside.test\\n')
+      writeFileSync(args[7], 'a.example.test\nb.example.test\noutside.test\n')
       done(null, '', '')
     },
   })
