@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inspectReadOnlyDesktopEvidence } from '../scripts/inspect-windows-desktop-evidence.mjs';
+import { inspectReadOnlyDesktopEvidence, parseDesktopProcessCount } from '../scripts/inspect-windows-desktop-evidence.mjs';
 
 const sampleFiles = [
   'lib/index.js', 'lib/prompt-profiles.js', 'lib/response-context.js',
@@ -373,4 +373,204 @@ test('operator opt-in never reads a linked manifest or nested code escaping its 
   assert.equal(result.profiles[0].version, null);
   assert.ok(!JSON.stringify(result).includes('SECRET_NOT_READ'));
   assert.ok(!JSON.stringify(result).includes(outside));
+});
+
+test('reports fixed renderer build IDs without treating disk identity as loaded UI', t => {
+  const f = workspace(t);
+  const { installed } = plugin(f);
+  const marker = id => 'const CLIENT_BUILD_ID = "' + id + '";\n';
+  const candidate = '0123456789abcdef';
+  const previous = 'fedcba9876543210';
+  fs.writeFileSync(path.join(f.root, 'client.js'), marker(candidate));
+  fs.writeFileSync(path.join(installed, 'client.js'), marker(previous) + 'private fixture text');
+  const inspect = () => inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '' });
+  const stale = inspect();
+  assert.equal(stale.candidate.rendererBuildIdOnDisk, candidate);
+  assert.equal(stale.profiles[0].rendererBuildIdOnDisk, previous);
+  assert.equal(stale.profiles[0].sourceFileComparison['client.js'], 'different');
+  assert.equal(stale.runtimeLoadVerified, false);
+  assert.equal(stale.profiles[1].rendererBuildIdOnDisk, null);
+  assert.ok(!JSON.stringify(stale).includes('private fixture text'));
+  fs.writeFileSync(path.join(installed, 'client.js'), marker(candidate));
+  const matching = inspect();
+  assert.equal(matching.profiles[0].rendererBuildIdOnDisk, candidate);
+  assert.equal(matching.runtimeLoadVerified, false);
+  fs.writeFileSync(path.join(installed, 'client.js'), marker('invalid-marker'));
+  assert.equal(inspect().profiles[0].rendererBuildIdOnDisk, null);
+  fs.rmSync(path.join(installed, 'client.js'));
+  assert.equal(inspect().profiles[0].rendererBuildIdOnDisk, null);
+});
+
+test('diagnostics do not inspect profiles or node_modules redirected outside their scope', t => {
+  const f = workspace(t);
+  const outside = path.join(f.base, 'external-profile');
+  const externalModules = path.join(outside, 'node_modules');
+  const externalPlugin = path.join(externalModules, 'dsh-purge');
+  fs.mkdirSync(externalPlugin, { recursive: true });
+  fs.writeFileSync(path.join(externalPlugin, 'package.json'), JSON.stringify({ name: 'dsh-purge', version: 'private-marker' }));
+  fs.writeFileSync(path.join(outside, 'package.json'), JSON.stringify({ dsh: { profile: { bundles: ['dsh-purge'] } } }));
+  const profiles = path.join(f.home, 'profiles');
+  fs.mkdirSync(path.join(profiles, 'web'), { recursive: true });
+  try {
+    fs.symlinkSync(outside, path.join(profiles, 'desktop'), process.platform === 'win32' ? 'junction' : 'dir');
+    fs.symlinkSync(externalModules, path.join(profiles, 'web', 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) { t.skip('host cannot create directory links: ' + error.code); return; }
+  for (const inspectHomeLinkedPlugin of [false, true]) {
+    const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: '', inspectHomeLinkedPlugin });
+    assert.equal(result.profiles[0].linkTargetScope, 'profile-directory-untrusted');
+    assert.equal(result.profiles[0].profileBundleRegistered, null);
+    assert.equal(result.profiles[1].linkTargetScope, 'profile-modules-untrusted');
+    for (const p of result.profiles.slice(0, 2)) {
+      assert.equal(p.installation, 'linked-uninspected');
+      assert.equal(p.version, null);
+      assert.equal(p.rendererBuildIdOnDisk, null);
+      assert.equal(p.sourceBytesEqual, null);
+    }
+    assert.ok(!JSON.stringify(result).includes('private-marker'));
+  }
+});
+
+test('process count distinguishes an explicit zero from missing or malformed output', () => {
+  assert.equal(parseDesktopProcessCount({ status: 0, stdout: '0\r\n' }), 0);
+  assert.equal(parseDesktopProcessCount({ status: 0, stdout: ' 3\n' }), 3);
+  for (const stdout of ['', ' ', '-1', '1.5', '1e2', '0x10', '9007199254740992', 'warning\n0']) {
+    assert.equal(parseDesktopProcessCount({ status: 0, stdout }), null);
+  }
+  assert.equal(parseDesktopProcessCount({ status: 1, stdout: '0' }), null);
+  assert.equal(parseDesktopProcessCount({ status: 0, stdout: '0', error: new Error('timeout') }), null);
+});
+
+test('malformed competing app directory remains visible beside a valid archive', t => {
+  const f = workspace(t);
+  const manifest = Buffer.from(JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.2-rc.5' }));
+  const header = Buffer.from(JSON.stringify({ files: { 'package.json': { size: manifest.length, offset: '0' } } }));
+  const pre = Buffer.alloc(16);
+  pre.writeUInt32LE(4, 0);
+  pre.writeUInt32LE(header.length + 8, 4);
+  pre.writeUInt32LE(header.length, 12);
+  fs.writeFileSync(path.join(f.resources, 'app.asar'), Buffer.concat([pre, header, manifest]));
+  fs.rmSync(path.join(f.resources, 'app', 'package.json'));
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.layout, 'sealed-and-unpacked');
+  assert.equal(result.desktop.manifestValid, true);
+  assert.equal(result.desktop.unpackedManifestValid, false);
+  assert.equal(result.desktop.unpackedVersionMismatch, null);
+  assert.equal(result.runtimeLoadVerified, false);
+});
+
+test('invalid archive entry is not treated as a clean unpacked installation', t => {
+  const f = workspace(t);
+  fs.writeFileSync(path.join(f.resources, 'app.asar'), '');
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.layout, 'sealed-and-unpacked');
+  assert.equal(result.desktop.manifestValid, false);
+  assert.equal(result.desktop.unpackedManifestValid, true);
+});
+
+test('redirected app directory is reported without reading external manifest', t => {
+  const f = workspace(t);
+  const outside = path.join(f.base, 'external');
+  fs.renameSync(path.join(f.resources, 'app'), outside);
+  fs.writeFileSync(path.join(outside, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: 'private-marker' }));
+  try { fs.symlinkSync(outside, path.join(f.resources, 'app'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.layout, 'unpacked');
+  assert.equal(result.desktop.manifestValid, false);
+  assert.equal(result.desktop.unpackedManifestValid, false);
+  assert.equal(result.desktop.version, null);
+  assert.ok(!JSON.stringify(result).includes('private-marker'));
+});
+
+test('official alpha.2 Node floor is checked against disk metadata without executing Node', t => {
+  const f = workspace(t);
+  const appManifest = path.join(f.resources, 'app', 'package.json');
+  fs.writeFileSync(appManifest, JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.3-alpha.2' }));
+  const runtime = path.join(f.resources, 'runtime');
+  fs.mkdirSync(runtime);
+  const metadata = path.join(runtime, 'versions.json');
+  const inspect = () => inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(inspect().desktop.alpha2NodeRequirementMet, null);
+  for (const [node, expected] of [
+    ['24.22.2', false], ['24.22.3', true], ['24.23.0', true],
+    ['25.99.99', false], ['26.13.0', false], ['v26.13.1', true], ['27.0.0', true],
+    ['24.22.3-rc.1', null], ['invalid', null], [null, null],
+  ]) {
+    fs.writeFileSync(metadata, JSON.stringify({ node }));
+    const result = inspect();
+    assert.equal(result.desktop.alpha2NodeRequirement, '^24.22.3 || >=26.13.1');
+    assert.equal(result.desktop.alpha2NodeRequirementMet, expected, String(node));
+    assert.equal(result.runtimeLoadVerified, false);
+    assert.equal(result.desktop.runtimeFilesComplete, false);
+  }
+  fs.writeFileSync(appManifest, JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.2-rc.5' }));
+  fs.writeFileSync(metadata, JSON.stringify({ node: '24.9.0' }));
+  const older = inspect();
+  assert.equal(older.desktop.nodeVersionOnDisk, '24.9.0');
+  assert.equal(older.desktop.alpha2NodeRequirement, null);
+  assert.equal(older.desktop.alpha2NodeRequirementMet, null);
+});
+
+test('linked runtime manifest is not read for alpha.2 Node evidence', t => {
+  const f = workspace(t);
+  fs.writeFileSync(path.join(f.resources, 'app', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.3-alpha.2' }));
+  const runtime = path.join(f.resources, 'runtime');
+  fs.mkdirSync(runtime);
+  const outside = path.join(f.base, 'external-runtime');
+  fs.writeFileSync(outside, JSON.stringify({ node: '26.99.99' }));
+  try { fs.symlinkSync(outside, path.join(runtime, 'versions.json'), 'file'); }
+  catch (error) { t.skip('host cannot create file links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.nodeVersionOnDisk, null);
+  assert.equal(result.desktop.alpha2NodeRequirementMet, null);
+});
+
+test('redirected runtime directory is unverified rather than complete', t => {
+  const f = workspace(t);
+  const outside = path.join(f.base, 'external-runtime');
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'versions.json'), JSON.stringify({ node: '24.22.3', pnpm: '11.28.5' }));
+  try { fs.symlinkSync(outside, path.join(f.resources, 'runtime'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create directory links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.runtimeFilesComplete, null);
+  assert.equal(result.desktop.nodeVersionOnDisk, null);
+  assert.equal(result.desktop.runtimeManifestValid, null);
+  assert.equal(result.desktop.missingRuntimeFiles.length, 0);
+  assert.ok(result.desktop.unverifiedRuntimeFiles.includes('versions.json'));
+  assert.ok(!JSON.stringify(result).includes(outside));
+});
+
+test('nested runtime junction is never counted as present', t => {
+  const f = workspace(t);
+  const runtime = path.join(f.resources, 'runtime');
+  const outside = path.join(f.base, 'external-bin');
+  fs.mkdirSync(runtime);
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, 'node.cmd'), 'private marker');
+  try { fs.symlinkSync(outside, path.join(runtime, 'bin'), process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { t.skip('host cannot create directory links: ' + error.code); return; }
+  const result = inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe });
+  assert.equal(result.desktop.runtimeFilesComplete, false);
+  assert.ok(result.desktop.unverifiedRuntimeFiles.includes('bin/node.cmd'));
+  assert.ok(!result.desktop.missingRuntimeFiles.includes('bin/node.cmd'));
+});
+
+test('runtime metadata validity is distinct from presence and Node floor', t => {
+  const f = workspace(t);
+  fs.writeFileSync(path.join(f.resources, 'app', 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop', version: '0.2.3-alpha.2' }));
+  const runtime = path.join(f.resources, 'runtime');
+  fs.mkdirSync(runtime);
+  const manifest = path.join(runtime, 'versions.json');
+  const inspect = () => inspectReadOnlyDesktopEvidence({ home: f.home, root: f.root, exe: f.exe }).desktop;
+  assert.equal(inspect().runtimeManifestValid, false);
+  fs.writeFileSync(manifest, '{bad json');
+  assert.equal(inspect().runtimeManifestValid, false);
+  assert.equal(inspect().alpha2NodeRequirementMet, null);
+  fs.writeFileSync(manifest, JSON.stringify({ node: '24.22.3' }));
+  assert.equal(inspect().runtimeManifestValid, false);
+  assert.equal(inspect().alpha2NodeRequirementMet, true);
+  fs.writeFileSync(manifest, JSON.stringify({ node: '24.22.3', pnpm: '11.28.5' }));
+  assert.equal(inspect().runtimeManifestValid, true);
+  assert.equal(inspect().runtimeFilesComplete, false);
 });

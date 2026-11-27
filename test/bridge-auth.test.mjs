@@ -166,3 +166,17 @@ test('real HTTP server exposes wildcard bind even when the request uses 127.0.0.
   assert.equal(snapshot.listenerScope, 'all_interfaces')
   assert.equal(snapshot.publicReachability, 'not_tested')
 })
+
+test('forwarding metadata cannot receive the local exemption when its value is empty or malformed', () => {
+  const options = { token: '', requireLocalToken: false }
+  for (const name of ['forwarded', 'x-forwarded-for', 'via', 'x-real-ip']) {
+    for (const value of ['', ' ', []]) {
+      const request = req('127.0.0.1', 'localhost:53380')
+      request.headers[name] = value
+      assert.equal(isLocalBridgePeer(request), false)
+      assert.equal(authorizeBridgeRequest(request, options).ok, false)
+    }
+  }
+  const direct = req('127.0.0.1', 'localhost:53380')
+  assert.equal(authorizeBridgeRequest(direct, options).ok, true)
+})

@@ -6,13 +6,14 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
   test(path + ': environment center groups existing views and preserves legacy survey entry', () => {
     const src = readFileSync(new URL('../' + path, import.meta.url), 'utf8')
     const env = src.slice(src.indexOf('function EnvTab(props)'), src.indexOf('function GuideTab(props)'))
-    for (const id of ['summary', 'execution', 'tools', 'local-search', 'network', 'diagnostics']) {
+    for (const id of ['summary', 'execution', 'tools', 'local-search', 'network', 'diagnostics', 'privacy']) {
       assert.ok(env.includes("['" + id + "',"))
     }
-    assert.match(env, /section === 'local-search' \? h\(React\.Fragment, null,/) 
+    assert.match(env, /section === 'local-search' \? h\(React\.Fragment, null,/)
+    assert.ok(env.includes("section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true })"))
+    assert.ok(src.includes("initialSection: st.tab === 'low-impact' ? 'privacy' : st.tab === 'local-search' ? 'local-search' : 'summary'")) 
     assert.match(env, /h\(LocalAssetSearchTab, \{ engagement: props.engagement, refreshKey \}\)/)
     assert.match(env, /顶部“保存环境配置”不保存测绘操作勾选/)
-    assert.match(src, /initialSection: st\.tab === 'local-search' \? 'local-search' : 'summary'/)
     assert.doesNotMatch(src, /label: '资源', pages: [^\n]*local-search/)
     assert.match(src, /op: 'intelSourcesSave'/)
     assert.match(src, /op: 'platformConfigSave'/)
