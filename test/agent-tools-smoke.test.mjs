@@ -58,6 +58,11 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(disabledPrompt.enabled, false)
   assert.equal(disabledPrompt.executionPolicy, 'disabled-no-reviewed-adapter')
   assert.equal(disabledPrompt.prompt, null, 'disabled legacy prompt text must not be exposed to the model')
+  const activePrompt = JSON.parse(await rolePromptTool.execute({ engagement: redteam.openEngagement('agent-smoke-recon', [], { bindCurrent: false }).id, role: 'recon' }, {}))
+  assert.equal(activePrompt.enabled, true)
+  assert.match(activePrompt.prompt, /当前工具执行契约（覆盖旧版角色提示词中的冲突指令）/)
+  assert.match(activePrompt.prompt, /redteam_passive_recon/)
+  assert.match(activePrompt.prompt, /不得执行，不得猜测命令/)
 
   // 2. 参数定义完整（dry_run 必须存在，默认语义在实现里）
   assert.ok(Object.hasOwn(chainTool.parameters, 'dry_run'))
