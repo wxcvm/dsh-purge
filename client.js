@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "e05b9f54096265d9";
+		const CLIENT_BUILD_ID = "9274508eec847433";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -8325,7 +8325,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
             h('h4', null, asset.label),
             h('span', { className: 'rt-tag' }, asset.meta && asset.meta.segment || '未知网段'),
-            h('span', { className: 'rt-tag' }, asset.meta && asset.meta.scope === 'internal' ? '内网' : '外网')),
+            h('span', { className: 'rt-tag' }, asset.meta && asset.meta.scope === 'internal' ? '内网' : '外网'),
+            h('button', { className: 'rt-btn', type: 'button',
+              onClick: () => { setView('list'); setFocusAssetId(Number(String(asset.id).slice(6))) } }, '查看详情')),
           h('div', { className: 'rt-kv' },
             h('b', null, '域名别名'),
             h('span', null, aliases.length ? aliases.map((node) => node.label).join(' · ') : '—')),
