@@ -8,7 +8,7 @@
 
 本文后续仍保留历史工具参数、数据库字段和兼容接口说明；历史命令示例与攻击链字段不是当前执行授权或可复制的操作手册。工具可用性以 lib/redteam/task-tool-plan.js 的实时契约为准。
 
-- 当前可执行：Nmap / ProjectDiscovery httpx 仅通过 redteam_scan_run 单目标适配器；subfinder / dnsx / Amass 仅通过 redteam_passive_recon 固定被动模式。
+- 当前可执行：Nmap / ProjectDiscovery httpx 仅通过 redteam_scan_run 单目标适配器；subfinder / dnsx / Amass 仅通过 redteam_passive_recon 固定被动模式；TUN/fake-IP 阻断后的 redteam_l7_probe 仅允许已登记单主机单端口、每次明确确认。
 - 其余工具均为 unmapped-manual-review：只显示路径/版本信息，不执行目标任务，不得使用通用 Shell、旧 Skill 或 customTools 兜底。
 - 主动任务必须有用户明确提供的授权依据与登记范围；redteam_scope_review 只是离线匹配，不证明授权。无范围时仅进行本地记录和证据整理。
 - 不执行口令爆破/喷洒、漏洞利用、拒绝服务、目标侧上传、WebShell、隧道部署、持久化、规避检测、横向移动、数据提取或破坏性操作。
@@ -1053,7 +1053,7 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 - `commit` — 默认 `true`：导入资产/端口；`false` 仅预览但仍保留文件。
 - `confirm` — 未登记授权范围时必须显式确认。
 
-执行器仅接受固定 Nmap/httpx 参数构造器，不接受任意命令或可执行文件。远端任务会重新发现所选环境并验证工具版本；SSH 还必须通过严格主机密钥检查与 Kali 身份确认。所有环境均复用同一单目标范围门禁、超时与证据 manifest。本机、WSL、Docker 检测到 TUN 网卡或 fake-IP 时会在启动扫描器前拒绝，避免伪造端口入库；此时可用 `redteam_l7_probe` 对同一授权主机做应用层复核。SSH Kali 的远端出站路由不会由本机检测，结果会明确标注未验证。
+执行器仅接受固定 Nmap/httpx 参数构造器，不接受任意命令或可执行文件。远端任务会重新发现所选环境并验证工具版本；SSH 还必须通过严格主机密钥检查与 Kali 身份确认。所有环境均复用同一单目标范围门禁、超时与证据 manifest。本机、WSL、Docker 检测到 TUN 网卡或 fake-IP 时会在启动扫描器前拒绝，避免伪造端口入库；此时只有在读取 `redteam:l7-service-confirmation`、确认非空 scope、每次显式 `confirm:true` 且仅提供一个端口后，才可用 `redteam_l7_probe` 复核；它不接受默认端口表或批量探测。SSH Kali 的远端出站路由不会由本机检测，结果会明确标注未验证。
 
 ### `redteam_ingest`
 批量解析本地扫描文件，支持 nuclei、httpx、nmap、ffuf。默认只预览计数；只有 `commit: true` 才写入资产或漏洞。ffuf 仅返回路径，不会写库。
@@ -1090,20 +1090,17 @@ _交付用 score_report（只收已得分项，附可重放原始请求）；rep
 参数：`engagement`、`before`（必填，原样传入上次 `redteam_next_action` 的 `focus.before` JSON 字符串）、`task_key`（可选）。
 
 ### `redteam_l7_probe`
-【应用层服务探针】对单个主机的指定端口做 L7 判定，**专治 TUN 类代理造成的端口伪造**。
 
-启用 FlClash / Mihomo 等 TUN 后，隧道对任意 TCP 连接回伪造 SYN-ACK，实测出现过 `nmap --top-ports 1000` 报 **1000/1000 open、延迟 0.75ms**，连 `1.1.1.1:1`、`example.com:12345` 这类必然关闭的端口也判 open —— 此时 TCP 层 STATE 没有鉴别力。
+【单端口应用层复核】仅用于 Nmap/httpx 因 TUN/fake-IP 被阻断后的单目标复核，不是扫描器或漏洞验证工具。
 
-伪造的 accept 无法完成应用层交互，所以本工具靠交互判定：先被动等 banner（SSH / FTP / SMTP / POP3 / IMAP / MySQL），无 banner 再发一次极小的 HTTP GET 与 TLS ClientHello。
+必须先读取 `redteam:l7-service-confirmation`；engagement 必须登记非空授权 scope；每次调用都要对单个 host + 单个 port 显式传 `confirm:true`。不接受 CIDR、URL、目标列表、默认端口清单或多个端口。可选 SOCKS5 仅允许 loopback 地址（127.0.0.1 / localhost）。
 
-- `verdict=REAL_SERVICE`：确实有服务，附 `service` 与 `evidence`（banner 或响应首行）
-- `verdict=FAKE_OR_SILENT`：连接"成功"但无任何应用层响应 —— TUN 环境下假 open 的典型特征，**不要当成开放端口写进结论**
-- `verdict=UNREACHABLE`：连接未建立
+结果：
+- `REAL_SERVICE`：收到可识别的 banner、TLS 或 HTTP 响应，只能证明该端口有服务响应。
+- `FAKE_OR_SILENT`：没有可识别的应用层响应；不代表漏洞，也不能证明目标不存在服务。
+- `UNREACHABLE`：本次连接失败；不得自动重试、换端口或扩大目标。
 
-只做被动读与一次探测请求，不发送凭据、不尝试登录、不执行目标侧命令。走与扫描同一套范围门禁。
-
-参数：`engagement`、`host`（必填，单个 IP 或域名）、`ports`（数组，不传则用内置高价值端口清单）、`proxy`（可选 `socks5://127.0.0.1:7890`，不传则直连）、`concurrency`（默认 4，上限 16）、`confirm`。
-
+不进行登录、认证、漏洞模板、目录枚举、状态变更或后续利用。
 ### `redteam_exploit_chain`
 【模拟占位】历史漏洞利用链工具当前不执行目标操作。dry_run=true 仅返回不含命令的阶段标签；dry_run=false 返回 unsupported。旧参数仅为兼容保留，不会读取凭据、执行 PoC、部署 C2、建立持久化或写入执行证据。
 
