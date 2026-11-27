@@ -83,12 +83,19 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(sessions.totals.tunnels, 1)
   assert.doesNotMatch(JSON.stringify(sessions), /credential-secret-marker|webshell-secret-marker|tunnel-command-marker|private\\.invalid/)
 
+  const originalReaders = new Map()
   for (const method of ['listCredentials', 'listTunnels', 'listWebshells', 'listAccess']) {
+    originalReaders.set(method, redteam[method])
     redteam[method] = () => { throw new Error('unsafe legacy session reader invoked: ' + method) }
   }
-  const nextAction = JSON.parse(await registered.get('redteam_next_action').execute({
-    engagement: sensitiveEngagement, limit: 10,
-  }, {}))
+  let nextAction
+  try {
+    nextAction = JSON.parse(await registered.get('redteam_next_action').execute({
+      engagement: sensitiveEngagement, limit: 10,
+    }, {}))
+  } finally {
+    for (const [method, reader] of originalReaders) redteam[method] = reader
+  }
   assert.equal(nextAction.state.credentials, 1)
   assert.equal(nextAction.state.webshells, 1)
   assert.equal(nextAction.state.tunnels, 1)
