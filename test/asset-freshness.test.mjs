@@ -54,6 +54,8 @@ test('asset freshness separates recency, provenance and stored test status', t =
     .run(agingAt, aging.id)
   db.prepare('UPDATE asset SET last_seen = NULL WHERE id = ?').run(unknown.id)
   db.prepare('UPDATE asset SET last_seen = ? WHERE id = ?').run('not-a-timestamp', invalid.id)
+  db.prepare(`INSERT INTO observation(entity_kind, entity_id, provenance, tool, collected_at)
+    VALUES('asset', ?, 'passive', 'ct', 'not-a-timestamp')`).run(invalid.id)
   db.prepare("UPDATE asset SET test_status = 'tested' WHERE ip = '192.0.2.31'").run()
 
   const report = store.assetFreshness(id, { limit: 2, offset: 0 })
