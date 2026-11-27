@@ -90,3 +90,29 @@ test("read-only ZIP member verification rejects inconsistent local headers", t =
   wrongMethod.writeUInt16LE(original.readUInt16LE(offset + 8) === 0 ? 8 : 0, offset + 8);
   assert.throws(() => readZipMembers(wrongMethod, [name]), /ZIP local header mismatch/);
 });
+
+test("read-only ZIP verification rejects invalid central directory boundaries", t => {
+  const f = fixture(t);
+  f.build(tag);
+  const original = readFileSync(f.options.archive);
+  const name = prefix + "/client.js";
+  let eocd = -1;
+  for (let i = original.length - 22; i >= 0; i--) {
+    if (original.readUInt32LE(i) === 0x06054b50 && i + 22 + original.readUInt16LE(i + 20) === original.length) {
+      eocd = i; break;
+    }
+  }
+  assert.ok(eocd >= 0);
+  assert.equal(readZipMembers(original, [name]).get(name).toString(), "fixture: client.js\n");
+  for (const mutate of [
+    b => b.writeUInt16LE(1, eocd + 4),
+    b => b.writeUInt16LE(0, eocd + 8),
+    b => b.writeUInt32LE(1, eocd + 12),
+    b => b.writeUInt32LE(0xffffffff, eocd + 16),
+    b => b.writeUInt16LE(0xffff, eocd + 20),
+  ]) {
+    const invalid = Buffer.from(original);
+    mutate(invalid);
+    assert.throws(() => readZipMembers(invalid, [name]), /zip/i);
+  }
+});

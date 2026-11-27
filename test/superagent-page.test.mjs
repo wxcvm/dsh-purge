@@ -14,13 +14,14 @@ function load(name, end, React, AgentReports, WorkItemsPanel) {
     h, React, AgentReports, WorkItemsPanel)
 }
 
-test('Super Agent is a separate entry with project-scoped panels and jumps', () => {
-  assert.match(client, /\['superagent', 'Super Agent'\]/)
-  assert.match(client, /else if \(st\.tab === 'superagent'\) body = h\(SuperAgentTab/)
-  assert.match(client, /onOpenSuperAgent: \(\) => openSuperAgent\(\)/)
+test('Agent review is embedded in the existing agent page with project-scoped panels and jumps', () => {
+  assert.doesNotMatch(client, /\['superagent', 'Super Agent'\]/)
+  assert.doesNotMatch(client, /function SuperAgentTab\(/)
+  assert.match(client, /else if \(activeTab === 'agents'\) body = h\(AgentsTab/)
+  assert.match(client, /h\(AgentReviewSection, \{ engagement: eng, refreshKey/)
   const AgentReports = () => {}
   const WorkItemsPanel = () => {}
-  const tab = load('SuperAgentTab', 'AgentsTab', { useRef: current => ({ current }) }, AgentReports, WorkItemsPanel)
+  const tab = load('AgentReviewSection', 'AgentsTab', { useRef: current => ({ current }) }, AgentReports, WorkItemsPanel)
   const navigation = () => {}
   const receipt = () => {}
   let reportReady = 0, ledgerFocused = 0
@@ -44,18 +45,18 @@ test('Super Agent is a separate entry with project-scoped panels and jumps', () 
   assert.equal(ledgerFocused, 1)
 })
 
-test('Workbench aliases preserve legacy navigation and do not alias Super Agent to settings', () => {
+test('Workbench aliases preserve legacy navigation and redirect the retired Super Agent page', () => {
   const select = load('activeWorkbenchTab', 'RtNavIcon')
   for (const [tab, page] of [
     ['skills', 'knowledge-center'], ['knowledge', 'env'], ['local-search', 'env'],
-    ['prompts', 'agents'], ['agents', 'agents'], ['superagent', 'superagent'], ['overview', 'overview'],
+    ['prompts', 'agents'], ['agents', 'agents'], ['superagent', 'agents'], ['overview', 'overview'],
   ]) assert.equal(select(tab), page)
-  assert.match(client, /superagent: \['M8 5H5v16h14V5h-3'/)
+  assert.doesNotMatch(client, /superagent: \['M8 5H5v16h14V5h-3'/)
 })
 
 test('history keeps registration, host-end and settlement separate and opens only the saved session', () => {
   let error = ''
-  const render = load('WorkAttemptEvidence', 'SuperAgentTab', { useState: () => [error, next => { error = next }] })
+  const render = load('WorkAttemptEvidence', 'AgentReviewSection', { useState: () => [error, next => { error = next }] })
   const opened = []
   const open = (...ids) => { opened.push(ids); return 'archived' }
   const attempt = {

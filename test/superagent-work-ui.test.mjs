@@ -540,3 +540,28 @@ test('a workbench refresh does not close the detail, but a changed run invalidat
   assert.equal(control(ui, 'button', '记录结算').props.disabled, true)
   ui.unmount()
 })
+
+test('abnormal host termination is not an accepted deliverable', async () => {
+  for (const stop of ['aborted', 'error', 'max-tokens', 'unknown']) {
+    const calls = []
+    const ended = item({ assignment: { ...item().assignment,
+      host_end_at: '2026-11-21T01:00:00Z', host_stop_reason: stop } })
+    const ui = mount('one', async req => {
+      calls.push(req)
+      return req.op === 'workItemReview'
+        ? list('one', [ended])
+        : { ok: true, engagement: 'one', item: { ...ended, history: [ended.assignment] } }
+    })
+    try {
+      await setImmediate()
+      control(ui, 'button', '查看持久任务 #1').props.onClick()
+      await setImmediate()
+      assert.ok(content(ui).includes('宿主结束事件：' + stop))
+      assert.equal(control(ui, 'button', '确认完成'), undefined)
+      assert.equal(control(ui, 'button', '记录结算').props.disabled, true)
+      assert.deepEqual(calls.map(req => req.op), ['workItemReview', 'workItemGet'])
+    } finally {
+      ui.unmount()
+    }
+  }
+})

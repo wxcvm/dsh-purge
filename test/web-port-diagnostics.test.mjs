@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  parseNetstatListeners, parseLsofPids, parseSsListeners, looksLikeDshWeb,
+  parseNetstatListeners, parseLsofPids, parseSsListeners, parseSsListenerState, looksLikeDshWeb,
   webPortNumber, recordPath, writeWebRecord, readWebRecord,
 } from '../lib/web-port-diagnostics.js'
 
@@ -57,4 +57,17 @@ test('PID record is advisory and read-only; malformed records are ignored', () =
   } finally {
     rmSync(home, { recursive: true, force: true })
   }
+})
+
+test('ss reports occupied sockets even when process ownership is hidden', () => {
+  const rows = [
+    'LISTEN 0 128 0.0.0.0:43120 0.0.0.0:*',
+    'LISTEN 0 128 [::]:43120 [::]:*',
+    'LISTEN 0 128 127.0.0.1:43121 0.0.0.0:* users:(("node",pid=321,fd=7))',
+  ].join('\n')
+  assert.deepEqual(parseSsListenerState(rows, 43120), { occupied: true, pids: [] })
+  assert.deepEqual(parseSsListenerState(rows, 43121), { occupied: true, pids: [321] })
+  assert.deepEqual(parseSsListenerState(rows, 43122), { occupied: false, pids: [] })
+  assert.deepEqual(parseSsListenerState(rows + '\nLISTEN 0 128 *:43120 *:* users:(("node",pid=999,fd=8))', 43120),
+    { occupied: true, pids: [999] })
 })
