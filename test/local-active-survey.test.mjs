@@ -63,6 +63,25 @@ test('single-host active survey runs local Nmap, imports discovered evidence and
   assert.equal(saved.ingestion.ports, 1)
 })
 
+test('multi-host Nmap output imports only IPs explicitly in scope for an IP target', async (t) => {
+  const { store, imported, scan } = fixture(t, ['192.0.2.10'])
+  const output = '<nmaprun>'
+    + '<host><address addr="192.0.2.10" addrtype="ipv4"/>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host>'
+    + '<host><address addr="192.0.2.11" addrtype="ipv4"/>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="apache"/></port></ports></host>'
+    + '</nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: '192.0.2.10',
+    ports: '80,443', commit: true,
+  }, { ...scan, execFileFn: (_exe, _argv, _options, cb) => cb(null, output, '') })
+  assert.equal(result.assets, 1)
+  assert.equal(imported.length, 1)
+  assert.deepEqual(imported[0].bundle.assets.map(asset => asset.ip), ['192.0.2.10'])
+})
+
 test('preview is the default and never writes assets; out-of-scope is rejected before scanning', async (t) => {
   const { store, imported, scan } = fixture(t)
   const preview = await runLocalActiveDiscovery(store, {
