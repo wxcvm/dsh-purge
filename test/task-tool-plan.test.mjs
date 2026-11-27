@@ -21,7 +21,7 @@ test('profiles contain only declared tool IDs and have stable task labels', () =
   assert.ok(profiles.find((p) => p.id === 'web').toolIds.includes('katana'))
 })
 
-test('task selection picks an installed, verifiable candidate over a path-only one', (t) => {
+test('task selection respects task-specific priority instead of rewarding version probes', (t) => {
   const root = workspace(t)
   const fscan = fileAt(join(root, 'fscan.exe'))
   const nmap = fileAt(join(root, 'nmap.exe'))
@@ -29,10 +29,19 @@ test('task selection picks an installed, verifiable candidate over a path-only o
     root, config: configFor(root, { fscan, nmap }), env: { PATH: '' },
   })
   assert.equal(plan.status, 'located')
-  assert.equal(plan.selected.id, 'nmap')
+  assert.equal(plan.selected.id, 'fscan')
   assert.equal(plan.selected.verification, 'not-run')
-  assert.ok(plan.candidates.find((c) => c.id === 'fscan').detected)
+  assert.equal(plan.selected.canProbe, false)
+  assert.ok(plan.candidates.find((c) => c.id === 'nmap').canProbe)
+  assert.ok(plan.candidates.find((c) => c.id === 'nmap').detected)
   assert.ok(plan.candidates.every((c) => c.verification === 'not-run'))
+
+  const preferred = planTaskTools('internal', {
+    root,
+    config: { ...configFor(root, { fscan, nmap }), planning: { preferredToolByTask: { internal: 'nmap' } } },
+    env: { PATH: '' },
+  })
+  assert.equal(preferred.selected.id, 'nmap', 'an explicit user preference must override the profile default')
 })
 
 test('unknown tasks and missing binaries do not run anything', async (t) => {
