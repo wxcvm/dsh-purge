@@ -1096,3 +1096,14 @@ Purge 的 `privacyPosture.bridge` 现在会在 Node HTTP 请求能获取所属�
 - `redteam_knowledge_get`: read a selected reference by source and ID. Returns bounded text and attribution; does not execute reference content or verify a target.
 
 - Pagination: choose a specific source and pass `offset` for `bundled`, `personal`, `cve`, `redteam`, or `aboutsecurity` (20 items per page). `source=all` returns each source's first page; the ARTEX adapter has no `offset` and uses its separate search tool.
+
+
+### `redteam_experience`
+跨靶标经验库：自动记录扫描运行结果、资产测试结论、子 Agent 结束事件、持久任务回报和真实执行链的高层结果；失败、阻断、超时、中断、无发现与成功都会保留。相似任务通过 `redteam_task_context` 自动带出相关经验。
+
+参数：
+- `action` — 必填：`list` 查看经验，`review` 核验或否决经验
+- `task_type` / `query` / `limit` — `list` 过滤条件
+- `id` / `status` / `evidence_ref` / `review_note` — `review` 必填或按状态要求填写
+
+新经验默认是 `candidate`。重复出现只增加复现次数与置信度，不会自动变成可信技能；只有核对原始证据后才能标记 `validated`。经验只提供复核线索，不自动执行任何动作，也不保存凭据、原始请求或目标地址。
