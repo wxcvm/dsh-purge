@@ -287,3 +287,21 @@ test("following host theme resolves both advertised schemes with the media prefe
   assert.equal(make(doc, { matchMedia: () => ({ matches: true }) }, () => { throw Error("restricted"); })(), "dusk");
   assert.equal(make({ body: { hasAttribute: () => true } })(), "dusk");
 });
+
+test("explicit false host dark-theme markers do not override the actual color scheme", () => {
+  const make = new Function("document", "window", "getComputedStyle",
+    extract("function detectHostTheme(", "function readTheme(") + "\nreturn detectHostTheme");
+  const target = value => ({
+    hasAttribute: name => name === "data-ds-dark-theme" && value !== null,
+    getAttribute: () => value,
+    style: { colorScheme: "light" },
+  });
+  for (const value of ["false", " FALSE ", "0", "off", "no"]) {
+    assert.equal(make({ body: target(value), documentElement: target(value) },
+      { matchMedia: () => ({ matches: true }) })(), "white");
+  }
+  for (const value of ["", "true", "1"]) {
+    assert.equal(make({ body: target(value), documentElement: target(null) })(), "dusk");
+  }
+  assert.equal(make({ body: target("false"), documentElement: target("true") })(), "dusk");
+});
