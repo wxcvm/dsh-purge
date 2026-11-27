@@ -100,19 +100,21 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   for (const name of ['redteam_chain_add', 'redteam_score_hit', 'redteam_chain_plan', 'redteam_chain_advance']) {
     const result = JSON.parse(await registered.get(name).execute({ engagement: sensitiveEngagement }, {}))
     assert.equal(result.status, 'unsupported', name)
-    assert.equal(result.actual_execution === false || result.scored === false, true, name)
+    assert.equal(result.ok, false, name)
   }
 
+  assert.equal(Object.hasOwn(registered.get('redteam_vuln_add').parameters, 'status'), false)
+  assert.equal(Object.hasOwn(registered.get('redteam_vuln_add').parameters, 'gained'), false)
   const candidate = JSON.parse(await registered.get('redteam_vuln_add').execute({
     engagement: sensitiveEngagement, title: 'Candidate-only test', severity: 'low',
-    status: 'exploited', gained: 'administrator access',
   }, {}))
   assert.equal(candidate.status, 'candidate')
   assert.equal(candidate.verified, false)
   const candidateId = candidate.id || candidate.vuln_id || candidate.item?.id
   if (candidateId) {
+    assert.equal(Object.hasOwn(registered.get('redteam_vuln_update').parameters, 'status'), false)
     const updatedCandidate = JSON.parse(await registered.get('redteam_vuln_update').execute({
-      engagement: sensitiveEngagement, id: candidateId, status: 'confirmed', gained: 'root',
+      engagement: sensitiveEngagement, id: candidateId, severity: 'medium',
     }, {}))
     assert.equal(updatedCandidate.verified, false)
     const storedCandidate = redteam.listVulns(sensitiveEngagement, { limit: 20 }).items.find(item => item.id === candidateId)
