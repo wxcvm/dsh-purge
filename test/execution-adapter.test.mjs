@@ -197,3 +197,24 @@ test('remote version-probe failure blocks the actual scan invocation', async () 
   assert.equal(result.attempted, false)
   assert.equal(calls, 2)
 })
+
+
+test('a local executable spawn failure is not recorded as a target invocation', async (t) => {
+  const root = workspace(t)
+  const executable = join(root, 'nmap.exe')
+  writeFileSync(executable, 'fixture')
+  const result = await executeToolInEnvironment({
+    toolId: 'nmap', environmentId: 'local', args: ['-sT', '192.0.2.7'],
+  }, {
+    root,
+    config: { platform: 'windows', tools: { nmap: executable }, toolkitDir: root, binDirs: [] },
+    execFileFn: (_command, _args, _options, done) => {
+      const error = new Error('spawn failed')
+      error.code = 'ENOENT'
+      done(error, '', '')
+    },
+  })
+  assert.equal(result.status, 'failed')
+  assert.equal(result.attempted, false)
+  assert.equal(result.errorCode, 'ENOENT')
+})
