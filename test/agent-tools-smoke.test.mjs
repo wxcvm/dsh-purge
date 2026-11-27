@@ -228,8 +228,20 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   const httpEvidenceAdd = JSON.parse(await registered.get('redteam_http_evidence_add').execute({
     engagement: sensitiveEngagement, label: 'redaction fixture', method: 'GET',
     url: 'https://example.invalid/?token=http-query-secret',
-    request: 'GET /?token=http-query-secret HTTP/1.1\\r\\nHost: example.invalid\\r\\nAuthorization: Bearer http-bearer-secret\\r\\nCookie: sid=http-cookie-secret\\r\\n\\r\\n',
-    response: 'HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\\r\\n{"access_token":"http-json-secret","safe":"ok"}',
+    request: [
+      'GET /?token=http-query-secret HTTP/1.1',
+      'Host: example.invalid',
+      'Authorization: Bearer http-bearer-secret',
+      'Cookie: sid=http-cookie-secret',
+      '',
+      '',
+    ].join(String.fromCharCode(13, 10)),
+    response: [
+      'HTTP/1.1 200 OK',
+      'Content-Type: application/json',
+      '',
+      '{"access_token":"http-json-secret","safe":"ok"}',
+    ].join(String.fromCharCode(13, 10)),
     note: 'token=http-note-secret',
   }, {}))
   assert.equal(httpEvidenceAdd.ok, true)
