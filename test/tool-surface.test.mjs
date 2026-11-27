@@ -93,6 +93,16 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(httpxCandidate.automaticExecutionAllowed, false)
   assert.equal(toolPlan.skillPlan.readTool, 'redteam_skill_read')
   assert.equal(toolPlan.executionGuard.scopeReviewTool, 'redteam_scope_review')
+  const passiveEngagement = redteam.openEngagement('passive-fixture', ['*.example.test']).id
+  const passiveTool = registered.get('redteam_passive_recon')
+  assert.ok(passiveTool)
+  const passivePreview = JSON.parse(await passiveTool.execute({
+    action: 'subdomains', engagement: passiveEngagement, target: 'example.test',
+  }, {}))
+  assert.equal(passivePreview.ok, true)
+  assert.equal(passivePreview.toolStatus, 'not-requested')
+  assert.equal(passivePreview.amassStatus, 'not-requested')
+  assert.equal(passivePreview.names.length, 0)
   const quality = registered.get('redteam_data_quality')
   const read = JSON.parse(await quality.execute({ engagement: 'fixture' }, {}))
   assert.deepEqual(read, {
