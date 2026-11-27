@@ -8,24 +8,28 @@ const fixture = (t) => {
   t.after(() => db.close())
   db.exec([
     'CREATE TABLE asset (id INTEGER PRIMARY KEY, ip TEXT, primary_name TEXT, scope TEXT)',
-    'CREATE TABLE asset_name (asset_id INTEGER, name TEXT)',
+    'CREATE TABLE asset_name (asset_id INTEGER, name TEXT, provenance TEXT, tool TEXT)',
     'CREATE TABLE port (id INTEGER PRIMARY KEY, asset_id INTEGER, port INTEGER, state TEXT, proto TEXT, provenance TEXT, title TEXT, banner TEXT, url TEXT)',
-    'CREATE TABLE service (port_id INTEGER, name TEXT, product TEXT, cpe TEXT)',
-    'CREATE TABLE fingerprint (asset_id INTEGER, category TEXT, product TEXT, vendor TEXT, evidence TEXT)',
-    'CREATE TABLE observation (entity_kind TEXT, entity_id INTEGER, attr TEXT, value TEXT)',
+    'CREATE TABLE service (port_id INTEGER, name TEXT, product TEXT, cpe TEXT, provenance TEXT, tool TEXT)',
+    'CREATE TABLE fingerprint (asset_id INTEGER, category TEXT, product TEXT, vendor TEXT, evidence TEXT, provenance TEXT, tool TEXT)',
+    'CREATE TABLE observation (entity_kind TEXT, entity_id INTEGER, attr TEXT, value TEXT, provenance TEXT, tool TEXT)',
     "INSERT INTO asset VALUES (1, '192.0.2.12', 'app.demo.test', 'external')",
     "INSERT INTO asset VALUES (2, '192.0.2.13', 'vpn.demo.test', 'external')",
     "INSERT INTO asset VALUES (3, '10.3.0.5', 'internal.demo.test', 'internal')",
-    "INSERT INTO asset_name VALUES (1, 'api.demo.test')",
+    "INSERT INTO asset VALUES (4, '192.0.2.14', 'alias-only.demo.test', 'external')",
+    "INSERT INTO asset_name(asset_id, name, provenance, tool) VALUES (1, 'api.demo.test', 'active', 'fixture')",
+    "INSERT INTO asset_name(asset_id, name, provenance, tool) VALUES (4, 'alias.demo.test', 'passive', 'crt.sh')",
     "INSERT INTO port VALUES (1, 1, 443, 'open', 'tcp', 'active', 'Demo Login', 'nginx banner', 'https://app.demo.test')",
     "INSERT INTO port VALUES (2, 2, 443, 'closed', 'tcp', 'passive', 'VPN', 'apache', 'https://vpn.demo.test')",
     "INSERT INTO port VALUES (3, 3, 8080, 'open', 'tcp', 'passive', 'Developer', 'tomcat', 'http://internal.demo.test:8080')",
-    "INSERT INTO service VALUES (1, 'https', 'nginx', 'cpe:/a:nginx:nginx')",
-    "INSERT INTO service VALUES (2, 'https', 'apache', 'cpe:/a:apache:httpd')",
-    "INSERT INTO service VALUES (3, 'http', 'tomcat', 'cpe:/a:apache:tomcat')",
-    "INSERT INTO fingerprint VALUES (1, 'web', 'nginx', 'Example', 'demo application')",
-    "INSERT INTO fingerprint VALUES (3, 'tls', 'tomcat', 'Example', 'issuer Local CA')",
-    "INSERT INTO observation VALUES ('asset', 3, 'cert_subject', '*.demo.test')",
+    "INSERT INTO service VALUES (1, 'https', 'nginx', 'cpe:/a:nginx:nginx', 'active', 'fixture')",
+    "INSERT INTO service VALUES (2, 'https', 'apache', 'cpe:/a:apache:httpd', 'passive', 'fixture')",
+    "INSERT INTO service VALUES (3, 'http', 'tomcat', 'cpe:/a:apache:tomcat', 'passive', 'fixture')",
+    "INSERT INTO fingerprint(asset_id, category, product, vendor, evidence, provenance, tool) VALUES (1, 'web', 'nginx', 'Example', 'demo application', 'active', 'fixture')",
+    "INSERT INTO fingerprint(asset_id, category, product, vendor, evidence, provenance, tool) VALUES (2, 'web', 'apache', 'Example', 'passive banner', 'active', 'fingerprint-fixture')",
+    "INSERT INTO fingerprint(asset_id, category, product, vendor, evidence, provenance, tool) VALUES (3, 'tls', 'tomcat', 'Example', 'issuer Local CA', 'passive', 'fixture')",
+    "INSERT INTO observation(entity_kind, entity_id, attr, value, provenance, tool) VALUES ('asset', 3, 'cert_subject', '*.demo.test', 'passive', 'fixture')",
+    "INSERT INTO observation(entity_kind, entity_id, attr, value, provenance, tool) VALUES ('asset', 3, 'primary_name', 'internal.demo.test', 'active', 'dns-fixture')",
   ].join(';') + ';')
   return (input) => {
     const compiled = compileLocalAssetQuery(input)
@@ -43,7 +47,8 @@ test('offline asset DSL supports combined filters, exact open ports, and observe
   assert.deepEqual(q('(port=443 || port=8080) && scope=internal'), [3])
   assert.deepEqual(q('host="192.0.2.13"'), [2])
   assert.deepEqual(q('cert="Local CA"'), [3])
-  assert.deepEqual(q('source=active'), [1])
+  assert.deepEqual(q('source=active'), [1, 2, 3])
+  assert.deepEqual(q('source=passive'), [2, 3, 4])
   assert.deepEqual(q('url="https://app.demo.test"'), [1])
   assert.deepEqual(q('protocol=udp'), [])
 })
