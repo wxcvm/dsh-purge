@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "4d7d5168211fb38a";
+		const CLIENT_BUILD_ID = "9274508eec847433";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7924,6 +7924,31 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [state, setState] = React.useState({ loading: false, error: null, total: 0, items: [] })
       const [page, setPage] = React.useState(0)
       const pageSize = 100
+      const [graphState, setGraphState] = React.useState({ loading: false, error: null, nodes: [], edges: [] })
+      React.useEffect(() => {
+        if (!eng || view !== 'graph') return undefined
+        if (!cidr) {
+          setGraphState({ loading: false, error: null, nodes: [], edges: [] })
+          return undefined
+        }
+        let live = true
+        setGraphState({ loading: true, error: null, nodes: [], edges: [] })
+        api({ op: 'graph', engagement: eng, cidr, maxNodes: 300 }).then((r) => {
+          if (!live) return
+          if (!r || r.ok === false) {
+            setGraphState({ loading: false, error: (r && r.error) || '关系图谱加载失败', nodes: [], edges: [] })
+            return
+          }
+          setGraphState({
+            loading: false, error: null,
+            nodes: Array.isArray(r.nodes) ? r.nodes : [],
+            edges: Array.isArray(r.edges) ? r.edges : [],
+          })
+        }, (e) => {
+          if (live) setGraphState({ loading: false, error: String((e && e.message) || e), nodes: [], edges: [] })
+        })
+        return () => { live = false }
+      }, [eng, view, cidr, refreshKey])
       React.useEffect(() => { setPage(0); setOpenId(null); setDetail(null) },
         [eng, cidr, qApplied, service, port, prov, testStatus, priority, scope, assetState, sort])
       const [domains, setDomains] = React.useState(null)
@@ -8092,6 +8117,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('button', { className: 'rt-btn' + (view === 'timeline' ? ' rt-btn-primary' : ''), title: '按发现时间看资产（什么时候发现、哪天收了多少）', onClick: () => setView('timeline') }, '发现时间'),
         h('button', { className: 'rt-btn' + (view === 'domain' ? ' rt-btn-primary' : ''), onClick: () => setView('domain') }, '域名'),
         h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'),
+        h('button', { className: 'rt-btn' + (view === 'graph' ? ' rt-btn-primary' : ''), title: '按所选 C 段查看本地资产、域名、端口、服务与指纹关系', onClick: () => setView('graph') }, '关系图谱'),
         h('button', { className: 'rt-btn' + (view === 'sensitive' ? ' rt-btn-primary' : ''), onClick: () => setView('sensitive') }, '敏感情报'))
 
       /* ── 结论行：一屏看清家底，数字点一下就是筛选 ───────────────────── */
@@ -8282,8 +8308,90 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : (!web.length ? h('div', { className: 'rt-empty' }, cidr ? '该 C 段下暂无 Web 资产' : '暂无 Web 资产（HTTP 探测后会写入 URL 与标题）') : null))
 
 
+      const graphNodeMap = new Map(graphState.nodes.map((node) => [node.id, node]))
+      const graphRelationLabels = {
+        contains: '包含', resolves: '解析到', exposes: '开放', identified_as: '识别为',
+        fingerprinted_as: '指纹识别', shares_cert: '共享证书',
+      }
+      const graphAssets = graphState.nodes.filter((node) => node.kind === 'asset')
+      const graphCards = graphAssets.map((asset) => {
+        const aliases = graphState.edges
+          .filter((edge) => edge.target === asset.id && edge.relation === 'resolves')
+          .map((edge) => graphNodeMap.get(edge.source)).filter(Boolean)
+        const ports = graphState.edges
+          .filter((edge) => edge.source === asset.id && edge.relation === 'exposes')
+          .map((edge) => graphNodeMap.get(edge.target)).filter(Boolean)
+        return h('div', { key: asset.id, className: 'rt-card' },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } },
+            h('h4', null, asset.label),
+            h('span', { className: 'rt-tag' }, asset.meta && asset.meta.segment || '未知网段'),
+            h('span', { className: 'rt-tag' }, asset.meta && asset.meta.scope === 'internal' ? '内网' : '外网'),
+            h('button', { className: 'rt-btn', type: 'button',
+              onClick: () => { setView('list'); setFocusAssetId(Number(String(asset.id).slice(6))) } }, '查看详情')),
+          h('div', { className: 'rt-kv' },
+            h('b', null, '域名别名'),
+            h('span', null, aliases.length ? aliases.map((node) => node.label).join(' · ') : '—')),
+          ports.length ? ports.map((portNode) => {
+            const services = graphState.edges
+              .filter((edge) => edge.source === portNode.id && edge.relation === 'identified_as')
+              .map((edge) => graphNodeMap.get(edge.target)).filter(Boolean)
+            const fingerprints = graphState.edges
+              .filter((edge) => edge.source === portNode.id && edge.relation === 'fingerprinted_as')
+              .map((edge) => graphNodeMap.get(edge.target)).filter(Boolean)
+            return h('div', {
+              key: portNode.id,
+              style: { padding: '7px 0 3px', borderTop: '1px solid var(--dsw-alias-border-l1)' },
+            },
+              h('div', { className: 'rt-kv' },
+                h('b', null, '开放端口'),
+                h('span', { className: 'rt-mono' }, portNode.label)),
+              h('div', { className: 'rt-kv' },
+                h('b', null, '服务'),
+                h('span', null, services.length ? services.map((node) => node.label).join(' · ') : '—')),
+              h('div', { className: 'rt-kv' },
+                h('b', null, '产品指纹'),
+                h('span', null, fingerprints.length
+                  ? fingerprints.map((node) => node.label + (node.meta && node.meta.confidence != null
+                    ? '（置信度 ' + Math.round(node.meta.confidence * 100) + '%）' : '')).join(' · ')
+                  : '—')))
+          }) : h('div', { className: 'rt-foot', style: { marginTop: 6 } }, '没有已记录的开放端口'),
+          h('div', { className: 'rt-foot', style: { marginTop: 6 } },
+            '最近观察：' + fmt(asset.meta && asset.meta.last_seen) + ' · 资产状态：' + (asset.meta && asset.meta.state || '未知')))
+      })
+      const graphStructuralRelations = new Set(['contains', 'resolves', 'exposes', 'identified_as', 'fingerprinted_as'])
+      const graphExtraEdges = graphState.edges.filter((edge) => !graphStructuralRelations.has(edge.relation))
+      const graphPane = h('div', { className: 'rt-pane', style: { flex: 1, minHeight: 0 } },
+        !cidr ? h('div', { className: 'rt-note' }, '请先从左侧选择一个 C 段，再打开关系图谱。图谱只读取本地已保存记录，不会发起扫描或网络请求。') : null,
+        graphState.loading ? h('div', { className: 'rt-empty' }, '正在读取本地关系…') : null,
+        graphState.error ? h('div', { className: 'rt-err' }, graphState.error) : null,
+        !graphState.loading && !graphState.error && cidr && graphState.nodes.length
+          ? h('div', null,
+            h('div', { className: 'rt-card' },
+              h('h4', null, '资产关系图谱 · ' + cidr),
+              h('div', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)' } },
+                graphState.nodes.length + ' 个节点 · ' + graphState.edges.length + ' 条关系 · 仅展示已保存元数据')),
+            graphCards,
+            graphExtraEdges.length ? h('div', { className: 'rt-card' },
+              h('h4', null, '其他已记录关系'),
+              graphExtraEdges.map((edge, index) => {
+                const from = graphNodeMap.get(edge.source)
+                const to = graphNodeMap.get(edge.target)
+                return h('div', { key: 'edge-' + index, className: 'rt-kv' },
+                  h('span', null, (from && from.label) || edge.source),
+                  h('b', null, graphRelationLabels[edge.relation] || edge.relation),
+                  h('span', null, (to && to.label) || edge.target),
+                  edge.confidence != null ? h('span', { className: 'rt-tag' }, Math.round(edge.confidence * 100) + '%') : null)
+              })) : null)
+          : null,
+        !graphState.loading && !graphState.error && cidr && !graphState.nodes.length
+          ? h('div', { className: 'rt-empty' }, '该 C 段没有可展示的资产关系。') : null)
       let pane = listPane
       if (view === 'testing') pane = h(TestingTab, { engagement: eng, refreshKey: refreshKey })
+      else if (view === 'graph') pane = graphPane
+      else if (view === 'domain') pane = domainPane
+      else if (view === 'web') pane = webPane
+      /* 发现时间视图自带滚动容器，直接放进 rt-main 的 flex 里 */
+      else if (view === 'timeline') pane = h(DiscoveryView, { engagement: eng, refreshKey: refreshKey })
       else if (view === 'domain') pane = domainPane
       else if (view === 'web') pane = webPane
       /* 发现时间视图自带滚动容器，直接放进 rt-main 的 flex 里 */
