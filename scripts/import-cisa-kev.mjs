@@ -84,7 +84,8 @@ function main() {
   const payload = JSON.parse(readFileSync(resolve(input), 'utf8'))
   const rows = normalizeCisaKevPayload(payload)
   const output = resolve(process.argv[3] || DEFAULT_OUTPUT)
-  writeFileSync(output, JSON.stringify(rows) + '\n', 'utf8')
+  const serialized = '[\n' + rows.map(row => '  ' + JSON.stringify(row)).join(',\n') + '\n]\n'
+  writeFileSync(output, serialized, 'utf8')
   process.stdout.write('Imported ' + rows.length + ' unique CISA KEV CVEs (' + payload.catalogVersion + ') to ' + output + '\n')
 }
 
