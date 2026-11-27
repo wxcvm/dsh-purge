@@ -227,9 +227,9 @@ test('SSH Kali scan records remote egress as unverified despite a host TUN', asy
     interfaces: () => ({ FlClash: [{ address: '198.18.0.1', family: 'IPv4' }] }),
     execFileFn: (_command, args, _options, done) => {
       const remote = args.at(-1)
-      if (remote === 'cat /etc/os-release') return done(null, 'ID=kali\\nPRETTY_NAME="Kali GNU/Linux"\\n', '')
-      if (remote.includes('-version')) return done(null, 'httpx 1.6.0\\n', '')
-      done(null, '{"url":"https://example.org/"}\\n', '')
+      if (remote === 'cat /etc/os-release') return done(null, 'ID=kali\nPRETTY_NAME="Kali GNU/Linux"\n', '')
+      if (remote.includes('-version')) return done(null, 'httpx 1.6.0\n', '')
+      done(null, '{"url":"https://example.org/"}\n', '')
     },
   })
   assert.equal(run.status, 'executed')
