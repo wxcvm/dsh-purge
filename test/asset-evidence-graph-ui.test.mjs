@@ -13,5 +13,6 @@ test('asset evidence graph view is CIDR-scoped and renders stored relationships 
     assert.match(source, /fingerprinted_as/)
     assert.match(source, /先从左侧选择一个 C 段/)
     assert.match(source, /不会发起扫描或网络请求/)
+    assert.match(source, /查看详情/)
   }
 })
