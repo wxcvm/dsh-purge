@@ -204,15 +204,44 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
 
   const evidenceRecord = JSON.parse(await registered.get('redteam_evidence_record').execute({
     engagement: sensitiveEngagement, operation: 'model-claim-test',
-    result: { claim: 'unverified' }, confidence: 'observed',
+    result: {
+      claim: 'unverified', password: 'evidence-secret-marker',
+      nested: { authorization: 'Bearer evidence-bearer-marker' },
+    }, confidence: 'observed', authority: 'tool-output',
   }, {}))
   assert.equal(evidenceRecord.ok, true)
   const evidenceId = evidenceRecord.ev_id || evidenceRecord.evidence?.ev_id
   if (evidenceId) {
-    const evidenceRow = redteam.db(sensitiveEngagement).prepare('SELECT confidence, authority FROM evidence WHERE ev_id = ?').get(evidenceId)
+    const evidenceRow = redteam.db(sensitiveEngagement).prepare('SELECT confidence, authority, parameters, result FROM evidence WHERE ev_id = ?').get(evidenceId)
     assert.equal(evidenceRow.confidence, 'claimed')
     assert.equal(evidenceRow.authority, 'subagent-report')
+    assert.doesNotMatch(JSON.stringify(evidenceRow), /evidence-secret-marker|evidence-bearer-marker/)
   }
+  const evidenceList = JSON.parse(await registered.get('redteam_evidence_list').execute({
+    engagement: sensitiveEngagement, operation: 'model-claim-test',
+  }, {}))
+  assert.equal(Object.hasOwn(evidenceList.items[0], 'parameters'), false)
+  assert.equal(Object.hasOwn(evidenceList.items[0], 'result'), false)
+  assert.equal(evidenceList.items[0].has_result, true)
+  assert.doesNotMatch(JSON.stringify(evidenceList), /evidence-secret-marker|evidence-bearer-marker/)
+
+  const httpEvidenceAdd = JSON.parse(await registered.get('redteam_http_evidence_add').execute({
+    engagement: sensitiveEngagement, label: 'redaction fixture', method: 'GET',
+    url: 'https://example.invalid/?token=http-query-secret',
+    request: 'GET /?token=http-query-secret HTTP/1.1\\r\\nHost: example.invalid\\r\\nAuthorization: Bearer http-bearer-secret\\r\\nCookie: sid=http-cookie-secret\\r\\n\\r\\n',
+    response: 'HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\\r\\n{"access_token":"http-json-secret","safe":"ok"}',
+    note: 'token=http-note-secret',
+  }, {}))
+  assert.equal(httpEvidenceAdd.ok, true)
+  const httpEvidenceStored = redteam.db(sensitiveEngagement)
+    .prepare('SELECT url, request, response, note FROM http_evidence WHERE id = ?').get(httpEvidenceAdd.id)
+  assert.doesNotMatch(JSON.stringify(httpEvidenceStored), /http-query-secret|http-bearer-secret|http-cookie-secret|http-json-secret|http-note-secret/)
+  const httpEvidenceRead = JSON.parse(await registered.get('redteam_http_evidence_query').execute({
+    engagement: sensitiveEngagement, id: httpEvidenceAdd.id, detail: 'full',
+  }, {}))
+  assert.equal(httpEvidenceRead.credentials_redacted, true)
+  assert.doesNotMatch(JSON.stringify(httpEvidenceRead), /http-query-secret|http-bearer-secret|http-cookie-secret|http-json-secret|http-note-secret/)
+  assert.match(JSON.stringify(httpEvidenceRead), /REDACTED_SECRET/)
 
   const skillReadTool = registered.get('redteam_skill_read')
   const quarantinedSkill = JSON.parse(await skillReadTool.execute({
