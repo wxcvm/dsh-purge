@@ -134,6 +134,14 @@ test('HTTPx parser expands address arrays, normalizes hostnames and merges same-
   assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.category === 'web-server'))
 })
 
+test('HTTPx parser bounds expanded address arrays', () => {
+  const addresses = Array.from({ length: 20 }, (_, index) => '192.0.2.' + (index + 1))
+  const observed = parseLocalDiscovery('httpx',
+    JSON.stringify({ url: 'https://bounded.example.test/', a: addresses }),
+    'bounded.example.test')
+  assert.equal(observed.length, 16)
+})
+
 test('privacy status never misrepresents target-side logs as protected', (t) => {
   const { store } = fixture(t)
   const defaults = summarizeProtection({ scanPreferences: {} })
