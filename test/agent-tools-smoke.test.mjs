@@ -97,6 +97,57 @@ test('作战智能体工具：注册、默认干运行、范围门禁', async (t
   assert.equal(evidenceUpgrade.status, 'unsupported')
   assert.equal(evidenceUpgrade.verified, false)
 
+  for (const name of ['redteam_chain_add', 'redteam_score_hit', 'redteam_chain_plan', 'redteam_chain_advance']) {
+    const result = JSON.parse(await registered.get(name).execute({ engagement: sensitiveEngagement }, {}))
+    assert.equal(result.status, 'unsupported', name)
+    assert.equal(result.actual_execution === false || result.scored === false, true, name)
+  }
+
+  const candidate = JSON.parse(await registered.get('redteam_vuln_add').execute({
+    engagement: sensitiveEngagement, title: 'Candidate-only test', severity: 'low',
+    status: 'exploited', gained: 'administrator access',
+  }, {}))
+  assert.equal(candidate.status, 'candidate')
+  assert.equal(candidate.verified, false)
+  const candidateId = candidate.id || candidate.vuln_id || candidate.item?.id
+  if (candidateId) {
+    const updatedCandidate = JSON.parse(await registered.get('redteam_vuln_update').execute({
+      engagement: sensitiveEngagement, id: candidateId, status: 'confirmed', gained: 'root',
+    }, {}))
+    assert.equal(updatedCandidate.verified, false)
+    const storedCandidate = redteam.getVuln(sensitiveEngagement, candidateId)
+    assert.equal(storedCandidate.status, 'candidate')
+  }
+
+  const evidenceRecord = JSON.parse(await registered.get('redteam_evidence_record').execute({
+    engagement: sensitiveEngagement, operation: 'model-claim-test',
+    result: { claim: 'unverified' }, confidence: 'observed', authority: 'tool-output',
+  }, {}))
+  assert.equal(evidenceRecord.ok, true)
+  const evidenceId = evidenceRecord.ev_id || evidenceRecord.evidence?.ev_id
+  if (evidenceId) {
+    const evidenceRow = redteam.db(sensitiveEngagement).prepare('SELECT confidence, authority FROM evidence WHERE ev_id = ?').get(evidenceId)
+    assert.equal(evidenceRow.confidence, 'claimed')
+    assert.equal(evidenceRow.authority, 'tool-output')
+  }
+
+  const skillReadTool = registered.get('redteam_skill_read')
+  const quarantinedSkill = JSON.parse(await skillReadTool.execute({
+    key: 'redteam:credential-attack',
+  }, { agent: { session: { id: 'sensitive-root', header: {} } } }))
+  assert.equal(quarantinedSkill.quarantined, true)
+  assert.equal(quarantinedSkill.skillReadReceipt, 'not-recorded')
+  assert.doesNotMatch(quarantinedSkill.content, /hydra|password.spray|weak.password/i)
+  const unapprovedSkill = JSON.parse(await skillReadTool.execute({
+    key: 'redteam:business-security-controls',
+  }, { agent: { session: { id: 'sensitive-root', header: {} } } }))
+  assert.equal(unapprovedSkill.skillReadReceipt, 'not-recorded')
+  const approvedSkill = JSON.parse(await skillReadTool.execute({
+    key: 'redteam:nmap-service-inventory',
+  }, { agent: { session: { id: 'sensitive-root', header: {} } } }))
+  assert.equal(approvedSkill.quarantined, false)
+  assert.equal(approvedSkill.skillReadReceipt, 'recorded-for-current-root-session')
+
   // 1. 两个工具确实注册了
   assert.ok(registered.has('redteam_exploit_chain'), 'redteam_exploit_chain must be registered')
   assert.ok(registered.has('redteam_internal_campaign'), 'redteam_internal_campaign must be registered')
