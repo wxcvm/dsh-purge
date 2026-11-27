@@ -21,7 +21,7 @@
 
 **当前红队与资料 PR 状态（均未合并；CI 与宿主验收分开）**：
 
-- [#667](https://github.com/wxcvm/dsh-purge/pull/667)：单目标 Nmap/httpx 多环境执行、真实执行状态与 TUN 守卫；补回 InternalAgent 导入后 Ubuntu UI、Ubuntu/Windows 兼容 CI 通过。仍为 Draft。
+- [#667](https://github.com/wxcvm/dsh-purge/pull/667)：单目标 Nmap/httpx 多环境执行、真实执行状态与 TUN 守卫；补回 InternalAgent 导入后 Ubuntu UI、Ubuntu/Windows 兼容 CI 通过。高影响旧 Skill 的模型读取已隔离（目录保留、正文不下发、仅四个审查通过的 Skill 可生成会话回执），原始文件仍留仓库供离线审查。仍为 Draft。
 - [#674](https://github.com/wxcvm/dsh-purge/pull/674)：拒答后只整理本轮已返回的工具结果；不重跑任务、不扩 scope；Ubuntu UI、Ubuntu/Windows 兼容 CI 通过。仍为 Draft。
 - [#675](https://github.com/wxcvm/dsh-purge/pull/675)：单 IP Shodan Host API 被动情报、write-only 凭据与显式外发同意；Ubuntu/Windows 两组 CI 通过。仍为 Draft。
 - [#676](https://github.com/wxcvm/dsh-purge/pull/676)：单端口 SOCKS5 可达性探针，scope/reach/已有开放端口三重门禁；loopback mock 工具级测试与 Ubuntu/Windows CI 通过。仍为 Draft。
