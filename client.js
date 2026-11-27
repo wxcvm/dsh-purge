@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "98fd3ecb371ac6eb";
+		const CLIENT_BUILD_ID = "4f69448f85245b09";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -10245,6 +10245,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('div', null, '执行：' + (item.started_at || '未知') + ' → ' + (item.finished_at || '未记录结束时间')),
                 h('div', null, item.execution
                   ? '执行来源：' + (item.execution.environment_id || '未知环境')
+                    + ' · ' + (item.execution.transport || '传输方式未知')
                     + ' · ' + (item.execution.tool_id || item.kind)
                     + ' · ' + (item.execution.binary_source || '路径来源未知')
                     + ' · ' + (item.execution.attempted ? '实际调用已发起' : '调用未成功发起')
