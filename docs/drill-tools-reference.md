@@ -312,6 +312,14 @@ AboutSecurity 下载/更新命令见 [独立集成说明](ABOUTSECURITY_INTEGRAT
 参数：
 - `engagement`
 
+### `redteam_asset_freshness`
+【本地只读】按最近一次已保存观察时间分类：`fresh`（≤7 天）、`aging`（8–30 天）、`stale`（>30 天）、`unknown`（缺失/无效时间）。同时单独返回来源（active / passive / mixed）和现有 `asset.test_status`（tested / testing / untested / blocked 等），不把时间新鲜度等同于资产当前在线，也不把工作流状态等同于漏洞验证。
+
+参数：
+- `engagement`
+- `limit` — 每页条数，默认 50，最多 200
+- `offset` — 分页起点，默认 0
+
 ### `redteam_asset_timeline`
 资产「发现时间」视图：按天聚合"哪天收了多少资产"（区分内网/外网），并列出最近发现的资产。用于回答"这个资产是什么时候发现的"、检查信息收集有没有断层，也用于本轮收集的收口核对。
 
