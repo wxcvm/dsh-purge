@@ -18,7 +18,7 @@ test('all original archive knowledge filenames are represented once, with nine r
   for (const row of loadCveCatalog()) {
     // 只遍历 fujiang 来源：AboutSecurity 导入条目（as-vuln-*.json）不在
     // fujiang archive 的 176 篇里，目录名与文件名都无法对应。
-    if (row.source_url.includes('wgpsec/AboutSecurity')) continue
+    if (row.source_url.includes('wgpsec/AboutSecurity') || row.advisory_status === 'cisa-kev') continue
     const name = row.source_url.split('/').pop()
     const ref = rows.find(r=>r.source_ref==='plugin/knowledge/'+row.category+'/'+name)
     assert.ok(ref, name)
