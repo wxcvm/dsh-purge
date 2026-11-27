@@ -741,3 +741,18 @@ test('identical visible session IDs and commit sequences do not cross live sessi
   assert.equal(first.durableArrival, 'exact-late');
   assert.equal(first.usage.totalTokens, 7);
 });
+
+
+test('request surface is unknown without an identifiable user message or a readable surface', () => {
+  const human = { seq: 1, type: 'user/message', data: { source: { kind: 'user' }, content: 'PRIVATE TASK' } };
+  for (const [hasHuman, surface, seq] of [[false, { nodes: [] }, null], [true, undefined, 1]]) {
+    const observer = createRuntimeObservations(), a = agent('unknown-request-surface');
+    a.session.events = hasHuman ? [human] : [];
+    a.session.surface = surface;
+    start(observer, a);
+    const row = observer.snapshot().items[0];
+    assert.deepEqual(row.taskRequestSurface, { status: 'unknown', userMessageSeq: seq, source: 'not-observed' });
+    assert.doesNotMatch(JSON.stringify(row), /PRIVATE TASK/);
+    observer.dispose();
+  }
+});

@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "98fd3ecb371ac6eb";
+		const CLIENT_BUILD_ID = "4d7d5168211fb38a";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -4720,6 +4720,10 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
             detail('失败/拒答归因', outcomeLabel(r)),
             detail('终态来源', source(r)),
             detail('路由证据', 'Provider：' + routeSource(r.providerSource) + ' · 模型：' + routeSource(r.modelSource)),
+            detail('流开始时的宿主上下文', ({
+              present: '关联用户原消息仍在',
+              absent: '关联用户原消息不在（摘要仍可能保留其内容）',
+            }[r.taskRequestSurface?.status] || '未观测') + '；不代表 Provider 实际收到的内容'),
             detail('工具开始（实时 / 持久）', value(r.toolCalls) + ' / ' + value(r.durableToolStarts)),
             detail('文本证据', r.firstTextMs != null ? '实时已计时' : r.durableTextObserved === true ? '持久流已观测 · 无实时计时' : '未观测')),
           r.streamGap || r.terminalConflict || r.interrupted ? h('p', { className: 'dshp-runtime-warning' }, [r.streamGap && '分片缺口', r.terminalConflict && '终态证据冲突', r.interrupted && '中断前缀'].filter(Boolean).join(' · ')) : null,
