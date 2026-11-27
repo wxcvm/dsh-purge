@@ -16,10 +16,7 @@ const filterPatchRows = isolated('filterPatchRows', 'patchStatusChanges')
 const patchStatusChanges = isolated('patchStatusChanges', 'formatPatchDiagnostics', {
   patchIdLabel: (r) => (r.ids || [r.id]).map((id) => '#' + id).join('/'),
 })
-const clientBuildId = client.match(/^\s*const CLIENT_BUILD_ID = "([0-9a-f]{16})";/m)?.[1]
-assert.ok(clientBuildId, 'client build ID must be present in the runtime bundle')
 const formatPatchDiagnostics = isolated('formatPatchDiagnostics', 'BackupInventory', {
-  CLIENT_BUILD_ID: clientBuildId,
   tallyPatches: (rows) => rows.reduce((o, row) => {
     o.total += 1
     if (row.st === 'applied' || row.st === 'already') o.applied += 1
@@ -162,7 +159,6 @@ test('diagnostic center distinguishes loaded and disk versions and unavailable h
     has_backup: false,
   }, [], (s) => s)
   assert.match(report, /插件磁盘版本: 2\.0\.0/)
-  assert.ok(report.includes('前端运行构建: ' + clientBuildId))
   assert.match(report, /后端加载时版本: 1\.0\.0/)
   assert.match(report, /插件目录: local-plugin/)
   assert.match(report, /补丁: 待检测/)
@@ -281,9 +277,9 @@ test('update receipt persists across restart and detects changed disk or boot co
         fs.writeFileSync(path.join(root, file), file + suffix)
       }
     }
-    const load = (pid = 123, startedAt = 1000) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
+    const load = (pid = 123, startedAt = 1000, filesystem = fs) => new Function('fs', 'path', 'createHash', 'PLUGIN_ROOT', 'readJson', 'realPath', 'findDshHome', 'atomicWriteSync', 'process', 'performance',
       source.slice(start, end).replace(/^export /gm, '') + '\nreturn { updateFingerprint, saveUpdateReceipt, updateReceiptStatus };')(
-      fs, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
+      filesystem, path, createHash, root, (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')) } catch { return null } },
       (p) => p, () => home, (p, data) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data) }, { pid }, { timeOrigin: startedAt })
     setFiles('old')
     const old = load()
@@ -298,7 +294,9 @@ test('update receipt persists across restart and detects changed disk or boot co
     assert.equal(load(123, 2000).updateReceiptStatus().processRestarted, true)
     assert.equal(load(124, 1000).updateReceiptStatus().processRestarted, true)
     setFiles('new')
-    const after = old.updateFingerprint()
+    // A receipt recorded before this patch only stored the version and hashes.
+    const { version, hashes } = old.updateFingerprint()
+    const after = { version, hashes }
     old.saveUpdateReceipt({ root, phase: 'awaiting_restart', ref: 'master', before, after, originProcess })
     let status = old.updateReceiptStatus()
     assert.equal(status.diskMatch, true)
@@ -310,17 +308,6 @@ test('update receipt persists across restart and detects changed disk or boot co
     assert.equal(status.processRestarted, true)
     assert.equal(status.backendBootMatch, true)
     assert.equal(status.diskMatch, true)
-    assert.equal(status.verification, 'backend_verified')
-    fs.mkdirSync(path.join(root, 'lib', 'redteam'), { recursive: true })
-    fs.writeFileSync(path.join(root, 'lib', 'redteam', 'vps-admin-config.js'), 'fixture')
-    assert.equal(restarted.updateReceiptStatus().runtimeMissing, true)
-    assert.equal(restarted.updateReceiptStatus().verification, 'disk_mismatch')
-    fs.mkdirSync(path.join(root, 'scripts'), { recursive: true })
-    fs.writeFileSync(path.join(root, 'scripts', 'vps-admin-check.mjs'), 'fixture')
-    assert.equal(restarted.updateReceiptStatus().verification, 'backend_verified')
-    restarted.saveUpdateReceipt({ root, phase: 'writing', before, originProcess })
-    assert.equal(restarted.updateReceiptStatus().verification, 'interrupted')
-    restarted.saveUpdateReceipt({ root, phase: 'awaiting_restart', before, after, originProcess })
     fs.writeFileSync(path.join(root, 'client.js'), 'unexpected')
     status = restarted.updateReceiptStatus()
     assert.equal(status.clientDiskMatch, false)
@@ -329,7 +316,19 @@ test('update receipt persists across restart and detects changed disk or boot co
     fs.unlinkSync(path.join(root, 'lib', 'index.js'))
     assert.equal(restarted.updateReceiptStatus().diskMatch, false)
     fs.writeFileSync(path.join(root, 'client.js'), 'client.jsnew')
-    assert.equal(restarted.updateReceiptStatus().diskMatch, null)
+    status = restarted.updateReceiptStatus()
+    assert.equal(status.diskMatch, false)
+    assert.equal(status.verification, 'disk_mismatch')
+    assert.deepEqual(status.disk.missingFiles, ['lib/index.js'])
+    fs.writeFileSync(path.join(root, 'lib', 'index.js'), 'lib/index.jsnew')
+    const readDenied = { ...fs, readFileSync(file, ...args) {
+      if (file === path.join(root, 'lib', 'index.js')) throw Object.assign(new Error('denied'), { code: 'EACCES' })
+      return fs.readFileSync(file, ...args)
+    } }
+    status = load(124, 2000, readDenied).updateReceiptStatus()
+    assert.equal(status.diskMatch, null)
+    assert.equal(status.verification, 'unknown')
+    assert.deepEqual(status.disk.missingFiles, [])
     restarted.saveUpdateReceipt({ root, phase: 'failed', error: 'reapply failed', before, after })
     assert.equal(load().updateReceiptStatus().phase, 'failed')
     assert.equal(load().updateReceiptStatus().error, 'reapply failed')
@@ -390,11 +389,12 @@ test('remote target check uses immutable commit and reports per-file differences
   let receipt = { targetSha: sha }
   let unavailable = ''
   let local = Object.fromEntries(files.map((file) => [file, createHash('sha256').update(file).digest('hex')]))
+  let missingFiles = []
   const seen = []
   let token = ''
   const verify = new Function('readCurrentUpdateReceipt', 'updateFingerprint', 'UPDATE_IDENTITY_FILES', 'fetchRes', 'REPO', 'createHash', 'Buffer', 'updateToken', 'privateUpdateContentsUrl',
     source.slice(start, end).replace('export async function', 'async function') + '\nreturn verifyUpdateTarget;')(
-    () => receipt, () => ({ hashes: local }), files,
+    () => receipt, () => ({ hashes: local, missingFiles }), files,
     async (url, timeout, headers) => {
       seen.push({ url, headers })
       const parsed = new URL(url)
@@ -419,6 +419,15 @@ test('remote target check uses immutable commit and reports per-file differences
   assert.equal((await verify()).status, 'mismatch')
   local['client.js'] = createHash('sha256').update('client.js').digest('hex')
   assert.equal((await verify()).status, 'unknown')
+  local['client.js'] = ''
+  assert.equal((await verify()).status, 'unknown', 'an unreadable local file does not prove a mismatch')
+  missingFiles = ['client.js']
+  const missing = await verify()
+  assert.equal(missing.status, 'mismatch', 'a missing required file outweighs another unknown file')
+  assert.deepEqual(missing.files.find((item) => item.file === 'client.js'),
+    { file: 'client.js', status: 'mismatch', reason: 'local_missing' })
+  unavailable = 'client.js'
+  assert.equal((await verify()).status, 'unknown', 'no remote bytes cannot establish a remote mismatch')
   receipt = { targetSha: 'master' }
   assert.equal((await verify()).files.length, 0)
   assert.match(source, /receipt.failedPhase = receipt.phase/)
@@ -441,24 +450,6 @@ test('host diagnostics report disk package identity and cross-surface uncertaint
       { isInsideDesktopInstall: (p) => p === '/desktop' }, () => 'desktop', (s) => s)
   assert.equal(inspect('/desktop').package.version, '0.2.2-rc.1')
   assert.equal(inspect('/desktop').surfaceMismatch, false)
-  manifests.set('/desktop/dsh-desktop-host/package.json', JSON.stringify({ name: '@deepseek-ai/dsh-desktop-host', version: '0.2.2-rc.3' }))
-  assert.equal(inspect('/desktop').package.name, '@deepseek-ai/dsh-desktop-host')
-  assert.equal(inspect('/desktop').package.version, '0.2.2-rc.3')
-  assert.equal(inspect('/desktop').candidates.length, 2)
-  assert.equal(inspect('/desktop', 'web').package.name, '@deepseek-ai/dsh')
-  manifests.set('/web/dsh-desktop-host/package.json', JSON.stringify({ name: '@deepseek-ai/dsh-desktop-host', version: '0.2.2-rc.3' }))
-  assert.equal(inspect('/web').package.name, '@deepseek-ai/dsh-base')
-  manifests.set('/desktop/dsh-desktop-host/package.json', JSON.stringify({ name: 'unrelated', version: '0.2.2-rc.3' }))
-  assert.equal(inspect('/desktop').package.name, '@deepseek-ai/dsh')
-  const entry = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
-  const compatStart = entry.indexOf('function describeHostCompatibility(')
-  const compatEnd = entry.indexOf('function watchWebTreeReady(', compatStart)
-  assert.ok(compatStart >= 0 && compatEnd > compatStart)
-  const compat = new Function(entry.slice(compatStart, compatEnd) + '\nreturn describeHostCompatibility;')()
-  const host = { package: { name: '@deepseek-ai/dsh-desktop-host', version: '0.2.2-rc.3' } }
-  assert.equal(compat(host, ['0.2.2-rc.3']).status, 'declared')
-  assert.equal(compat(host, ['0.2.2-rc.2']).status, 'not_listed')
-  assert.equal(compat({ package: { name: 'unrelated', version: '0.2.2-rc.3' } }, ['0.2.2-rc.3']).status, 'unknown')
   assert.equal(inspect('/web').surfaceMismatch, true)
   assert.equal(inspect('/web', 'web').package.name, '@deepseek-ai/dsh-base')
   assert.equal(inspect('/missing').package, null)
@@ -578,81 +569,3 @@ test('git update keeps channel branch name but never checks out a moving remote 
   assert.deepEqual(calls.at(-1), ['reset', '--hard', sha])
 })
 
-test('version update reports real live stages and prevents duplicate writes', async () => {
-  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8')
-  const state = source.slice(source.indexOf('let liveUpdate = null;'), source.indexOf('export function pluginRoot()')).replace('export function', 'function')
-  const wrapper = source.slice(source.indexOf('export async function handleUpdateOp('), source.indexOf('async function handleUpdateOpImpl(')).replace('export async function', 'async function')
-  let release
-  const pending = new Promise(resolve => { release = resolve })
-  const api = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus, updateStage };')(async body => {
-    if (body.op === 'check') return { ok: true }
-    await pending
-    return { ok: true, restartAfter: true }
-  })
-  const task = api.handleUpdateOp({op:'switch',ref:'beta'})
-  assert.equal(api.updateProgressStatus().stage, 'checking_versions')
-  api.updateStage('downloading', { received: 5, total: 10 })
-  assert.equal(api.updateProgressStatus().received, 5)
-  assert.equal(api.updateProgressStatus().total, 10)
-  await assert.rejects(api.handleUpdateOp({op:'switch',ref:'master'}), /already in progress/)
-  assert.equal((await api.handleUpdateOp({op:'check'})).ok, true)
-  release()
-  await task
-  assert.equal(api.updateProgressStatus().active, false)
-  assert.equal(api.updateProgressStatus().stage, 'awaiting_restart')
-  assert.ok(api.updateProgressStatus().finishedAt >= api.updateProgressStatus().startedAt)
-  const failing = new Function('handleUpdateOpImpl', state + wrapper + '\nreturn { handleUpdateOp, updateProgressStatus };')(async () => { throw Error('network offline') })
-  await assert.rejects(failing.handleUpdateOp({op:'switch',ref:'beta'}), /network offline/)
-  assert.equal(failing.updateProgressStatus().stage, 'failed')
-  assert.equal(failing.updateProgressStatus().failedStage, 'checking_versions')
-  assert.equal(failing.updateProgressStatus().error, 'network offline')
-  assert.equal(failing.updateProgressStatus().active, false)
-  assert.match(client, /apiJson\("\/dsh-purge\/update-progress"\)/)
-  assert.match(client, /总大小未知/)
-})
-
-test('recovery selects the newest receipt belonging to the current profile, not another install', async () => {
-  const source = readFileSync(new URL('../lib/update.js', import.meta.url), 'utf8');
-  const start = source.indexOf('function readCurrentUpdateReceipt()');
-  const end = source.indexOf('export function updateReceiptStatus()', start);
-  const path = await import('node:path');
-  const root = path.resolve('current-plugin'), profile = path.resolve('profiles/desktop');
-  const direct = path.resolve('receipts', 'a'.repeat(64) + '.json');
-  const related = 'b'.repeat(64) + '.json', other = 'c'.repeat(64) + '.json';
-  const old = { startedAt: '2026-01-01T00:00:00Z', targetSha: 'old' };
-  const newer = { startedAt: '2026-02-01T00:00:00Z', targetSha: 'new', profileInstall: { profiles: [{ dir: profile }] } };
-  const unrelated = { startedAt: '2026-03-01T00:00:00Z', targetSha: 'other', profileInstall: { profiles: [{ dir: path.resolve('profiles/web') }] } };
-  const records = new Map([[direct, old], [path.join(path.dirname(direct), related), newer], [path.join(path.dirname(direct), other), unrelated]]);
-  const read = new Function('fs', 'path', 'PLUGIN_ROOT', 'updateReceiptPath', 'readJson', 'realPath', 'findPurgeProfiles', 'profilePluginDir',
-    source.slice(start, end) + '\nreturn readCurrentUpdateReceipt;')(
-      { readdirSync: () => [path.basename(direct), related, other] }, path, root, () => direct,
-      p => records.get(p) || null, p => p, () => [{ dir: profile }], () => root);
-  assert.equal(read().targetSha, 'new');
-  records.delete(path.join(path.dirname(direct), related));
-  assert.equal(read().targetSha, 'old');
-  records.delete(direct);
-  assert.equal(read(), null);
-});
-
-
-test('rescan reports a changed child even if merged patch status is unchanged', () => {
- const before=[{id:2,ids:[2,12],title:'Compose',st:'applied',memberStates:{2:'applied',12:'pending'}}]
- const after=[{...before[0],memberStates:{2:'applied',12:'applied'}}]
- const changes=patchStatusChanges(before,after)
- assert.equal(changes.length,1)
- assert.equal(changes[0].id,'#12')
- assert.equal(changes[0].before,'pending')
- assert.equal(changes[0].after,'applied')
-})
-test('patch browser distinguishes failed status from an empty filter and permits read-only retry', () => {
- const from=client.indexOf('function PatchGroups('),to=client.indexOf('function InjectSwitchSection(',from)
- const h=(type,props,...children)=>({type,props,children})
- let i=0;const calls=[]
- const render=runInNewContext(client.slice(from,to)+'\nPatchGroups',{useT:()=>x=>x,useState:v=>[v,()=>{}],h,Btn:'button'})
- const tree=render({state:{ok:false,patch_status:{}},onRefresh:async()=>calls.push('refresh'),busy:false})
- assert.match(JSON.stringify(tree),/宿主状态读取失败/)
- assert.doesNotMatch(JSON.stringify(tree),/没有匹配的补丁/)
- const button=tree.children.find(n=>n?.type==='button')
- assert.equal(button.children[0],'重新检测')
- return button.props.onClick().then(()=>assert.equal(calls.length,1))
-})

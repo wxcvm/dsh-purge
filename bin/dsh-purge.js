@@ -38,7 +38,7 @@ function printStatus(state) {
 }
 
 async function main() {
-  const mode = args.find((a) => ["--apply", "--revert", "--uninstall", "--status", "--runtime-status", "--edit", "--help", "--inject", "--inject-on", "--inject-off", "--inject-toggle", "--web-port-status", "--desktop-runtime-status", "--repair-desktop-runtime", "--repair-status", "--repair", "--repair-rollback"].includes(a));
+  const mode = args.find((a) => ["--apply", "--revert", "--uninstall", "--status", "--runtime-status", "--edit", "--help", "--inject", "--inject-on", "--inject-off", "--inject-toggle", "--web-port-status"].includes(a));
 
   if (mode === "--help" || args.includes("-h")) {
     console.log(`dsh-purge 用法:
@@ -53,36 +53,7 @@ async function main() {
   dsh-purge --inject-off 仅停止提示词注入
   dsh-purge --inject-toggle 切换注入开关
   dsh-purge --web-port-status [port] 只读诊断 Web 端口与进程归属
-  dsh-purge --desktop-runtime-status --exe "[HARNESS_EXE]" 只读检查桌面更新运行时
-  dsh-purge --repair-desktop-runtime --exe "[HARNESS_EXE]" 从本机同版本缓存恢复缺失运行时
-  dsh-purge --repair-status [--exe "[HARNESS_EXE]"] 只读诊断常见故障
-  dsh-purge --repair [runtime|global-patch|profile-patch|stream-timeout] 显式修复
-  dsh-purge --repair-rollback [RECEIPT_ID] 按记录回滚，不覆盖后续改动
   dsh-purge --help       帮助`);
-    return;
-  }
-
-  if (["--repair-status", "--repair", "--repair-rollback"].includes(mode)) {
-    const repair = await import("../lib/repair-center.js");
-    const desktop = await import("../lib/desktop.js");
-    const at = args.indexOf("--exe");
-    const options = { home: core.findDshHome(), exe: at < 0 ? desktop.findDesktopAppExecutable() : args[at + 1] };
-    const action = args[args.indexOf(mode) + 1];
-    const result = mode === "--repair-status" ? await repair.inspectRepairCenter(options) : mode === "--repair-rollback" ? repair.rollbackRepair(options, action) : await repair.runRepair(options, action);
-    console.log(JSON.stringify(result, null, 2));
-    if (!result.ok) process.exitCode = 1;
-    return;
-  }
-
-  if (mode === "--desktop-runtime-status" || mode === "--repair-desktop-runtime") {
-    const health = await import("../lib/desktop-runtime-health.js");
-    const desktop = await import("../lib/desktop.js");
-    const at = args.indexOf("--exe");
-    const exe = at < 0 ? desktop.findDesktopAppExecutable() : args[at + 1];
-    const options = { exe, home: core.findDshHome() };
-    const result = mode === "--repair-desktop-runtime" ? await health.repairDesktopRuntime(options) : health.inspectDesktopRuntime(options);
-    console.log(JSON.stringify(result, null, 2));
-    if (!result.ok) process.exitCode = 1;
     return;
   }
 
@@ -96,10 +67,10 @@ async function main() {
     const index = args.indexOf(mode);
     const rawPort = args[index + 1] || process.env.PORT || "3080";
     const status = inspectWebPort(rawPort, dshHomeDir());
-    console.log("Web port: " + status.port + (status.occupied ? " (occupied)" : " (no listener found)"));
+    console.log("Web port: " + status.port + (status.occupied === null ? " (unknown)" : status.occupied ? " (occupied)" : " (no listener found)"));
     if (status.recorded_pid) {
       console.log("Previous plugin-spawned PID: " + status.recorded_pid
-        + (status.recorded_on_port ? " (still associated with this port)" : " (not listening on this port)"));
+        + (status.recorded_on_port ? " (still associated with this port)" : " (not observed on this port)"));
     }
     for (const item of status.listeners) {
       console.log("  PID " + item.pid + " — " + item.kind);

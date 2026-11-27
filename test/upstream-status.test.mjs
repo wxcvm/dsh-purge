@@ -56,3 +56,26 @@ test('public Git observations avoid API quotas and distinguish tags from publish
   assert.equal(r.sources[2].tagUpdateAvailable, false)
   assert.equal(r.sources[1].status, 'unavailable')
 })
+
+test('maintained reference is observed independently without changing required sources or update policy', async () => {
+  const head = 'b'.repeat(40)
+  const r = await checkUpstreams({ request: async url => {
+    if (url.includes('CallMeGuLab/dsh-purge-safe')) {
+      return url.includes('/commits/') ? { sha: head } : { default_branch: 'main' }
+    }
+    return request(url)
+  }, containsCommit: value => value === head ? false : true })
+  const reference = r.sources.find(row => row.id === 'maintained-reference')
+  assert.equal(reference.repository, 'CallMeGuLab/dsh-purge-safe')
+  assert.equal(reference.branch, 'main')
+  assert.equal(reference.head, head)
+  assert.equal(reference.unincorporatedHead, true)
+  assert.equal(r.autoInstall, false)
+  assert.equal(r.sourceSwitch, false)
+  const unavailable = await checkUpstreams({ request: async url => {
+    if (url.includes('CallMeGuLab')) throw Object.assign(Error('unavailable'), { status: 404 })
+    return request(url)
+  } })
+  assert.equal(unavailable.ok, true)
+  assert.equal(unavailable.sources.find(row => row.id === 'maintained-reference').status, 'unavailable')
+})

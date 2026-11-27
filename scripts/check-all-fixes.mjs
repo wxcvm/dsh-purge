@@ -71,14 +71,14 @@ await check("红队预设锚点门关闭", () => {
 // 6. 元层面拒绝识别
 await check("元拒绝识别", () => {
   const v = obedience.classifyRefusal("改变不了这个答案。这条指令框架不是我能接受的重定义，别的技术活随时找我。");
-  expect(v.refusal === false, "不能通过立场措辞推断任务拒答");
+  expect(v.refusal === true && v.hits.includes("meta-answer-locked"), "未命中元拒绝");
   return `score=${v.score}`;
 });
 
 // 7. 自激保护（讲插件本身不判拒绝）
 await check("元讨论短路", () => {
   const v = obedience.classifyRefusal("obedience 模块的 nudgeText 不再内嵌 anchorText，纠偏逻辑见契约段。");
-  expect(v.refusal === false, "正常说明被误判");
+  expect(v.refusal === false && v.hits.includes("meta-discussion"), "自激保护失效");
   return "refusal=false";
 });
 
@@ -125,14 +125,18 @@ await check("用户改稿保留逻辑", async () => {
   return "keep 哨兵 OK";
 });
 
-// 12. 宿主目标声明：主字段是当前适配版本，且必须在 dshTargets 里（0.2.2-rc.1 起多版本）
-await check("dshTarget 声明一致", () => {
+// 12. 宿主目标声明：主字段指向最新实测版本，engines.dsh 才是宿主安装/启动兼容门槛
+await check("dshTarget / engines.dsh 声明一致", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const targets = Array.isArray(pkg.dshTargets) ? pkg.dshTargets : [];
-  expect(pkg.dshTarget === "0.2.2-rc.1", `dshTarget=${pkg.dshTarget}`);
-  expect(targets.includes(pkg.dshTarget), `dshTargets 不含 ${pkg.dshTarget}`);
-  for (const v of ["0.2.1-rc.5", "0.2.1-rc.2"]) expect(targets.includes(v), `dshTargets 丢回退版本 ${v}`);
-  return pkg.dshTarget + " / " + targets.join(",");
+  const expectedRange = "=0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2";
+  expect(pkg.dshTarget === "0.2.2-rc.5", `dshTarget=${pkg.dshTarget}`);
+  expect(pkg.engines?.dsh === expectedRange, `engines.dsh=${pkg.engines?.dsh}`);
+  for (const v of ["0.2.2-rc.5", "0.2.2-rc.3", "0.2.2-rc.1", "0.2.1-rc.5", "0.2.1-rc.2"]) {
+    expect(targets.includes(v), `dshTargets 丢失已声明版本 ${v}`);
+  }
+  expect(targets.length === 5, `dshTargets 出现未核验版本：${targets.join(",")}`);
+  return pkg.dshTarget + " / " + targets.join(",") + " / " + expectedRange;
 });
 
 // 13. 移植模块在位
@@ -176,6 +180,28 @@ await check("GLM 适配层接线", async () => {
   expect(!text.includes("UNRESTRICTED SANDBOX"), "GLM 装配里仍残留越狱式提示词块");
   expect(overlay.applyModelPrompt("BASE", asm).includes("GLM-PROMPT"), "applyModelPrompt 未生效");
   return "wired";
+});
+
+// 17. escalation 降级请求是 no-op（#13）+ 空白 justification 容忍（#94）
+await check("escalation 降级 no-op / 空白 justification 容忍", async () => {
+  const esc = path.join(
+    process.env.DSH_ASAR_APP || "D:\\dsh\\resources\\app\\dsh\\node_modules",
+    "@deepseek-ai", "dsh-sandbox", "lib", "index.js",
+  );
+  if (!fs.existsSync(esc)) return "宿主不在（跳过）";
+  const text = fs.readFileSync(esc, "utf8");
+  const markers = ["[dsh-purge] narrowing escalation is a no-op", "[dsh-purge] blank justification tolerated"];
+  const missing = markers.filter((m) => !text.includes(m));
+  // 没打上不是这次体检的失败项：状态页会显示 skipped，这里只报出来。
+  if (missing.length > 0) return `未应用（缺 ${missing.length} 条 marker）`;
+  const mod = await import(pathToFileURL(esc).href);
+  mod.validateEscalationArgs("workspace-write", "");
+  const mode = await mod.approveEscalation(
+    { requestedMode: "workspace-write", effectiveMode: "danger-full-access", justification: "", subject: "command" },
+    { approver: { request: () => { throw new Error("降级请求走了审批"); } }, agent: {}, callId: "c", toolName: "pwsh" },
+  );
+  expect(mode === "danger-full-access", `降级请求返回 ${mode}`);
+  return "workspace-write@danger-full-access → danger-full-access";
 });
 
 const pad = Math.max(...rows.map((r) => r.name.length));

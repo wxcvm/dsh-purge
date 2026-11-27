@@ -352,6 +352,7 @@ test('未测资产逐台生成稳定任务，阻塞一台后可继续下一台',
   assert.equal(actions[0].action, '漏洞发现')
   assert.match(actions[0].why, /192\.0\.2\.8/)
   assert.equal(nextTaskCard(actions).first_tool, 'redteam_task_context(target="asset #8") → subagent redteamRole: vuln-scan')
+  assert.ok(nextTaskCard(actions).workflow.some(step => step.includes('bundled_knowledge') && step.includes('redteam_knowledge_get')))
   const blockedKey = taskKey(actions[0])
   const remaining = filterBlockedActions(actions, blockedKey)
   assert.equal(nextTaskCard(remaining).target, 'asset #12')

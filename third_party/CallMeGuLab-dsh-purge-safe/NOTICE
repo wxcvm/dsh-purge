@@ -1,0 +1,11 @@
+dsh-purge-safe
+Copyright 2026 CallMeGuLab
+
+Source project: dsh-purge-safe (CallMeGuLab)
+Maintained by CallMeGuLab.
+
+This product is licensed under the Apache License, Version 2.0.
+Derivative works must retain this NOTICE and attribute the source repository.
+
+The bundled skill library under skills/ and the red-team modules under lib/redteam/
+are part of this repository's open-source release.

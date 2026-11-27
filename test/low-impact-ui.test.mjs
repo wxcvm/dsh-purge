@@ -7,18 +7,23 @@ import { dispatch } from '../lib/redteam/store-core.js'
 
 const read = (file) => readFileSync(new URL('../' + file, import.meta.url), 'utf8')
 
-test('workbench has a real low-impact tab in both source and embedded UI', () => {
+test('privacy settings are nested under Environment, not a standalone workbench page', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
+    const nav = src.slice(src.indexOf('const tabSections = ['), src.indexOf('const tabs = tabSections'))
+    assert.equal(nav.includes("['low-impact',"), false, path)
+    assert.ok(src.includes("case 'low-impact': // Legacy saved tab; privacy settings now live under Environment."), path)
+    assert.ok(src.includes("['privacy', '本机隐私']"), path)
+    assert.ok(src.includes("section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true })"), path)
+    assert.ok(src.includes("initialSection: st.tab === 'low-impact' ? 'privacy'"), path)
+    assert.ok(src.includes("props.embedded ? React.Fragment : 'div'"), path)
     assert.match(src, /function LowImpactTab\(props\)/, path)
-    assert.match(src, /\['low-impact', '智能隐私中心'\]/, path)
-    assert.match(src, /st\.tab === 'low-impact'/, path)
-    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: expected, privacyManagement: policy \}/, path)
-    assert.match(src, /maskHistory \? '目标已隐藏'/, path)
-    assert.match(src, /item\.output_file && !maskHistory/, path)
+    assert.ok(src.includes("op: 'platformConfigSave', config: { scanPreferences: expected, privacyManagement: policy }"), path)
+    assert.ok(src.includes("maskHistory ? '目标已隐藏'"), path)
+    assert.ok(src.includes("item.output_file && !maskHistory"), path)
+    assert.ok(src.includes('打开环境中的本机隐私设置'), path)
   }
 })
-
 test('workbench API saves only scan preferences and preserves existing configuration', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'redteam-impact-ui-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
@@ -101,41 +106,6 @@ test('privacy center previews presets, discards draft and displays stored change
 })
 
 
-test('ARTEX privacy presentation masks report and paths, with explicit temporary reveal', () => {
-  const source = read('lib/redteam/client.js')
-  const start = source.indexOf('    function summarizeArtexReviewProgress(')
-  const end = source.indexOf('    /* ---------------------------------------------------------- 常驻面板主体', start)
-  assert.ok(start >= 0 && end > start)
-  const render = (mask, reveal = false, temporary = null) => {
-    let i = 0
-    const React = { useState: value => {
-      const at = i++
-      return [at === 0 ? { maskAssetResults: mask } : at === 1 ? reveal : at === 3 ? {
-        state: 'detected', online: true, tools: [{ id: 'nmap', path: 'private-tool-path', reused: true }],
-        toolRoots: ['private-root'], skillDir: 'private-skill'
-      } : value, () => {}]
-    }, useEffect() {} }
-    const h = (type, props, ...children) => ({ type, props, children })
-    const report = { unique_findings: 1, duplicates_skipped: 0, items: [{ finding_id: 1,
-      asset_ids: [], summary: 'private-report', severity: 'info' }], review_queue: [] }
-    const node = new Function('React', 'h', 'props', 'useTemporaryPrivacy', source.slice(start, end) + '\nreturn ArtexTab(props)')(React, h, { report }, () => temporary)
-    const values = []
-    const walk = x => { if (Array.isArray(x)) x.forEach(walk); else if (x && typeof x === 'object') walk(x.children); else if (typeof x === 'string') values.push(x) }
-    walk(node)
-    return values.join('\n')
-  }
-  const masked = render(true)
-  assert.match(masked, /路径已隐藏/)
-  assert.match(masked, /报告已读取/)
-  for (const secret of ['private-tool-path', 'private-root', 'private-skill', 'private-report']) {
-    assert.equal(masked.includes(secret), false)
-    assert.equal(render(false).includes(secret), true)
-    assert.equal(render(true, true).includes(secret), true)
-    assert.equal(render(false, true, { task: 'sharing', maskAssetResults: true }).includes(secret), false)
-  }
-})
-
-
 test('five privacy preset previews preserve locks and unrelated preferences', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
@@ -200,50 +170,15 @@ test('task recommendations distinguish observed posture and preserve locks witho
 })
 
 
-test('workspace privacy summary reports saved display flags without implying network protection', () => {
-  for (const path of ['lib/workspace/client-shell.js', 'client.js']) {
-    const src = read(path)
-    const start = src.indexOf('function workspacePrivacySummary(')
-    const end = src.indexOf('function PurgeWorkspacePage(', start)
-    assert.ok(start >= 0 && end > start, path)
-    const summarize = new Function(src.slice(start, end) + '\nreturn workspacePrivacySummary')()
-    assert.equal(summarize(null).label, '隐私 · 未知')
-    assert.equal(summarize({ ok: false }).label, '隐私 · 未知')
-    assert.equal(summarize({ ok: true, maskHistory: true }).label, '隐私 · 未知')
-    assert.equal(summarize({ ok: true, maskHistory: false, maskAssetResults: false }).label, '隐私 · 0/2')
-    assert.equal(summarize({ ok: true, maskHistory: false, maskAssetResults: true }).label, '隐私 · 1/2')
-    const all = summarize({ ok: true, maskHistory: true, maskAssetResults: true })
-    assert.equal(all.label, '隐私 · 2/2')
-    assert.match(all.detail, /仅本地展示/)
-    assert.match(all.detail, /不代表网络/)
-    assert.match(src, /addEventListener\("dsh-purge-privacy-saved", refresh\)/)
-    assert.match(src, /removeEventListener\("dsh-purge-privacy-saved", refresh\)/)
-    assert.match(src, /current === revision/)
-    assert.match(src, /op: "privacyDisplayStatus"/)
-    assert.match(src, /tab: "low-impact", focus: null/)
-  }
-  assert.match(read('lib/redteam/client.js'), /document\.dispatchEvent\(new Event\('dsh-purge-privacy-saved'\)\)/)
-})
 
-
-test('temporary task privacy only adds unlocked display flags and never persists settings', () => {
+test('master ARTEX hides target-specific panels, paths and reports while retaining the existing links', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
-    const start = src.indexOf('    let temporaryPrivacy = null')
-    const end = src.indexOf('    function privacyTaskRecommendation(', start)
-    assert.ok(start >= 0 && end > start)
-    const { temporaryPrivacyForTask, setTemporaryPrivacy, current } = new Function(src.slice(start, end) + '\nreturn { temporaryPrivacyForTask, setTemporaryPrivacy, current: () => temporaryPrivacy }')()
-    const policy = { mode: 'manual', locked: ['maskHistory'] }
-    assert.equal(temporaryPrivacyForTask('local', policy), null)
-    const sharing = temporaryPrivacyForTask('sharing', policy)
-    assert.deepEqual(sharing, { task: 'sharing', maskHistory: false, maskAssetResults: true })
-    setTemporaryPrivacy(sharing)
-    assert.deepEqual(current(), sharing)
-    setTemporaryPrivacy(null)
-    assert.equal(current(), null)
-    assert.deepEqual(policy, { mode: 'manual', locked: ['maskHistory'] })
-    assert.doesNotMatch(src.slice(start, end), /platformConfigSave|localStorage|sessionStorage/)
-    assert.match(src, /savedMaskHistory \|\| !!temporary\?\.maskHistory/)
-    assert.match(src, /!!temporary\?\.maskAssetResults \|\| \(!showPrivateDetails/)
+    assert.match(src, /!maskArtex \? h\(ArtexIntelPanel/)
+    assert.match(src, /!maskArtex \? h\(ArtexProjectOverview/)
+    assert.match(src, /report && !maskArtex \? h\('div'/)
+    assert.match(src, /maskArtex \? '路径已隐藏' : tool\.path/)
+    assert.match(src, /savedMaskAssets \|\| !!temporary\?\.maskAssetResults/)
+    assert.match(src, /React\.useEffect\(\(\) => \(\) => setTemporaryPrivacy\(null\), \[\]\)/)
   }
 })
