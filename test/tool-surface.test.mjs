@@ -103,6 +103,18 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(passivePreview.toolStatus, 'not-requested')
   assert.equal(passivePreview.amassStatus, 'not-requested')
   assert.equal(passivePreview.names.length, 0)
+  redteam.db(passiveEngagement).prepare(
+    'INSERT INTO dns_intel_snapshot(name,value,collected_at) VALUES(?,?,?)',
+  ).run('www.example.test', JSON.stringify({
+    records: [{ type: 'A', value: '192.0.2.33', source: 'dnsx' }], errors: [],
+  }), '2026-11-27T00:00:00.000Z')
+  const dnsHistory = JSON.parse(await passiveTool.execute({
+    action: 'dns-history', engagement: passiveEngagement, target: 'www.example.test',
+  }, {}))
+  assert.equal(dnsHistory.ok, true)
+  assert.equal(dnsHistory.target, 'www.example.test')
+  assert.equal(dnsHistory.items.length, 1)
+  assert.equal(dnsHistory.items[0].records[0].value, '192.0.2.33')
   const skillReader = registered.get('redteam_skill_read')
   const passiveExec = { agent: { session: { id: 'passive-session' } } }
   const passiveRequest = {
