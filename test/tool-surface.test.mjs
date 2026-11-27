@@ -103,6 +103,42 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.equal(passivePreview.toolStatus, 'not-requested')
   assert.equal(passivePreview.amassStatus, 'not-requested')
   assert.equal(passivePreview.names.length, 0)
+  const skillReader = registered.get('redteam_skill_read')
+  const passiveExec = { agent: { session: { id: 'passive-session' } } }
+  const passiveRequest = {
+    action: 'subdomains', engagement: passiveEngagement, target: 'example.test',
+    use_subfinder: true, confirm_external: true, environment_id: 'not-a-real-environment',
+  }
+  const blockedPassive = JSON.parse(await passiveTool.execute(passiveRequest, passiveExec))
+  assert.equal(blockedPassive.ok, false)
+  assert.match(blockedPassive.error, /redteam:passive-recon/)
+  const passiveSkill = JSON.parse(await skillReader.execute({ key: 'redteam:passive-recon' }, passiveExec))
+  assert.equal(passiveSkill.skillReadReceipt, 'recorded-for-current-root-session')
+  const otherSession = { agent: { session: { id: 'another-session' } } }
+  const isolatedPassive = JSON.parse(await passiveTool.execute(passiveRequest, otherSession))
+  assert.equal(isolatedPassive.ok, false)
+  assert.match(isolatedPassive.error, /redteam:passive-recon/)
+  const passiveAfterRead = JSON.parse(await passiveTool.execute(passiveRequest, passiveExec))
+  assert.equal(passiveAfterRead.status, 'unsupported-environment')
+  assert.equal(passiveAfterRead.toolRuns[0].attempted, false)
+
+  const scanEngagement = redteam.openEngagement('scan-fixture', ['192.0.2.10']).id
+  const scanTool = registered.get('redteam_scan_run')
+  const scanExec = { agent: { session: { id: 'scan-session' } } }
+  const scanRequest = {
+    engagement: scanEngagement, kind: 'nmap', target: '192.0.2.10',
+    environment_id: 'not-a-real-environment', commit: false,
+  }
+  const blockedScan = JSON.parse(await scanTool.execute(scanRequest, scanExec))
+  assert.equal(blockedScan.ok, false)
+  assert.match(blockedScan.error, /redteam:nmap-service-inventory/)
+  const nmapSkill = JSON.parse(await skillReader.execute({
+    key: 'redteam:nmap-service-inventory',
+  }, scanExec))
+  assert.equal(nmapSkill.skillReadReceipt, 'recorded-for-current-root-session')
+  const scanAfterRead = JSON.parse(await scanTool.execute(scanRequest, scanExec))
+  assert.equal(scanAfterRead.status, 'unsupported-environment')
+  assert.equal(scanAfterRead.execution.attempted, false)
   const quality = registered.get('redteam_data_quality')
   const read = JSON.parse(await quality.execute({ engagement: 'fixture' }, {}))
   assert.deepEqual(read, {
