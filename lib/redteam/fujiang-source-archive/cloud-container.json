@@ -1,0 +1,380 @@
+[
+  {
+    "id": "fujiang:cloud-container:cve-2019-7238-nexus-rce",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2019-7238-nexus-rce.md",
+    "metadata": {
+      "title": "Nexus Repository 未授权 RCE（CVE-2019-7238）",
+      "cve": "CVE-2019-7238",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Sonatype Nexus Repository Manager 3.x",
+      "versions": "3.6.2 - 3.14.0",
+      "ports": "8081",
+      "keywords": "nexus, sonatype, 2019-7238, 未授权, rce, 供应链",
+      "verified": "false",
+      "sources": "公开资料整理（Sonatype 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 3.14.1+；Nexus 只对内网；禁匿名访问。",
+    "reference_notes": "- Sonatype CVE-2019-7238。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2019-7238-nexus-rce.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2019-9193-postgres",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2019-9193-postgres.md",
+    "metadata": {
+      "title": "PostgreSQL COPY PROGRAM 命令执行（CVE-2019-9193）",
+      "cve": "CVE-2019-9193",
+      "severity": "high",
+      "source_cvss": "8.8",
+      "product": "PostgreSQL 9.3 - 11",
+      "versions": "9.3 - 11.x",
+      "ports": "5432",
+      "keywords": "postgresql, postgres, copy, program, 命令执行, 数据库",
+      "verified": "false",
+      "sources": "公开资料整理（PostgreSQL 文档 + 公开复现）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 12+；回收 `pg_execute_server_program`；数据库只对内网。",
+    "reference_notes": "- PostgreSQL COPY 文档；CVE-2019-9193。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2019-9193-postgres.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2021-21972-vcenter-upload",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2021-21972-vcenter-upload.md",
+    "metadata": {
+      "title": "vCenter Server 未授权上传 → RCE（vROPS 插件）",
+      "cve": "CVE-2021-21972",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "VMware vCenter Server",
+      "versions": "6.5 < 6.5U3n、6.7 < 6.7U3l、7.0 < 7.0U1c",
+      "ports": "443",
+      "keywords": "vcenter, vrops, uploadova, 21972, 未授权",
+      "verified": "false",
+      "sources": "NVD / VMware VMSA-2021-0002 / 公开 PoC"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 6.5U3n / 6.7U3l / 7.0U1c+；管理面只对内网；关闭不需要的 vROPS 插件。",
+    "reference_notes": "- NVD CVE-2021-21972；VMware VMSA-2021-0002。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2021-21972-vcenter-upload.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2021-29441-nacos",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2021-29441-nacos.md",
+    "metadata": {
+      "title": "Nacos 认证绕过（User-Agent 白名单）",
+      "cve": "CVE-2021-29441",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Alibaba Nacos",
+      "versions": "1.4.1 之前（含默认未开鉴权）",
+      "ports": "8848",
+      "keywords": "nacos, user-agent, auth-bypass, cve-2021-29441",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 1.4.1+ 并开启鉴权（`nacos.core.auth.enabled=true` + 换默认 token key）；8848 只对内。",
+    "reference_notes": "- NVD CVE-2021-29441；Nacos 安全公告。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2021-29441-nacos.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2021-43798-grafana-file-read",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2021-43798-grafana-file-read.md",
+    "metadata": {
+      "title": "Grafana 插件路径穿越任意文件读（CVE-2021-43798）",
+      "cve": "CVE-2021-43798",
+      "severity": "high",
+      "source_cvss": "8.6",
+      "product": "Grafana 8.0.0 - 8.3.0",
+      "versions": "8.0.0-8.3.0",
+      "ports": "3000",
+      "keywords": "grafana, 2021-43798, 路径穿越, 文件读取, 监控",
+      "verified": "false",
+      "sources": "公开资料整理（Grafana 公告 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 8.3.1+；Grafana 只对内网；面板加固。",
+    "reference_notes": "- Grafana CVE-2021-43798。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2021-43798-grafana-file-read.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2022-0492-cgroup-release-agent",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2022-0492-cgroup-release-agent.md",
+    "metadata": {
+      "title": "cgroups release_agent 容器逃逸",
+      "cve": "CVE-2022-0492",
+      "severity": "high",
+      "source_cvss": "7.8",
+      "product": "Linux kernel cgroup v1",
+      "versions": "5.16.2 之前（多数容器宿主）",
+      "ports": "本地",
+      "keywords": "cgroup, release_agent, escape, cap_sys_admin, container",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级内核到 5.16.2+；容器不要给 `CAP_SYS_ADMIN`；启用 userns 隔离与 cgroup v2。",
+    "reference_notes": "- NVD CVE-2022-0492；Unit 42 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2022-0492-cgroup-release-agent.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2022-22954-workspace-one-ssti",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2022-22954-workspace-one-ssti.md",
+    "metadata": {
+      "title": "VMware Workspace ONE Access 模板注入 RCE",
+      "cve": "CVE-2022-22954",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "VMware Workspace ONE Access / Identity Manager",
+      "versions": "21.08.0.0 - 21.10.0.x（2022-04 补丁前）",
+      "ports": "443",
+      "keywords": "workspace one, freemarker, ssti, 22954, 未授权",
+      "verified": "false",
+      "sources": "NVD / VMware VMSA-2022-0011 / 公开 PoC"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级到 21.10.0.1 / 21.08.0.1+；管理面只对内网；WAF 拦 `deviceUdid=` 里的 `${`。",
+    "reference_notes": "- NVD CVE-2022-22954；VMware VMSA-2022-0011。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2022-22954-workspace-one-ssti.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2023-27532-veeam-credential-dump",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2023-27532-veeam-credential-dump.md",
+    "metadata": {
+      "title": "Veeam Backup 凭据泄露（CVE-2023-27532）",
+      "cve": "CVE-2023-27532",
+      "severity": "high",
+      "source_cvss": "7.5",
+      "product": "Veeam Backup & Replication",
+      "versions": "11.x、12.x（12.0.0.1420 之前）",
+      "ports": "9401",
+      "keywords": "veeam, 2023-27532, 凭据, 备份",
+      "verified": "false",
+      "sources": "公开资料整理（Veeam KB4424 + 公开 PoC）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 12.0.0.1420 / 11.0.1.1261；9401 只允许备份服务器互访。",
+    "reference_notes": "- Veeam KB4424。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2023-27532-veeam-credential-dump.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2024-21626-runc-leaky-vessels",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2024-21626-runc-leaky-vessels.md",
+    "metadata": {
+      "title": "runc 文件描述符泄露逃逸（Leaky Vessels）",
+      "cve": "CVE-2024-21626",
+      "severity": "critical",
+      "source_cvss": "8.6",
+      "product": "runc（Docker / containerd / K8s 运行时）",
+      "versions": "runc <= 1.1.11（1.1.12 修复）",
+      "ports": "本地",
+      "keywords": "runc, leaky vessels, fd leak, workdir, escape, docker build",
+      "verified": "false",
+      "sources": "NVD / 厂商公告 / 公开分析（见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升级 runc 到 1.1.12+（Docker 25.0.2+ / containerd 1.7.13+）；限制普通用户 `docker build` 能力；不要把 docker socket 暴露给不可信容器。",
+    "reference_notes": "- NVD CVE-2024-21626；Snyk \"Leaky Vessels\" 分析。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2024-21626-runc-leaky-vessels.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2024-37085-esxi-auth-bypass",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2024-37085-esxi-auth-bypass.md",
+    "metadata": {
+      "title": "VMware ESXi 认证绕过 → hypervisor 失守（CVE-2024-37085）",
+      "cve": "CVE-2024-37085",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "VMware ESXi 7.x / 8.x（已入 AD 域）",
+      "versions": "ESXi 7.0 全系、8.0 < 8.0U3（ESXi80U3-24022510 之前）",
+      "ports": "443, 902",
+      "keywords": "esxi, vmware, 2024-37085, ad, 认证绕过, 勒索",
+      "verified": "false",
+      "sources": "公开资料整理（Broadcom VMSA-2024-0013 + 勒索在野利用）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 打 ESXi80U3-24022510 或 7.0U3 对应补丁；或把 ESXi 移出域。\n- 监控 \"ESX Admins\" 组新建。",
+    "reference_notes": "- Broadcom VMSA-2024-0013。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2024-37085-esxi-auth-bypass.md"
+  },
+  {
+    "id": "fujiang:cloud-container:cve-2024-40711-veeam-rce",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/cve-2024-40711-veeam-rce.md",
+    "metadata": {
+      "title": "Veeam Backup 未认证 RCE（CVE-2024-40711）",
+      "cve": "CVE-2024-40711",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Veeam Backup & Replication 12.x",
+      "versions": "12.1.2.172 及更早（12.2.0.334 修复）",
+      "ports": "9419, 9401",
+      "keywords": "veeam, 2024-40711, 反序列化, 未认证, rce",
+      "verified": "false",
+      "sources": "公开资料整理（Veeam KB4649 + watchTowr 分析）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 升到 12.2.0.334；9419 只放内网。",
+    "reference_notes": "- Veeam KB4649。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/cve-2024-40711-veeam-rce.md"
+  },
+  {
+    "id": "fujiang:cloud-container:docker-api-2375",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/docker-api-2375.md",
+    "metadata": {
+      "title": "Docker Remote API 未授权（直接拿宿主）",
+      "cve": "无 CVE（配置缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Docker Engine",
+      "versions": "任意（2375 裸露）",
+      "ports": "2375, 2376",
+      "keywords": "docker, api, 2375, privileged, escape",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 2375 只绑 127.0.0.1；对外只开 2376 + TLS 双向认证。\n- 检测：`/var/log/docker.log` 或 auditd 里 `docker run --privileged` 的异常。",
+    "reference_notes": "- Docker 官方《Protect the Docker daemon socket》。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/docker-api-2375.md"
+  },
+  {
+    "id": "fujiang:cloud-container:mongodb-unauth",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/mongodb-unauth.md",
+    "metadata": {
+      "title": "MongoDB 未授权访问（直接拖库）",
+      "cve": "无（配置缺陷）",
+      "severity": "critical",
+      "source_cvss": "9.0",
+      "product": "MongoDB",
+      "versions": "任意（未启认证）",
+      "ports": "27017",
+      "keywords": "mongodb, 未授权, 拖库, 数据库, nosql",
+      "verified": "false",
+      "sources": "公开资料整理（配置缺陷类）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 开 auth + 强口令；只监听内网；禁 `$where`。",
+    "reference_notes": "- MongoDB 安全清单。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/mongodb-unauth.md"
+  },
+  {
+    "id": "fujiang:cloud-container:redis-unauth",
+    "category": "cloud-container",
+    "source_ref": "plugin/knowledge/cloud-container/redis-unauth.md",
+    "metadata": {
+      "title": "Redis 未授权（写文件 / 模块加载 / 主从复制）",
+      "cve": "无单一 CVE（CVE-2022-0543 为 Debian 特例）",
+      "severity": "critical",
+      "source_cvss": "9.8",
+      "product": "Redis",
+      "versions": "任意（无认证 + 暴露）",
+      "ports": "6379, 6380",
+      "keywords": "redis, unauth, config-set, rdb, cron, module-load, replica",
+      "verified": "false",
+      "sources": "公开资料整理（业务逻辑 / 实现 / 配置缺陷类，无 CVE；出处见文末参考）"
+    },
+    "metadata_origin": "uploaded-archive-frontmatter",
+    "source_sections": {
+      "fingerprint": true,
+      "preconditions": true,
+      "remediation": true,
+      "references": true
+    },
+    "remediation_source": "- 设 `requirepass` + `rename-command CONFIG \"\"`；6379 只对内网；`protected-mode yes` 且不绑 0.0.0.0。",
+    "reference_notes": "- Redis 安全建议；CVE-2022-0543（Debian 打包的 Lua 沙箱逃逸）。",
+    "mirror_url": "https://github.com/sanjiu2024/dsh-team-workflow/blob/c55070e2858c1677bbebaf6ec1e8f13dad366cd6/skills/kb-cloud-container/redis-unauth.md"
+  }
+]
