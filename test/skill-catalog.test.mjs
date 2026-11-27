@@ -209,3 +209,35 @@ test('newly absorbed skills reference only registered Purge tools', () => {
       name + ' must not claim unsupported upstream-only tools')
   }
 })
+
+
+test('legacy high-impact Skills are quarantined and cannot grant executable guidance', () => {
+  for (const key of [
+    'redteam:credential-attack',
+    'redteam:fscan-intranet',
+    'redteam:gogo-intranet',
+    'redteam:nuclei-scan',
+    'redteam:suo5-tunnel',
+    'redteam:webshell-toolkit',
+    'redteam:vps-reverse-shell',
+    'redteam:lateral-movement',
+  ]) {
+    const result = readLocalSkill(key)
+    assert.equal(result.quarantined, true, key)
+    assert.equal(result.executionPolicy, 'quarantined-reference-only', key)
+    assert.equal(result.contentTrust, 'quarantined', key)
+    assert.doesNotMatch(result.content, /hydra|weak.password|reverse.shell|webshell|frpc|impacket|nuclei -t/i, key)
+  }
+
+  const search = searchLocalSkills('credential-attack')
+  const item = search.items.find(row => row.key === 'redteam:credential-attack')
+  assert.ok(item)
+  assert.equal(item.quarantined, true)
+  assert.equal(item.execution_policy, 'quarantined-reference-only')
+  assert.doesNotMatch(item.description, /hydra|爆破|密码/i)
+
+  const safe = readLocalSkill('redteam:nmap-service-inventory')
+  assert.equal(safe.quarantined, false)
+  assert.equal(safe.executionPolicy, 'reference-only')
+  assert.match(safe.content, /Nmap/i)
+})
