@@ -150,7 +150,6 @@ test('model-facing metadata views never decrypt or expose credential, WebShell o
   assert.equal(Object.hasOwn(tunnel, 'reach'), false)
   assert.equal(tunnel.command_present, true)
 
-  store.close()
   const noKey = track(new RedteamStore(root))
   assert.equal(noKey.listCredentialMetadata(id)[0].secret_present, true)
   assert.equal(noKey.sessionMetadataSummary(id).totals.credentials, 1)
