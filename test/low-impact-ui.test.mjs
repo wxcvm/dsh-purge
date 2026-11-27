@@ -7,18 +7,23 @@ import { dispatch } from '../lib/redteam/store-core.js'
 
 const read = (file) => readFileSync(new URL('../' + file, import.meta.url), 'utf8')
 
-test('workbench has a real low-impact tab in both source and embedded UI', () => {
+test('privacy settings are nested under Environment, not a standalone workbench page', () => {
   for (const path of ['lib/redteam/client.js', 'client.js']) {
     const src = read(path)
+    const nav = src.slice(src.indexOf('const tabSections = ['), src.indexOf('const tabs = tabSections'))
+    assert.equal(nav.includes("['low-impact',"), false, path)
+    assert.ok(src.includes("case 'low-impact': // Legacy saved tab; privacy settings now live under Environment."), path)
+    assert.ok(src.includes("['privacy', '本机隐私']"), path)
+    assert.ok(src.includes("section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true })"), path)
+    assert.ok(src.includes("initialSection: st.tab === 'low-impact' ? 'privacy'"), path)
+    assert.ok(src.includes("props.embedded ? React.Fragment : 'div'"), path)
     assert.match(src, /function LowImpactTab\(props\)/, path)
-    assert.match(src, /\['low-impact', '智能隐私中心'\]/, path)
-    assert.match(src, /st\.tab === 'low-impact'/, path)
-    assert.match(src, /op: 'platformConfigSave', config: \{ scanPreferences: expected, privacyManagement: policy \}/, path)
-    assert.match(src, /maskHistory \? '目标已隐藏'/, path)
-    assert.match(src, /item\.output_file && !maskHistory/, path)
+    assert.ok(src.includes("op: 'platformConfigSave', config: { scanPreferences: expected, privacyManagement: policy }"), path)
+    assert.ok(src.includes("maskHistory ? '目标已隐藏'"), path)
+    assert.ok(src.includes("item.output_file && !maskHistory"), path)
+    assert.ok(src.includes('打开环境中的本机隐私设置'), path)
   }
 })
-
 test('workbench API saves only scan preferences and preserves existing configuration', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'redteam-impact-ui-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
