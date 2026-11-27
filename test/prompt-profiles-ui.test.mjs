@@ -22,6 +22,13 @@ function mount({ querySession, readSettings, requestPreview, requestWrite, fullW
   let stateIndex = 0, refIndex = 0, sessionLock = "writing";
   const snapshot = () => ({ ok: true, profiles: structuredClone(profiles),
     routingSettings: structuredClone(routingSettings), observedTargets: structuredClone(observed),
+    backupSource: { ready: true, code: "READY", bytes: 1234, version: "v2.0.0" },
+    modelPromptCatalog: [
+      { id: "openai", label: "GPT / OpenAI", sampleModel: "gpt-6", text: "[GPT-ADAPT] built-in GPT text" },
+      { id: "claude", label: "Claude / Anthropic", sampleModel: "claude-sonnet-4", text: "Claude model guidance" },
+      { id: "gemini", label: "Gemini / Google", sampleModel: "gemini-2.5-pro", text: "Gemini model guidance" },
+      { id: "glm", label: "GLM / 智谱", sampleModel: "glm-4.6", text: "GLM model guidance" },
+    ],
     lastAssembly: { stage: "assembled", delivery: "unverified" } });
   const context = vm.createContext({
     useState(initial) {
@@ -434,6 +441,72 @@ test("source status is readable on the same page, independently of ordinary rout
   assert.deepEqual(structuredClone(write.data.settings), { modelAdaptive: true });
   assert.equal(ui.routingSettings.upstreamSafeBackup, true);
   assert.match(status(), /配置已选择副方案/);
+});
+
+test("model family cards show real host-provided text and create only an unsaved scoped rule", async () => {
+  const ui = mount();
+  let tree = await ui.initialize();
+  const modelPanel = ui.nodes(tree).find(node => node.props["aria-label"] === "模型专属提示词");
+  const panelText = JSON.stringify(modelPanel);
+  assert.match(panelText, /GPT \/ Claude \/ Gemini \/ GLM/);
+  assert.match(panelText, /\[GPT-ADAPT\] built-in GPT text/);
+  assert.match(panelText, /Claude model guidance/);
+  assert.match(panelText, /Gemini model guidance/);
+  assert.ok(ui.find(tree, "button", "编辑GPT专属规则"));
+  ui.find(tree, "button", "编辑GPT专属规则").props.onClick();
+  tree = ui.render();
+  assert.equal(ui.find(tree, "input", "局部规则名称").props.value, "GPT 专属规则");
+  assert.equal(ui.find(tree, "input", "启用当前提示词规则").props.checked, false);
+  assert.equal(ui.actions.length, 0, "creating an editor must not save or inject a prompt");
+  ui.find(tree, "textarea", "局部提示词正文").props.onChange({ target: { value: "Owner's custom GPT rule" } });
+  tree = ui.render();
+  ui.find(tree, "input", "启用当前提示词规则").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  ui.find(tree, "button", "保存规则").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const saved = ui.actions.find(x => x.op === "save").data.profile;
+  assert.equal(saved.id, "model-openai");
+  assert.equal(saved.enabled, true);
+  assert.equal(saved.allowEnabled, true);
+  assert.ok(saved.allowTargets.models.includes("gpt-*"));
+  assert.equal(saved.body, "Owner's custom GPT rule");
+});
+
+test("source choice saves only the backup switch and leaves other unsaved routing changes", async () => {
+  const ui = mount({ fullWriteResponse: true });
+  ui.routingSettings.upstreamSafeBackup = false;
+  let tree = await ui.initialize();
+  assert.match(JSON.stringify(tree), /备用资源可读取/);
+  assert.equal(ui.find(tree, "input", "启用接手版副提示词").props.checked, false);
+  ui.find(tree, "input", "普通模式识别红队任务").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  ui.find(tree, "input", "启用接手版副提示词").props.onChange({ target: { checked: true } });
+  tree = ui.render();
+  await ui.find(tree, "button", "保存副提示词方案").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const first = ui.actions.find(x => x.op === "routing-settings");
+  assert.deepEqual(structuredClone(first.data.settings), { upstreamSafeBackup: true });
+  assert.equal(ui.routingSettings.upstreamSafeBackup, true);
+  assert.equal(ui.routingSettings.redteamTaskRoute, false, "unrelated router switch must not be saved");
+  tree = ui.render();
+  assert.equal(ui.find(tree, "input", "普通模式识别红队任务").props.checked, true,
+    "the unrelated routing draft must survive source save");
+  await ui.find(tree, "button", "保存路由开关").props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const writes = ui.actions.filter(x => x.op === "routing-settings");
+  assert.equal(writes.length, 2);
+  assert.deepEqual(structuredClone(writes[1].data.settings), { redteamTaskRoute: true });
+});
+
+test("unknown backup selection is not clickable, and missing built-in family text is not invented", async () => {
+  const ui = mount({ readSettings(result) {
+    return { ...result, modelPromptCatalog: undefined, backupSource: undefined };
+  } });
+  const tree = await ui.initialize();
+  assert.equal(ui.find(tree, "input", "启用接手版副提示词").props.disabled, true);
+  assert.match(JSON.stringify(tree), /备用资源未核验/);
+  assert.match(JSON.stringify(tree), /当前宿主未返回内置适配正文/);
+  assert.equal(ui.find(tree, "button", "保存副提示词方案").props.disabled, true);
 });
 
 test("local-only leaves the source unconfirmed and preserves an edited prompt", async () => {

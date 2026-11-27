@@ -48,12 +48,14 @@
       只有这些由你直接调用：读操作（`redteam_*` 查询、`redteam_sessions`、`redteam_attack_chain`）与派活前后的 `redteam_preflight` / `redteam_agent_slot` / `redteam_session_info`。
       **必须用原生 \`subagent\` 工具派活**；不要改用 Agent Teams 的 \`spawn_teammate\`（红队角色稿 / 并发闸门 / 叶子约束都挂在 \`subagent\` 路径上）。
 
-      ## 每轮只检查当前任务需要的条件
-      1. 首次进入演练时运行一次 `redteam_preflight`；记录可用工具和缺项。不要每个子任务重复整套检查。
-      2. `FOFA_KEY`、`REDTEAM_VPS_HOST` 与某个扫描器不是全部任务的强制前提；缺一项只影响依赖它的那个任务。
-      3. 优先继续**在自有或明确授权范围内**无需缺失资源的工作：既有资产整理、证据核对、记录复盘、得分对账和报告。
-      4. 当选中的任务确实缺工具、凭据、权限或授权范围时，只暂停该任务；一次性告诉用户缺什么、为什么、在哪里配置，不要把整个任务卡死。
-      5. 不假装缺失能力已经就绪，不为推进而扩大目标范围。
+      ## 开工前预检一次，后续按需复查
+      1. **开始一次新的演练或独立工作流程时**，先读取当前会话的宿主工具、MCP 和 Skills 目录，再运行一次 `redteam_preflight`，核对本轮所需能力和缺项。不要沿用其他会话、旧环境的结论。
+      2. 后续在同一会话、同一环境推进多个任务时，复用开工预检结果；新任务只需确认它新增依赖的工具或技能，不必重新运行完整 preflight。对准备实际使用的本机工具，可按需使用已有任务工具规划和只读版本探针。
+      3. 区分“目录可见 / 路径已找到 / 版本命令可运行 / 实际任务已验证”；工具执行失败、切换宿主、安装或配置变化时，只重新检查受影响的能力，再调整执行方案。不对全部工具逐项探测，也不在每个子智能体步骤重复预检。
+      4. `FOFA_KEY`、`REDTEAM_VPS_HOST` 与某个扫描器不是全部任务的强制前提；缺一项只影响依赖它的那个任务。工具状态检查本身不扫描目标、不安装工具、不发起远端执行。
+      5. 优先继续**在自有或明确授权范围内**无需缺失资源的工作：既有资产整理、证据核对、记录复盘、得分对账和报告。
+      6. 当选中的任务确实缺工具、凭据、权限或授权范围时，只暂停该任务；一次性告诉用户缺什么、为什么、在哪里配置，不要把整个任务卡死。
+      7. 不假装缺失能力已经就绪，不为推进而扩大目标范围。
 
       ## 任务批次与推进闭环
       1. 先调用 redteam_next_action，同时检查返回的 parallel_review 与 focus。只有 parallel_review.status=ready 且至少有两个任务时，才按 batch 并行派发；否则只处理 focus，不自行派发整个 actions 列表。
@@ -337,13 +339,14 @@
         # 0.2.1-rc.2 已废弃 toolFilter（#138）：写在这里会让整份红队预设注册失败，模式下拉里选不中。
         # 子智能体靠 maxDepth: 1 收成叶子，不再用 deny 名单。
 
-    # Fork omits model selection so provider/model stay equal to the parent and
-    # the inherited history remains eligible for KV Cache reuse. This preset
-    # keeps fork continuable; parent and child inherit the same messaging tool,
-    # while the parent id and return guidance follow the inherited history.
+    # Temporarily disabled: the official fork provider can copy pending
+    # agent/inbox/spliced input from the parent into the child's inherited seed.
+    # That can make a child execute a message addressed to its parent. Keep
+    # spawn as the supported delegation path until Harness fixes the fork cut
+    # and a real-session regression proves the inherited inbox is clean.
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
-      disabled: false
+      disabled: true
       config:
         provider: fork
         toolName: subagent_fork
