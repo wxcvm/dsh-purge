@@ -27,7 +27,7 @@
 - [#676](https://github.com/wxcvm/dsh-purge/pull/676)：单端口 SOCKS5 可达性探针，scope/reach/已有开放端口三重门禁；loopback mock 工具级测试与 Ubuntu/Windows CI 通过。仍为 Draft。
 - [#677](https://github.com/wxcvm/dsh-purge/pull/677)：1,805 条 CISA KEV 离线快照、显式刷新、流式大小上限和来源溯源；Ubuntu/Windows 两组 CI 通过。仍为 Draft。
 - [#678](https://github.com/wxcvm/dsh-purge/pull/678)、[#679](https://github.com/wxcvm/dsh-purge/pull/679)：本地资产导入去重、离线来源检索；当前对应 CI 已通过。
-- [#680](https://github.com/wxcvm/dsh-purge/pull/680)：Nmap/httpx 本地测绘证据解析。新增域名-only 不提升解析 IP 为授权资产的边界修复；最新回归提交 CI 运行中，不能沿用前一提交的通过状态。
+- [#680](https://github.com/wxcvm/dsh-purge/pull/680)：Nmap/httpx 本地测绘证据解析。新增域名-only 不提升解析 IP 为授权资产的边界修复；仅 IP/CIDR 明确命中才导入 IP 资产，原始输出仍保留。最新 head `23c2c6ab` 的 Ubuntu/Windows 两组 CI 均通过。
 - [#681](https://github.com/wxcvm/dsh-purge/pull/681)、[#682](https://github.com/wxcvm/dsh-purge/pull/682)、[#683](https://github.com/wxcvm/dsh-purge/pull/683)：只读数据质量/去重预览、资产证据图、资产新鲜度与来源评估；当前对应 CI 已通过。
 - [#684](https://github.com/wxcvm/dsh-purge/pull/684)、[#685](https://github.com/wxcvm/dsh-purge/pull/685)、[#686](https://github.com/wxcvm/dsh-purge/pull/686)：分别依赖 #683、#681、#682 的 UI 分支；先合并各自后端父 PR，再将 UI PR 的 base 改到 master，避免把功能分支历史误当作独立主线改动。
 
