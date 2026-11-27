@@ -3,6 +3,11 @@ Copyright 2026 YuJunZhiXue
 
 Source: https://github.com/YuJunZhiXue/dsh-purge
 
+WXCVM-maintained derivative: https://github.com/wxcvm/dsh-purge
+Copyright 2026 WXCVM (WXCVM-authored modifications and additions only).
+Other contributors retain their respective copyrights.
+Original and upstream copyright and attribution notices remain in effect.
+
 This product is licensed under the Apache License, Version 2.0.
 Derivative works must retain this NOTICE and attribution.
 
@@ -11,6 +16,8 @@ Copyright 2026 CallMeGuLab
 Source project: dsh-purge-safe (CallMeGuLab)
 https://github.com/CallMeGuLab/dsh-purge-safe
 Maintained by CallMeGuLab.
+The upstream LICENSE appendix also identifies HunYiSage (2026);
+this attribution is preserved without asserting ownership of unrelated code.
 
 The sealed prompt resource at lib/upstream-safe/asset-table.js is incorporated from
 CallMeGuLab/dsh-purge-safe v2.0.0 (d96c5f25); the optional persona-prefix adapter

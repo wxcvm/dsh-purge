@@ -28,3 +28,15 @@ test('既有语义回归：core 三段与稳定版/预发布优先级', () => {
   assert.equal(versionIsNewer('', '1.0.0'), false, '空 remote 恒 false')
   assert.equal(versionIsNewer('1.0.0', ''), true, '空 local 恒 true')
 })
+
+test('build metadata does not change updater version precedence', () => {
+  for (const version of ['1.1.92', '1.1.92-wxcvm.24', '1.1.92-wxcvm.7-beta.10']) {
+    assert.equal(versionIsNewer(version + '+build.20', version), false)
+    assert.equal(versionIsNewer(version, version + '+build.20'), false)
+    assert.equal(versionIsNewer(version + '+build-20', 'v' + version + '+build.9'), false)
+    assert.equal(versionIsNewer('v' + version + '+build.9', version + '+build-20'), false)
+  }
+  assert.equal(versionIsNewer('1.1.92-wxcvm.25+build.1', '1.1.92-wxcvm.24+build.99'), true)
+  assert.equal(versionIsNewer('1.1.92-wxcvm.7-beta.10+build.1', '1.1.92-wxcvm.7-beta.9+build.99'), true)
+  assert.equal(versionIsNewer('1.1.92+build-1', '1.1.92-wxcvm.24+build.99'), true)
+})
