@@ -133,3 +133,20 @@ test('both client surfaces expose the WSL discovery and explicit probe controls'
   assert.match(host, /if \(op === 'environmentDiscover'\) return diagnoseEnvironmentTopology\(\{ root \}\)/)
   assert.match(host, /if \(op === 'wslToolProbe'\) return observedProbe\(probeWslTool\(request.distro, request.id\)\)/)
 })
+
+test('remote httpx probe falls through catalogued aliases without accepting custom commands', async () => {
+  const calls = []
+  const result = await probeWslTool('kali-linux', 'httpx', {
+    platform: 'win32',
+    execFileFn: (_command, args, _options, done) => {
+      calls.push(args)
+      if (calls.length === 1) return done(null, tableBytes, Buffer.alloc(0))
+      if (args[3] === 'httpx-toolkit') return done(Object.assign(new Error('not found'), { code: 127 }), Buffer.alloc(0), Buffer.from('not found'))
+      assert.deepEqual(args, ['--distribution', 'kali-linux', '--exec', 'pd-httpx', '-version'])
+      done(null, Buffer.from('httpx 1.6.0\\n'), Buffer.alloc(0))
+    },
+  })
+  assert.equal(calls.length, 3)
+  assert.equal(result.status, 'probe_verified')
+  assert.equal(result.binary, 'pd-httpx')
+})
