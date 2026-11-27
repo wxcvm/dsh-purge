@@ -339,13 +339,14 @@
         # 0.2.1-rc.2 已废弃 toolFilter（#138）：写在这里会让整份红队预设注册失败，模式下拉里选不中。
         # 子智能体靠 maxDepth: 1 收成叶子，不再用 deny 名单。
 
-    # Fork omits model selection so provider/model stay equal to the parent and
-    # the inherited history remains eligible for KV Cache reuse. This preset
-    # keeps fork continuable; parent and child inherit the same messaging tool,
-    # while the parent id and return guidance follow the inherited history.
+    # Temporarily disabled: the official fork provider can copy pending
+    # agent/inbox/spliced input from the parent into the child's inherited seed.
+    # That can make a child execute a message addressed to its parent. Keep
+    # spawn as the supported delegation path until Harness fixes the fork cut
+    # and a real-session regression proves the inherited inbox is clean.
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
-      disabled: false
+      disabled: true
       config:
         provider: fork
         toolName: subagent_fork

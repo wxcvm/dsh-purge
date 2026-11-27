@@ -81,3 +81,23 @@ test('remote peers cannot claim local desktop-origin exemptions', () => {
   assert.equal(allowedBridgeOrigin(request('app://dsh', '198.51.100.8')), false)
   assert.equal(allowedBridgeOrigin(request('https://example.test', '198.51.100.8', 'example.test')), true)
 })
+
+test('an explicitly empty browser Origin cannot use the absent-Origin Desktop exception', () => {
+  const host = '127.0.0.1:53380'
+  for (const cookie of ['dsh-desktop-session=synthetic', rc5DesktopCookie(host)]) {
+    assert.equal(allowedBridgeOrigin(request('', '127.0.0.1', host, cookie)), false)
+    assert.equal(allowedBridgeOrigin(request(undefined, '127.0.0.1', host, cookie)), true)
+  }
+})
+
+test('HTTP origin checks require a serialized origin rather than a full URL', () => {
+  for (const origin of [
+    'http://127.0.0.1:53380/',
+    'http://127.0.0.1:53380/path',
+    'http://127.0.0.1:53380?query',
+    'http://127.0.0.1:53380#fragment',
+    'http://user@127.0.0.1:53380',
+    ' http://127.0.0.1:53380',
+  ]) assert.equal(allowedBridgeOrigin(request(origin)), false, origin)
+  assert.equal(allowedBridgeOrigin(request('http://127.0.0.1:53380')), true)
+})

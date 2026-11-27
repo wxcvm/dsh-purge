@@ -36,9 +36,9 @@ function mount(handler) {
     setTemporaryPrivacy() {},
     loadRtGeom: () => ({}),
     usePanelDigest: () => ({}),
-    activeWorkbenchTab: tab => tab,
+    activeWorkbenchTab: tab => tab === 'superagent' || tab === 'prompts' ? 'agents' : tab,
     AgentReportReminder: 'AgentReportReminder', RtNavIcon: 'RtNavIcon', RtBoundary: 'RtBoundary',
-    OverviewTab: 'OverviewTab', SuperAgentTab: 'SuperAgentTab',
+    OverviewTab: 'OverviewTab', AgentsTab: 'AgentsTab',
   })
   vm.runInContext(client.slice(start, end), context)
   const render = () => { stateIndex = refIndex = 0; return vm.runInContext('Panel({ embedded: true })', context) }
@@ -81,7 +81,7 @@ test('first 403 is not an empty roster; retry restores the current project and r
   assert.match(content(view), /资产 4/)
   assert.doesNotMatch(content(view), /项目列表加载失败/)
   overview.props.onOpenReportPage()
-  assert.equal(view.ui.tab, 'superagent')
+  assert.equal(view.ui.tab, 'agents')
   view.unmount()
 })
 
@@ -130,7 +130,7 @@ test('older roster and snapshot responses cannot overwrite a newer selection', a
   view.unmount()
 })
 
-test('overview snapshot failure and recovery do not replace the Super Agent page', async () => {
+test('overview snapshot failure and recovery do not replace the agent page', async () => {
   let snapshots = 0
   const view = mount(req => req.op === 'bootstrap' ? roster(['a'], 'a')
     : ++snapshots === 1 ? snapshot('different-project', 99) : snapshot('a'))
@@ -138,7 +138,7 @@ test('overview snapshot failure and recovery do not replace the Super Agent page
   assert.match(content(view), /统计加载失败/)
   assert.doesNotMatch(content(view), /资产 99|资产 0/)
   view.ui.tab = 'superagent'
-  assert.match(content(view), /SuperAgentTab/)
+  assert.match(content(view), /AgentsTab/)
   assert.match(content(view), /统计未加载/)
   view.ui.tab = 'overview'
   await button(view, '重试加载').props.onClick()
