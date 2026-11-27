@@ -171,8 +171,8 @@ test('selected WSL environment is revalidated and recorded in the scan manifest'
       calls.push({ command, args })
       assert.equal(command, 'wsl.exe')
       assert.equal(options.shell, false)
-      if (args[0] === '--list') return done(null, '* Ubuntu-24.04 Running 2\\n', '')
-      if (args.includes('--version')) return done(null, 'Nmap version 7.99\\n', '')
+      if (args[0] === '--list') return done(null, '* Ubuntu-24.04 Running 2\n', '')
+      if (args.includes('--version')) return done(null, 'Nmap version 7.99\n', '')
       assert.deepEqual(args, ['--distribution', 'Ubuntu-24.04', '--exec', 'nmap',
         '-sT', '-sV', '--open', '-oX', '-', '192.0.2.50'])
       done(null, '<nmaprun><host></host></nmaprun>', '')
