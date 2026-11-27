@@ -149,6 +149,24 @@ test('every built-in tool has an explicit reviewed contract and existing Skill r
   }
 })
 
+test('passive recon tools use a dedicated adapter and require one-off external-query consent', (t) => {
+  const root = workspace(t)
+  const plan = planTaskTools('domains', {
+    root, config: configFor(root, {}), env: { PATH: '' },
+  })
+  for (const id of ['subfinder', 'dnsx', 'amass']) {
+    const candidate = plan.candidates.find(item => item.id === id)
+    assert.equal(candidate.executionAdapter, 'redteam_passive_recon', id)
+    assert.equal(candidate.executionPolicy, 'dedicated-adapter', id)
+    assert.equal(candidate.operatorConfirmationRequired, true, id)
+    assert.equal(candidate.automaticExecutionAllowed, false, id)
+    assert.ok(candidate.skillRequirements.length > 0, id)
+  }
+  const ksubdomain = plan.candidates.find(item => item.id === 'ksubdomain')
+  assert.equal(ksubdomain.executionPolicy, 'manual-review-only')
+  assert.equal(ksubdomain.executionAdapter, null)
+})
+
 test('selected tools expose Skill read keys and explicit execution policy without granting execution', (t) => {
   const root = workspace(t)
   const httpx = fileAt(join(root, 'pd-httpx.exe'))
