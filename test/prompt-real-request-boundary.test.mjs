@@ -9,6 +9,7 @@ import { rewriteLiveAssembly, getLastInjectReport } from "../lib/index.js";
 import { installAssembleGuard } from "../lib/identity.js";
 import { savePromptProfile, setSessionPromptLock, setSessionPromptPause, listPromptProfiles, routePrompt } from "../lib/prompt-profiles.js";
 import { setInjectionOff } from "../lib/inject-switch.js";
+import { installRuntimeObservations, promptAssemblyForSession } from "../lib/runtime-observations.js";
 
 test("official Agent Loop carries Purge through frozen llm/stream into an inert adapter", {
   skip: !process.env.DSH_COMPAT_HOST_ROOT && "requires pinned official host fixture",
@@ -48,10 +49,35 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   await ctx.plugin(NativeToolExecutor);
   await ctx.plugin(AgentRegistry);
   await ctx.plugin(AgentLoop, { agents: [] });
+  const observer = installRuntimeObservations(ctx);
+  t.after(() => observer.dispose());
 
   const nativeMarker = "P0_NATIVE_COMPLETE_20261120";
-  ctx.systemPrompt.section({ name: "fixture:complete", order: 0, text: nativeMarker, complete: true });
-  const config = { enabled: true, bundledDefault: true };
+  ctx.systemPrompt.section({ name: "fixture:native", order: 0, text: nativeMarker });
+  const effectiveSystemText = request => {
+    const messages = request.messages.filter(message => message.role === "system");
+    if (!messages.some(message => message.source?.kind === "system-prompt" && Array.isArray(message.source.sections))) {
+      return messages.flatMap(message => message.content).filter(block => block.type === "text")
+        .map(block => block.text).join("");
+    }
+    // alpha.2's public DTO records changes to named sections prospectively.
+    // Kept history is not evidence that those older sections are still active.
+    const current = new Map();
+    for (const message of messages) {
+      const source = message.source;
+      if (source?.kind !== "system-prompt" || !Array.isArray(source.sections)) continue;
+      if (source.reset) current.clear();
+      for (const section of source.sections) {
+        if (section.state === "retired") current.delete(section.name);
+        else current.set(section.name, { order: section.order, text: message.content[section.contentIndex]?.text });
+      }
+    }
+    return [...current.values()].sort((a, b) => a.order - b.order)
+      .map(section => section.text || "").join("");
+  };
+  const firstMarker = "FIXTURE_ORDINARY_READ_ONLY_PROMPT";
+  savePromptProfile(home, { id: "global", enabled: true, body: firstMarker });
+  const config = { enabled: true, bundledDefault: false };
   ctx.on("system-prompt/assemble", async (_assembly, context, next) =>
     rewriteLiveAssembly(config, await next(), context));
   installAssembleGuard(ctx.systemPrompt, (assembly, context) =>
@@ -92,6 +118,10 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   await send("First fixture turn");
   assert.equal(atStream.length, 1, "the official loop must reach llm/stream");
   assert.equal(adapter.requests.length, 1, "the official adapter must actually be dispatched");
+  const owned = promptAssemblyForSession(ctx, "p0-inert-request");
+  assert.equal(owned?.requestBoundary, "stream-start-observed");
+  assert.equal(owned?.delivery, "unverified");
+  assert.equal(promptAssemblyForSession(ctx, "unrelated-session"), null);
   const request = atStream[0];
   assert.deepEqual(adapter.requests[0].messages, request.messages);
   const systems = request.messages.filter(m => m.role === "system");
@@ -100,7 +130,7 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   const nativeAt = delivered.indexOf(nativeMarker);
   assert.ok(nativeAt > 0, "the Purge section must precede native host text");
   const injected = delivered.slice(0, nativeAt).trim();
-  assert.ok(injected.length > 100, "real request must include nonempty Purge prompt text");
+  assert.equal(injected, firstMarker, "real request contains only the selected ordinary test rule");
   assert.equal(delivered.split(injected).length - 1, 1, "the prompt must not be duplicated");
   const committed = agent.session.snapshotEvents().filter(e => e.type === "system/message");
   assert.ok(committed.some(e => e.data.message.content.some(b =>
@@ -113,8 +143,7 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   await send("Second fixture turn");
   assert.equal(atStream.length, 2);
   assert.equal(adapter.requests.length, 2);
-  const later = atStream[1].messages.filter(m => m.role === "system")
-    .flatMap(m => m.content.filter(b => b.type === "text").map(b => b.text)).join("");
+  const later = effectiveSystemText(atStream[1]);
   assert.equal(later, nativeMarker);
   assert.ok(!later.includes(injected), "disabled injection must not remain in the current request");
 
@@ -130,9 +159,7 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
     const sent = adapter.requests.at(-1);
     assert.equal(atStream.length, adapter.requests.length, "each stream reaches the inert adapter");
     assert.deepEqual(sent.messages, stream.messages, "the adapter must receive the current DTO");
-    const system = sent.messages.filter(m => m.role === "system");
-    assert.equal(system.length, 1, "native host must preserve one assembled system message");
-    return system[0].content.filter(b => b.type === "text").map(b => b.text).join("");
+    return effectiveSystemText(sent);
   };
   config.enabled = true;
   config.bundledDefault = false;
@@ -192,4 +219,11 @@ test("official Agent Loop carries Purge through frozen llm/stream into an inert 
   current = deliveredNow();
   assert.ok(current.includes(localMarker), "turning injection back on restores the scoped local rule");
   assert.ok(!current.includes(globalMarker), "global remains disabled after independent switch recovery");
+});
+
+test("already admitted host assemblies are returned intact", () => {
+  const native = { name: "fixture:native", text: "NATIVE_ADMITTED_MARKER", complete: true };
+  const compiled = { sections: [native], systemUpdates: () => [] };
+  assert.equal(rewriteLiveAssembly({ enabled: true }, compiled, {}), compiled);
+  assert.deepEqual(compiled.sections, [native]);
 });
