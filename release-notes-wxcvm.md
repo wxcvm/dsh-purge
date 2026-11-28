@@ -1,3 +1,31 @@
+# 1.1.92-wxcvm.31
+
+## 中文
+
+修复版本。解决「无法读取 GitHub 仓库提交；网络不可用或远端响应无效」误报——该提示会把一个正常的分支缺失说成网络故障，并引导用户去查 token 和代理。
+
+### 🐛 修复
+
+- **`beta` 分支缺失被误判为网络故障**：`readPrivateRemoteHead()` 的 `allowMissing` 原先只接受 HTTP 404。GitHub 对已删除的分支返回 **422**（`No commit found for SHA: beta`），于是检查更新时把「可选 ref 不存在」渲染成 `remoteAccessError`。422 不在 401/403/404/429/5xx 的专门文案里，最终落到兜底句「网络不可用或远端响应无效」，让用户误以为是代理或凭据问题。现在 404 与 422 同等视为可选 ref 缺失。
+
+### 📝 影响面
+
+检查更新、版本列表、源码诊断三条路径都会并发查询 `master` 与 `beta`。`beta` 不存在属于正常状态（fork 只在发测试版时才建该分支），不应阻断整个面板。
+
+### ✅ 验证
+
+`beta` 分支存在时 `/commits/beta` 返回 200；不存在时返回 422。修复后两种状态都不再抛错，`master` 的 sha 与远程 `package.json` 版本照常读取。
+
+## English
+
+Fix release. Stops a deleted optional branch from being reported as a network failure.
+
+- `readPrivateRemoteHead()` treated only HTTP 404 as an absent optional ref. GitHub answers **422** (`No commit found for SHA: beta`) for a deleted branch, so the update check rendered a missing ref as `remoteAccessError`. 422 has no dedicated message, so it fell through to "network unavailable or invalid remote response", pointing users at their proxy and credentials. 404 and 422 now both count as missing.
+
+- Update checks, version listing, and source diagnostics all query `master` and `beta` concurrently. A missing `beta` is a normal state for this fork and must not block the panel.
+
+- Verified: `/commits/beta` returns 200 with the branch present, 422 without it; neither throws after the fix, and the `master` sha plus remote `package.json` version still resolve.
+
 # 1.1.92-wxcvm.30
 
 ## 中文
