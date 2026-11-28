@@ -51,6 +51,8 @@
     continueMax: 3
     continueText: "继续"
     capabilityProtocol: true
+    nativePermissionMode: strict
+    toolGateBypass: false
     hooksDenyBypass: false
     hooksDenyBypassOptIn: false
 

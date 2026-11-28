@@ -3,12 +3,12 @@
   "source": {
     "repository": "CallMeGuLab/dsh-purge-safe",
     "url": "https://github.com/CallMeGuLab/dsh-purge-safe",
-    "revision": "d0a9abda6e2eb020dde85b48b5727b45d26582a7",
-    "version": "v2.0.1",
+    "revision": "29bf73a962891cc2c543077572ebd70078897d69",
+    "version": "v2.0.2",
     "license": "Apache-2.0",
     "licenseFile": "third_party/CallMeGuLab-dsh-purge-safe/LICENSE",
     "noticeFile": "third_party/CallMeGuLab-dsh-purge-safe/NOTICE",
-    "verifiedAt": "2026-11-22"
+    "verifiedAt": "2026-11-28"
   },
   "files": [
     {
@@ -243,6 +243,12 @@
       "local": "webshell-toolkit.md",
       "upstream": "skills/redteam/webshell-toolkit.md",
       "upstreamBlobSha": "30d8d0bbf6f5e8a5de741341af846ef8c152b785",
+      "adoption": "adapted"
+    },
+    {
+      "local": "c2-infra.md",
+      "upstream": "skills/redteam/c2-infra.md",
+      "upstreamBlobSha": "378dd8d02c5f84d5d98c6ac9b84ca62838337294",
       "adoption": "adapted"
     }
   ]

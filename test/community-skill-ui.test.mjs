@@ -23,7 +23,7 @@ test('existing skills panel can list and read a community skill without native r
   assert.ok(catalog.items.some((item) => item.name === 'web-injection' && item.library === 'redteam'))
   const bundled = catalog.items.find((item) => item.name === 'active-scan')
   assert.equal(bundled.sourceMeta.repository, 'CallMeGuLab/dsh-purge-safe')
-  assert.equal(bundled.sourceMeta.version, 'v2.0.1')
+  assert.equal(bundled.sourceMeta.version, 'v2.0.2')
   assert.equal(bundled.sourceMeta.license, 'Apache-2.0')
   assert.equal(bundled.sourceMeta.adoption, 'adapted')
   const skill = catalog.items.find(item => item.name === 'community/yak-skills/yaklang-syntax')

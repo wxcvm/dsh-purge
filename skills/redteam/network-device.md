@@ -1,39 +1,68 @@
 ---
 name: network-device
-description: 网络与边界设备安全审查：路由器、防火墙、VPN、交换机、堡垒机的只读配置与管理面核查
-whenToUse: 授权资产包含网络设备、VPN 网关、防火墙、交换机、路由器或堡垒机时
-role: vuln-scan
+description: 【内网】网络设备与边界设备：VPN/防火墙/路由器/交换机/网闸的 SNMP、默认口令、配置与路由表取证（netdev 记分）
+whenToUse: 资产是 VPN/防火墙/路由器/交换机/网闸/堡垒机，或需要从网络设备看路由/策略/跨区路径时
+role: internal
 category: 内网
-tags: [network, snmp, vpn, firewall, read-only]
+tags: [network, snmp, vpn, netdev]
 enabled: true
 ---
 
-# 网络与边界设备审查
+# 网络设备 / 边界设备
 
-网络设备的误操作可能造成大面积中断。本技能默认只读；任何配置变更、固件升级、重启或故障切换都需要单独的书面授权和回滚方案。
+> 网络设备是**边界突破和横向跳板**的高价值目标，但也是最容易“一改就断网”的目标：先只读、先备份、不做 reload/erase/重启。
 
-## 1. 范围与身份
+## 前置与工具
 
-- 先通过 `redteam_scope_review(allowed=...)` 核对设备 IP、管理域名和网段。
-- 优先使用用户提供的只读管理账号、只读 SNMPv3 凭据或厂商导出的脱敏配置。
-- 不猜默认口令、不枚举 community string、不复用泄露凭据；没有授权凭据时只整理公开/被动信息。
+| 工具 | 用途 |
+| --- | --- |
+| `snmpwalk` / `onesixtyone` | SNMP v1/v2c/v3 枚举 |
+| `ssh` / `telnet` / `nc` | 管理面登录与端口验证 |
+| `nuclei` | 厂商 CVE / 默认口令模板 |
+| `curl` | Web 管理面、VPN 门户 |
+| 厂商 CLI | `show running-config` / `show route` / `show arp` |
 
-## 2. 只读盘点
+工具缺失时 `command -v` 确认；缺厂商 MIB 就记录 OID 与回显，不要猜。
 
-- 记录厂商、型号、固件版本、支持状态、管理接口和资产责任人。
-- 检查管理面是否暴露到不必要的网络、是否强制 MFA、是否限制管理源地址、是否使用安全管理协议。
-- 在已提供只读访问的前提下，查看设备接口、路由、ACL/NAT、VPN 配置摘要、SNMP 版本和日志转发设置。
-- 对配置备份只读取必要片段；遮蔽密钥、预共享密钥、社区字符串、用户和公网地址等敏感值。
-- 对固件版本使用厂商公告和 CVE 资料核对，不直接运行利用代码。
+## 识别与只读枚举
 
-## 3. 关系与风险
+```bash
+# SNMP v2c（先试只读 community；不要写 set）
+snmpwalk -v2c -c public <ip> 1.3.6.1.2.1.1
+snmpwalk -v2c -c public <ip> 1.3.6.1.2.1.4.20   # IP 地址表
+snmpwalk -v2c -c public <ip> 1.3.6.1.2.1.4.21   # 路由表
 
-- 通过 `redteam_asset_query` 获取已有资产；确认 IP 未登记时才用 `redteam_asset_add` 登记，填写真实 IP、`provenance` 和 `tool`。
-- 只有存在配置或文档证据时才用 `redteam_asset_link` 记录设备之间的信任、路由或暴露关系。
-- 区分管理面暴露、配置弱点、已确认漏洞和单纯版本线索；不要把设备可达等同于跨区突破。
+# 管理面
+curl -k -I https://<ip>/
+nc -nv <ip> 22
+```
 
-## 4. 证据与交付
+- 关注：设备型号/固件、管理口暴露、默认口令、SNMP 可写、VPN 门户、双机热备、路由表/策略、跨区接口；
+- 先判断它是**边界设备**还是普通内网设备；边界设备的路由表/策略是 `boundary-*` 证据的一部分。
 
-用 `redteam_asset_test` 追加型号/版本、管理面范围、只读检查项、证据来源、风险和未检查原因。需要报告漏洞时使用 `redteam_vuln_add`，默认 candidate；确认状态必须有可重复、无副作用的证据。
+## 常见路径
 
-禁止 SNMP SET、改路由/ACL/NAT、导出完整配置、读取无关第三方凭据、reload/erase/reboot、固件写入和批量管理口尝试。
+1. **默认/弱口令管理面**：只试厂商默认与针对性小字典；登录成功先看只读页面，记录型号/版本/权限；
+2. **SNMP**：读路由表、ARP、接口、CPU/内存；若 community 可写，**不要改配置**，只记录可写事实；
+3. **Web 管理面 CVE**：用 `nuclei` 厂商模板或 `redteam_poc_search`，先验证存在，不直接利用；
+4. **配置/备份泄露**：找 `config.bin`、`running-config`、VPN 配置文件；下载前确认不含无关第三方数据；
+5. **路由/策略取证**：`show ip route`、`show running-config`、`show arp`、NAT/ACL；截图/文本落 `runs/`。
+
+## 证据与记分
+
+- 资产：`redteam_asset_add`（vendor/product/version、管理口、Web 标题）；
+- 凭证：`redteam_credential_add`（source=默认口令/SNMP/配置泄露）；
+- 得分：`netdev` 普通 100 / 管理员 200；重定向/业务劫持 +200、植入远控 +1000 单独记；
+- 边界：跨隔离区才记 `boundary-*`；同区只记 `internal`；
+- 证据：路由表/策略/连接量截图（G7），命令写进 `score_hit` 的 `command`/`result`。
+
+## OPSEC 与边界
+
+- 不改路由/ACL/NAT，不 reload、不 erase、不升级固件；必须改时先备份并记录原值；
+- 不批量扫管理口，避免触发锁定/告警；
+- 配置里可能有第三方凭据/密钥：只取证明所需片段，脱敏落库；
+- 清理自己上传的文件/临时账号，登记 `redteam_cleanup`。
+
+## 交接
+
+回报：设备类型/型号/固件、管理权限、路由/策略要点、跨区路径、可用作跳板的接口、未打通的卡点；`needs` 写清缺的 MIB/账号/授权。

@@ -1,44 +1,66 @@
 ---
 name: mobile-code-recon
-description: 移动应用与代码包静态审查：APK/IPA、Manifest、深链、WebView、网络配置、硬编码端点和敏感信息暴露
-whenToUse: 用户提供了自有/授权的 APK、IPA、小程序包或公开代码仓库，需要梳理移动端攻击面时
+description: 【侦察】移动端与代码泄露侦察：APK/IPA/小程序提取 API 与密钥、GitHub/Gitee/GitLab 代码泄露、前端 SourceMap（只取公开线索）
+whenToUse: 靶标有 APP/小程序/H5，或需要从公开代码仓库/前端包找接口、密钥、内网地址时
 role: recon
 category: 侦察
-tags: [mobile, apk, ipa, source-code, privacy]
+tags: [mobile, apk, code-leak, api]
 enabled: true
 ---
 
-# 移动应用与代码包侦察
+# 移动端 / 代码泄露侦察
 
-只分析用户提供、组织自有或明确授权的应用包与仓库。公开可下载不等于获得测试其后端服务的授权。
+> 只使用公开可获取的安装包/仓库/前端资源；不破解、不盗版、不碰与靶标无关的第三方代码。发现密钥先记录，不直接使用。
 
-## 1. 前置检查
+## 前置与工具
 
-- 记录应用名称、版本、包名、构建渠道、文件来源和 SHA-256。
-- 可选工具：`jadx`、`apktool`、`MobSF`、`plutil`。先用 `command -v` 检查是否安装；缺少工具时说明限制，不假装已经分析。
-- 静态分析优先；动态验证只使用专用测试设备、测试账号和预发环境。
+| 工具 | 用途 |
+| --- | --- |
+| `jadx` / `apktool` | APK 反编译、资源/Manifest |
+| `MobSF`（可选） | 静态/动态分析 |
+| `gitleaks` / `git-secrets` | 仓库密钥扫描 |
+| `curl` / `browser-automation` | 前端 JS/SourceMap、小程序包 |
+| `fofa-recon` / `deepseek-web-intel` | 公开资产与情报 |
 
-## 2. Android / iOS 检查项
+## Android / iOS
 
-- Android Manifest：权限、exported 组件、intent-filter、深链、Content Provider、调试和备份标记。
-- 网络安全配置：明文流量、信任锚、证书策略和 WebView 的 JavaScript/文件访问设置。
-- WebView 与桥接：允许加载的域名、外部 Intent、JavaScript bridge 暴露面和导航校验。
-- 本地存储：日志、缓存、偏好设置、数据库和备份中是否出现敏感数据；只记录问题位置，不复制数据内容。
-- iOS：Info.plist、URL Scheme、Universal Links、ATS、Keychain 使用方式、调试符号和应用组配置。
-- 原生库与依赖：组件名称、版本、许可证、已知安全公告和维护状态。
+```bash
+# APK：先看 Manifest、字符串、assets、native lib
+jadx -d runs/apk-<name> app.apk
+apktool d app.apk -o runs/apk-<name>-smali
+grep -RInE 'https?://|api[_-]?key|secret|token|access[_-]?key' runs/apk-<name> | head -100
+```
 
-## 3. API 与代码泄露线索
+- 关注：API base URL、内网地址、AK/SK、推送/地图/支付 Key、WebView 入口、证书绑定；
+- iOS：`class-dump`/`strings`/`plutil` 看 Mach-O 与 Info.plist；不做越狱设备操作；
+- 小程序：从缓存/包体提取 `app-service.js`、`wx.config`、request 域名；只抓公开包。
 
-- 从源码或资源文件提取 API base URL、路径、WebSocket 域名和环境切换配置。
-- 对疑似密钥只记录类型、文件路径、行号和脱敏指纹；不尝试登录、不调用管理 API、不把完整值写入报告。
-- SourceMap、公开仓库和 CI 配置只分析在授权范围内可访问的内容；个人开发者仓库和第三方 SDK 不自动纳入靶标范围。
-- 发现后端域名/IP 时先做归属与范围复核，再决定是否进行任何网络验证。
+## 代码泄露
 
-## 4. 证据与交付
+- GitHub/Gitee/GitLab 搜索：单位名、域名、项目名、`internal`、`jdbc:`、`AKID`、`password`；
+- 重点：CI 配置（`.gitlab-ci.yml`、`Jenkinsfile`）、`.env`、`config.*`、`docker-compose`、测试脚本；
+- 命中密钥只记录来源与截图，不直接登录；需要验证时先 `redteam_scope_review` 并走用户确认。
 
-- 使用 `redteam_asset_test` 追加应用包 SHA、版本、组件/配置位置、API 线索和复核状态。
-- 只有确认后端资产属于本次范围时，才用 `redteam_asset_add` 登记已确认的 IP；该工具要求真实 IPv4，不要用域名或占位值伪造资产。
-- 对可重复的安全缺陷用 `redteam_vuln_add` 记录；证据只保留必要的脱敏片段。
-- 输出按“确认问题 / 风险线索 / 未验证项”分组，并列出修复建议。
+## 前端 / SourceMap
 
-不破解付费应用、不绕过账号付费限制、不提取或使用真实凭据、不批量请求生产 API，也不对未授权后端发起探测。
+- JS 里找 `baseURL`、`/api/`、`/v2/`、`/internal/`、WebSocket；
+- `.map` 还原源码，找接口与硬编码密钥；
+- 结果写进资产 `test`/`surface`，接口清单落 `runs/`。
+
+## 证据与落库
+
+- 资产：`redteam_asset_add` / `redteam_batch kind=assets`（APP 后端域名/IP、小程序 API）；
+- 线索：`redteam_asset_test` 的 `surface` 写接口/密钥/内网地址；
+- 归属：ICP/证书/页脚/单位名，按 `asset-correlation`；
+- 不把密钥明文写进报告/会话；按凭据规范落库。
+
+## OPSEC 与边界
+
+- 只下载公开包/公开仓库；不破解付费应用、不盗用第三方代码；
+- 不对生产 API 做未授权批量请求；验证前先 scope check；
+- 第三方代码/供应商资产不在范围只记线索；
+- 不把个人开发者仓库当靶标资产，除非能证明归属。
+
+## 交接
+
+回报：APP/小程序入口、API base、泄露的密钥类型（不贴明文）、可用接口、归属证据、未覆盖平台；`needs` 写清缺的工具/授权。

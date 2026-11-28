@@ -1,50 +1,103 @@
 ---
 name: asset-deep-scan
-description: 单资产深度评估：按 surface、web、auth、cve、app 五个维度逐项核查并记录覆盖缺口
-whenToUse: 一批资产初步测绘完成后，需要选定单个已授权资产做细致复核和任务交接时
+description: 【验证】单资产深挖：对一个资产逐项完成 surface / web / auth / cve / app 五项检查，产出候选漏洞与未验证假设，避免批量扫描漏细节
+whenToUse: 主会话按单个资产派发漏洞发现任务，或需要把“扫过一批”变成“看透一个资产”时
 role: vuln-scan
 category: 验证
-tags: [asset, deep-scan, coverage, evidence]
+tags: [asset, deep-scan, vulnerability, coverage]
 enabled: true
 ---
 
-# 单资产深度评估
+# 单资产深挖
 
-一次只处理一个资产。批量扫描结果只是候选线索；本技能把单个资产的已知攻击面、证据和未完成项整理清楚，不自动执行利用。
+> 一次只负责一个资产。批量 nuclei/ffuf 只产生候选；本技能要求把五项检查逐项做完，写进 `redteam_coverage`，否则不许收口。
 
-## 0. 选择资产与范围
+## 0. 建包
 
-1. 用 `redteam_asset_query` 按 IP、端口、服务或指纹找到资产。
-2. 用 `redteam_asset_get(id=...)` 读取完整记录，确认资产 ID、来源和历史测试。
-3. 用 `redteam_scope_review(allowed=...)` 再核对该资产是否在用户明确授权范围内。
-4. 开始前调用 `redteam_asset_test(status=testing)`；不在范围或归属不明时停止，不启动主动探测。
+```text
+redteam_coverage action=status phase=external asset_id=<id>
+redteam_asset_next asset_id=<id>
+```
 
-## 1. Surface：端口、服务与指纹
+先看资产端口/服务/版本/URL/标题，以及 `surface/web/auth/cve/app` 当前状态。缺什么补什么。
 
-记录已知端口、协议、服务、产品、版本、banner、URL、证书和指纹来源。版本未知就标记未知，不从端口号猜产品。优先复用已有采集结果，缺口只做授权范围内的最小补充。
+## 1. surface（端口/服务/版本/指纹）
 
-## 2. Web：页面与接口
+- 端口、协议、服务、产品、版本、banner、URL、标题；
+- 指纹：框架/CMS/中间件/开发语言/云组件；
+- 已知组件版本 → 对应 CVE/POC；版本不明就记录“无法确认”，不要猜。
 
-检查已授权站点公开入口、robots/sitemap、登录页、前端脚本引用、OpenAPI/Swagger、GraphQL 和业务 API。接口清单只记录路径、方法、认证要求和用途，不下载无关文件、不批量枚举敏感数据。
+完成后：
 
-## 3. Auth：身份与授权
+```text
+redteam_coverage action=update phase=external asset_id=<id> surface=done
+```
 
-使用用户提供的测试账号或专门合成账号。检查匿名访问、过期会话、普通/管理员角色差异、对象级授权和租户隔离。不要猜测口令、复用泄露凭据或对真实用户账号做尝试。
+## 2. web（路径/接口/前端）
 
-## 4. CVE：已知漏洞候选
+- 根路径、robots/sitemap、登录/注册/上传/导出/报表；
+- JS 里的 API、Swagger/OpenAPI、GraphQL、actuator、druid；
+- 参数与对象：`id/userId/tenantId/orderId`、`pageSize`、`export`；
+- 目录爆破只做小字典定点，不跑大字典刷时间。
 
-先用 `redteam_poc_search` 或厂商公告核对产品、版本和受影响范围。搜索命中只表示候选，不表示目标存在漏洞。优先使用版本/配置证据和无副作用检测；不运行破坏性 PoC、不修改目标状态。
+完成后 `web=done`；没有 Web 服务则 `not_applicable`。
 
-## 5. App：业务逻辑与数据边界
+## 3. auth（认证面）
 
-使用合成订单、测试用户和沙箱数据检查上传/下载、导出、分页、对象 ID、租户 ID、状态机和字段白名单。只验证授权判断，不读取真实客户记录、不执行真实转账/删除/审批操作。
+- 未授权访问：不带 token/过期 token/低权限 token；
+- 默认口令、弱口令（严格限流，不盲爆破）；
+- 已有凭据复用；登录成功才 `redteam_access_add`；
+- 越权：普通账号访问管理员接口、替换租户/用户 id。
 
-## 6. 记录与收口
+完成后 `auth=done`；没有登录面则 `not_applicable`；被锁/被封记 `blocked` 并写原因。
 
-- 用 `redteam_asset_test` 的 `test` 追加每个维度的检查结果，`surface` 写仍未覆盖的部分。
-- 没有对应服务的维度，在 `test` 记录中写明 `not applicable` 和原因；这不是 `redteam_asset_test` 的独立 status 值。
-- 发现问题先以 `redteam_vuln_add(status=candidate)` 记录；只有在测试环境中可重复且证据充分时才确认。
-- 五个维度均完成或明确不适用后，用 `redteam_asset_test(status=tested)` 收口；被授权边界、账号或环境阻断时用 `status=blocked` 并说明原因。只有整个资产确实没有可评估面时才使用 `status=no_surface`。
-- 不在授权范围或授权无法确认时不要开始主动测试；保留未测试状态并写明原因。不要把“扫过”写成“已验证”。
+## 4. cve（已知漏洞）
 
-不批量扫描多个目标，不收集真实凭据，不导出全库，不删除/修改业务数据，也不把未验证假设写成 confirmed。
+- 按组件/版本查 `redteam_poc_search`，优先 P0 RCE/上传/反序列化；
+- 用最小验证确认，不直接上破坏性 payload；
+- 命中写 `redteam_vuln_add`（status=candidate/confirmed，带 request/response）；
+- 不确认的写“未验证假设”，不要写成 confirmed。
+
+完成后 `cve=done`。
+
+## 5. app（业务逻辑/数据接口）
+
+- 上传/下载/导出/批量查询/分页上限；
+- IDOR/越权/批量赋值/金额/订单/审批绕过；
+- 数据接口字段、条数、是否含三要素；达到 P1 用 `redteam_data_proof`；
+- 只取证明所需样本，不拖全库。
+
+完成后 `app=done`；无业务面则 `not_applicable`。
+
+## 6. 候选与交接
+
+每个候选写：
+
+```text
+redteam_vuln_add {
+  asset_id, title, severity, target, evidence,
+  status: candidate|confirmed,
+  request, response
+}
+```
+
+- 候选要写“还缺什么验证”，不要为了速度把 candidate 当 confirmed；
+- 发现需要利用链/凭据/隧道才能验证，写进 `needs` 交 `exploit`；
+- 利用失败时由 `exploit` 反向要求补 `web/auth/app` 某项，不要直接换资产。
+
+## 7. 收口
+
+五项都 `done/blocked/not_applicable` 后：
+
+```text
+redteam_coverage action=close phase=external asset_id=<id>
+```
+
+close 报缺项就补，不能跳过；只有 close 成功才算这个资产看完。
+
+## 纪律
+
+- 一次只做一个资产；不要在同一任务里批量扫几十个资产；
+- 不写“XX红队测试”、队伍标识、假身份、XSS/弹窗/留言等无法获得权限的数据；
+- 不把“扫过”当“看透”；没有证据的候选标 candidate；
+- 不删除/加密/重启/批量改密/清日志。

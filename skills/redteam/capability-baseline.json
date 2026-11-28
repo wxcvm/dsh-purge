@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "note": "dsh-purge 技能能力基线：只允许增长。删除命令/参数表会被 scripts/check-upstream-capability.mjs 拦住。",
+  "upstream": {
+    "revision": "29bf73a962891cc2c543077572ebd70078897d69",
+    "version": "v2.0.2"
+  },
+  "skills": {
+    "active-scan.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 11,
+      "lines": 35
+    },
+    "ad-attack.md": {
+      "codeBlocks": 4,
+      "commandLines": 22,
+      "tableRows": 0,
+      "lines": 72
+    },
+    "ai-agent-attack.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 6,
+      "lines": 59
+    },
+    "api-attack.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 0,
+      "lines": 52
+    },
+    "asset-correlation.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 0,
+      "lines": 54
+    },
+    "asset-deep-scan.md": {
+      "codeBlocks": 4,
+      "commandLines": 9,
+      "tableRows": 0,
+      "lines": 104
+    },
+    "browser-automation.md": {
+      "codeBlocks": 3,
+      "commandLines": 30,
+      "tableRows": 5,
+      "lines": 83
+    },
+    "campaign-planning.md": {
+      "codeBlocks": 1,
+      "commandLines": 1,
+      "tableRows": 0,
+      "lines": 83
+    },
+    "chisel-tunnel.md": {
+      "codeBlocks": 4,
+      "commandLines": 11,
+      "tableRows": 9,
+      "lines": 116
+    },
+    "cloud-container.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 0,
+      "lines": 50
+    },
+    "cn-proxy-pool.md": {
+      "codeBlocks": 3,
+      "commandLines": 34,
+      "tableRows": 8,
+      "lines": 91
+    },
+    "credential-attack.md": {
+      "codeBlocks": 4,
+      "commandLines": 21,
+      "tableRows": 5,
+      "lines": 156
+    },
+    "deepseek-web-intel.md": {
+      "codeBlocks": 5,
+      "commandLines": 201,
+      "tableRows": 20,
+      "lines": 346
+    },
+    "dir-bruteforce.md": {
+      "codeBlocks": 4,
+      "commandLines": 20,
+      "tableRows": 21,
+      "lines": 116
+    },
+    "fofa-recon.md": {
+      "codeBlocks": 2,
+      "commandLines": 101,
+      "tableRows": 16,
+      "lines": 182
+    },
+    "frp-tunnel.md": {
+      "codeBlocks": 3,
+      "commandLines": 26,
+      "tableRows": 10,
+      "lines": 148
+    },
+    "fscan-intranet.md": {
+      "codeBlocks": 16,
+      "commandLines": 60,
+      "tableRows": 13,
+      "lines": 217
+    },
+    "gogo-intranet.md": {
+      "codeBlocks": 17,
+      "commandLines": 68,
+      "tableRows": 21,
+      "lines": 237
+    },
+    "host-post-exploit.md": {
+      "codeBlocks": 5,
+      "commandLines": 31,
+      "tableRows": 0,
+      "lines": 108
+    },
+    "kimi-webbridge.md": {
+      "codeBlocks": 3,
+      "commandLines": 13,
+      "tableRows": 0,
+      "lines": 87
+    },
+    "lateral-movement.md": {
+      "codeBlocks": 5,
+      "commandLines": 33,
+      "tableRows": 7,
+      "lines": 150
+    },
+    "mobile-code-recon.md": {
+      "codeBlocks": 1,
+      "commandLines": 3,
+      "tableRows": 7,
+      "lines": 67
+    },
+    "netspy-recon.md": {
+      "codeBlocks": 7,
+      "commandLines": 23,
+      "tableRows": 19,
+      "lines": 185
+    },
+    "network-device.md": {
+      "codeBlocks": 1,
+      "commandLines": 5,
+      "tableRows": 7,
+      "lines": 69
+    },
+    "nuclei-scan.md": {
+      "codeBlocks": 1,
+      "commandLines": 7,
+      "tableRows": 24,
+      "lines": 110
+    },
+    "oob-verify.md": {
+      "codeBlocks": 1,
+      "commandLines": 3,
+      "tableRows": 0,
+      "lines": 59
+    },
+    "opsec-hygiene.md": {
+      "codeBlocks": 1,
+      "commandLines": 5,
+      "tableRows": 0,
+      "lines": 70
+    },
+    "passive-recon.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 0,
+      "lines": 27
+    },
+    "recon-pipeline.md": {
+      "codeBlocks": 2,
+      "commandLines": 24,
+      "tableRows": 18,
+      "lines": 112
+    },
+    "redteam-setup.md": {
+      "codeBlocks": 2,
+      "commandLines": 3,
+      "tableRows": 12,
+      "lines": 100
+    },
+    "score-coverage.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 21,
+      "lines": 124
+    },
+    "shell-handler.md": {
+      "codeBlocks": 6,
+      "commandLines": 32,
+      "tableRows": 14,
+      "lines": 147
+    },
+    "specialist-paths.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 13,
+      "lines": 81
+    },
+    "suo5-tunnel.md": {
+      "codeBlocks": 2,
+      "commandLines": 9,
+      "tableRows": 0,
+      "lines": 64
+    },
+    "supply-chain.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 7,
+      "lines": 59
+    },
+    "unauth-exploit.md": {
+      "codeBlocks": 5,
+      "commandLines": 37,
+      "tableRows": 13,
+      "lines": 152
+    },
+    "vps-reverse-shell.md": {
+      "codeBlocks": 9,
+      "commandLines": 33,
+      "tableRows": 30,
+      "lines": 188
+    },
+    "web-fingerprint.md": {
+      "codeBlocks": 0,
+      "commandLines": 0,
+      "tableRows": 0,
+      "lines": 18
+    },
+    "webshell-toolkit.md": {
+      "codeBlocks": 4,
+      "commandLines": 11,
+      "tableRows": 6,
+      "lines": 104
+    },
+    "c2-infra.md": {
+      "codeBlocks": 1,
+      "commandLines": 4,
+      "tableRows": 12,
+      "lines": 91
+    }
+  }
+}
