@@ -1,3 +1,39 @@
+# 1.1.92-wxcvm.30
+
+## 中文
+
+候选版本，新增注入槽体检与 upstream-safe 载荷解密工具。相比 `.29` 增加两个只读诊断脚本和一份机制说明文档，用于定位「插件已装但模型只打印模板、不调用工具」这类症状。
+
+### 🎯 核心新增
+
+- **upstream-safe 载荷解密**（`scripts/decrypt-upstream-safe.mjs`）：解开 `lib/upstream-safe/asset-table.js` 内的 AES-256-GCM + zlib 密封稿。仓库源码缺少该资产时自动退到已安装插件目录，也支持 `--lib` 显式指定。
+
+- **注入槽体检**（`scripts/audit-inject-slot.mjs`）：只读判断 `prompt-inject.md` 是完整稿还是被截断的残片。按 `ACTION vs PRINT` 段、`run:` 槽位、`output exactly:` 三个确定性信号裁决，退出码 0/1/2 分别代表完整/残缺/无法判定。
+
+- **机制说明**（`docs/INJECT-SLOT-AUDIT.zh-CN.md`）：记录密封载荷结构、密钥派生链、槽位优先级与修复步骤。
+
+### 📝 背景
+
+用户槽 `prompt-inject.md` 的优先级高于密封默认稿。若槽位被替换成残片，槽位动词会从 `run:` 退化为 `output exactly:`，强制段整体缺失，模型退化为打印器。`upstreamSafeAssemblyProbe()` 只报告组装层、不报告真实投递，因此该症状在诊断里看不出来。
+
+### ✅ 验证
+
+- 对完整槽：`verdict: complete`，退出码 0
+- 对残片槽：`verdict: truncated`，命中 `output exactly` 削弱信号，退出码 1
+- 解密输出与 `readUpstreamSafePrompt()` 同源同算法
+
+## English
+
+Prerelease. Adds read-only diagnostics for the inject slot and the upstream-safe sealed prompt.
+
+- `scripts/decrypt-upstream-safe.mjs`: decrypt the AES-256-GCM + zlib payload in `lib/upstream-safe/asset-table.js`; falls back to the installed plugin when the source tree lacks the asset, and accepts `--lib`.
+- `scripts/audit-inject-slot.mjs`: read-only verdict on whether `prompt-inject.md` is the full contract or a truncated fragment, keyed on `ACTION vs PRINT`, `run:` slots, and `output exactly:`. Exit 0/1/2 = complete/truncated/unknown.
+- `docs/INJECT-SLOT-AUDIT.zh-CN.md`: payload structure, key derivation chain, slot precedence, and repair steps.
+
+The user slot outranks the sealed default. A fragment slot degrades `run:` into `output exactly:` and drops the mandatory section, so the model only prints templates. `upstreamSafeAssemblyProbe()` reports assembly, not delivery, so this is invisible in diagnostics.
+
+Verified: a full slot reports `complete` (exit 0); the truncated fragment reports `truncated` with the `output exactly` signal (exit 1).
+
 # 1.1.92-wxcvm.29
 
 ## 中文
