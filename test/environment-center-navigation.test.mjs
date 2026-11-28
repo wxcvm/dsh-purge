@@ -13,7 +13,8 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     assert.ok(env.includes("section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true })"))
     assert.ok(src.includes("initialSection: st.tab === 'low-impact' ? 'privacy' : st.tab === 'local-search' ? 'local-search' : 'summary'")) 
     assert.match(env, /h\(LocalAssetSearchTab, \{ engagement: props.engagement, refreshKey \}\)/)
-    assert.match(env, /顶部“保存环境配置”不保存测绘操作勾选/)
+    assert.match(env, /测绘偏好在本页单独保存/)
+    assert.match(env, /更多设置/)
     assert.doesNotMatch(src, /label: '资源', pages: [^\n]*local-search/)
     assert.match(src, /op: 'intelSourcesSave'/)
     assert.match(src, /op: 'platformConfigSave'/)
@@ -29,8 +30,8 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     }
     assert.match(survey, /surveyPage === 'assets' \? h\(React.Fragment/)
     assert.match(survey, /if \(!eng\) \{ setError\('请先选择靶标'\)/)
-    assert.match(src, /onClick: loadCapabilityMatrix \}, matrixBusy \? '读取中…' : '读取环境与工具路径'/)
-    assert.match(src, /推荐配置与下一步/)
+    assert.match(src, /onClick: loadCapabilityMatrix \},\s+matrixBusy \? '正在生成矩阵…' : '生成 \/ 刷新能力矩阵'/)
+    assert.match(src, /本机配置检查/)
     assert.match(src, /网络配置诊断/)
   })
 }

@@ -32,10 +32,10 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     assert.equal(envToolReadiness(tools[0], { status: 'runnable', path: '/tools/previous' }), 'unchecked')
 
     const view = source.slice(end, source.indexOf('function GuideTab(props)', end))
-    assert.match(view, /开工前 · 环境速检/)
+    assert.match(view, /本机配置检查/)
     assert.match(view, /版本命令成功都不等于实际任务成功/)
     assert.match(view, /当前检查结果仍基于已保存配置/)
-    assert.match(view, /读取环境与工具路径/)
+    assert.match(view, /路径与版本明细/)
     assert.match(view, /onClick: \(\) => showToolStatus\(filter\)/)
     assert.match(view, /工具验证状态筛选/)
     assert.match(view, /toolStatusFilter === 'all' \|\| envToolReadiness/)

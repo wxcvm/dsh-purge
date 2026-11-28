@@ -27,6 +27,9 @@ test('saved receipt, path check and a fresh process read one credential-free rev
   assert.equal(missing.config.exists, false)
   assert.equal(missing.configRevision, 'missing')
   assert.equal(check(root, 'missing').configExists, false)
+  assert.equal(missing.configCheck.configExists, false)
+  assert.equal(missing.configCheck.toolkitDirectoryConfigured, false)
+  assert.equal(missing.configCheck.configRevision, missing.configRevision)
 
   const nonexistent = join(root, 'unavailable')
   const secret = 'FIXTURE_SECRET_DO_NOT_RETURN'
@@ -49,6 +52,15 @@ test('saved receipt, path check and a fresh process read one credential-free rev
   assert.deepEqual(observed.missingBinDirs, [nonexistent])
   assert.ok(Number.isFinite(Date.parse(observed.checkedAt)))
   assert.equal(JSON.stringify(observed).includes(secret), false)
+  const withoutTime = ({ checkedAt, ...value }) => value
+  assert.deepEqual(withoutTime(saved.configCheck), withoutTime(observed))
+  const file = join(root, 'config.json')
+  const beforeInspect = readFileSync(file, 'utf8')
+  mkdirSync(nonexistent)
+  const refreshed = get(root)
+  assert.deepEqual(refreshed.configCheck.missingBinDirs, [])
+  assert.equal(refreshed.configCheck.configRevision, saved.configRevision)
+  assert.equal(readFileSync(file, 'utf8'), beforeInspect, 'a refreshed check must not write the configuration')
 
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
     import { handlePlatformSettingsOp } from ${JSON.stringify(new URL('../lib/redteam/platform-settings.js', import.meta.url).href)};
@@ -76,6 +88,8 @@ test('stale windows and directory assignment cannot overwrite a newer patch', t 
   const accepted = assign(next.configRevision)
   assert.equal(accepted.ok, true)
   assert.equal(accepted.runtime.nodePlatform, process.platform)
+  assert.equal(accepted.configCheck.configRevision, accepted.configRevision)
+  assert.equal(accepted.configCheck.toolkitDirectoryOk, true)
   assert.equal(get(root).config.configRevision, accepted.configRevision)
   const clear = save(root, { env: { FOFA_KEY: '' } }, accepted.configRevision)
   assert.equal(clear.ok, true)

@@ -165,7 +165,7 @@ test('diagnostic center distinguishes loaded and disk versions and unavailable h
   assert.match(report, /备份: 未知/)
   assert.match(client, /cleanPane\(\["diagnostics"\], h\(CleanDiagnostics/)
   assert.match(client, /loaded && disk && loaded !== disk/)
-  assert.match(client, /版本号一致（不代表所有前端资源或补丁已生效）/)
+  assert.match(client, /版本号一致不代表前端资源或补丁已生效/)
 })
 
 test('version identity retains module-evaluation version while disk changes', () => {
