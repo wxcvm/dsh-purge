@@ -96,18 +96,20 @@
   },
   "dependencies": {
     "proxy-agent": "^6.5.0",
+    "semver": "^7.7.2",
     "yaml": "^2.9.1",
     "better-sqlite3": "^9.2.2"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/cordis": "^4.0.1 || =4.2.0-alpha.1"
   },
   "engines": {
     "node": ">=18",
-    "dsh": "=0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2"
+    "dsh": "=0.2.3-alpha.2 || =0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2"
   },
   "dshTarget": "0.2.2-rc.5",
   "dshTargets": [
+    "0.2.3-alpha.2",
     "0.2.2-rc.5",
     "0.2.2-rc.3",
     "0.2.2-rc.1",

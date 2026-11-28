@@ -5,12 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 // Single reviewed daily CI baseline; update when the next official host is released.
 const latestHost = '0.2.2-rc.5';
+const alphaHost = '0.2.3-alpha.2';
+const modernHost = new Set([latestHost, alphaHost]);
 const version = process.argv[2] || latestHost;
-if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', latestHost].includes(version)) {
+if (!['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.1-rc.5', '0.2.2-rc.1', '0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', latestHost, alphaHost].includes(version)) {
   throw new Error('Select one of the explicitly reviewed fixture versions.');
 }
 const root = fileURLToPath(new URL('../', import.meta.url));
-const directory = path.join(root, '.scratch', 'hosts', version === latestHost ? version + '-child-native' : version);
+const directory = path.join(root, '.scratch', 'hosts', modernHost.has(version) ? version + '-child-native' : version);
 const response = await fetch(`https://registry.npmjs.org/@deepseek-ai%2Fdsh-tools/${encodeURIComponent(version)}`);
 if (!response.ok) throw new Error(`official package metadata HTTP ${response.status}`);
 const metadata = await response.json();
@@ -50,7 +52,7 @@ for (const name of [
 ]) dependencies[name] = version;
 // rc.2+ dsh-llm imports dsh-error at runtime. The fixture deliberately installs
 // with --legacy-peer-deps, so explicitly pin this official peer/module.
-if (['0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', latestHost].includes(version)) {
+if (['0.2.2-rc.2', '0.2.2-rc.3', '0.2.2-rc.4', latestHost, alphaHost].includes(version)) {
   dependencies['@deepseek-ai/dsh-error'] = version;
 }
 // Legacy tools import sandbox utilities; the 0.2.2 tool provider no longer does.
@@ -60,13 +62,13 @@ if (metadata.peerDependencies?.['@deepseek-ai/dsh-sandbox']) {
   dependencies['@deepseek-ai/dsh-working-directory'] = version;
 }
 // Add only pinned official packages to the current fixture for PTC denial contracts.
-if (version === latestHost) {
+if (modernHost.has(version)) {
   for (const name of ['@deepseek-ai/dsh-tool-executor-ptc', '@deepseek-ai/dsh-ptc-runtime', '@deepseek-ai/dsh-working-directory', '@deepseek-ai/dsh-subagent', '@deepseek-ai/dsh-subagent-spawn-in-process', '@deepseek-ai/dsh-tool-subagent', '@deepseek-ai/dsh-session-persistence-jsonl', '@deepseek-ai/dsh-attachment', '@deepseek-ai/dsh-typert-protocol', '@deepseek-ai/dsh-util-time', '@deepseek-ai/dsh-brand']) dependencies[name] = version;
 }
 // The current isolated persistence test needs published platform binaries.
 // Keep optional packages and install scripts disabled globally; pin just the
 // binaries needed by the hosted x64 runners alongside their official wrappers.
-if (version === latestHost && process.arch === 'x64') {
+if (modernHost.has(version) && process.arch === 'x64') {
   if (process.platform === 'win32') {
     dependencies.koffi = '3.1.1';
     dependencies['@koromix/koffi-win32-x64'] = '3.1.1';

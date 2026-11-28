@@ -130,6 +130,6 @@ test('both client surfaces expose the WSL discovery and explicit probe controls'
     assert.match(source, /显式版本检测可能启动已停止的 WSL 发行版/)
   }
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
-  assert.match(host, /if \(op === 'environmentDiscover'\) return diagnoseEnvironmentTopology\(\{ root \}\)/)
-  assert.match(host, /if \(op === 'wslToolProbe'\) return observedProbe\(probeWslTool\(request.distro, request.id\)\)/)
+  assert.ok(host.includes("op === 'environmentDiscover') return observe(diagnoseEnvironmentTopology)"))
+  assert.ok(host.includes("op === 'wslToolProbe') return observedProbe(scope => probeWslTool(request.distro, request.id, scope))"))
 })

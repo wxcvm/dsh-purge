@@ -86,7 +86,7 @@ test('model-visible preflight does not echo platform env, key path, or FOFA frag
 
 test('native and embedded settings preserve, replace and explicitly clear the write-only key', () => {
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
-  assert.match(host, /const withProfiles = \(result\) => \(\{ \.\.\.platformUiProjection\(result\)/)
+  assert.ok(host.includes('handlePlatformSettingsOp(root, request || {})'))
   for (const path of ['../lib/redteam/client.js', '../client.js']) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8')
     const begin = source.indexOf('    function envDraftDelta(')

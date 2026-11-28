@@ -119,7 +119,7 @@ test('Docker probe errors are reported, not promoted to verified', async () => {
 test('actual host bridge, source UI and embedded client expose Docker discovery and probe', () => {
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   assert.match(host, /op === 'dockerToolProbe'/)
-  assert.match(host, /probeDockerTool\(request\.containerId, request\.id\)/)
+  assert.ok(host.includes('observedProbe(scope => probeDockerTool(request.containerId, request.id, scope))'))
   for (const file of ['../lib/redteam/client.js', '../client.js']) {
     const source = readFileSync(new URL(file, import.meta.url), 'utf8')
     assert.match(source, /Docker · 已运行容器/)

@@ -129,13 +129,13 @@ await check("用户改稿保留逻辑", async () => {
 await check("dshTarget / engines.dsh 声明一致", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const targets = Array.isArray(pkg.dshTargets) ? pkg.dshTargets : [];
-  const expectedRange = "=0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2";
+  const expectedRange = "=0.2.3-alpha.2 || =0.2.2-rc.5 || =0.2.2-rc.3 || =0.2.2-rc.1 || =0.2.1-rc.5 || =0.2.1-rc.2";
   expect(pkg.dshTarget === "0.2.2-rc.5", `dshTarget=${pkg.dshTarget}`);
   expect(pkg.engines?.dsh === expectedRange, `engines.dsh=${pkg.engines?.dsh}`);
   for (const v of ["0.2.2-rc.5", "0.2.2-rc.3", "0.2.2-rc.1", "0.2.1-rc.5", "0.2.1-rc.2"]) {
     expect(targets.includes(v), `dshTargets 丢失已声明版本 ${v}`);
   }
-  expect(targets.length === 5, `dshTargets 出现未核验版本：${targets.join(",")}`);
+  expect(targets.length === 6, `dshTargets 出现未核验版本：${targets.join(",")}`);
   return pkg.dshTarget + " / " + targets.join(",") + " / " + expectedRange;
 });
 
