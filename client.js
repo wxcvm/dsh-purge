@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "77474c9729f71248";
+		const CLIENT_BUILD_ID = "e37cbeb03354a5f0";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -7947,6 +7947,46 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const [state, setState] = React.useState({ loading: false, error: null, total: 0, items: [] })
       const [page, setPage] = React.useState(0)
       const pageSize = 100
+      const [freshnessPage, setFreshnessPage] = React.useState(0)
+      const freshnessPageSize = 100
+      const [freshnessFilter, setFreshnessFilter] = React.useState('')
+      const [freshnessSourceFilter, setFreshnessSourceFilter] = React.useState('')
+      const [freshnessVerificationFilter, setFreshnessVerificationFilter] = React.useState('')
+      const [freshnessState, setFreshnessState] = React.useState({
+        loading: false, error: null, total: 0, items: [], summary: null,
+      })
+      React.useEffect(() => { setFreshnessPage(0) }, [eng])
+      React.useEffect(() => {
+        if (!eng) {
+          setFreshnessState({ loading: false, error: null, total: 0, items: [], summary: null })
+          return undefined
+        }
+        let live = true
+        setFreshnessState({ loading: true, error: null, total: 0, items: [], summary: null })
+        api({
+          op: 'assetFreshness', engagement: eng,
+          freshness: freshnessFilter || undefined,
+          source: freshnessSourceFilter || undefined,
+          verification_status: freshnessVerificationFilter || undefined,
+          limit: freshnessPageSize, offset: freshnessPage * freshnessPageSize,
+        }).then((r) => {
+          if (!live) return
+          if (!r || r.ok === false) {
+            setFreshnessState({ loading: false, error: (r && r.error) || '新鲜度查询失败', total: 0, items: [], summary: null })
+            return
+          }
+          setFreshnessState({
+            loading: false, error: null, total: Number(r.total) || 0,
+            items: Array.isArray(r.items) ? r.items : [],
+            summary: r.summary || null,
+          })
+        }, (e) => {
+          if (live) setFreshnessState({
+            loading: false, error: String((e && e.message) || e), total: 0, items: [], summary: null,
+          })
+        })
+        return () => { live = false }
+      }, [eng, refreshKey, freshnessPage, freshnessFilter, freshnessSourceFilter, freshnessVerificationFilter])
       React.useEffect(() => { setPage(0); setOpenId(null); setDetail(null) },
         [eng, cidr, qApplied, service, port, prov, testStatus, priority, scope, assetState, sort])
       const [domains, setDomains] = React.useState(null)
@@ -8113,6 +8153,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         h('button', { className: 'rt-btn', title: '重新拉取快照与当前视图数据', onClick: () => { if (onRefresh) onRefresh() } }, '刷新'),
         h('button', { className: 'rt-btn' + (view === 'list' ? ' rt-btn-primary' : ''), onClick: () => setView('list') }, '列表'),
         h('button', { className: 'rt-btn' + (view === 'timeline' ? ' rt-btn-primary' : ''), title: '按发现时间看资产（什么时候发现、哪天收了多少）', onClick: () => setView('timeline') }, '发现时间'),
+        h('button', { className: 'rt-btn' + (view === 'freshness' ? ' rt-btn-primary' : ''), title: '按最近一次已保存观察时间查看新鲜度；不代表实时在线', onClick: () => { setFreshnessPage(0); setView('freshness') } }, '新鲜度'),
         h('button', { className: 'rt-btn' + (view === 'domain' ? ' rt-btn-primary' : ''), onClick: () => setView('domain') }, '域名'),
         h('button', { className: 'rt-btn' + (view === 'web' ? ' rt-btn-primary' : ''), onClick: () => setView('web') }, 'Web'),
         h('button', { className: 'rt-btn' + (view === 'sensitive' ? ' rt-btn-primary' : ''), onClick: () => setView('sensitive') }, '敏感情报'))
@@ -8145,6 +8186,28 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           h('option', { value: 'discovered' }, '排序：最近发现优先'),
           h('option', { value: 'ports' }, '排序：端口多优先'),
           h('option', { value: 'ip' }, '排序：按 IP')))
+      const freshnessCounts = (freshnessState.summary && freshnessState.summary.freshness) || {}
+      const sourceCounts = (freshnessState.summary && freshnessState.summary.sources) || {}
+      const freshnessChip = (key, label, value) => h('span', Object.assign({
+        key: key, className: 'rt-concl-i' + (freshnessFilter === key ? ' on' : ''),
+        title: '点击筛选该新鲜度；再次点击清除',
+      }, clickable(() => {
+        setFreshnessFilter((current) => current === key ? '' : key)
+        setFreshnessPage(0)
+        setView('freshness')
+      }, { label: '按' + label + '筛选资产', expanded: freshnessFilter === key })),
+        h('b', null, freshnessState.loading && !freshnessState.summary ? '…' : String(value || 0)),
+        h('span', null, label))
+      const freshnessStrip = h('div', { className: 'rt-concl', title: '根据本地已保存观察时间计算，不会向目标发起探测' },
+        h('span', { style: { fontSize: 11.5, color: 'var(--dsw-alias-label-secondary)', marginRight: 4 } }, '数据新鲜度'),
+        freshnessChip('fresh', '新鲜', freshnessCounts.fresh),
+        freshnessChip('aging', '临近过期', freshnessCounts.aging),
+        freshnessChip('stale', '已过期', freshnessCounts.stale),
+        freshnessChip('unknown', '未知', freshnessCounts.unknown),
+        h('div', { className: 'rt-spacer' }),
+        h('span', { className: 'rt-foot', title: '来源类型与新鲜度、测试状态分开统计' },
+          '主动 ' + (sourceCounts.active || 0) + ' · 被动 ' + (sourceCounts.passive || 0)
+          + ' · 混合 ' + (sourceCounts.mixed || 0)))
 
       const head = h('div', { className: 'rt-row head' },
         h('span', null, 'IP'), h('span', null, '易打'), h('span', null, '测试状态'),
@@ -8305,8 +8368,77 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
           : (!web.length ? h('div', { className: 'rt-empty' }, cidr ? '该 C 段下暂无 Web 资产' : '暂无 Web 资产（HTTP 探测后会写入 URL 与标题）') : null))
 
 
+      const freshnessPane = h('div', { className: 'rt-table' },
+        h('div', { className: 'rt-toolbar' },
+          h('select', { className: 'rt-input', value: freshnessFilter, onChange: (e) => { setFreshnessFilter(e.target.value); setFreshnessPage(0) } },
+            h('option', { value: '' }, '全部新鲜度'),
+            h('option', { value: 'fresh' }, '新鲜（≤7 天）'),
+            h('option', { value: 'aging' }, '临近过期（8–30 天）'),
+            h('option', { value: 'stale' }, '已过期（>30 天）'),
+            h('option', { value: 'unknown' }, '时间未知')),
+          h('select', { className: 'rt-input', value: freshnessSourceFilter, onChange: (e) => { setFreshnessSourceFilter(e.target.value); setFreshnessPage(0) } },
+            h('option', { value: '' }, '全部来源'),
+            h('option', { value: 'active' }, '主动发现'),
+            h('option', { value: 'passive' }, '被动发现'),
+            h('option', { value: 'mixed' }, '混合来源'),
+            h('option', { value: 'unknown' }, '来源未知')),
+          h('select', { className: 'rt-input', value: freshnessVerificationFilter, onChange: (e) => { setFreshnessVerificationFilter(e.target.value); setFreshnessPage(0) } },
+            h('option', { value: '' }, '全部测试状态'),
+            h('option', { value: 'untested' }, '未测试'),
+            h('option', { value: 'testing' }, '测试中'),
+            h('option', { value: 'tested' }, '已测试'),
+            h('option', { value: 'blocked' }, '被封禁'),
+            h('option', { value: 'abandoned' }, '已放弃'),
+            h('option', { value: 'no_surface' }, '无攻击面'),
+            h('option', { value: 'unknown' }, '状态未知'))),
+        h('div', { className: 'rt-row head', style: { gridTemplateColumns: '1.35fr 1.15fr 105px 85px 105px' } },
+          h('span', null, '资产'), h('span', null, '最近观察'), h('span', null, '新鲜度'),
+          h('span', null, '来源'), h('span', null, '测试状态')),
+        freshnessState.error ? h('div', { className: 'rt-err' }, freshnessState.error) : null,
+        freshnessState.loading && !freshnessState.items.length
+          ? h('div', { className: 'rt-empty' }, '正在读取本地观察记录…') : null,
+        freshnessState.items.map((it) => {
+          const freshnessLabel = it.freshness === 'fresh' ? '新鲜'
+            : it.freshness === 'aging' ? '临近过期'
+              : it.freshness === 'stale' ? '已过期' : '未知'
+          const freshnessClass = it.freshness === 'fresh' ? 'rt-tag-live'
+            : it.freshness === 'aging' ? 'rt-tag-active'
+              : it.freshness === 'stale' ? 'rt-tag-warn' : ''
+          const sourceLabel = it.source === 'active' ? '主动'
+            : it.source === 'passive' ? '被动'
+              : it.source === 'mixed' ? '混合' : '未知'
+          const sourceClass = it.source === 'active' ? 'rt-tag-active'
+            : it.source === 'passive' ? 'rt-tag-passive' : ''
+          const ageLabel = it.age_days === null || it.age_days === undefined
+            ? '时间未知' : (it.age_days === 0 ? '今天' : it.age_days + ' 天前')
+          const observed = it.timestamp_anomaly ? '时间异常' : fmt(it.last_observed_at)
+          const verification = it.verification_status || 'unknown'
+          const verificationLabels = {
+            tested: '已测试', testing: '测试中', untested: '未测试',
+            blocked: '被封禁', abandoned: '已放弃', no_surface: '无攻击面', unknown: '未知',
+          }
+          return h('div', Object.assign({
+            key: 'fresh-' + it.id, className: 'rt-row',
+            style: { gridTemplateColumns: '1.35fr 1.15fr 105px 85px 105px', cursor: 'pointer' },
+            title: '打开本地资产详情；此处仅展示已保存的观察记录',
+          }, clickable(() => { setView('list'); setFocusAssetId(it.id) }, { label: '查看资产 ' + it.ip })),
+            h('span', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 } },
+              h('span', { className: 'rt-mono' }, it.ip || '—'),
+              h('span', { style: { fontSize: 10.5, color: 'var(--dsw-alias-label-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' } },
+                it.primary_name || '无主机名')),
+            h('span', { title: it.timestamp_anomaly || it.last_observed_at || '没有可用观察时间' },
+              observed, h('span', { style: { display: 'block', fontSize: 10.5, color: 'var(--dsw-alias-label-secondary)' } }, ageLabel)),
+            h('span', null, h('span', { className: 'rt-tag ' + freshnessClass }, freshnessLabel)),
+            h('span', null, h('span', { className: 'rt-tag ' + sourceClass }, sourceLabel)),
+            h('span', null, verification === 'unknown'
+              ? h('span', { className: 'rt-tag' }, verificationLabels[verification])
+              : h(TestTag, { s: verification })))
+        }),
+        !freshnessState.loading && !freshnessState.error && !freshnessState.items.length
+          ? h('div', { className: 'rt-empty' }, '当前靶标没有可展示的资产观察记录') : null)
       let pane = listPane
       if (view === 'testing') pane = h(TestingTab, { engagement: eng, refreshKey: refreshKey })
+      else if (view === 'freshness') pane = freshnessPane
       else if (view === 'domain') pane = domainPane
       else if (view === 'web') pane = webPane
       /* 发现时间视图自带滚动容器，直接放进 rt-main 的 flex 里 */
@@ -8328,9 +8460,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
               onClick: () => setUI({ tab: 'artex', focus: null }) }, '返回 ARTEX')) : null,
           view === 'testing' ? null : toolbar,
           conclusion,
+          freshnessStrip,
           state.error ? h('div', { className: 'rt-err' }, state.error) : null,
           pane,
-          view === 'list' ? pageControls(state.total, page, pageSize, setPage) : null))
+          view === 'list' ? pageControls(state.total, page, pageSize, setPage)
+            : view === 'freshness' ? pageControls(freshnessState.total, freshnessPage, freshnessPageSize, setFreshnessPage) : null))
     }
 
     /* ---------------------------------------------------------- 资产发现时间线 */
