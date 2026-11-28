@@ -205,7 +205,12 @@ test('newly absorbed skills reference only registered Purge tools', () => {
     for (const match of skill.content.matchAll(/\x60(redteam_[a-z0-9_]+)(?:\([^`\n]*\))?\x60/g)) {
       assert.ok(registered.has(match[1]), name + ' references unregistered tool ' + match[1])
     }
-    assert.doesNotMatch(skill.content, /\x60redteam_pivot_probe\x60/,
-      name + ' must not claim unsupported upstream-only tools')
   }
+})
+test('SOCKS5 tunnel skill documents only pre-provisioned scoped reachability checks', () => {
+  const content = readFileSync(new URL('../skills/redteam/suo5-tunnel.md', import.meta.url), 'utf8')
+  assert.match(content, /操作者已在授权实验环境中独立配置 SOCKS5 监听/)
+  assert.match(content, /redteam_pivot_probe/)
+  assert.match(content, /只允许单资产、单端口、单次 SOCKS5 CONNECT/)
+  assert.doesNotMatch(content, /suo5\s+-t|--auth\s+\S+|proxychains(?:4)?|nmap\s+-|curl\s+.*--socks5/)
 })

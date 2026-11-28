@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
+import { createServer } from 'node:net'
 import { RedteamStore, dispatch } from '../lib/redteam/store-core.js'
 import { DDL, migrate } from '../lib/redteam/schema.js'
 import { join } from 'node:path'
@@ -349,6 +350,69 @@ test('reviewed tool names match source declarations and actual registrations', a
   assert.ok(report.markdown.includes('evidence://redacted/001'))
   assert.ok(!report.markdown.includes('RAW_SAMPLE_MARKER'))
   assert.ok(!report.markdown.includes('SELECT * FROM users'))
+
+  const pivotTool = registered.get('redteam_pivot_probe')
+  assert.equal(Object.hasOwn(pivotTool.parameters, 'targets'), false)
+  assert.equal(Object.hasOwn(pivotTool.parameters, 'listen'), false)
+  const pivotEngagement = redteam.openEngagement('pivot-fixture', ['10.0.0.0/24'], { bindCurrent: false }).id
+  const mockProxy = createServer(socket => {
+    let stage = 'greeting'
+    let buffer = Buffer.alloc(0)
+    socket.on('data', chunk => {
+      buffer = Buffer.concat([buffer, chunk])
+      if (stage === 'greeting' && buffer.length >= 3) {
+        buffer = buffer.subarray(3)
+        socket.write(Buffer.from([5, 0]))
+        stage = 'connect'
+      }
+      if (stage === 'connect' && buffer.length >= 10) {
+        buffer = buffer.subarray(10)
+        socket.write(Buffer.from([5, 0, 0, 1, 127, 0, 0, 1, 0, 0]))
+        stage = 'done'
+      }
+    })
+  })
+  await new Promise((resolve, reject) => {
+    mockProxy.once('error', reject)
+    mockProxy.listen(0, '127.0.0.1', resolve)
+  })
+  try {
+    const listen = '127.0.0.1:' + mockProxy.address().port
+    const assetTool = registered.get('redteam_asset_add')
+    const tunnelTool = registered.get('redteam_tunnel_add')
+    const assetAdded = JSON.parse(await assetTool.execute({ engagement: pivotEngagement, ip: '10.0.0.2',
+      state: 'live', provenance: 'active', tool: 'fixture',
+      ports: [{ port: 443, proto: 'tcp', service: 'https', provenance: 'active', tool: 'fixture' }] }, {}))
+    const assetId = assetAdded.asset.id
+    const storedAsset = redteam.getAsset(pivotEngagement, assetId)
+    assert.ok(storedAsset.ports.some(item => Number(item.port) === 443
+      && String(item.proto).toLowerCase() === 'tcp' && String(item.state).toLowerCase() === 'open'))
+    const tunnelAdded = JSON.parse(await tunnelTool.execute({ engagement: pivotEngagement, kind: 'socks5',
+      listen, reach: '10.0.0.0/24', entry_kind: 'target-http', entry: 'mock fixture tunnel' }, {}))
+    const tunnelId = tunnelAdded.id
+    const reachable = JSON.parse(await pivotTool.execute({ engagement: pivotEngagement,
+      tunnel_id: tunnelId, asset_id: assetId, port: 443, timeout_ms: 1000 }, {}))
+    assert.equal(reachable.ok, true)
+    assert.equal(reachable.reachable, true)
+    assert.equal(reachable.target, '10.0.0.2:443')
+
+    const outAsset = JSON.parse(await assetTool.execute({ engagement: pivotEngagement, ip: '10.0.1.2',
+      state: 'live', provenance: 'active', tool: 'fixture',
+      ports: [{ port: 443, proto: 'tcp', service: 'https', provenance: 'active', tool: 'fixture' }] }, {}))
+    const outOfScope = JSON.parse(await pivotTool.execute({ engagement: pivotEngagement,
+      tunnel_id: tunnelId, asset_id: outAsset.asset.id, port: 443, timeout_ms: 1000 }, {}))
+    assert.equal(outOfScope.ok, false)
+    assert.match(outOfScope.error, /scope/i)
+
+    const selfTunnel = JSON.parse(await tunnelTool.execute({ engagement: pivotEngagement, kind: 'socks5',
+      listen, reach: '10.0.0.0/24', entry_kind: 'self-only', entry: 'self-only fixture' }, {}))
+    const selfOnly = JSON.parse(await pivotTool.execute({ engagement: pivotEngagement,
+      tunnel_id: selfTunnel.id, asset_id: assetId, port: 443, timeout_ms: 1000 }, {}))
+    assert.equal(selfOnly.ok, false)
+    assert.match(selfOnly.error, /legitimate|self-only/i)
+  } finally {
+    await new Promise(resolve => mockProxy.close(resolve))
+  }
 
   const { knowledgeRequest } = await import('../lib/redteam/knowledge-center.js')
   const saved = knowledgeRequest(home, { op: 'knowledgeSave', title: 'Example personal note', body: 'LOCAL_REFERENCE_BODY' }).item
