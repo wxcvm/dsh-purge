@@ -13760,10 +13760,10 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setBrief(null)
         setBriefError('')
         if (!eng) return undefined
-        api({ op: 'taskBrief', engagement: eng }).then((result) => {
+        api({ op: 'taskBrief', engagement: eng, includeWorkCompletion: true }).then((result) => {
           if (!live) return
           if (!result || result.ok === false) { setBriefError((result && result.error) || '任务摘要不可用'); return }
-          setBrief(result)
+          setBrief({ ...result, completionScope: { engagement: eng, refreshKey: props.refreshKey } })
         }, (error) => { if (live) setBriefError(String((error && error.message) || error)) })
         return () => { live = false }
       }, [eng, props.refreshKey])
@@ -13801,6 +13801,11 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const taskSuggestion = brief && brief.suggestion ? brief.suggestion : next
       const counts = (brief && brief.counts) || {}
       const scanFeedback = (brief && brief.scan_feedback) || {}
+      const completion = brief?.workCompletion
+      const allWorkConfirmed = !briefError && brief?.completionScope?.engagement === eng
+        && brief?.completionScope?.refreshKey === props.refreshKey && completion?.engagement === eng
+        && Number.isSafeInteger(completion.total) && completion.total > 0
+        && completion.done === completion.total && testing === 0 && untested === 0 && paused === 0
       const phases = [
         ['01', '资产测绘', 'assets'],
         ['02', '漏洞分析', 'findings'],
@@ -13816,6 +13821,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
             h('p', null, '任务状态、资产与证据集中查看。下面的快捷入口只切换页面，不会自动运行测试。')),
           h('button', { type: 'button', className: 'rt-btn rt-btn-primary', onClick: () => goto('report') }, '查看报告')),
         h(AgentReportSummary, { total: props.pendingAgentReports, onOpen: props.onOpenReportPage }),
+        allWorkConfirmed ? h('section', { className: 'rt-ops-section', role: 'status' },
+          h('div', { className: 'rt-ops-section-head' }, h('h3', null, '全部任务已确认完成')),
+          h('p', null, '请核对测试报告与审计记录，确认授权环境已恢复。')) : null,
         h('div', { className: 'rt-ops-metrics' },
           metric('资产总数', assets, '存活 ' + live + ' · 查看资产清单', 'assets'),
           metric('漏洞记录', vulns, '进入漏洞与证据', 'findings'),
