@@ -38,10 +38,12 @@ test('Exchange and AD corrections distinguish security updates, configuration an
   assert.match(get('cve-2024-45519-zimbra-postjournal'), /MITRE CNA 10\.0/)
   for (const cve of ['CVE-2021-26855','CVE-2021-26857','CVE-2021-26858','CVE-2021-27065','CVE-2021-34473','CVE-2021-34523','CVE-2021-31207']) {
     const result = matchCveCandidates({cve})
-    assert.equal(result.total, 1, cve)
-    assert.ok(result.items[0].cve.includes(cve))
-    assert.equal(result.items[0].verified, false)
-    assert.equal(result.items[0].version_applicability.status, 'unknown')
+    const vendorRows = result.items.filter(row => row.advisory_status === 'vendor-corrected')
+    assert.equal(vendorRows.length, 1, cve)
+    assert.equal(result.items[0].advisory_status, 'vendor-corrected', cve)
+    assert.ok(vendorRows[0].cve.includes(cve))
+    assert.equal(vendorRows[0].verified, false)
+    assert.equal(vendorRows[0].version_applicability.status, 'unknown')
   }
   assert.equal(matchCveCandidates({cve:'CVE-2024-21410', version:'15.2.1544.4'}).items[0].version_applicability.status, 'unknown')
 })

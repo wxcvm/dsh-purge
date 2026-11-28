@@ -40,10 +40,10 @@ test('refresh is explicit, pinned to CISA, deduplicates, and keeps the cache off
   const root = fixture(t)
   const calls = []
   const refresh = await refreshKev(root, { now, fetchFn: async (url, opts) => {
-    calls.push({ url, signal: !!opts.signal })
+    calls.push({ url, method: opts.method, redirect: opts.redirect, signal: !!opts.signal })
     return response(sample)
   } })
-  assert.deepEqual(calls, [{ url: KEV_FEED, signal: true }])
+  assert.deepEqual(calls, [{ url: KEV_FEED, method: 'GET', redirect: 'error', signal: true }])
   assert.equal(refresh.ok, true)
   assert.equal(refresh.count, 2)
   assert.equal(refresh.action, 'refreshed')
@@ -59,6 +59,24 @@ test('refresh is explicit, pinned to CISA, deduplicates, and keeps the cache off
   const persisted = JSON.parse(readFileSync(join(root, 'kb', 'cisa-kev.json'), 'utf8'))
   assert.equal(persisted.items.length, 2)
   assert.equal(Object.hasOwn(persisted, 'vulnerabilities'), false)
+})
+
+test('oversized streamed feeds are stopped before full buffering and preserve the prior cache', async t => {
+  const root = fixture(t)
+  await refreshKev(root, { now, fetchFn: async () => response(sample) })
+  const path = join(root, 'kb', 'cisa-kev.json')
+  const before = readFileSync(path, 'utf8')
+  const oversized = await refreshKev(root, { now: now + 4000, fetchFn: async () => new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(12 * 1024 * 1024 + 1))
+        controller.close()
+      },
+    }),
+  ) })
+  assert.equal(oversized.ok, false)
+  assert.match(oversized.reason, /feed_too_large/)
+  assert.equal(readFileSync(path, 'utf8'), before)
 })
 
 test('HTTP failures and invalid feed leave the previously good cache untouched', async t => {
