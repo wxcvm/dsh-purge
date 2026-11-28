@@ -15,7 +15,7 @@ export async function main(argv = process.argv.slice(2), { env = process.env, cw
       + '默认根目录：REDTEAM_HOME 或 DSH_HOME/redteam 或 ~/.dsh/redteam。\n'
       + '默认导出当前靶标；每次在 --out（默认当前目录）下新建独立交付包，不覆盖已有文件。\n'
       + '普通模式包含 Markdown、引用的 shots/ 文件和 SHA-256 manifest.json。\n'
-      + '--shareable 是可选的初步脱敏副本：隐藏常见凭据/IP，省略截图，仍须人工检查后分享。');
+      + '--shareable 是可选的初步脱敏副本：隐藏常见凭据和 IPv4/IPv6 字面量，省略截图，仍须人工检查后分享。');
     return null;
   }
   const result = await exportEngagementReport(options, { createStore });

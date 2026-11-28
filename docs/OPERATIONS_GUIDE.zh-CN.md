@@ -309,7 +309,7 @@ Censys、ZoomEye、Quake、Hunter、Netlas 仅从新测绘首页隐藏，已保�
 node scripts/export-engagement-report.mjs --engagement <项目ID> --out .\reports --shareable
 ```
 
-`--shareable` 会对**常见**凭据头、密码/token 字段和 IPv4 做基础掩码，隐藏目标标题与 manifest 中的 engagement ID，并省略原始截图文件。它不会修改工作区数据库或已有完整报告。**这不是完整匿名化保证**：其他个人信息、IPv6、域名、自由文本和嵌入链接仍可能包含敏感内容，分享前必须人工审阅。UI 中的「下载 Markdown」仍为原始报告，不会自动应用此选项。
+`--shareable` 会对**常见**凭据头、密码/token 字段、IPv4 和 IPv6 字面量做基础掩码，隐藏目标标题与 manifest 中的 engagement ID，并省略原始截图文件。IPv6 的压缩、展开、URL 方括号及 IPv4 嵌入写法统一按地址分配报告内代号；匹配到的 zone ID 一并移除。它不会修改工作区数据库或已有完整报告。**这不是完整匿名化保证**：域名、自由文本、编码后的地址及嵌入链接仍可能包含敏感内容，分享前必须人工审阅。UI 中的「下载 Markdown」仍为原始报告，不会自动应用此选项。
 
 ## 十三、Skill、SQLite 与 CLI 诊断
 
