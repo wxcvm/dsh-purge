@@ -63,6 +63,25 @@ test('single-host active survey runs local Nmap, imports discovered evidence and
   assert.equal(saved.ingestion.ports, 1)
 })
 
+test('multi-host Nmap output imports only IPs explicitly in scope for an IP target', async (t) => {
+  const { store, imported, scan } = fixture(t, ['192.0.2.10'])
+  const output = '<nmaprun>'
+    + '<host><address addr="192.0.2.10" addrtype="ipv4"/>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host>'
+    + '<host><address addr="192.0.2.11" addrtype="ipv4"/>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="apache"/></port></ports></host>'
+    + '</nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: '192.0.2.10',
+    ports: '80,443', commit: true,
+  }, { ...scan, execFileFn: (_exe, _argv, _options, cb) => cb(null, output, '') })
+  assert.equal(result.assets, 1)
+  assert.equal(imported.length, 1)
+  assert.deepEqual(imported[0].bundle.assets.map(asset => asset.ip), ['192.0.2.10'])
+})
+
 test('preview is the default and never writes assets; out-of-scope is rejected before scanning', async (t) => {
   const { store, imported, scan } = fixture(t)
   const preview = await runLocalActiveDiscovery(store, {
@@ -95,16 +114,114 @@ test('empty scope needs explicit confirmation, with no extension to batch scans'
   assert.equal(bad.ok, false)
 })
 
-test('HTTPx import is limited to one matching host and retains supported metadata', () => {
+test('hostname-only scope does not authorize importing its resolved IP as an asset', async t => {
+  const { store, imported, scan } = fixture(t, ['example.test'])
+  const output = '<nmaprun><host><address addr="192.0.2.50" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host></nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: 'example.test',
+    ports: '80,443', commit: true,
+  }, { ...scan, execFileFn: (_exe, argv, _options, cb) => {
+    assert.equal(argv.at(-1), 'example.test')
+    cb(null, output, '')
+  } })
+  assert.equal(result.ok, true)
+  assert.equal(result.scope, 'name-only')
+  assert.equal(result.assets, 0)
+  assert.equal(result.ports, 0)
+  assert.match(result.note, /IP\/CIDR/)
+  assert.equal(imported.length, 0)
+  assert.ok(result.output_file, 'raw scan output remains available for manual review')
+})
+
+test('empty-scope confirmation of a hostname still cannot import its resolved IPs', async t => {
+  const { store, imported, scan } = fixture(t, [])
+  const output = '<nmaprun><host><address addr="192.0.2.51" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host></nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: 'example.test',
+    ports: '80,443', confirm: true, commit: true,
+  }, { ...scan, execFileFn: (_exe, _argv, _options, cb) => cb(null, output, '') })
+  assert.equal(result.ok, true)
+  assert.equal(result.scope, 'scope-empty-confirmed')
+  assert.equal(result.assets, 0)
+  assert.match(result.note, /IP\/CIDR/)
+  assert.equal(imported.length, 0)
+})
+
+test('hostname scope plus an explicit matching IP/CIDR rule can import the resolved asset', async t => {
+  const { store, imported, scan } = fixture(t, ['example.test', '192.0.2.0/24'])
+  const output = '<nmaprun><host><address addr="192.0.2.50" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx"/></port></ports></host></nmaprun>'
+  const result = await runLocalActiveDiscovery(store, {
+    engagement: 'example', kind: 'nmap', target: 'example.test',
+    ports: '80,443', commit: true,
+  }, { ...scan, execFileFn: (_exe, argv, _options, cb) => {
+    assert.equal(argv.at(-1), 'example.test')
+    cb(null, output, '')
+  } })
+  assert.equal(result.assets, 1)
+  assert.equal(imported.length, 1)
+  assert.equal(imported[0].bundle.assets[0].ip, '192.0.2.50')
+})
+
+test('Nmap parser retains bounded host records, names, service versions and CPE evidence', () => {
+  const observed = parseLocalDiscovery('nmap',
+    '<nmaprun>'
+    + '<host><address addr="192.0.2.21" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="edge.example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="443"><state state="open"/>'
+    + '<service name="https" product="nginx" version="1.24">'
+    + '<cpe>cpe:/a:nginx:nginx:1.24</cpe></service></port></ports></host>'
+    + '<host><address addr="192.0.2.22" addrtype="ipv4"/>'
+    + '<hostnames><hostname name="api.example.test" type="user"/></hostnames>'
+    + '<ports><port protocol="tcp" portid="8443"><state state="open"/>'
+    + '<service name="https" product="caddy" version="2.8"/></port></ports></host>'
+    + '</nmaprun>', 'example.test')
+  assert.equal(observed.length, 2)
+  assert.deepEqual(observed.map(asset => asset.ip), ['192.0.2.21', '192.0.2.22'])
+  assert.equal(observed[0].primary_name, 'example.test')
+  assert.ok(observed[0].names.some(item => item.name === 'edge.example.test'))
+  assert.equal(observed[0].ports[0].cpe, 'cpe:/a:nginx:nginx:1.24')
+  assert.equal(observed[0].ports[0].fingerprints[0].evidence, 'cpe:/a:nginx:nginx:1.24')
+  assert.equal(observed[1].ports[0].version, '2.8')
+})
+
+test('HTTPx parser expands address arrays, normalizes hostnames and merges same-port evidence', () => {
   const observed = parseLocalDiscovery('httpx',
-    JSON.stringify({ url: 'https://a.example.test/', a: '192.0.2.20', title: 'App Home', tech: ['nginx'] })
-    + '\n' + JSON.stringify({ url: 'https://elsewhere.test', a: '198.51.100.12' }),
-    'https://a.example.test/')
-  assert.equal(observed.length, 1)
-  assert.equal(observed[0].ip, '192.0.2.20')
+    JSON.stringify({ url: 'https://a.example.test/', ip: '192.0.2.20',
+      a: ['192.0.2.20', '192.0.2.21'], title: 'App Home',
+      tech: ['nginx'], webserver: 'nginx', status_code: 200 })
+    + '\n' + JSON.stringify({ url: 'https://a.example.test/', ip: '192.0.2.20',
+      a: ['192.0.2.20'], tech: ['React'] })
+    + '\n' + JSON.stringify({ url: 'https://elsewhere.test', ip: '198.51.100.12',
+      a: ['198.51.100.12'] }),
+    'https://A.EXAMPLE.TEST./')
+  assert.equal(observed.length, 2)
+  assert.deepEqual(observed.map(asset => asset.ip), ['192.0.2.20', '192.0.2.21'])
   assert.equal(observed[0].primary_name, 'a.example.test')
   assert.equal(observed[0].ports[0].title, 'App Home')
-  assert.equal(observed[0].ports[0].fingerprints[0].product, 'nginx')
+  assert.equal(observed[0].ports[0].product, 'nginx')
+  assert.equal(observed[0].ports[0].banner, 'nginx')
+  assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.product === 'React'))
+  assert.ok(observed[0].ports[0].fingerprints.some(fp => fp.category === 'web-server'))
+  assert.equal(observed[0].state, 'live')
+  assert.equal(observed[1].state, 'unknown', 'DNS-only addresses must not inherit another IP response status')
+  assert.equal(observed[1].ports.length, 0, 'service evidence belongs only to the connected IP')
+})
+
+test('HTTPx parser bounds expanded address arrays', () => {
+  const addresses = Array.from({ length: 20 }, (_, index) => '192.0.2.' + (index + 1))
+  const observed = parseLocalDiscovery('httpx',
+    JSON.stringify({ url: 'https://bounded.example.test/', a: addresses }),
+    'bounded.example.test')
+  assert.equal(observed.length, 16)
 })
 
 test('privacy status never misrepresents target-side logs as protected', (t) => {
