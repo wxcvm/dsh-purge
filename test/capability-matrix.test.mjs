@@ -99,7 +99,8 @@ test('an empty environment inventory never manufactures an execution environment
 test('host and both browser clients expose matrix, without silent auto-probing', () => {
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
   assert.match(host, /op === 'environmentCapabilityMatrix'/)
-  assert.match(host, /return environmentCapabilityMatrix\(\{ root \}\)/)
+  assert.ok(host.includes("op === 'environmentCapabilityMatrix') return observe(environmentCapabilityMatrix)"))
+  assert.ok(host.includes('observeEnvironmentConfig(root, request.expectedRevision, run, onFresh)'))
   for (const path of ['../lib/redteam/client.js', '../client.js']) {
     const ui = readFileSync(new URL(path, import.meta.url), 'utf8')
     assert.match(ui, /跨环境工具能力矩阵/)
@@ -107,7 +108,7 @@ test('host and both browser clients expose matrix, without silent auto-probing',
     assert.match(ui, /生成 \/ 刷新能力矩阵/)
     assert.match(ui, /matrixCellStatus\(cell\)/)
     assert.match(ui, /kaliProbeResults\[cell\.toolId\]/)
-    assert.match(ui, /setKaliProbeResults\(\(prev\)/)
+    assert.match(ui, /setKaliProbeResults\(\s*\(?prev\)?\s*=>/)
     assert.match(ui, /已定位 ≠ 可运行/)
     assert.match(ui, /setCapabilityMatrix\(null\)/)
   }
