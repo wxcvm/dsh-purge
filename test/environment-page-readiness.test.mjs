@@ -29,6 +29,7 @@ for (const path of ['lib/redteam/client.js', 'client.js']) {
     assert.equal(envToolReadiness(tools[2], { status: 'path-only' }), 'unchecked')
     assert.equal(envToolReadiness(tools[0], { status: 'probe_verified' }), 'verified')
     assert.equal(envToolReadiness(tools[4], probes.missing), 'missing')
+    assert.equal(envToolReadiness(tools[0], { status: 'runnable', path: '/tools/previous' }), 'unchecked')
 
     const view = source.slice(end, source.indexOf('function GuideTab(props)', end))
     assert.match(view, /开工前 · 环境速检/)

@@ -41,7 +41,8 @@ test('topology combines local paths and provider inventory without treating disc
 
 test('existing environmentDiscover API and both UI surfaces expose factual topology', () => {
   const host = readFileSync(new URL('../lib/redteam/ui.js', import.meta.url), 'utf8')
-  assert.match(host, /op === 'environmentDiscover'\) return diagnoseEnvironmentTopology/)
+  assert.ok(host.includes("op === 'environmentDiscover') return observe(diagnoseEnvironmentTopology)"))
+  assert.ok(host.includes('observeEnvironmentConfig(root, request.expectedRevision'))
   for (const path of ['../lib/redteam/client.js', '../client.js']) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8')
     assert.match(source, /跨环境状态 · 只读诊断/)
