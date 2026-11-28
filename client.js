@@ -7,7 +7,7 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 		const h = react.createElement;
 		const { useState, useEffect, useLayoutEffect, useCallback, useRef, Component } = react;
 
-		const CLIENT_BUILD_ID = "77474c9729f71248";
+		const CLIENT_BUILD_ID = "7c3afb941af3baea";
 		const name = "dsh-purge";
 		const inject = ["slots", "locale", "uiConversation"];
 		const NS = "settings.dsh-purge";
@@ -996,6 +996,22 @@ window.__ModuleLoader__.load({ id: "dsh-purge", factory: (require) => {
 .dshp-flow-node.is-cur{transform:none}
 }
 .dshp-clean-browser{margin:8px 0 14px}
+.dshp-diagnostic-lead{margin:8px 0 12px}
+.dshp-diagnostic-lead h4{margin:0}
+.dshp-diagnostic-lead .dshp-row{margin-top:8px}
+.dshp-diagnostic-lead .dshp-runtime-meta{margin:6px 0}
+.dshp-diagnostic-details{margin:8px 0;padding:8px 12px;border:1px solid var(--dshp-line);
+  border-radius:8px;min-width:0}
+.dshp-diagnostic-details>summary{cursor:pointer;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.dshp-diagnostic-details>summary:focus-visible{outline:2px solid var(--dshp-accent);outline-offset:2px}
+.dshp-observation-counts{display:flex;gap:6px 16px;flex-wrap:wrap;margin:10px 0}
+.dshp-observation-counts div{display:flex;align-items:baseline;gap:5px;font-size:12px;color:var(--dshp-mute)}
+.dshp-observation-counts dd{margin:0;font-size:14px;font-weight:700;color:var(--dshp-ink)}
+.dshp-http-rows{list-style:none;margin:8px 0;padding:0}
+.dshp-http-row{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:3px 12px;
+  border-bottom:1px solid var(--dshp-line);padding:8px 0;font-size:13px;overflow-wrap:anywhere}
+.dshp-http-row p{margin:0}
+.dshp-http-row[data-status="attention"] strong{color:var(--dshp-warn)}
 .dshp-clean-tools{display:grid;gap:8px;margin:8px 0 12px}
 .dshp-clean-search{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dshp-mute)}
 .dshp-clean-search .dshp-field{flex:1;min-width:0;max-width:400px;padding:8px 10px}
@@ -1807,39 +1823,73 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 		function CleanDiagnostics({ state, onRefresh, busy }) {
 			const t = useT();
 			const [checking, setChecking] = useState(false);
-			const [feedback, setFeedback] = useState("");
-			const rows = state ? patchRowsOf(state).map((r) => ({ ...r, title: patchTitle(t, state, r) })) : [];
-			const report = state ? formatPatchDiagnostics(state, rows, t) : "尚未读取宿主状态";
-			const identity = state?.plugin_identity;
-			const hostIdentity = state?.host_identity;
-			const loaded = identity?.loaded || "";
-			const disk = identity?.disk || "";
-			const mismatch = Boolean(loaded && disk && loaded !== disk);
+			const [feedback, setFeedback] = useState(null);
+			const [readFailed, setReadFailed] = useState(false);
+			const [showReport, setShowReport] = useState(false);
+			const details = useRef(null);
+			const observed = state?.ok === true && state.ready !== false;
+			const loaded = observed ? state.plugin_identity?.loaded : null;
+			const disk = observed ? state.plugin_identity?.disk : null;
+			const hostIdentity = observed ? state.host_identity : null;
+			let title, next;
+			if (!observed) {
+				title = state || readFailed ? "宿主状态暂未确认" : "正在读取宿主状态";
+				next = "状态未确认时，可重新检测；这不会改动文件。";
+			} else if (hostIdentity?.surfaceMismatch) {
+				title = "宿主目录与当前界面不一致";
+				next = "先核对当前打开的 Harness 实例，再重新检测。";
+			} else if (loaded && disk && loaded !== disk) {
+				title = "已加载后端与磁盘版本不一致";
+				next = "请完整退出并重新打开 Harness，再回来检测；无需再次下载。";
+			} else if (!state.ai_base) {
+				title = "尚未定位宿主目录";
+				next = "展开下方「安装诊断与恢复」，查看本机安装来源。";
+			} else if (!loaded || !disk) {
+				title = "已定位宿主，版本证据尚不完整";
+				next = "在「更新验收与安装副本」里核对构建和安装来源。";
+			} else {
+				title = "后端与磁盘版本号一致";
+				next = "版本号一致不代表前端资源或补丁已生效。遇到请求问题，切换到 Provider 与运行记录。";
+			}
+			const formatReport = () => state ? formatPatchDiagnostics(state,
+				patchRowsOf(state).map(r => ({ ...r, title: patchTitle(t, state, r) })), t) : "尚未读取宿主状态";
 			const refresh = async () => {
+				if (busy || checking) return;
 				setChecking(true);
-				setFeedback("");
-				try { await onRefresh(); setFeedback("检测完成：已重新读取宿主状态"); }
-				catch (e) { setFeedback("检测失败：" + String(e?.message || e)); }
-				finally { setChecking(false); }
+				setFeedback(null);
+				try {
+					await onRefresh();
+					setReadFailed(false);
+					setFeedback({ text: "已重新读取宿主状态" });
+				} catch (e) {
+					setReadFailed(true);
+					setFeedback({ failed: true, text: "读取失败：" + String(e?.message || e) });
+				} finally { setChecking(false); }
 			};
 			const copy = async () => {
-				try { await navigator.clipboard.writeText(report); setFeedback("诊断已复制（含本机路径）"); }
-				catch { setFeedback("复制失败，请选中下方诊断文本手动复制"); }
+				try {
+					await navigator.clipboard.writeText(formatReport());
+					setFeedback({ text: "已复制完整诊断（含本机路径）" });
+				} catch {
+					if (details.current) details.current.open = true;
+					setFeedback({ failed: true, text: "自动复制失败；已展开诊断文本，可手动选中复制。" });
+				}
 			};
-			return h("div", { className: "dshp-clean-browser" },
-				h("div", { className: "dshp-sub" }, h("h4", null, "版本身份核对")),
-				h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
-				hostIdentity?.surfaceMismatch ? h("p", { role: "alert" }, "宿主目录与界面类型不同，请核对当前运行实例。") : null,
-				h("p", { className: "dshp-hint" }, "后端模块加载时版本：" + (loaded || "未知") + " · 当前目录磁盘版本：" + (disk || "未知")),
-				h("p", { className: "dshp-hint", role: "status" }, mismatch
-					? "版本不一致：文件已变化，建议完整退出并重启 Harness 后重新检测。"
-					: loaded && disk ? "版本号一致（不代表所有前端资源或补丁已生效）" : "版本身份暂不可用，不能判断是否已加载更新。"),
-				h("div", { className: "dshp-row" },
-					h(Btn, { disabled: busy || checking, onClick: refresh }, checking ? "检测中…" : "重新检测"),
-					h(Btn, { disabled: !state, onClick: copy }, "复制完整诊断")),
-				feedback ? h("p", { role: "status", className: "dshp-hint" }, feedback) : null,
-				h("p", { className: "dshp-hint" }, "诊断含本机目录及错误详情，分享前请检查私人信息。"),
-				h("pre", { className: "dshp-clean-diagnostic", tabIndex: 0, "aria-label": "清洗台完整诊断" }, report),
+			return h("section", { className: "dshp-clean-browser", "aria-label": "宿主状态" },
+				h("div", { className: "dshp-runtime-card dshp-diagnostic-lead" },
+					h("h4", null, title),
+					h("p", { className: "dshp-runtime-meta" }, next),
+					readFailed && observed ? h("p", { className: "dshp-runtime-meta" }, "显示上次成功读取的状态。") : null,
+					h("div", { className: "dshp-row" },
+						h(Btn, { kind: "primary", disabled: busy || checking, onClick: refresh }, checking ? "检测中…" : "重新检测宿主"))),
+				feedback ? h("p", { role: feedback.failed ? "alert" : "status", className: "dshp-hint" }, feedback.text) : null,
+				h("details", { ref: details, className: "dshp-diagnostic-details",
+					onToggle: event => setShowReport(event.currentTarget.open) },
+					h("summary", null, "版本身份与完整诊断"),
+					h("p", { className: "dshp-hint" }, "宿主磁盘包：" + (hostIdentity?.package ? hostIdentity.package.name + "@" + hostIdentity.package.version : "未知") + "（不是运行进程身份凭证）"),
+					h("p", { className: "dshp-hint" }, "后端加载版本：" + (loaded || "未知") + " · 磁盘版本：" + (disk || "未知")),
+					h(Btn, { disabled: !state, onClick: copy }, "复制完整诊断（含本机路径）"),
+					showReport ? h("pre", { className: "dshp-clean-diagnostic", tabIndex: 0, "aria-label": "清洗台完整诊断" }, formatReport()) : null),
 			);
 		}
 
@@ -3185,10 +3235,15 @@ body[data-ds-dark-theme] .dshp-launch{background:color-mix(in srgb,var(--dsw-ali
 				)),
 				noticeNode(notice),
 				cleanPane(["patches"], h(PatchGroups, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
-				cleanPane(["maintenance", "diagnostics"], h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
-				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
 				cleanPane(["diagnostics"], h(CleanDiagnostics, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy })),
-				cleanPane(["diagnostics"], h(RepairCenter, { busy: jobOn || updateBusy })),
+				cleanPane(["maintenance", "diagnostics"], h("details", {
+					className: section === "diagnostics" ? "dshp-diagnostic-details" : undefined,
+					open: section !== "diagnostics" ? true : undefined,
+				}, h("summary", { hidden: section !== "diagnostics" }, "更新验收与安装副本"),
+					h(UpdateVerification, { state: s, onRefresh: refreshPatchStatus, busy: jobOn || updateBusy }))),
+				cleanPane(["maintenance"], h(BackupInventory, { busy: jobOn || updateBusy })),
+				cleanPane(["diagnostics"], h("details", { className: "dshp-diagnostic-details" },
+					h("summary", null, "安装诊断与恢复"), h(RepairCenter, { busy: jobOn || updateBusy }))),
 				cleanPane(["prompt"], h(InjectSwitchSection), h(HooksDenySection, { onSaved: loadAll })),
 
 				askUninstall ? h("div", {
@@ -4646,8 +4701,8 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
     if (row.turnOutcome === 'aborted' || row.finish === 'aborted') evidence.cancelled++;
   }
   const durableTextCount = routeItems.filter(row => row.durableTextObserved === true && row.firstTextMs == null).length;
-  const metric = (title, count) => h('div', { className: 'dshp-runtime-metric' },
-    h('small', null, title), h('strong', null, snapshot ? count : '—'));
+  const metric = (title, count) => h('div', null,
+    h('dt', null, title), h('dd', null, snapshot ? count : '—'));
   const detail = (title, content) => h('div', null, h('dt', null, title), h('dd', null, content));
   const source = r => ({ 'host-stream': '实时流', 'durable-stream': '持久事件', 'not-observed': '未观测' }[r.reasonSource] || '未观测');
   const routeSource = kind => ({ 'request-header': '请求头配置', 'request-context': '请求上下文', 'assistant-event': '助手事件', 'not-observed': '未观测' }[kind] || '未观测');
@@ -4666,7 +4721,7 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
       temporary?.maskHistory ? h('span', null, ' · 本次工作区临时遮蔽已开启') : null,
       !temporary?.maskHistory && privacyDisplay?.maskHistory === true ? h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => setRevealPrivate(v => !v) }, revealPrivate ? '重新隐藏详情' : '临时显示详情') : null) : null,
-    h('div', { className: 'dshp-runtime-metrics' },
+    h('dl', { className: 'dshp-observation-counts' },
       metric('近期记录', counts.all), metric('等待后续事件', counts.running), metric('需要关注', counts.attention), metric('已结束 / 取消', counts.ended)),
     h('div', { className: 'dshp-runtime-toolbar' },
       h('label', null, '按会话筛选 ', h('input', { type: maskRuntime ? 'password' : 'text', value: session, maxLength: 160, onChange: e => changeSession(e.target.value), placeholder: '留空显示近期会话' })),
@@ -4679,13 +4734,6 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           h('button', { key, type: 'button', 'aria-pressed': filter === key, onClick: () => setFilter(key) }, name + ' ' + (snapshot ? counts[key] : '—'))))),
     error ? h('p', { role: 'alert' }, error + (snapshot ? ' 当前显示的是上次读取结果，计数未更新。' : '')) : null,
     lastRead ? h('p', { className: 'dshp-runtime-meta' }, '最近成功读取：', h('time', { dateTime: lastRead.toISOString() }, lastRead.toLocaleString())) : null,
-    snapshot ? h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot.evicted) + '。计数仅代表当前最多 50 条记录。') : null,
-    h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
-    snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
-    snapshot && durableTextCount ? h('p', { className: 'dshp-runtime-meta' }, '另有 ' + durableTextCount + ' 条仅持久流文本证据，未计入首文本计时。') : null,
-    snapshot ? h('p', { className: 'dshp-runtime-meta' }, subagents?.observed
-      ? '子智能体生命周期（' + (subagents.scope === 'direct-parent' ? '当前父会话' : '全部近期父会话') + '）：启动 ' + subagents.startsObserved + ' · 结束 ' + subagents.endsObserved + ' · 配对 ' + subagents.pairedRuns + ' · 仅启动 ' + subagents.startOnly + ' · 仅结束 ' + subagents.endOnly + ' · 乱序 ' + subagents.outOfOrder + ' · 配对区间峰值重叠 ' + value(subagents.peakPairedOverlap) + '。仅为采集窗口内的事件顺序，不代表实时并发或任务完成；全局已淘汰 ' + subagents.evicted + ' 条。'
-      : '子智能体生命周期：未观测（可能尚未启动或宿主未发出事件）。') : null,
     !snapshot ? h('div', { role: 'status', className: 'dshp-runtime-empty', 'aria-busy': !error },
       h('strong', null, error ? '暂时无法读取运行记录' : '正在读取运行状态…'),
       h('p', null, error ? '页面可见时会自动刷新，无需重复发起模型请求。' : '正在获取近期请求，请稍候。')) :
@@ -4731,6 +4779,15 @@ function RuntimeObservationsSection({ onNavigate, active = true } = {}) {
           h('p', null, (r.assessment?.reasonCodes || []).join(', ')),
           h('p', null, '回合 ' + value(r.turn) + ' · 步骤 ' + value(r.step) + ' · 实收分片 ' + value(r.observedChunks) + ' / 序号覆盖 ' + value(r.chunks) + ' · 工具开始 ' + value(r.toolCalls) + '（实时）')));
     })),
+    h('details', { className: 'dshp-diagnostic-details' },
+      h('summary', null, '观测范围与来源'),
+      snapshot ? h('p', { className: 'dshp-runtime-meta' }, '流式接口：' + (snapshot.streamSupport === 'observed' ? '已观测' : '未观测（可能尚未运行或宿主不支持）') + '；已淘汰记录：' + value(snapshot.evicted) + '。计数仅代表当前最多 50 条记录。') : null,
+      h('p', { className: 'dshp-runtime-meta' }, '近期路由：' + (snapshot ? routes.size : '—') + '；仅为实际观测记录，不代表全部 Provider 或协议已兼容。'),
+      snapshot ? h('p', { className: 'dshp-runtime-meta' }, '当前路由证据（请求数）：首文本 ' + evidence.text + ' · 工具调用 ' + evidence.tools + ' · 已观测终态 ' + evidence.terminal + ' · 取消 ' + evidence.cancelled + '。零表示当前记录无该类证据，不代表协议不支持。') : null,
+      snapshot && durableTextCount ? h('p', { className: 'dshp-runtime-meta' }, '另有 ' + durableTextCount + ' 条仅持久流文本证据，未计入首文本计时。') : null,
+      snapshot ? h('p', { className: 'dshp-runtime-meta' }, subagents?.observed
+        ? '子智能体生命周期（' + (subagents.scope === 'direct-parent' ? '当前父会话' : '全部近期父会话') + '）：启动 ' + subagents.startsObserved + ' · 结束 ' + subagents.endsObserved + ' · 配对 ' + subagents.pairedRuns + ' · 仅启动 ' + subagents.startOnly + ' · 仅结束 ' + subagents.endOnly + ' · 乱序 ' + subagents.outOfOrder + ' · 配对区间峰值重叠 ' + value(subagents.peakPairedOverlap) + '。仅为采集窗口内的事件顺序，不代表实时并发或任务完成；全局已淘汰 ' + subagents.evicted + ' 条。'
+        : '子智能体生命周期：未观测（可能尚未启动或宿主未发出事件）。') : null),
     h(ThinkingExperimentPanel, { rows: shown, mask: maskRuntime, snapshotAvailable: !!snapshot }),
     h(ThinkingTaskBenchmarkPanel, { rows: items, mask: maskRuntime, snapshotAvailable: !!snapshot, stale: !!error }),
     h('h3', null, '任务质量报告'),
@@ -4767,10 +4824,12 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
   const [readError, setReadError] = useState('');
   const [receivedAt, setReceivedAt] = useState(null);
   const [simulate, setSimulate] = useState(false);
+  const [filter, setFilter] = useState('observed');
+  const [limit, setLimit] = useState(10);
   const root = useRef(null);
   useEffect(() => {
     if (!active) return;
-    let stopped = false, timer, controller;
+    let stopped = false, timer, controller, failures = 0;
     async function refresh() {
       if (stopped) return;
       if (typeof document !== 'undefined' && document.visibilityState !== 'hidden'
@@ -4781,69 +4840,86 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
           const response = await fetch(apiUrl('/dsh-purge/runtime-observations?limit=50'),
             { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
           if (!response.ok) {
+            failures++;
             if (!stopped) setReadError('诊断接口 HTTP ' + response.status + '；这不是模型 Provider 的状态码');
           } else {
             const value = await response.json();
             if (value?.ok !== true || !Array.isArray(value.items)) throw new Error('invalid-observation-schema');
+            failures = 0;
             if (!stopped) { setSnapshot(value); setReadError(''); setReceivedAt(Date.now()); }
           }
         } catch (error) {
+          failures++;
           if (!stopped) setReadError(error?.name === 'AbortError'
             ? '读取超时' : '读取失败或响应格式不兼容');
         } finally { clearTimeout(timeout); }
       }
-      if (!stopped) timer = setTimeout(refresh, 1500);
+      if (!stopped) timer = setTimeout(refresh, Math.min(15000, 2000 * 2 ** failures));
     }
     refresh();
     return () => { stopped = true; clearTimeout(timer); controller?.abort(); };
   }, [active]);
-  const rows = projectHttpStatuses(snapshot, simulate);
+  const rows = projectHttpStatuses(snapshot, simulate).map((row, index) => ({ ...row, index }));
   const known = rows.filter(row => row.rawStatus !== null);
   const denied = known.filter(row => row.rawStatus === 403);
   const refused = rows.filter(row => row.errorCode === 'CONTENT_REFUSED');
-  const sample = { rawStatus: 403, displayedStatus: simulate ? 200 : 403,
-    errorCode: 'FORBIDDEN', simulated: simulate };
+  const visible = filter === 'observed' ? known : rows;
+  // Keep the pager mounted after its last click so keyboard focus is not lost.
+  const remaining = Math.max(0, visible.length - limit);
+  const count = (label, value) => h('div', null, h('dt', null, label), h('dd', null, snapshot ? value : '—'));
+  const updateFilter = next => { setFilter(next); setLimit(10); };
   const statusText = value => value === null ? '未观测' : String(value);
   return h('section', { ref: root, className: 'dshp-runtime-observations dshp-http-status-observer',
       'aria-label': 'HTTP 响应观察' },
     h('div', { className: 'dshp-runtime-heading' },
-      h('div', null, h('h3', null, 'HTTP 响应观察 · 只读实验'),
-        h('p', null, '区分 Host 记录的 HTTP 状态、模型内容拒答与清洗台接口错误；不抓取正文、凭据或提示词。')),
+      h('div', null, h('h3', null, 'HTTP 响应观察'),
+        h('p', null, '这里只显示宿主已记录的终态元数据。未观测不等于成功；中转后的宿主状态可能与上游不同。')),
       h('button', { type: 'button', className: 'dshp-runtime-action',
         onClick: () => onNavigate?.('runtime') }, '返回 Provider 与运行记录')),
-    h('p', { className: 'dshp-runtime-meta' },
-      '仅显示宿主提供的终态元数据，未观测不等于 200。请求经过中转或 Provider 适配器时，Host 状态不一定是原始上游 HTTP 状态。'),
-    h('div', { className: 'dshp-runtime-metrics' },
-      h('div', { className: 'dshp-runtime-metric' }, h('small', null, '近期请求'), h('strong', null, snapshot ? rows.length : '—')),
-      h('div', { className: 'dshp-runtime-metric' }, h('small', null, 'Host 报告 HTTP 403'), h('strong', null, snapshot ? denied.length : '—')),
-      h('div', { className: 'dshp-runtime-metric' }, h('small', null, '内容拒答码 CONTENT_REFUSED'), h('strong', null, snapshot ? refused.length : '—')),
-      h('div', { className: 'dshp-runtime-metric' }, h('small', null, '无 HTTP 状态证据'), h('strong', null, snapshot ? rows.length - known.length : '—'))),
-    h('div', { className: 'dshp-runtime-toolbar' },
+    h('dl', { className: 'dshp-observation-counts' },
+      count('近期请求', rows.length), count('宿主记录 HTTP 403', denied.length),
+      count('内容拒答码', refused.length), count('HTTP 状态未观测', rows.length - known.length)),
+    readError ? h('p', { role: 'alert', className: 'dshp-runtime-warning' }, readError
+      + (snapshot ? '；下方为上次成功读取的数据，页面可见时自动重试。' : '；页面可见时自动重试。')) : null,
+    receivedAt ? h('p', { className: 'dshp-runtime-meta' },
+      '最近成功读取：' + new Date(receivedAt).toLocaleString()) : null,
+    !snapshot ? h('div', { className: 'dshp-runtime-empty', role: 'status' },
+      readError ? '暂未读取到 HTTP 观测数据。' : '正在读取运行元数据…') :
+      !rows.length ? h('div', { className: 'dshp-runtime-empty' },
+        readError ? '上次读取没有近期运行记录。' : '近期没有运行记录。') :
+        h('div', null,
+          h('div', { className: 'dshp-runtime-filters', role: 'group', 'aria-label': '按 HTTP 状态证据筛选' },
+            [['observed', '有 HTTP 状态'], ['all', '全部请求']].map(([id, label]) =>
+              h('button', { type: 'button', key: id, 'aria-pressed': filter === id,
+                onClick: () => updateFilter(id) }, label + ' ' + (id === 'observed' ? known.length : rows.length)))),
+          !visible.length ? h('div', { className: 'dshp-runtime-empty' },
+            h('strong', null, '没有可显示的 HTTP 状态'),
+            h('p', null, '这批 ' + rows.length + ' 条请求均未记录 HTTP 状态。「全部请求」仍可查看终态和来源。')) :
+            h('div', null,
+              h('ul', { className: 'dshp-http-rows', 'aria-label': '请求状态' }, visible.slice(0, limit).map(row =>
+                h('li', { key: row.index, className: 'dshp-http-row', 'data-status': row.rawStatus >= 400 ? 'attention' : 'ended' },
+                  h('div', null,
+                    h('strong', null, '请求 ' + (row.index + 1) + ' · HTTP ' + statusText(row.rawStatus)
+                      + (row.simulated ? ' → 200（模拟）' : '')),
+                    row.errorCode ? h('span', null, ' · ' + row.errorCode) : null),
+                  h('p', { className: 'dshp-runtime-meta' },
+                    '终态：' + row.finish + ' · 运行结果：' + row.turnOutcome + ' · 来源：' + row.reasonSource)))),
+              h('div', { className: 'dshp-runtime-filters' },
+                h('span', { className: 'dshp-runtime-meta', role: 'status' }, '显示 ' + Math.min(limit, visible.length) + ' / ' + visible.length + ' 条'),
+                visible.length > 10 ? h('button', { type: 'button', 'aria-disabled': !remaining,
+                  onClick: () => { if (remaining) setLimit(n => n + 10); } },
+                  remaining ? '再显示 ' + Math.min(10, remaining) + ' 条' : '已显示全部') : null))),
+    h('details', { className: 'dshp-diagnostic-details',
+      onToggle: event => { if (!event.currentTarget.open) setSimulate(false); } },
+      h('summary', null, '展示对照（离线）'),
+      h('p', { className: 'dshp-runtime-meta' },
+        '离线示例：原始 HTTP 403 → 当前显示 HTTP ' + (simulate ? 200 : 403)
+        + '；错误码仍为 FORBIDDEN，没有模型生成结果。'),
       h('label', null, h('input', { type: 'checkbox', checked: simulate,
         'aria-label': '本地模拟将 403 显示为 200', onChange: event => setSimulate(event.target.checked) }),
         ' 本地模拟：403 → 200（仅改本页展示）')),
-    h('p', { role: 'status', className: 'dshp-runtime-meta' },
-      '离线示例：原始 HTTP ' + sample.rawStatus + ' → 当前显示 HTTP ' + sample.displayedStatus
-      + '；响应仍包含 error.code=' + sample.errorCode + '，没有模型生成结果。'
-      + (simulate ? ' 本模拟不会修改任何网络请求或上游拒绝。' : ' 勾选后仅比较展示层效果。')),
-    readError ? h('p', { role: 'alert' }, readError
-      + (snapshot ? '；下方数据来自上次成功读取，已停止更新。' : '')) : null,
-    receivedAt ? h('p', { className: 'dshp-runtime-meta' },
-      '最近成功读取：' + new Date(receivedAt).toLocaleString()) : null,
-    !snapshot ? h('p', null, readError ? '暂无可用观测数据。' : '正在读取只读运行元数据…') :
-      !rows.length ? h('p', null, '近期没有模型运行记录；先运行一次普通无害任务。') :
-      h('div', { className: 'dshp-runtime-cards' }, rows.map((row, i) =>
-        h('article', { key: String(i), className: 'dshp-runtime-card', 'data-status': row.rawStatus === 403 ? 'attention' : 'ended' },
-          h('div', { className: 'dshp-runtime-summary' },
-            h('strong', null, '请求 ' + (i + 1) + ' · HTTP ' + statusText(row.rawStatus)
-              + (row.simulated ? ' → 200（模拟）' : '')),
-            h('span', null, ' · 错误码 ' + (row.errorCode || '未观测'))),
-          h('p', { className: 'dshp-runtime-meta' },
-            '终态：' + row.finish + ' · 运行结果：' + row.turnOutcome
-            + ' · 来源：' + row.reasonSource
-            + (row.simulated ? ' · 原始 403 保留，未改变错误分类' : ''))))),
     h('p', { className: 'dshp-runtime-meta' },
-      '页面只读、内存快照、最多 50 条；不保留完整 URL、请求头、Cookie、Token、正文或会话 ID。真实 Provider 的 403 不会被改写成网络 200。'));
+      '只读快照，最多 50 条。页面不显示请求正文、凭据或会话标识；真实 Provider 的 403 不会被改写成网络 200。'));
 }
 /* __DSH_PURGE_RUNTIME_END__ */
 
@@ -5667,6 +5743,7 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
 			const [profilesVisited, setProfilesVisited] = useState(true);
 			const [runtimeVisited, setRuntimeVisited] = useState(false);
 			const pageHeading = useRef(null);
+			const pageContent = useRef(null);
 			const activePaneButton = useRef(null);
             const redteamButton = useRef(null);
 			const pendingFocus = useRef(null);
@@ -5694,6 +5771,9 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
 				// A content shortcut can hide its own button without changing the outer page.
 				else if (changesPane) pendingFocus.current = "pane";
 			};
+			useLayoutEffect(() => {
+				if (pageContent.current) pageContent.current.scrollTop = 0;
+			}, [section, diagnosticsPane]);
 			useLayoutEffect(() => {
 				const destination = pendingFocus.current;
 				if (!destination) return;
@@ -5775,11 +5855,10 @@ function HttpStatusObservationPanel({ active = true, onNavigate } = {}) {
 						onClick: () => navigate(item.id),
 					}, h("strong", null, item.title), h("small", null, item.description))),
 				),
-				h("div", { className: "dshp-clean-content" },
+				h("div", { className: "dshp-clean-content", ref: pageContent },
 					h("header", { className: "dshp-clean-page-heading" },
 						h("h2", { ref: pageHeading, tabIndex: -1 }, selected.title),
 						h("p", null, selected.description),
-						section === "diagnostics" ? h("button", { type: "button", className: "dshp-runtime-action", onClick: () => navigate("overview") }, t("diag.overview.back")) : null,
 					),
 					section === "diagnostics" ? h("div", { className: "dshp-clean-filters", role: "group", "aria-label": "诊断中心分组" },
 						[["health", "宿主与故障"], ["runtime", "Provider 与运行记录"], ["http", "HTTP 响应观察"]].map(([id, label]) => h("button", {
@@ -7397,6 +7476,30 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
 .rt-dock.rt-embedded .rt-env-main .rt-textarea{
   background:#122238!important;
 }
+
+.rt-env-main .rt-env-status,.rt-env-main .rt-env-tabs{gap:6px 8px}
+.rt-env-main .rt-env-tabs .rt-btn:not(.rt-btn-primary),.rt-env-main .rt-env-more>summary{
+  background:transparent;border-color:transparent;color:var(--rt-mute,var(--dsw-alias-label-secondary))
+}
+.rt-env-main .rt-env-tabs .rt-btn:not(.rt-btn-primary):hover,.rt-env-main .rt-env-more>summary:hover{
+  border-color:var(--rt-line,var(--dsw-alias-border-l1))
+}
+.rt-env-more>summary{display:list-item;list-style-position:inside}
+.rt-env-more[open]{flex-basis:100%}
+.rt-env-more>div,.rt-env-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}
+.rt-env-more>div{padding:6px 0 2px}
+.rt-env-check-heading{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px 12px}
+.rt-env-check-heading h4{margin:0}
+.rt-env-check{padding:13px 15px}
+.rt-env-meta{font-size:12px;line-height:1.55;color:var(--rt-mute,var(--dsw-alias-label-secondary));overflow-wrap:anywhere}
+.rt-env-check p{margin:6px 0}
+.rt-env-issues{list-style:none;padding:0;margin:9px 0}
+.rt-env-issues li{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding:6px 0}
+.rt-env-extra{border-top:1px solid var(--dsw-alias-border-l1);padding-top:8px;margin-top:10px}
+.rt-env-extra>summary{cursor:pointer;font-size:12px;color:var(--rt-mute,var(--dsw-alias-label-secondary))}
+.rt-env-extra>summary:focus-visible,.rt-env-more>summary:focus-visible{outline:2px solid var(--rt-accent);outline-offset:2px}
+.rt-env-counts{margin:8px 0 0}
+.rt-env-counts .rt-btn{white-space:normal;text-align:left}
 
 /* Full-screen paint stability + comfortable reading density.
  * The full console already has opaque dark surfaces: nested backdrop blur on
@@ -12190,21 +12293,39 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       return out
     }
 
+    function envCheckForRevision(check, revision) {
+      return check?.ok === true && check.configRevision === revision
+        && check.environmentId === 'local' && Array.isArray(check.missingBinDirs) ? check : null
+    }
+
     function EnvTab(props) {
       const refreshKey = props.refreshKey || 0
       const [section, setSection] = React.useState(props.initialSection || 'summary')
       const sections = [
-        ['summary', '环境总览'], ['execution', '执行环境'], ['tools', '工具管理'],
-        ['local-search', '测绘中心'], ['network', '网络配置'], ['diagnostics', '诊断与修复'], ['privacy', '本机隐私'],
+        ['summary', '环境总览'], ['tools', '工具管理'], ['execution', '执行环境'], ['diagnostics', '诊断与修复'],
+        ['network', '网络配置'], ['local-search', '测绘中心'], ['privacy', '本机隐私'],
       ]
+      const primarySections = sections.slice(0, 4)
+      const extraSections = sections.slice(4)
+      const activeExtra = extraSections.find(([id]) => id === section)
+      const paneRef = React.useRef(null)
+      const directoryRef = React.useRef(null)
+      const searchDirsRef = React.useRef(null)
+      const toolFilterRef = React.useRef(null)
+      const pendingFocus = React.useRef(null)
+      React.useLayoutEffect(() => {
+        if (paneRef.current) paneRef.current.scrollTop = 0
+        pendingFocus.current?.current?.focus()
+        pendingFocus.current = null
+      }, [section])
       const sectionCard = (id, attrs, ...children) => section === id ? h('div', attrs, ...children) : null
       const [data, setData] = React.useState(null)
       const [draft, setDraftState] = React.useState(null)
       const draftRef = React.useRef(null)
       const savedDraftRef = React.useRef(null)
       const configBusyRef = React.useRef(false)
+      const refreshQueued = React.useRef(false)
       const evidenceScope = React.useRef({ revision: null })
-      const [evidenceStale, setEvidenceStale] = React.useState(false)
       const [savedCheck, setSavedCheck] = React.useState(null)
       const [savedCheckBusy, setSavedCheckBusy] = React.useState(false)
       const setDraft = (update) => {
@@ -12478,7 +12599,6 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       }
 
       const resetEvidence = (revision, topologyOnly = false) => {
-        if (!topologyOnly && evidenceScope.current.revision !== null) setEvidenceStale(true)
         evidenceScope.current = { revision }
         if (!topologyOnly) setSavedCheck(null)
         setToolChecks({})
@@ -12504,6 +12624,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const acceptReceipt = (r) => {
         if (!r?.ok || typeof r.configRevision !== 'string') return false
         if (evidenceScope.current.revision !== r.configRevision) resetEvidence(r.configRevision)
+        setSavedCheck(envCheckForRevision(r.configCheck, r.configRevision))
         setData(r)
         setErr(null)
         return true
@@ -12525,14 +12646,23 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (configBusyRef.current) return
         configBusyRef.current = true
         setBusy(true); setMsg(null)
-        try { await fn() }
-        finally {
+        try {
+          await fn()
+          // A workspace refresh during a save must not disappear behind the write.
+          while (refreshQueued.current) {
+            refreshQueued.current = false
+            await readSaved()
+          }
+        } finally {
           configBusyRef.current = false
           setBusy(false)
         }
       }
-      const load = () => transact(readSaved)
-      React.useEffect(() => { void load() }, [refreshKey])
+      const load = () => {
+        if (configBusyRef.current) { refreshQueued.current = true; return }
+        return transact(readSaved)
+      }
+      React.useEffect(() => { void load(); return () => { refreshQueued.current = false } }, [refreshKey])
 
       const mutateConfig = (request, onSaved) => transact(async () => {
         const expectedRevision = evidenceScope.current.revision
@@ -12625,10 +12755,9 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         if (!canObserve() || savedCheckBusy) return
         setSavedCheckBusy(true)
         setSavedCheck(null)
-        return observeSaved({ op: 'platformConfigCheck' }, r => {
-          setSavedCheck(r)
-          if (r.ok) setEvidenceStale(false)
-        }, () => setSavedCheckBusy(false))
+        return observeSaved({ op: 'platformConfigCheck' }, r => setSavedCheck(!r.ok ? r
+          : envCheckForRevision(r, evidenceScope.current.revision) || { ok: false, error: '本机检查明细不完整。' }),
+          () => setSavedCheckBusy(false))
       }
 
       const planForTask = () => {
@@ -12834,8 +12963,13 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const tools = (data && data.tools && data.tools.items) || []
       const found = tools.filter((t) => t.path).length
       const readiness = envToolSummary(tools, toolChecks)
+      const editToolSettings = (field) => {
+        pendingFocus.current = field
+        setSection('tools')
+      }
       const showToolStatus = (status) => {
-        setToolStatusFilter(status); setToolGroup('all'); setToolSearch(''); setSection('tools')
+        setToolStatusFilter(status); setToolGroup('all'); setToolSearch('')
+        editToolSettings(toolFilterRef)
       }
       // Existing discovery stays authoritative; explicit paths are only pinned on request.
       const suggestedPaths = tools.filter(t => t.path && ['toolkit', 'binDir', 'path', 'artex'].includes(t.source)
@@ -12852,8 +12986,8 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
         setMsg({ ok: '已填入发现的工具路径草稿；检查后点击保存。' })
         setSection('tools')
       }
-      const stalePaths = tools.filter(t => !t.path && t.configured && !String(t.id).startsWith('custom:')
-        && String(draft?.tools?.[t.id] || '').trim() === String(data?.config?.tools?.[t.id] || '').trim())
+      const stalePaths = tools.filter(t => !t.path && t.configured && !String(t.id).startsWith('custom:'))
+      const editedToolPath = id => String(draft?.tools?.[id] || '').trim() !== String(data?.config?.tools?.[id] || '').trim()
       const taskProfiles = (data && data.taskProfiles) || []
       const selectedCheck = taskPlan && taskPlan.selected ? toolChecks[taskPlan.selected.id] : null
       const toolGroups = [
@@ -12896,108 +13030,80 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
       const defaultNuclei = (data && data.nucleiTemplatesDir) || (defaultToolkit + '/nuclei-templates')
       const configKnown = !!data?.configRevision && !err
       const checkedTime = r => r?.checkedAt ? ' · ' + new Date(r.checkedAt).toLocaleString() : ''
-      const savedStatus = !configKnown ? '配置待读取' : !data.config.exists ? '尚未保存配置'
-        : savedCheck?.ok ? '已保存 · 配置已检查' : evidenceStale ? '已保存 · 旧检测已过期' : '已保存 · 尚未检查'
+      const savedStatus = dirty ? '有未保存修改' : !configKnown ? (err ? '读取失败' : '正在读取')
+        : data.config.exists ? '已保存' : '使用默认配置'
+      const requiresSetup = configKnown && (!data.config.envAdaptConfigured || data.config.envAdaptSkip)
+      const hostLabel = runtime.nodePlatform === 'win32' ? 'Windows'
+        : runtime.nodePlatform === 'linux' ? (adapt.kali ? 'Kali' : 'Linux') : runtime.nodePlatform || '主机未确认'
+      const missingBinDirs = savedCheck?.ok ? savedCheck.missingBinDirs || [] : []
+      const badToolkit = savedCheck?.ok && savedCheck.toolkitDirectoryConfigured && !savedCheck.toolkitDirectoryOk
+      const configIssues = Number(!!badToolkit) + missingBinDirs.length + stalePaths.length
+      const sectionButton = ([id, label]) => h('button', {
+        key: id, type: 'button', className: 'rt-btn' + (section === id ? ' rt-btn-primary' : ''),
+        'aria-pressed': section === id, onClick: () => setSection(id),
+      }, label)
 
       return h('div', { className: 'rt-main rt-env-main' },
-        h('div', { className: 'rt-toolbar' },
+        h('div', { className: 'rt-toolbar rt-env-status' },
           h('span', { style: { fontWeight: 600 } }, '环境中心'),
-          h('span', { className: 'rt-tag' }, !data ? '未检测' : runtime.effective === 'windows' ? 'Windows' : 'Linux/Kali'),
-          adapt.kali ? h('span', { className: 'rt-tag rt-tag-live' }, 'Kali') : null,
-          h('span', { className: 'rt-tag' + (adapt.ready ? ' rt-tag-live' : ' rt-tag-warn') },
-            adapt.ready ? '配置引导可继续（非运行验证）' : '配置待处理（可继续只读）'),
-          h('span', { className: 'rt-tag' + (found ? ' rt-tag-live' : ' rt-tag-warn') }, data ? '路径已定位 ' + found + '/' + tools.length : '路径尚未读取'),
+          data ? h('span', { className: 'rt-tag' }, hostLabel) : null,
           h('div', { className: 'rt-spacer' }),
-          h('span', { className: 'rt-tag', role: 'status' }, savedStatus),
-          dirty ? h('span', { className: 'rt-tag rt-tag-warn' }, '未保存修改') : null,
-          h('button', { className: 'rt-btn', disabled: busy, onClick: load }, busy ? '处理中…' : '刷新'),
-          dirty ? h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
+          h('span', { className: 'rt-tag' + (dirty || err ? ' rt-tag-warn' : ''), role: 'status' }, savedStatus),
+          h('button', { type: 'button', className: 'rt-btn', disabled: busy || savedCheckBusy, onClick: load }, busy ? '处理中…' : '刷新本机配置'),
+          dirty ? h('button', { type: 'button', className: 'rt-btn', disabled: busy, onClick: () => {
             setDraft(savedDraftRef.current); setMsg({ ok: '已恢复上次保存的配置。' })
           } }, '撤销修改') : null,
-          h('button', { className: 'rt-btn rt-btn-primary', disabled: busy || !draft || !configKnown || (!dirty && data.config.envAdaptConfigured && !data.config.envAdaptSkip), onClick: save },
-            busy ? '处理中…' : '保存环境配置')),
-        h('div', { className: 'rt-toolbar', role: 'group', 'aria-label': '环境中心子页面' },
-          sections.map(([id, label]) => h('button', {
-            key: id, type: 'button', className: 'rt-btn' + (section === id ? ' rt-btn-primary' : ''),
-            'aria-pressed': section === id, onClick: () => setSection(id),
-          }, label))),
+          dirty || requiresSetup ? h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
+            disabled: busy || !draft || !configKnown, onClick: save },
+            dirty ? '保存环境配置' : '确认当前配置') : null),
+        h('div', { className: 'rt-toolbar rt-env-tabs', role: 'group', 'aria-label': '环境中心子页面' },
+          primarySections.map(sectionButton),
+          h('details', { className: 'rt-env-more' },
+            h('summary', { className: 'rt-btn' }, '更多设置' + (activeExtra ? ' · ' + activeExtra[1] : '')),
+            h('div', null, extraSections.map(sectionButton)))),
         section === 'local-search' ? h(React.Fragment, null,
           h('div', { className: 'rt-foot', style: { padding: '4px 12px' } },
-            '顶部“保存环境配置”不保存测绘操作勾选；测绘偏好在测绘中心自动保存，外部提交同意不持久化。'),
+            '测绘偏好在本页单独保存；外部提交同意不持久化。'),
           h(LocalAssetSearchTab, { engagement: props.engagement, refreshKey })) :
         section === 'privacy' ? h(LowImpactTab, { engagement: props.engagement, refreshKey, visible: props.visible !== false, embedded: true }) :
-        h('div', { className: 'rt-pane', style: { minHeight: 0 } },
-        err ? h('div', { className: 'rt-err' }, err) : null,
-        msg ? h('div', { role: msg.err ? 'alert' : 'status', className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
-          ['summary', 'diagnostics'].includes(section) ? h('div', { className: 'rt-card' },
-            h('h4', null, '配置检查 · 当前主机'),
-            h('button', { type: 'button', className: 'rt-btn rt-btn-primary',
-              disabled: !configKnown || busy || savedCheckBusy, onClick: checkSavedConfig },
-            savedCheckBusy ? '检查中…' : '检查已保存配置'),
-            dirty ? h('p', { className: 'rt-foot' }, '检查不包含未保存的草稿。') : null,
-            savedCheck ? savedCheck.ok
-              ? h('div', { role: 'status', className: 'rt-foot' },
-                h('p', null, (savedCheck.configExists ? '配置可读' : '未落盘，检查默认配置')
-                  + ' · 定位到 ' + savedCheck.located + '/' + savedCheck.total + ' 条工具路径' + checkedTime(savedCheck)),
-                h('p', null, savedCheck.toolkitDirectoryOk ? '工具箱目录可用' : savedCheck.toolkitDirectoryConfigured
-                  ? '已配置的工具箱不是可用目录' : '默认工具箱目录不存在（可选）'),
-                savedCheck.missingBinDirs.length
-                  ? h('p', null, '不可用的搜索目录：' + savedCheck.missingBinDirs.join('、')) : null)
-              : h('p', { className: 'rt-err', role: 'alert' }, savedCheck.error)
-              : h('p', { className: 'rt-foot' }, '仅检查配置和路径，不探测版本或连接远端。')) : null,
-        sectionCard('summary', { className: 'rt-card' },
-          h('h4', null, '开工前 · 环境速检'),
-          h('p', { className: 'rt-foot' }, '先发现环境和工具路径，再按本轮任务需要验证版本。路径存在、版本命令成功都不等于实际任务成功。'),
-          h('div', { className: 'rt-toolbar', style: { padding: '0 0 8px', border: 0 } },
-            h('button', { className: 'rt-btn rt-btn-primary', disabled: !configKnown || busy || matrixBusy || environmentBusy || !!wslChecking || !!dockerBusy || !!kaliBusy,
-              onClick: loadCapabilityMatrix }, matrixBusy ? '读取中…' : '读取环境与工具路径'),
-            h('span', { className: 'rt-foot' }, '只读发现环境和工具路径；不安装、不执行目标任务。')),
-          matrixError ? h('div', { className: 'rt-err', role: 'alert' }, matrixError) : null,
-          dirty ? h('p', { className: 'rt-foot', role: 'status' }, '有未保存修改：当前检查结果仍基于已保存配置。请先保存，再刷新环境。') : null,
-          h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 8 } },
-            [['已定位路径', data ? readiness.located + '/' + readiness.total : '尚未读取', 'all'],
-              ['版本已验证', readiness.verified + ' 项', 'verified'],
-              ['待验证版本', readiness.unchecked + ' 项', 'unchecked'],
-              ['验证未通过', readiness.failed + ' 项', 'failed'],
-              ['未定位路径', readiness.missing + ' 项', 'missing']
-            ].map(([label, status, filter]) => h('button', { key: filter, type: 'button', className: 'rt-btn',
-              style: { textAlign: 'left', padding: 10, whiteSpace: 'normal' }, onClick: () => showToolStatus(filter) },
-              h('strong', { style: { display: 'block' } }, label), h('span', null, status)))),
-          h('p', { className: 'rt-foot', style: { marginTop: 8 } },
-            '未定位工具不一定是本轮必需项；没有可靠版本参数的已定位工具：' + readiness['path-only'] + ' 项。'),
-          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 8 } },
-            [['工具管理', 'tools'], ['执行环境', 'execution'], ['测绘中心', 'local-search'],
-              ['网络配置', 'network'], ['诊断与修复', 'diagnostics']].map(([label, id]) =>
-              h('button', { key: id, type: 'button', className: 'rt-btn', onClick: () => setSection(id) }, label)))),
-        sectionCard('summary', { className: 'rt-card' },
-          h('h4', null, '推荐配置与下一步'),
-          h('div', { className: 'rt-foot' }, '根据当前已读取的配置和检测结果推荐；不会覆盖手工设置。'),
-          suggestedPaths.length ? h('div', { className: 'rt-kv' },
-            h('span', null, '发现 ' + suggestedPaths.length + ' 个未手工配置的工具；默认动态查找即可，也可固定当前路径。'),
-            h('button', { className: 'rt-btn', disabled: busy || !draft, onClick: fillDetectedPaths }, '填入已发现路径')) : null,
-          stalePaths.map(t => h('div', { key: t.id, className: 'rt-kv' },
-            h('span', null, t.label + '：已配置的路径不存在'),
-            h('button', { className: 'rt-btn', disabled: busy, onClick: () => {
-              setTool(t.id, ''); setSection('tools'); setMsg({ ok: '已清空失效路径草稿；保存后恢复自动查找。' })
-            } }, '恢复自动查找'))),
-          !data ? h('p', null, '正在读取本机配置；失败时使用刷新重试。') : null,
-          data && draft && draft.platform !== 'auto' ? h('div', { className: 'rt-kv' },
-            h('span', null, '平台模式为 ' + draft.platform + '；跨平台使用时可考虑 auto。'),
-            h('button', { className: 'rt-btn', onClick: () => setSection('tools') }, '查看配置')) : null,
-          data && tools.some(t => !t.path) ? h('div', { className: 'rt-kv' },
-            h('span', null, '尚未定位 ' + tools.filter(t => !t.path).length + ' 个工具；只需补齐当前任务所需工具。'),
-            h('button', { className: 'rt-btn', onClick: () => { setToolGroup('all'); setToolSearch(''); setSection('tools') } }, '查看工具目录')) : null,
-          data && found === tools.length && tools.length > 0 ? h('p', null, '本机工具路径均已定位；可按需进行版本验证。') : null,
-          environmentSnapshot ? h('div', { className: 'rt-kv' },
-            h('span', null, '发现 ' + (environmentSnapshot.environments || []).length + ' 个执行环境；远端工具仍需显式验证。'),
-            h('button', { className: 'rt-btn', onClick: () => setSection('execution') }, '查看环境')) : null,
-          (environmentSnapshot?.localDiagnostics?.issues || []).map((item) =>
-            h('div', { key: item.code, className: 'rt-kv' },
-              h('span', null, item.message),
-              h('button', { className: 'rt-btn', onClick: () => setSection('diagnostics') }, '查看诊断')))),
-        sectionCard('summary', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
-          adapt.message
-            || '均可选填：留空则用默认路径/自动查找。填了的覆盖默认。密钥类只在需要测绘/反弹时才填。'),
+        h('div', { className: 'rt-pane', ref: paneRef, style: { minHeight: 0 } },
+          err ? h('div', { className: 'rt-err', role: 'alert' }, err) : null,
+          msg ? h('div', { role: msg.err ? 'alert' : 'status', className: msg.err ? 'rt-err' : 'rt-foot' }, msg.err || msg.ok) : null,
+          ['summary', 'diagnostics'].includes(section) ? h('section', { className: 'rt-card rt-env-check', 'aria-label': '本机配置检查' },
+            h('div', { className: 'rt-env-check-heading' },
+              h('h4', null, '本机配置检查'),
+              configKnown && !savedCheck?.ok ? h('button', { type: 'button', className: 'rt-btn',
+                disabled: busy || savedCheckBusy, onClick: checkSavedConfig }, savedCheckBusy ? '检查中…' : '检查本机目录') : null),
+            h('p', { role: 'status', className: 'rt-env-meta' }, !configKnown
+              ? err ? '尚无可用结果；刷新本机配置后重试。' : '正在读取配置与路径…'
+              : (configIssues ? '有 ' + configIssues + ' 项已配置路径待处理'
+                : savedCheck?.ok ? data.config.exists ? '已保存的配置未发现目录问题' : '已检查默认配置；未设置额外目录'
+                  : '已读取配置，目录检查尚未确认')
+                + ' · 工具路径 ' + readiness.located + '/' + readiness.total + checkedTime(savedCheck)),
+            savedCheck && !savedCheck.ok ? h('p', { className: 'rt-err', role: 'alert' }, savedCheck.error) : null,
+            dirty ? h('p', { className: 'rt-env-meta' }, '当前检查结果仍基于已保存配置；保存后自动检查。') : null,
+            configIssues ? h('ul', { className: 'rt-env-issues' },
+              badToolkit ? h('li', null, h('span', null, '已配置的工具箱目录不可用'),
+                h('button', { type: 'button', className: 'rt-btn', onClick: () => editToolSettings(directoryRef) }, '编辑工具箱目录')) : null,
+              missingBinDirs.length ? h('li', null,
+                h('span', { className: 'rt-env-meta' }, '不可用的搜索目录：' + missingBinDirs.join('、')),
+                h('button', { type: 'button', className: 'rt-btn', onClick: () => editToolSettings(searchDirsRef) }, '编辑搜索目录')) : null,
+              stalePaths.map(t => h('li', { key: t.id },
+                h('span', null, t.label + '：已保存的文件路径不可用'),
+                editedToolPath(t.id) ? h('span', { className: 'rt-env-meta' }, '草稿已修改，保存后复查')
+                  : h('button', { type: 'button', className: 'rt-btn', disabled: busy, onClick: () => {
+                    setTool(t.id, ''); setMsg({ ok: '已清空失效路径草稿；保存后恢复自动查找。' })
+                  } }, '恢复自动查找')))) : null,
+            configKnown ? h('details', { className: 'rt-env-extra' },
+              h('summary', null, '路径与版本明细'),
+              h('div', { className: 'rt-env-actions rt-env-counts' },
+                [['路径已定位', readiness.located, 'all'], ['版本已验证', readiness.verified, 'verified'],
+                  ['待验证版本', readiness.unchecked, 'unchecked'], ['仅定位路径', readiness['path-only'], 'path-only'],
+                  ['验证未通过', readiness.failed, 'failed'], ['未定位路径', readiness.missing, 'missing']
+                ].map(([label, count, filter]) => h('button', { key: filter, type: 'button', className: 'rt-btn',
+                  onClick: () => showToolStatus(filter) }, label + ' ' + count))),
+              h('p', { className: 'rt-env-meta' },
+                '自动检查只读取配置和本机路径，不验证版本或连接执行环境。路径存在、版本命令成功都不等于实际任务成功。')) : null) : null,
         sectionCard('diagnostics', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, '跨环境工具能力矩阵'),
           h('div', { style: { fontSize: 11.5, opacity: 0.85, marginBottom: 8 } },
@@ -13117,7 +13223,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     h('span', null, provider.note || '未提供说明'))),
                 (environmentSnapshot.localDiagnostics?.issues || []).map((item) =>
                   h('p', { key: item.code, className: 'rt-foot' }, item.message)))
-            : h('p', { className: 'rt-foot' }, '点击「生成 / 刷新能力矩阵」或环境总览的一键检测，读取本机路径与跨环境提供方状态。')),
+            : h('p', { className: 'rt-foot' }, '点击「生成 / 刷新能力矩阵」，查看本机与其他环境的只读发现结果。')),
         sectionCard('tools', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'ARTEX · 本机工具来源'),
           environmentSnapshot?.providers?.artex
@@ -13132,7 +13238,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                     h('span', { className: 'rt-mono', style: { overflowWrap: 'anywhere' } },
                       item.path))),
                 h('p', { className: 'rt-foot' }, environmentSnapshot.providers.artex.note))
-            : h('p', { className: 'rt-foot' }, '在执行环境中发现环境，或使用环境总览的一键检测，即可查看 ARTEX 工具路径来源。'),
+            : h('p', { className: 'rt-foot' }, '在「执行环境」中发现环境后，可查看 ARTEX 工具路径来源。'),
         ),
         sectionCard('execution', { className: 'rt-card', style: { margin: '0 0 8px', fontSize: 12, lineHeight: 1.6 } },
           h('div', { style: { fontWeight: 600, marginBottom: 6 } }, 'Docker · 已运行容器'),
@@ -13287,6 +13393,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                   h('option', { value: 'linux' }, 'linux'))),
               h('label', { style: { fontSize: 12 } }, '工具箱目录 toolkitDir（留空＝默认）',
                 h('input', {
+                  ref: directoryRef,
                   className: 'rt-input', style: { display: 'block', width: '100%', marginTop: 4 },
                   placeholder: '默认：' + defaultToolkit,
                   value: draft.toolkitDir,
@@ -13301,6 +13408,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 })),
               h('label', { style: { fontSize: 12 } }, '工具搜索目录 binDirs（留空＝只搜 toolkit + PATH；每行一个）',
                 h('textarea', {
+                  ref: searchDirsRef,
                   className: 'rt-input', rows: 4, style: { display: 'block', width: '100%', marginTop: 4, fontFamily: 'var(--dsw-font-mono, monospace)' },
                   placeholder: '可选。例如：' + String.fromCharCode(10) + 'D:\\tools' + String.fromCharCode(10) + 'D:\\pentest-bin',
                   value: draft.binDirsText,
@@ -13458,7 +13566,7 @@ body[data-ds-dark-theme] .rt-scope-testing,.dshp-dock[data-theme="dusk"] .rt-sco
                 h('option', { value: 'all' }, '全部用途'),
                 toolGroups.map((g) => h('option', { key: g.id, value: g.id }, g.title))),
               h('select', { className: 'rt-input', style: { flex: '1 1 110px' },
-                'aria-label': '工具验证状态筛选', value: toolStatusFilter,
+                ref: toolFilterRef, 'aria-label': '工具验证状态筛选', value: toolStatusFilter,
                 onChange: (e) => setToolStatusFilter(e.target.value) },
                 [['all', '全部状态'], ['missing', '未定位路径'], ['unchecked', '待验证版本'],
                   ['verified', '版本已验证'], ['failed', '验证未通过'], ['path-only', '仅定位路径']].map(([id, label]) =>

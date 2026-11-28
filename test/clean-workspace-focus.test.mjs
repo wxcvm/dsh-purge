@@ -11,7 +11,8 @@ assert.ok(start >= 0 && end > start)
 // or mounting any of the content panes and their host requests.
 function workspace() {
   let stateIndex, refIndex, tree
-  let layoutDeps = [], layoutEffect, attached = []
+  let layoutIndex, pendingLayout = [], attached = []
+  const layoutDeps = [], scroller = { scrollTop: 0 }
   const state = [], refs = [], focused = []
   const scope = {
     h(tag, props, ...children) { return { tag, props: props ?? {}, children: children.flat() } },
@@ -23,9 +24,10 @@ function workspace() {
     useRef(initial) { return refs[refIndex++] ??= { current: initial } },
     useEffect() {},
     useLayoutEffect(effect, deps) {
-      if (deps.some((dep, i) => !Object.is(dep, layoutDeps[i]))) {
-        layoutEffect = effect
-        layoutDeps = deps
+      const index = layoutIndex++
+      if (!layoutDeps[index] || deps.some((dep, i) => !Object.is(dep, layoutDeps[index][i]))) {
+        pendingLayout.push(effect)
+        layoutDeps[index] = deps
       }
     },
     readTheme: () => 'dusk',
@@ -43,22 +45,23 @@ function workspace() {
       ? [node, ...node.children.flatMap(child => nodes(child || false))] : []
   }
   function render() {
-    stateIndex = refIndex = 0
-    layoutEffect = null
+    stateIndex = refIndex = layoutIndex = 0
+    pendingLayout = []
     tree = SettingsRoot({ workspace: true })
     for (const ref of attached) ref.current = null
     attached = []
     for (const node of nodes()) {
       if (node.props.ref) {
         attached.push(node.props.ref)
-        node.props.ref.current = { focus() { focused.push({ tag: node.tag, label: node.children[0] }) } }
+        node.props.ref.current = node.props.className === 'dshp-clean-content' ? scroller
+          : { focus() { focused.push({ tag: node.tag, label: node.children[0] }) } }
       }
     }
-    layoutEffect?.()
+    pendingLayout.forEach(effect => effect())
   }
   render()
   return {
-    render, focused,
+    render, focused, scroller,
     button: label => nodes().find(node => node.tag === 'button' && node.children[0] === label),
     page: (id) => nodes().find(node => node.tag === scope[id]),
     sidebar: () => nodes().filter(node => node.props.className === 'dshp-clean-nav-item'),
@@ -80,8 +83,10 @@ test('clean workspace keeps keyboard focus on a visible destination after a cont
   root.button('Provider 与运行记录').props.onClick()
   root.render()
   assert.deepEqual(root.focused, [], 'a visible toggle keeps its normal button focus')
+  root.scroller.scrollTop = 650
   root.button('HTTP 响应观察').props.onClick()
   root.render()
+  assert.equal(root.scroller.scrollTop, 0, 'switching from a long log starts the new pane at its heading')
   assert.equal(root.page('HttpStatusObservationPanel').props.active, true)
   assert.equal(root.page('RuntimeObservationsSection').props.active, false)
   root.page('HttpStatusObservationPanel').props.onNavigate('runtime')
